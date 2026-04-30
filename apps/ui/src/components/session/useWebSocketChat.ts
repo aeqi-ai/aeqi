@@ -166,6 +166,31 @@ export function useWebSocketChat({
     wsSessionRef.current = sessionId;
   }, []);
 
+  // Subscribe-then-send is the single canonical path. The daemon's
+  // `session_subscribe` verb uses `snapshot_and_subscribe` (atomic backlog
+  // + live), so events emitted by gateway setup or the executor are never
+  // missed regardless of whether the subscribe arrives before or after
+  // the HTTP send. Idempotent: a no-op when the matching session is
+  // already wired to an open socket.
+  const ensureLiveAttached = useCallback(
+    (sessionId: string, startTime: number): Promise<void> => {
+      if (!token) return Promise.resolve();
+      if (wsSessionRef.current === sessionId && wsRef.current?.readyState === WebSocket.OPEN) {
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        const ws = openChatSocket(token);
+        replaceSocket(ws, sessionId);
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ subscribe: true, session_id: sessionId }));
+          resolve();
+        };
+        attachEventHandlers(ws, startTime);
+      });
+    },
+    [token, attachEventHandlers, replaceSocket],
+  );
+
   const dispatchMessage = useCallback(
     async (messageText: string, options?: DispatchMessageOptions) => {
       const turnIdeas = options?.sessionIdeas ?? sessionIdeas;
@@ -196,56 +221,35 @@ export function useWebSocketChat({
       setLiveStepOffset(0);
       setSessionStreaming(sessionId, true);
 
-      const liveAttached = wsSessionRef.current === activeSessionId;
-      if (liveAttached) {
-        try {
-          await api.sendSessionMessage({
-            message: messageText,
-            agent_id: agentId || undefined,
-            session_id: sessionId,
-            session_ideas: turnIdeas.length > 0 ? turnIdeas : undefined,
-            quest_id: turnTask?.id,
-            files:
-              turnFiles.length > 0
-                ? turnFiles.map((f) => ({ name: f.name, content: f.content }))
-                : undefined,
-          });
-        } catch {
-          clearLiveState();
-        }
-        return;
-      }
+      await ensureLiveAttached(sessionId, startTime);
 
-      const ws = openChatSocket(token);
-      replaceSocket(ws, sessionId);
-      ws.onopen = () =>
-        ws.send(
-          JSON.stringify(
-            sendPayload({
-              messageText,
-              agentId,
-              sessionId,
-              sessionIdeas: turnIdeas,
-              sessionTask: turnTask,
-              attachedFiles: turnFiles,
-            }),
-          ),
-        );
-      attachEventHandlers(ws, startTime);
+      try {
+        await api.sendSessionMessage({
+          message: messageText,
+          agent_id: agentId || undefined,
+          session_id: sessionId,
+          session_ideas: turnIdeas.length > 0 ? turnIdeas : undefined,
+          quest_id: turnTask?.id,
+          files:
+            turnFiles.length > 0
+              ? turnFiles.map((f) => ({ name: f.name, content: f.content }))
+              : undefined,
+        });
+      } catch {
+        clearLiveState();
+      }
     },
     [
       token,
       agentId,
       agentName,
-      activeSessionId,
       sessionIdRef,
       prevSessionRef,
       setSession,
       setSessions,
       setMessages,
       clearLiveState,
-      attachEventHandlers,
-      replaceSocket,
+      ensureLiveAttached,
       sessionIdeas,
       sessionTask,
       attachedFiles,
@@ -257,22 +261,12 @@ export function useWebSocketChat({
   const attachToLiveStream = useCallback(
     (sessionId: string) => {
       if (!token || !sessionId) return;
-      // Decide based on what's already in the messages list.
-      //
-      // - Trailing draft assistant: turn is in-flight server-side, the
-      //   StreamingMessage will replay the same content from the broadcast
-      //   backlog and continue live. Drop the static partial here so the
-      //   live trail is the only render.
-      //
-      // - Trailing completed assistant: the turn already finished, the DB
-      //   reconstruction has the canonical content. `isSessionActive`
-      //   sometimes returns true for a few hundred ms after the agent
-      //   exits (registry race) — and the broadcast backlog isn't always
-      //   cleared in time, so a fresh subscription would replay the whole
-      //   turn into a SECOND committed message. Skip the live-attach.
-      //
-      // - No trailing assistant (just a user message, or empty): a fresh
-      //   turn is presumably starting; attach so its events stream in.
+      // Trailing completed assistant: the turn already finished and the
+      // DB reconstruction owns the canonical content. `isSessionActive`
+      // can return true for a few hundred ms after the agent exits
+      // (registry race), so a fresh subscription would replay the
+      // backlog into a SECOND committed message. Skip the live-attach.
+      // For trailing-draft / no-trailing-assistant we attach normally.
       const last = messagesRef.current[messagesRef.current.length - 1];
       if (last?.role === "assistant" && !last.draft) return;
 
@@ -286,12 +280,9 @@ export function useWebSocketChat({
         });
       }
 
-      const ws = openChatSocket(token);
-      replaceSocket(ws, sessionId);
-      ws.onopen = () => ws.send(JSON.stringify({ subscribe: true, session_id: sessionId }));
-      attachEventHandlers(ws, 0);
+      void ensureLiveAttached(sessionId, 0);
     },
-    [token, attachEventHandlers, replaceSocket, setSessionStreaming, setMessages, messagesRef],
+    [token, ensureLiveAttached, setSessionStreaming, setMessages, messagesRef],
   );
 
   useEffect(() => {
@@ -303,7 +294,7 @@ export function useWebSocketChat({
   }, [activeSessionId, clearLiveState]);
 
   useEffect(() => {
-    if (!token || !activeSessionId || streaming) return;
+    if (!token || !activeSessionId) return;
     let cancelled = false;
     api
       .isSessionActive(activeSessionId)
@@ -457,34 +448,4 @@ async function ensureSession({
   } catch {
     return { sessionId: null, isNew: true };
   }
-}
-
-interface SendPayloadArgs {
-  messageText: string;
-  agentId: string;
-  sessionId: string | null;
-  sessionIdeas: string[];
-  sessionTask: { id: string; name: string } | null;
-  attachedFiles: AttachedFile[];
-}
-
-function sendPayload({
-  messageText,
-  agentId,
-  sessionId,
-  sessionIdeas,
-  sessionTask,
-  attachedFiles,
-}: SendPayloadArgs): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    message: messageText,
-    agent_id: agentId || undefined,
-    session_id: sessionId || undefined,
-  };
-  if (sessionIdeas.length > 0) payload.session_ideas = sessionIdeas;
-  if (sessionTask) payload.quest_id = sessionTask.id;
-  if (attachedFiles.length > 0) {
-    payload.files = attachedFiles.map((f) => ({ name: f.name, content: f.content }));
-  }
-  return payload;
 }
