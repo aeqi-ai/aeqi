@@ -125,6 +125,31 @@ not a default. If the deployed shape is itself wrong, hard-refreshing
 just shows them the same wrong shape faster — which is the opposite of
 helpful.
 
+### Network / socket / proxy regressions — run the audit
+
+`npm run verify` cannot catch a query-param mismatch on a WebSocket URL,
+a fetch-ordering bug that fires `X-Entity required` calls before the
+entity is known, or a wagmi config that crashes RainbowKit at module
+init. These only show up when the deployed app boots in a real browser.
+
+When the user reports "weird 400s" / "something feels off in prod" / WS
+not connecting, OR after any change that touches `apps/ui/src/api/`,
+`apps/ui/src/hooks/use*Socket*`, daemon-store ordering, or the platform
+proxy contract — run the headless audit. Recipe:
+[`scripts/AUDIT.md`](../../scripts/AUDIT.md). One command,
+authed-as-user, captures network + console + WS state across every
+route plus a refresh-reconnect probe per route.
+
+The two recurring contract bugs the audit catches:
+
+- WS query param: the platform proxy reads `entity` or `entity_id`
+  from the WS URL query, not `root`. Both `useDaemonSocket.ts` and
+  `useWebSocketChat.ts` send to the proxy boundary — keep them in
+  lockstep.
+- Daemon `fetchAll` ordering: `fetchEntities` is user-scoped (no
+  X-Entity required); the rest are entity-scoped. Run entities first
+  and gate the rest on `getScopedEntity()` returning non-empty.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5
