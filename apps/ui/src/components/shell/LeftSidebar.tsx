@@ -159,13 +159,18 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   // user is currently looking at. Per-agent drilldowns
   // (`/c/<entity>/agents/<agent>`) inherit the same sidebar.
   const base = entityId ? `/c/${encodeURIComponent(entityId)}` : "";
-  // The "in a company" check is path-based — the prop `entityId` falls
-  // back to the user's first company for context (so navigation links
-  // resolve), but at user scope (`/`, `/me`, `/economy`, …) we still
-  // want to render only the user's own surfaces. The user picks a
-  // company via the switcher; that flips the URL into `/c/<id>/...` and
-  // the company-scoped items appear.
-  const isEntityScope = path.startsWith("/c/");
+  // Switcher = cursor, URL = page. The company section's *visibility*
+  // is driven by the switcher (a non-empty `entityId` means a company
+  // is selected), NOT by the URL path. That way Home and Inbox — which
+  // are user-scope routes that aggregate cross-company — keep the
+  // company tabs visible and one click away. Pressing Home does not
+  // unselect your company. The URL still drives *active* state below
+  // (which tab is lit), and `isActive` for the bare `/c/<id>` path
+  // already correctly returns false on `/` or `/me/inbox` so nothing
+  // lights up while you're at user scope. If no company is selected,
+  // the section collapses and the switcher trigger reads "Select a
+  // company".
+  const hasCompany = !!entityId;
 
   const navHref = (id: string) => `${base}/${id}`;
   const isActive = (id: string) => {
@@ -332,11 +337,12 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           </Tooltip>
         </div>
 
-        {/* Company-scope items — only shown when the URL puts the
-            user inside a company. Flat: no "Company" group header.
-            Once you're in a company, the items are obviously
-            company-scoped — the label was repeating itself. ── */}
-        {isEntityScope && (
+        {/* Company-scope items — visible whenever a company is
+            selected in the switcher, regardless of what URL the user
+            is on. Home / Inbox keep the section visible so it's one
+            click into the workspace. Flat: no "Company" group header.
+            ── */}
+        {hasCompany && (
           <>
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company">
               {navItem("overview", "Company", <CompanyIcon />)}
