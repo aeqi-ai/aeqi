@@ -27,12 +27,9 @@ export default function LoginPage() {
     loginWithEmail,
     verifyEmail,
     resendCode,
-    verify2fa,
     verifyTotp,
-    resend2fa,
     requestLoginCode,
     loginWithCode,
-    pending2faEmail,
     isAuthenticated,
   } = useAuthStore();
 
@@ -71,7 +68,7 @@ export default function LoginPage() {
     const titles: Record<typeof step, string> = {
       credentials: "Sign in · aeqi",
       verify: "Verify email · aeqi",
-      "2fa": "Two-factor · aeqi",
+      "2fa": "Verify sign-in · aeqi",
       totp: "Two-factor · aeqi",
       forgot: "Reset password · aeqi",
       "magic-code": "Sign in · aeqi",
@@ -267,7 +264,7 @@ export default function LoginPage() {
     if (full.length === 6) {
       setTwoFaLoading(true);
       setTwoFaError("");
-      verify2fa(email, full).then((ok) => {
+      loginWithCode(email, full).then((ok) => {
         setTwoFaLoading(false);
         if (ok) {
           track(Events.Auth2faCompleted, { kind: "email" });
@@ -294,7 +291,7 @@ export default function LoginPage() {
       twoFaRefs.current[5]?.focus();
       setTwoFaLoading(true);
       setTwoFaError("");
-      verify2fa(email, text).then((ok) => {
+      loginWithCode(email, text).then((ok) => {
         setTwoFaLoading(false);
         if (ok) {
           track(Events.Auth2faCompleted, { kind: "email" });
@@ -309,7 +306,7 @@ export default function LoginPage() {
 
   const handle2faResend = async () => {
     if (twoFaResendCooldown > 0) return;
-    const ok = await resend2fa(email);
+    const ok = await requestLoginCode(email);
     if (ok) setTwoFaResendCooldown(60);
   };
 
@@ -450,8 +447,7 @@ export default function LoginPage() {
             </>
           ) : step === "2fa" ? (
             <>
-              We sent a code to{" "}
-              <strong className="auth-email-highlight">{pending2faEmail || email}</strong>
+              We sent a code to <strong className="auth-email-highlight">{email}</strong>
             </>
           ) : step === "totp" ? (
             "Enter the 6-digit code from your authenticator app"

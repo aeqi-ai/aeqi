@@ -170,18 +170,6 @@ export const api = {
       body: JSON.stringify({ email }),
     }),
 
-  verify2fa: (email: string, code: string) =>
-    request<{ ok: boolean; token: string; user?: Record<string, unknown> }>("/auth/2fa/verify", {
-      method: "POST",
-      body: JSON.stringify({ email, code }),
-    }),
-
-  resend2fa: (email: string) =>
-    request<{ ok: boolean }>("/auth/2fa/resend", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    }),
-
   forgotPassword: (email: string) =>
     request<{ ok: boolean }>("/auth/forgot-password", {
       method: "POST",

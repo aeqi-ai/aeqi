@@ -64,10 +64,7 @@ interface AuthState {
   requestLoginCode: (email: string) => Promise<boolean>;
   loginWithCode: (email: string, code: string) => Promise<boolean>;
   loginWithMagicLink: (token: string) => Promise<boolean>;
-  verify2fa: (email: string, code: string) => Promise<boolean>;
   verifyTotp: (email: string, code: string) => Promise<boolean>;
-  resend2fa: (email: string) => Promise<boolean>;
-  pending2faEmail: string | null;
   handleOAuthCallback: (token: string) => void;
   fetchMe: () => Promise<void>;
   logout: () => void;
@@ -86,7 +83,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: false,
   error: null,
   pendingEmail: null,
-  pending2faEmail: null,
   authModeLoaded: false,
 
   fetchAuthMode: async () => {
@@ -149,13 +145,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const resp = await api.loginWithEmail(email, password);
       if (resp.ok && (resp as Record<string, unknown>).pending_totp) {
-        const maskedEmail = resp.email || email;
-        set({ loading: false, pending2faEmail: maskedEmail });
+        set({ loading: false });
         return "totp";
       }
       if (resp.ok && resp.pending_2fa) {
-        const maskedEmail = resp.email || email;
-        set({ loading: false, pending2faEmail: maskedEmail });
+        set({ loading: false });
         return "2fa";
       }
       if (resp.ok && resp.token) {
@@ -306,28 +300,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  verify2fa: async (email: string, code: string) => {
-    set({ loading: true, error: null });
-    try {
-      const resp = await api.verify2fa(email, code);
-      if (resp.ok && resp.token) {
-        clearSessionData();
-        localStorage.setItem("aeqi_token", resp.token);
-        defaultAnalyticsConsentOnAuth();
-        const user = (resp.user as User | undefined) || null;
-        set({ token: resp.token, user, loading: false, pending2faEmail: null });
-        applyRoot(user?.roots);
-        return true;
-      }
-      set({ loading: false, error: "Invalid or expired code" });
-      return false;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Verification failed";
-      set({ loading: false, error: msg });
-      return false;
-    }
-  },
-
   verifyTotp: async (email: string, code: string) => {
     set({ loading: true, error: null });
     try {
@@ -341,7 +313,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           token: (resp as Record<string, unknown>).token as string,
           user,
           loading: false,
-          pending2faEmail: null,
         });
         applyRoot(user?.roots);
         return true;
@@ -351,15 +322,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Verification failed";
       set({ loading: false, error: msg });
-      return false;
-    }
-  },
-
-  resend2fa: async (email: string) => {
-    try {
-      await api.resend2fa(email);
-      return true;
-    } catch {
       return false;
     }
   },
@@ -397,7 +359,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       token: null,
       user: null,
       pendingEmail: null,
-      pending2faEmail: null,
       appMode: null,
       authMode: null,
       authModeLoaded: false,
