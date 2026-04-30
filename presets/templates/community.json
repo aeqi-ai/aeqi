@@ -34,7 +34,11 @@
       "cooldown_secs": 0,
       "query_template": "community lead identity norms and current priorities",
       "query_top_k": 6,
-      "query_tag_filter": ["identity", "norm", "priorities"],
+      "query_tag_filter": [
+        "identity",
+        "norm",
+        "priorities"
+      ],
       "tool_calls": []
     },
     {
@@ -44,7 +48,11 @@
       "cooldown_secs": 3600,
       "query_template": "weekly community health pulse and unresolved threads",
       "query_top_k": 5,
-      "query_tag_filter": ["cadence", "weekly-digest", "mod-log"],
+      "query_tag_filter": [
+        "cadence",
+        "weekly-digest",
+        "mod-log"
+      ],
       "tool_calls": []
     },
     {
@@ -54,7 +62,10 @@
       "cooldown_secs": 3600,
       "query_template": "daily curation digest top threads",
       "query_top_k": 4,
-      "query_tag_filter": ["weekly-digest", "norm"],
+      "query_tag_filter": [
+        "weekly-digest",
+        "norm"
+      ],
       "tool_calls": []
     }
   ],
@@ -63,37 +74,61 @@
       "owner": "root",
       "name": "Community norms",
       "content": "Be specific, kind, and on-topic. Disagreement is welcome; contempt is not. No self-promo outside the dedicated channel. No DM-spam to recruit, sell, or fundraise. New members are welcomed personally within 24 hours. Mistakes are forgivable; patterns are not.",
-      "tags": ["norm", "identity", "evergreen"]
+      "tags": [
+        "norm",
+        "identity",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "Moderation philosophy",
       "content": "Act fast on the obvious. Be slow on the borderline. Public removals are reserved for public violations; everything else is a DM first. Bans are explained — not justified — once, and never re-litigated. The community trusts moderation when it's predictable, not when it's lenient.",
-      "tags": ["norm", "stance", "evergreen"]
+      "tags": [
+        "norm",
+        "stance",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "Surfaceable signal",
       "content": "Things worth lifting up: a member shipping something with a real artifact attached, a sharp question that opens a thread, a generous teach where someone explains the thing they spent a year learning. Things not worth lifting: hot takes, vague vibe-posts, dunks, contests-for-engagement.",
-      "tags": ["norm", "stance", "evergreen"]
+      "tags": [
+        "norm",
+        "stance",
+        "evergreen"
+      ]
     },
     {
       "owner": "Moderator",
       "name": "Mod-log format",
       "content": "Each entry: date, channel, user (or `anon`), action (removed / muted / banned / warned), one-line reason, link to the offending content. No editorializing. Logs are reviewed weekly; patterns inform updates to the norms.",
-      "tags": ["mod-log", "procedure", "evergreen"]
+      "tags": [
+        "mod-log",
+        "procedure",
+        "evergreen"
+      ]
     },
     {
       "owner": "Curator",
       "name": "Daily curation rules",
       "content": "Pick 3–5 threads daily. Each gets a one-sentence framing — not a summary, a frame: 'why this is worth your time'. Frame in the Community Lead's voice. Never feature your own posts; if a great thread is yours, hand it to the Lead.",
-      "tags": ["weekly-digest", "procedure", "evergreen"]
+      "tags": [
+        "weekly-digest",
+        "procedure",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "How to evolve the norms",
       "content": "Norms change when the room outgrows them. Don't change in response to a single bad actor — that's enforcement, not a norm change. Propose the new norm as an idea, mark the old one superseded, and post the change publicly with a one-paragraph explanation.",
-      "tags": ["skill", "norm", "evergreen"]
+      "tags": [
+        "skill",
+        "norm",
+        "evergreen"
+      ]
     }
   ],
   "seed_quests": [
@@ -101,13 +136,46 @@
       "owner": "root",
       "subject": "Welcome the last 14 days of new members",
       "description": "Read the new-member list. Send each one a personal welcome that points to the right channel for what they joined for. Capture any patterns — what people keep saying they want — as ideas tagged `priorities` so we know what to build for them.",
-      "labels": ["onboarding", "operations"]
+      "labels": [
+        "onboarding",
+        "operations"
+      ]
     },
     {
       "owner": "Curator",
       "subject": "Run the first daily curation",
       "description": "Read the last 24 hours of high-signal channels. Pick the 3 strongest threads, write a one-sentence framing for each, and post the digest. Store the digest as an idea tagged `weekly-digest` so the trend is visible across weeks.",
-      "labels": ["curation", "weekly-digest"]
+      "labels": [
+        "curation",
+        "weekly-digest"
+      ]
+    }
+  ],
+  "seed_roles": [
+    {
+      "key": "root",
+      "title": "Community Lead",
+      "default_occupant_agent": "root"
+    },
+    {
+      "key": "moderator",
+      "title": "Moderator",
+      "default_occupant_agent": "Moderator"
+    },
+    {
+      "key": "curator",
+      "title": "Curator",
+      "default_occupant_agent": "Curator"
+    }
+  ],
+  "seed_role_edges": [
+    {
+      "parent": "root",
+      "child": "moderator"
+    },
+    {
+      "parent": "root",
+      "child": "curator"
     }
   ]
 }

@@ -18,7 +18,10 @@
       "cooldown_secs": 0,
       "query_template": "operator priorities and recent decisions",
       "query_top_k": 4,
-      "query_tag_filter": ["identity", "priorities"],
+      "query_tag_filter": [
+        "identity",
+        "priorities"
+      ],
       "tool_calls": []
     }
   ],
@@ -27,8 +30,20 @@
       "owner": "root",
       "name": "Operating principles",
       "content": "Tell aeqi what you want this company to do — there is no preset role. The simplest first move: name a goal, ask aeqi to break it into 2-3 quests, and start. Spawn sub-agents only when you can name what they own that aeqi can't.",
-      "tags": ["identity", "priorities", "evergreen"]
+      "tags": [
+        "identity",
+        "priorities",
+        "evergreen"
+      ]
     }
   ],
-  "seed_quests": []
+  "seed_quests": [],
+  "seed_roles": [
+    {
+      "key": "root",
+      "title": "aeqi",
+      "default_occupant_agent": "root"
+    }
+  ],
+  "seed_role_edges": []
 }

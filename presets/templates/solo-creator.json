@@ -34,7 +34,11 @@
       "cooldown_secs": 0,
       "query_template": "creator voice priorities and current pipeline",
       "query_top_k": 6,
-      "query_tag_filter": ["identity", "voice", "priorities"],
+      "query_tag_filter": [
+        "identity",
+        "voice",
+        "priorities"
+      ],
       "tool_calls": []
     },
     {
@@ -44,7 +48,11 @@
       "cooldown_secs": 3600,
       "query_template": "weekly pipeline review and idea bank",
       "query_top_k": 5,
-      "query_tag_filter": ["cadence", "production-debrief", "audience-signal"],
+      "query_tag_filter": [
+        "cadence",
+        "production-debrief",
+        "audience-signal"
+      ],
       "tool_calls": []
     },
     {
@@ -54,7 +62,9 @@
       "cooldown_secs": 3600,
       "query_template": "weekly audience signal digest",
       "query_top_k": 5,
-      "query_tag_filter": ["audience-signal"],
+      "query_tag_filter": [
+        "audience-signal"
+      ],
       "tool_calls": []
     }
   ],
@@ -63,37 +73,61 @@
       "owner": "root",
       "name": "Creator voice",
       "content": "Specific, generous, opinionated. No hustle theater, no humble brags, no mid-paragraph epiphany. Talk to one person, not an audience. Show the work; show the doubt. If a sentence could come out of any creator's mouth, cut it.",
-      "tags": ["voice", "identity", "evergreen"]
+      "tags": [
+        "voice",
+        "identity",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "Pipeline rhythm",
       "content": "Mon: brainstorm + lock the week's piece. Tue–Wed: produce. Thu: edit + sit with it. Fri: ship + audience time. Saturday off; Sunday a single quiet think-walk. The pipeline never has zero pieces in flight; it never has more than three.",
-      "tags": ["cadence", "procedure", "evergreen"]
+      "tags": [
+        "cadence",
+        "procedure",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "What we don't make",
       "content": "We don't make pure trend chases, hot takes for engagement, AI-generated thumbnails, or any piece whose hook doesn't survive a one-day cool-off. We don't sell products we haven't used. We don't take sponsorships that fight the audience's interest.",
-      "tags": ["voice", "stance", "evergreen"]
+      "tags": [
+        "voice",
+        "stance",
+        "evergreen"
+      ]
     },
     {
       "owner": "Producer",
       "name": "Hook rubric",
       "content": "Every piece opens with one of: a concrete scene, a counter-intuitive claim with a one-line proof, or a question the audience already half-asked. If the first 15 seconds (or 60 words) don't pull a stranger in, the piece is not done.",
-      "tags": ["production-debrief", "procedure"]
+      "tags": [
+        "production-debrief",
+        "procedure"
+      ]
     },
     {
       "owner": "Community Lead",
       "name": "Reply policy",
       "content": "Reply to thoughtful comments within 24 hours. Reply in the Creator's voice — if unsure, ask. Never argue; clarify once and move on. DMs about products go to the team inbox; personal questions get a brief warm reply. Surface signal, don't perform engagement.",
-      "tags": ["voice", "stance", "procedure", "evergreen"]
+      "tags": [
+        "voice",
+        "stance",
+        "procedure",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "How to evolve the voice",
       "content": "Voice changes are intentional, not drift. When the Creator wants to shift — sharper, softer, more political, more technical — write a new `voice` idea, mark the old one as superseded, and produce one piece that visibly demonstrates the shift before scaling it.",
-      "tags": ["skill", "voice", "evergreen"]
+      "tags": [
+        "skill",
+        "voice",
+        "evergreen"
+      ]
     }
   ],
   "seed_quests": [
@@ -101,13 +135,46 @@
       "owner": "root",
       "subject": "Pick this week's piece",
       "description": "Review the idea bank. Pick the one piece you'd want to read or watch right now. Write a one-paragraph brief: hook, three beats, the line only you can say. Hand to the Producer.",
-      "labels": ["pipeline", "voice"]
+      "labels": [
+        "pipeline",
+        "voice"
+      ]
     },
     {
       "owner": "Community Lead",
       "subject": "Run the first audience-signal digest",
       "description": "Read the last 14 days of comments and DMs across every channel. Identify the three pieces of feedback that came up unprompted from multiple people. Store each as an idea tagged `audience-signal` with a one-paragraph summary.",
-      "labels": ["audience", "research"]
+      "labels": [
+        "audience",
+        "research"
+      ]
+    }
+  ],
+  "seed_roles": [
+    {
+      "key": "root",
+      "title": "Creator",
+      "default_occupant_agent": "root"
+    },
+    {
+      "key": "producer",
+      "title": "Producer",
+      "default_occupant_agent": "Producer"
+    },
+    {
+      "key": "community-lead",
+      "title": "Community Lead",
+      "default_occupant_agent": "Community Lead"
+    }
+  ],
+  "seed_role_edges": [
+    {
+      "parent": "root",
+      "child": "producer"
+    },
+    {
+      "parent": "root",
+      "child": "community-lead"
     }
   ]
 }

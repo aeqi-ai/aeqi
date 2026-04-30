@@ -10,5 +10,13 @@
   "seed_agents": [],
   "seed_events": [],
   "seed_ideas": [],
-  "seed_quests": []
+  "seed_quests": [],
+  "seed_roles": [
+    {
+      "key": "root",
+      "title": "Root",
+      "default_occupant_agent": "root"
+    }
+  ],
+  "seed_role_edges": []
 }

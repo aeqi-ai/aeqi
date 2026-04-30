@@ -41,7 +41,11 @@
       "cooldown_secs": 0,
       "query_template": "managing partner identity priorities and current engagements",
       "query_top_k": 6,
-      "query_tag_filter": ["identity", "engagement-debrief", "priorities"],
+      "query_tag_filter": [
+        "identity",
+        "engagement-debrief",
+        "priorities"
+      ],
       "tool_calls": []
     },
     {
@@ -51,7 +55,10 @@
       "cooldown_secs": 3600,
       "query_template": "weekly engagement pipeline and outstanding proposals",
       "query_top_k": 5,
-      "query_tag_filter": ["cadence", "weekly-status"],
+      "query_tag_filter": [
+        "cadence",
+        "weekly-status"
+      ],
       "tool_calls": []
     },
     {
@@ -61,7 +68,9 @@
       "cooldown_secs": 3600,
       "query_template": "produce friday engagement status",
       "query_top_k": 4,
-      "query_tag_filter": ["weekly-status"],
+      "query_tag_filter": [
+        "weekly-status"
+      ],
       "tool_calls": []
     }
   ],
@@ -70,37 +79,60 @@
       "owner": "root",
       "name": "Agency positioning",
       "content": "We sell judgment, not headcount. Engagements are 4–10 weeks, fixed-fee, with a single named partner. We say no to retainers that turn us into a staff aug shop. We say no to scope expansions inside an engagement — the right path is a follow-on engagement with a fresh scope.",
-      "tags": ["identity", "stance", "evergreen"]
+      "tags": [
+        "identity",
+        "stance",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "Engagement structure",
       "content": "Week 1: discovery + reframe the problem. Weeks 2–N-1: the work. Final week: written deliverable + working session + 30-day follow-up plan. Status notes go out every Friday whether the client asks for them or not. Surprises are a delivery failure, not a feature.",
-      "tags": ["playbook", "procedure", "evergreen"]
+      "tags": [
+        "playbook",
+        "procedure",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "Pricing rules",
       "content": "Fixed fee per engagement. Smallest engagement: 4 weeks at the firm's senior weekly rate. We do not discount; we narrow scope. Late payment = work paused, not waived. Refunds are offered when the deliverable was not what was agreed.",
-      "tags": ["stance", "playbook", "evergreen"]
+      "tags": [
+        "stance",
+        "playbook",
+        "evergreen"
+      ]
     },
     {
       "owner": "Senior Consultant (Strategy)",
       "name": "Discovery rubric",
       "content": "Every engagement opens with three artifacts: (1) the stated problem in the client's own words, (2) the underlying problem we believe they actually have, (3) the smallest test that would prove or disprove (2) before we commit a full plan. Discovery is done when the client agrees to (2) or pushes back with a sharper version.",
-      "tags": ["playbook", "procedure"]
+      "tags": [
+        "playbook",
+        "procedure"
+      ]
     },
     {
       "owner": "Producer",
       "name": "Status note format",
       "content": "One page, three sections: shipped this week (concrete artifacts only), shipping next week (with names and dates), risks (with mitigations or asks). No status note ever uses the word 'progressing'.",
-      "tags": ["weekly-status", "procedure", "evergreen"]
+      "tags": [
+        "weekly-status",
+        "procedure",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "How to write a proposal",
       "content": "Proposals are two pages. Page one: the problem in the client's words, our reframe, the artifact they will hold at the end, the named partner. Page two: the schedule, the fee, what is and isn't included. No appendix. If it requires a sales call to make sense, the proposal is wrong.",
-      "tags": ["skill", "playbook", "evergreen"]
+      "tags": [
+        "skill",
+        "playbook",
+        "evergreen"
+      ]
     }
   ],
   "seed_quests": [
@@ -108,13 +140,55 @@
       "owner": "root",
       "subject": "Draft the first proposal",
       "description": "Pick the most-qualified prospect from the inbound list. Apply the proposal format from the playbook. Send the draft to the Senior Consultant (Strategy) for one editorial pass before it goes to the client.",
-      "labels": ["pipeline", "writing"]
+      "labels": [
+        "pipeline",
+        "writing"
+      ]
     },
     {
       "owner": "Producer",
       "subject": "Stand up the engagement calendar",
       "description": "Create a single calendar that lists every active engagement, its key deliverables, and its weekly checkpoints. Produce the first Friday status note even if no engagement is yet active — set the muscle.",
-      "labels": ["operations", "weekly-status"]
+      "labels": [
+        "operations",
+        "weekly-status"
+      ]
+    }
+  ],
+  "seed_roles": [
+    {
+      "key": "root",
+      "title": "Managing Partner",
+      "default_occupant_agent": "root"
+    },
+    {
+      "key": "senior-consultant-strategy",
+      "title": "Senior Consultant (Strategy)",
+      "default_occupant_agent": "Senior Consultant (Strategy)"
+    },
+    {
+      "key": "senior-consultant-delivery",
+      "title": "Senior Consultant (Delivery)",
+      "default_occupant_agent": "Senior Consultant (Delivery)"
+    },
+    {
+      "key": "producer",
+      "title": "Producer",
+      "default_occupant_agent": "Producer"
+    }
+  ],
+  "seed_role_edges": [
+    {
+      "parent": "root",
+      "child": "senior-consultant-strategy"
+    },
+    {
+      "parent": "root",
+      "child": "senior-consultant-delivery"
+    },
+    {
+      "parent": "root",
+      "child": "producer"
     }
   ]
 }

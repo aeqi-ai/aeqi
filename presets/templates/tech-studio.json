@@ -48,7 +48,11 @@
       "cooldown_secs": 0,
       "query_template": "tech lead identity priorities and current sprint",
       "query_top_k": 6,
-      "query_tag_filter": ["identity", "architecture", "priorities"],
+      "query_tag_filter": [
+        "identity",
+        "architecture",
+        "priorities"
+      ],
       "tool_calls": []
     },
     {
@@ -58,7 +62,10 @@
       "cooldown_secs": 3600,
       "query_template": "weekly release plan and outstanding quests",
       "query_top_k": 5,
-      "query_tag_filter": ["cadence", "release-log"],
+      "query_tag_filter": [
+        "cadence",
+        "release-log"
+      ],
       "tool_calls": []
     },
     {
@@ -68,7 +75,10 @@
       "cooldown_secs": 3600,
       "query_template": "production smoke checklist",
       "query_top_k": 3,
-      "query_tag_filter": ["release-log", "infra"],
+      "query_tag_filter": [
+        "release-log",
+        "infra"
+      ],
       "tool_calls": []
     }
   ],
@@ -77,37 +87,58 @@
       "owner": "root",
       "name": "Engineering principles",
       "content": "Ship small, reversible changes. Tests live next to code. No comments that paraphrase the next line. A working ugly version beats a perfect plan. Refactor only when the next change becomes harder. If a feature can be deferred until a real user asks for it, defer it.",
-      "tags": ["identity", "architecture", "evergreen"]
+      "tags": [
+        "identity",
+        "architecture",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "Release cadence",
       "content": "Releases on Monday and Wednesday. Tag the commit, run smoke tests, post one line to the release-log. Hot fixes ship the moment they're verified — they do not wait for the cadence. Skip a release rather than ship a half-done one.",
-      "tags": ["cadence", "release-log", "procedure"]
+      "tags": [
+        "cadence",
+        "release-log",
+        "procedure"
+      ]
     },
     {
       "owner": "root",
       "name": "Architecture defaults",
       "content": "Boring tech first: SQLite or Postgres, plain HTTP, files on disk. No new service unless the existing one is the bottleneck and we have data to prove it. APIs are versioned only when an external client depends on them. State lives in one place; everything else reads from it.",
-      "tags": ["architecture", "evergreen"]
+      "tags": [
+        "architecture",
+        "evergreen"
+      ]
     },
     {
       "owner": "Designer-Engineer",
       "name": "Design system fundamentals",
       "content": "Tokens before components. Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64. Type scale set in CSS variables. One sans, one mono, one display — never a fourth. Color: a neutral ramp + one accent + one success + one warning. Motion: 120 ms ease for hover, 240 ms cubic-bezier for entrances. Anything outside these defaults is a deliberate choice with a recorded reason.",
-      "tags": ["design-system", "evergreen"]
+      "tags": [
+        "design-system",
+        "evergreen"
+      ]
     },
     {
       "owner": "Senior Engineer (Backend)",
       "name": "API rules of thumb",
       "content": "Endpoints describe nouns, not verbs. Pagination uses cursor + limit, not page + size. Errors return a stable code, never a free-text status. Always return JSON, never null on the response root. Idempotency keys for any non-GET that mutates external state.",
-      "tags": ["backend", "evergreen"]
+      "tags": [
+        "backend",
+        "evergreen"
+      ]
     },
     {
       "owner": "root",
       "name": "How to spawn a new project",
       "content": "Open a quest with the project name, the one-sentence outcome, and the two metrics that prove it shipped. Spin a worktree, copy the studio's starter scaffold, and merge to main only when the smoke test reads green. New projects get their own ideas tagged `<project>` so context doesn't bleed across the studio.",
-      "tags": ["skill", "procedure", "evergreen"]
+      "tags": [
+        "skill",
+        "procedure",
+        "evergreen"
+      ]
     }
   ],
   "seed_quests": [
@@ -115,13 +146,64 @@
       "owner": "root",
       "subject": "Pick the next product to spin up",
       "description": "Review the studio's idea log. Identify the candidate with the clearest problem statement and the strongest user pull. Open it as a project quest with a one-sentence outcome, two metrics, and a target ship date.",
-      "labels": ["planning", "product"]
+      "labels": [
+        "planning",
+        "product"
+      ]
     },
     {
       "owner": "Operator",
       "subject": "Stand up the studio's release pipeline",
       "description": "Wire CI: lint, test, build, smoke. Configure two environments (staging + prod). Document the rollback procedure as an idea tagged `infra`. Verify by shipping a no-op commit through the full pipeline and posting the release-log entry.",
-      "labels": ["infra", "release-log"]
+      "labels": [
+        "infra",
+        "release-log"
+      ]
+    }
+  ],
+  "seed_roles": [
+    {
+      "key": "root",
+      "title": "Tech Lead",
+      "default_occupant_agent": "root"
+    },
+    {
+      "key": "senior-engineer-backend",
+      "title": "Senior Engineer (Backend)",
+      "default_occupant_agent": "Senior Engineer (Backend)"
+    },
+    {
+      "key": "senior-engineer-frontend",
+      "title": "Senior Engineer (Frontend)",
+      "default_occupant_agent": "Senior Engineer (Frontend)"
+    },
+    {
+      "key": "designer-engineer",
+      "title": "Designer-Engineer",
+      "default_occupant_agent": "Designer-Engineer"
+    },
+    {
+      "key": "operator",
+      "title": "Operator",
+      "default_occupant_agent": "Operator"
+    }
+  ],
+  "seed_role_edges": [
+    {
+      "parent": "root",
+      "child": "senior-engineer-backend"
+    },
+    {
+      "parent": "root",
+      "child": "senior-engineer-frontend"
+    },
+    {
+      "parent": "root",
+      "child": "designer-engineer"
+    },
+    {
+      "parent": "root",
+      "child": "operator"
     }
   ]
 }
