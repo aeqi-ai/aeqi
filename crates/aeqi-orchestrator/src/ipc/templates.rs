@@ -136,6 +136,29 @@ pub struct SeedRoleEdgeSpec {
     pub child: String,
 }
 
+/// Operator-time override of a declared role's default occupant.
+/// Sent in the spawn payload; applied during position installation.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RoleOverride {
+    pub role_key: String,
+    pub occupant: OverrideOccupant,
+}
+
+/// What the operator chose to slot into a role at spawn time. The
+/// `kind` discriminator picks the variant; agent and human carry their
+/// occupant identifier.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum OverrideOccupant {
+    /// Use a seed_agent by name (or "root" for the root agent).
+    Agent { agent: String },
+    /// Slot a human user as the occupant. `user_id` is the
+    /// platform-side user UUID; usually the operator's own.
+    Human { user_id: String },
+    /// Leave the role vacant.
+    Vacant,
+}
+
 /// Full template manifest.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Template {
@@ -241,6 +264,25 @@ fn parse_parts(request: &serde_json::Value) -> Vec<BlueprintPart> {
     }
 }
 
+/// Read `role_overrides` from the spawn IPC payload. Forward-compatible:
+/// missing or malformed entries warn and skip rather than 400 the spawn.
+/// Each entry must be `{ "role_key": "...", "occupant": { "kind": "agent|human|vacant", ... } }`.
+fn parse_role_overrides(request: &serde_json::Value) -> Vec<RoleOverride> {
+    let Some(arr) = request.get("role_overrides").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    let mut out: Vec<RoleOverride> = Vec::with_capacity(arr.len());
+    for v in arr {
+        match serde_json::from_value::<RoleOverride>(v.clone()) {
+            Ok(r) => out.push(r),
+            Err(err) => {
+                tracing::warn!(error = %err, "blueprint spawn: ignoring malformed role override");
+            }
+        }
+    }
+    out
+}
+
 /// Spawn a company from a template. Pure logic: everything external is
 /// injected so tests can drive this without the full daemon context.
 ///
@@ -257,6 +299,7 @@ fn parse_parts(request: &serde_json::Value) -> Vec<BlueprintPart> {
 /// always created (it owns the entity); seed_agents/events/ideas/quests
 /// are gated on the corresponding `BlueprintPart` flag. The Import flows
 /// pass `[Ideas]` or `[Quests]` to scope a spawn to one primitive.
+#[allow(clippy::too_many_arguments)]
 pub async fn spawn_blueprint(
     template: &Template,
     override_name: Option<&str>,
@@ -266,6 +309,8 @@ pub async fn spawn_blueprint(
     agent_registry: &AgentRegistry,
     event_store: &EventHandlerStore,
     idea_store: Option<&Arc<dyn aeqi_core::traits::IdeaStore>>,
+    position_registry: &crate::position_registry::PositionRegistry,
+    role_overrides: &[RoleOverride],
 ) -> anyhow::Result<SpawnOutcome> {
     let mut warnings: Vec<String> = Vec::new();
 
@@ -466,6 +511,28 @@ pub async fn spawn_blueprint(
         anyhow::anyhow!("spawned root agent has no entity_id (post-Phase-4 invariant)")
     })?;
 
+    // Install declared roles when the template provides them. The
+    // agent_registry has already auto-created one position per spawned
+    // agent (the legacy fallback path that keeps un-declared blueprints
+    // working). When `seed_roles` is non-empty, we wipe those auto
+    // positions and install the declared structure fresh — that's how
+    // vacancies and role-overrides land on the spawned company.
+    if !template.seed_roles.is_empty() {
+        if let Err(err) = install_declared_roles(
+            position_registry,
+            &entity_id,
+            &template.seed_roles,
+            &template.seed_role_edges,
+            &owner_to_agent_id,
+            role_overrides,
+            &mut warnings,
+        )
+        .await
+        {
+            warnings.push(format!("declared roles install failed: {err}"));
+        }
+    }
+
     Ok(SpawnOutcome {
         entity_id,
         root_agent_id: root.id.clone(),
@@ -476,6 +543,114 @@ pub async fn spawn_blueprint(
         created_quests,
         warnings,
     })
+}
+
+/// Replace every auto-created position for `entity_id` with the
+/// declared role structure. Operator overrides take precedence over
+/// the template's `default_occupant_agent`. Unknown role keys in
+/// overrides become warnings (the spawn still proceeds).
+#[allow(clippy::too_many_arguments)]
+async fn install_declared_roles(
+    position_registry: &crate::position_registry::PositionRegistry,
+    entity_id: &str,
+    seed_roles: &[SeedRoleSpec],
+    seed_role_edges: &[SeedRoleEdgeSpec],
+    owner_to_agent_id: &std::collections::HashMap<String, String>,
+    role_overrides: &[RoleOverride],
+    warnings: &mut Vec<String>,
+) -> anyhow::Result<()> {
+    use crate::position_registry::OccupantKind;
+
+    // Validate operator-supplied overrides early; an override referencing
+    // an unknown role key signals UI-side staleness and should warn loudly.
+    let role_keys: std::collections::HashSet<&str> =
+        seed_roles.iter().map(|r| r.key.as_str()).collect();
+    let mut overrides_by_key: std::collections::HashMap<&str, &OverrideOccupant> =
+        std::collections::HashMap::new();
+    for o in role_overrides {
+        if !role_keys.contains(o.role_key.as_str()) {
+            warnings.push(format!(
+                "role override for unknown role key '{}' ignored",
+                o.role_key,
+            ));
+            continue;
+        }
+        overrides_by_key.insert(o.role_key.as_str(), &o.occupant);
+    }
+
+    // Wipe the auto-position residue. Single transaction underneath —
+    // edges first (FK to positions), then positions.
+    position_registry.delete_for_entity(entity_id).await?;
+
+    // Mint declared positions; map role_key → fresh position_id so
+    // `seed_role_edges` can reference them.
+    let mut key_to_position_id: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for role in seed_roles {
+        let (kind, occupant_id): (OccupantKind, Option<String>) =
+            match overrides_by_key.get(role.key.as_str()) {
+                Some(OverrideOccupant::Agent { agent }) => match owner_to_agent_id.get(agent) {
+                    Some(id) => (OccupantKind::Agent, Some(id.clone())),
+                    None => {
+                        warnings.push(format!(
+                            "override for role '{}' names agent '{}' which wasn't seeded; leaving vacant",
+                            role.key, agent,
+                        ));
+                        (OccupantKind::Vacant, None)
+                    }
+                },
+                Some(OverrideOccupant::Human { user_id }) => {
+                    (OccupantKind::Human, Some(user_id.clone()))
+                }
+                Some(OverrideOccupant::Vacant) => (OccupantKind::Vacant, None),
+                None => match role.default_occupant_agent.as_deref() {
+                    Some(agent_name) => match owner_to_agent_id.get(agent_name) {
+                        Some(id) => (OccupantKind::Agent, Some(id.clone())),
+                        None => {
+                            warnings.push(format!(
+                                "default occupant '{}' for role '{}' wasn't seeded; leaving vacant",
+                                agent_name, role.key,
+                            ));
+                            (OccupantKind::Vacant, None)
+                        }
+                    },
+                    None => (OccupantKind::Vacant, None),
+                },
+            };
+
+        let position = position_registry
+            .create(entity_id, &role.title, kind, occupant_id.as_deref())
+            .await?;
+        key_to_position_id.insert(role.key.clone(), position.id);
+    }
+
+    // Wire edges. Unknown keys here are template-author bugs — warn
+    // but don't fail the spawn.
+    for edge in seed_role_edges {
+        let parent_id = match key_to_position_id.get(&edge.parent) {
+            Some(id) => id,
+            None => {
+                warnings.push(format!(
+                    "seed_role_edge parent '{}' not found in seed_roles; skipping",
+                    edge.parent,
+                ));
+                continue;
+            }
+        };
+        let child_id = match key_to_position_id.get(&edge.child) {
+            Some(id) => id,
+            None => {
+                warnings.push(format!(
+                    "seed_role_edge child '{}' not found in seed_roles; skipping",
+                    edge.child,
+                ));
+                continue;
+            }
+        };
+        position_registry.add_edge(parent_id, child_id).await?;
+    }
+
+    Ok(())
 }
 
 fn resolve_owner<'a>(
@@ -627,6 +802,8 @@ pub async fn handle_spawn_blueprint(
         return serde_json::json!({"ok": false, "error": "event handler store not available"});
     };
 
+    let role_overrides = parse_role_overrides(request);
+
     match spawn_blueprint(
         &template,
         display_name.as_deref(),
@@ -636,6 +813,8 @@ pub async fn handle_spawn_blueprint(
         &ctx.agent_registry,
         event_store.as_ref(),
         ctx.idea_store.as_ref(),
+        ctx.position_registry.as_ref(),
+        &role_overrides,
     )
     .await
     {
@@ -728,6 +907,8 @@ pub async fn handle_spawn_blueprint_into_entity(
         &ctx.agent_registry,
         event_store.as_ref(),
         ctx.idea_store.as_ref(),
+        ctx.position_registry.as_ref(),
+        &[],
     )
     .await
     {
@@ -866,6 +1047,7 @@ mod tests {
     async fn spawn_blueprint_creates_root_and_seeds_atomically() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let template = fixture_template();
@@ -878,6 +1060,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("spawn should succeed");
@@ -947,6 +1131,7 @@ mod tests {
     async fn spawn_blueprint_tolerates_missing_idea_store() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
 
         let template = fixture_template();
         let outcome = spawn_blueprint(
@@ -981,6 +1166,7 @@ mod tests {
     async fn spawn_blueprint_warns_on_unknown_owner() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let mut template = fixture_template();
@@ -1004,6 +1190,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("spawn should succeed despite one bad seed");
@@ -1023,6 +1211,7 @@ mod tests {
     async fn spawn_blueprint_applies_override_name() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let template = fixture_template();
@@ -1035,6 +1224,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("spawn should succeed");
@@ -1052,6 +1243,7 @@ mod tests {
     async fn spawn_blueprint_into_existing_entity_attaches_under_root() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         // Stand up a host entity first.
@@ -1065,6 +1257,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("host spawn should succeed");
@@ -1105,6 +1299,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("import spawn should succeed");
@@ -1137,6 +1333,7 @@ mod tests {
     async fn spawn_blueprint_with_only_ideas_skips_other_seeds() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let template = fixture_template();
@@ -1149,6 +1346,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("spawn should succeed");
@@ -1175,6 +1374,7 @@ mod tests {
     async fn spawn_blueprint_with_only_quests_skips_other_seeds() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
+        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let template = fixture_template();
@@ -1187,6 +1387,8 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
+            &position_registry,
+            &[],
         )
         .await
         .expect("spawn should succeed");

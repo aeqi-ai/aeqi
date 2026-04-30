@@ -321,6 +321,21 @@ export interface TemplateSeedRoleEdge {
   child: string;
 }
 
+/** Operator-time override of a declared role's default occupant.
+ *  `role_key` must match a `seed_roles[].key` in the template. The
+ *  occupant variants mirror the runtime `OccupantKind`: `agent` swaps
+ *  the default occupant for a different seed_agent (by name); `human`
+ *  slots a user as the occupant; `vacant` leaves the role empty. */
+export type RoleOverrideOccupant =
+  | { kind: "agent"; agent: string }
+  | { kind: "human"; user_id: string }
+  | { kind: "vacant" };
+
+export interface RoleOverride {
+  role_key: string;
+  occupant: RoleOverrideOccupant;
+}
+
 export interface CompanyTemplate {
   slug: string;
   name: string;

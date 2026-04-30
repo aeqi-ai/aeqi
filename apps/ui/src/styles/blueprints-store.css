@@ -380,6 +380,52 @@
   }
 }
 
+/* ── Role picker (pre-spawn occupant override) ────── */
+
+.bp-role-picker {
+  margin: 24px 0 32px;
+  padding: 20px 24px;
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+}
+.bp-role-picker-head {
+  margin-bottom: 16px;
+}
+.bp-role-picker-title {
+  margin: 0 0 4px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: lowercase;
+}
+.bp-role-picker-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.bp-role-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bp-role-picker-row {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  align-items: center;
+  gap: 16px;
+}
+.bp-role-picker-row-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
 /* ── Detail seed counts + samples + spawn form ────── */
 
 .bp-detail-monograms {

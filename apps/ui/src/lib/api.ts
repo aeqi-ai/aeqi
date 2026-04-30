@@ -9,6 +9,7 @@ import type {
   OccupantKind,
   Role,
   RoleEdge,
+  RoleOverride,
   Quest,
   ScopeValue,
 } from "@/lib/types";
@@ -549,7 +550,15 @@ export const api = {
   getDefaultBlueprint: () =>
     request<{ ok: boolean; blueprint: CompanyTemplate }>("/blueprints/default"),
 
-  spawnBlueprint: (data: { blueprint: string; display_name?: string }) =>
+  /** `role_overrides` lets the operator stage occupants before the spawn
+   *  commits — swap a default agent for themselves (human), or leave a
+   *  role vacant. Each override targets a `role_key` declared in the
+   *  template's `seed_roles`. Unknown keys silently warn server-side. */
+  spawnBlueprint: (data: {
+    blueprint: string;
+    display_name?: string;
+    role_overrides?: RoleOverride[];
+  }) =>
     request<{ ok: boolean; entity_id: string }>("/blueprints/spawn", {
       method: "POST",
       body: JSON.stringify(data),

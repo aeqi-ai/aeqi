@@ -196,6 +196,23 @@ impl PositionRegistry {
         )?;
         Ok(())
     }
+
+    /// Wipe every position and edge for an entity. Used by
+    /// `spawn_blueprint` when the template declares explicit `seed_roles`:
+    /// the agent_registry's spawn-time auto-positions get cleared so the
+    /// declared structure can be installed fresh, in a single transaction
+    /// with the redeclaration. Edges go first (FK to positions).
+    pub async fn delete_for_entity(&self, entity_id: &str) -> Result<()> {
+        let db = self.db.lock().await;
+        db.execute(
+            "DELETE FROM position_edges
+             WHERE parent_position_id IN (SELECT id FROM positions WHERE entity_id = ?1)
+                OR child_position_id IN (SELECT id FROM positions WHERE entity_id = ?1)",
+            params![entity_id],
+        )?;
+        db.execute("DELETE FROM positions WHERE entity_id = ?1", params![entity_id])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

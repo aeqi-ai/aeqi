@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import type {
   CompanyTemplate,
+  RoleOverrideOccupant,
   TemplateSeedAgent,
   TemplateSeedEvent,
   TemplateSeedIdea,
   TemplateSeedQuest,
 } from "@/lib/types";
+import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { Button, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import PageRail from "@/components/PageRail";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import { BlueprintSeedCounts } from "@/components/blueprints/BlueprintSeedCounts";
+import {
+  BlueprintRolePicker,
+  buildRoleOverridesPayload,
+} from "@/components/blueprints/BlueprintRolePicker";
 import "@/styles/templates.css";
 import "@/styles/blueprints-store.css";
 
@@ -100,6 +106,34 @@ export default function BlueprintDetailPage() {
     };
   }, [slug]);
 
+  // Hooks must run unconditionally before any early return.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const [roleOverrides, setRoleOverrides] = useState<Record<string, RoleOverrideOccupant>>({});
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+
+  const handleLaunchWithOverrides = useCallback(async () => {
+    if (!template) return;
+    setLaunching(true);
+    setLaunchError(null);
+    try {
+      const payload = buildRoleOverridesPayload(template, roleOverrides);
+      const resp = await api.spawnBlueprint({
+        blueprint: template.slug,
+        ...(payload.length > 0 ? { role_overrides: payload } : {}),
+      });
+      if (!resp.ok || !resp.entity_id) {
+        setLaunchError("Spawn failed — please try again.");
+        setLaunching(false);
+        return;
+      }
+      navigate(`/c/${encodeURIComponent(resp.entity_id)}/overview`);
+    } catch (err) {
+      setLaunchError(err instanceof Error ? err.message : "Spawn failed.");
+      setLaunching(false);
+    }
+  }, [template, roleOverrides, navigate]);
+
   if (loading && !template) {
     return (
       <div className="page-rail-shell">
@@ -131,6 +165,8 @@ export default function BlueprintDetailPage() {
   const launchHref = isImportMode
     ? `/economy/blueprints/${encodeURIComponent(template.slug)}?import_into=${encodeURIComponent(importIntoId ?? "")}`
     : `/start?blueprint=${encodeURIComponent(template.slug)}`;
+
+  const declaredRoles = (template.seed_roles ?? []).length > 0;
 
   return (
     <div className="page-rail-shell">
@@ -167,19 +203,35 @@ export default function BlueprintDetailPage() {
             </button>
             <h1 className="bp-detail-toolbar-title">{template.name}</h1>
             <div className="ideas-toolbar-spacer" aria-hidden />
-            <Link to={launchHref} className="bp-detail-launch-link" aria-disabled={isImportMode}>
+            {declaredRoles && !isImportMode ? (
+              // When the template declares roles, we own the spawn here so
+              // the operator's `roleOverrides` flow through. Bypasses the
+              // /start hop, which would lose the override state across
+              // pages without a query-string round-trip.
               <Button
                 type="button"
                 variant="primary"
                 size="sm"
-                disabled={isImportMode}
-                onClick={(e) => {
-                  if (isImportMode) e.preventDefault();
-                }}
+                loading={launching}
+                onClick={handleLaunchWithOverrides}
               >
-                {isImportMode ? "Coming soon" : "Use this Blueprint →"}
+                Use this Blueprint →
               </Button>
-            </Link>
+            ) : (
+              <Link to={launchHref} className="bp-detail-launch-link" aria-disabled={isImportMode}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  disabled={isImportMode}
+                  onClick={(e) => {
+                    if (isImportMode) e.preventDefault();
+                  }}
+                >
+                  {isImportMode ? "Coming soon" : "Use this Blueprint →"}
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -199,6 +251,21 @@ export default function BlueprintDetailPage() {
             <div className="bp-error" role="alert">
               {error} — showing the bundled copy.
             </div>
+          )}
+
+          {launchError && (
+            <div className="bp-error" role="alert">
+              {launchError}
+            </div>
+          )}
+
+          {declaredRoles && !isImportMode && activeSection === "overview" && (
+            <BlueprintRolePicker
+              template={template}
+              userId={userId}
+              overrides={roleOverrides}
+              onChange={setRoleOverrides}
+            />
           )}
 
           {activeSection === "overview" && <OverviewSection template={template} />}
