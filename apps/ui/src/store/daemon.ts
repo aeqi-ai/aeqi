@@ -4,6 +4,7 @@ import * as agentsApi from "@/api/agents";
 import * as entitiesApi from "@/api/entities";
 import * as questsApi from "@/api/quests";
 import * as runtimeApi from "@/api/runtime";
+import { getScopedEntity } from "@/lib/appMode";
 import type { Agent, ActivityEntry, Entity, Quest } from "@/lib/types";
 
 interface WorkerEvent {
@@ -128,10 +129,22 @@ export const useDaemonStore = create<DaemonState>((set, get) => ({
 
   fetchAll: async () => {
     const s = get();
+    // fetchEntities is user-scoped (no X-Entity required) and produces the
+    // companies the user owns. Run it first so that on first ever load we
+    // don't fire the entity-scoped proxy fetches against an empty scope —
+    // the proxy 400s with "X-Entity required" and the dashboard ends up
+    // with five red entries before fetchEntities has resolved.
+    await s.fetchEntities();
+    if (!getScopedEntity()) {
+      // No active entity yet — the user just landed at `/` with zero
+      // companies, or hasn't picked one. Skip the proxied fetches; they
+      // require entity scope and there's nothing to render against them.
+      set({ initialLoaded: true });
+      return;
+    }
     await Promise.all([
       s.fetchStatus(),
       s.fetchAgents(),
-      s.fetchEntities(),
       s.fetchQuests(),
       s.fetchEvents(),
       s.fetchCost(),

@@ -353,7 +353,7 @@ function openChatSocket(token: string): WebSocket {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const entity = getScopedEntity();
   return new WebSocket(
-    `${protocol}//${window.location.host}/api/chat/stream?token=${token}&root=${encodeURIComponent(entity)}`,
+    `${protocol}//${window.location.host}/api/chat/stream?token=${token}&entity_id=${encodeURIComponent(entity)}`,
   );
 }
 
