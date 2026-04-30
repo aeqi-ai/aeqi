@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/auth";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Spinner } from "@/components/ui";
 import AppLayout from "@/components/AppLayout";
+import SessionRedirect from "@/components/SessionRedirect";
 
 // Auth pages -- loaded eagerly since they gate entry
 import LoginPage from "@/pages/LoginPage";
@@ -139,6 +140,15 @@ export default function App() {
                   <Route path="agents" element={<AgentsPage />} />
                   <Route path="change-password" element={<ChangePasswordPage />} />
 
+                  {/* Legacy flat session URL — resolves the owning
+                      agent + entity (inbox store fast path, then
+                      getSessions recovery), then Navigate replace to
+                      the canonical deep shape. Lives outside the
+                      shell: the redirect renders before any chrome
+                      mounts, so the user never sees the old URL
+                      decorated with composer / rail wiring. */}
+                  <Route path="sessions/:sessionId" element={<SessionRedirect />} />
+
                   {/* Home dashboard + profile + every company at
                       /c/:entityId/... share the same shell — AppLayout
                       decides content from path + params. /economy
@@ -156,12 +166,6 @@ export default function App() {
                         wizard. AppLayout dispatches StartPage when
                         path === "/start". */}
                     <Route path="start" element={null} />
-                    {/* Legacy flat session URL — AppLayout dispatches
-                        SessionRedirect here, which resolves the owning
-                        agent + entity and bounces to the canonical
-                        deep shape `/c/<entity>/agents/<agent>/sessions/<id>`.
-                        Kept so external links and bookmarks keep working. */}
-                    <Route path="sessions/:sessionId" element={null} />
                     {/* Canonical company route group. */}
                     <Route path="c/:entityId" element={null}>
                       <Route index element={null} />

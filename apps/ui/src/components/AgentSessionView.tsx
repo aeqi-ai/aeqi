@@ -10,6 +10,7 @@ import { useFileAttachments } from "./session/useFileAttachments";
 import MessageItem from "./session/MessageItem";
 import StreamingMessage from "./session/StreamingMessage";
 import EmptyState from "./session/EmptyState";
+import AwaitingBanner from "./session/AwaitingBanner";
 
 const EMPTY_QUEUED_DRAFTS: PendingMessage[] = [];
 
@@ -375,6 +376,7 @@ export default function AgentSessionView({ agentId, sessionId: urlSessionId }: A
       onDragLeave={fileAttachments.handleDragLeave}
     >
       <div className="asv-main">
+        <AwaitingBanner sessionId={activeSessionId} agentName={agentName} />
         <div className="asv-messages" ref={messagesScrollRef} onScroll={handleMessagesScroll}>
           {messages.length === 0 && queuedDrafts.length === 0 && !streaming && (
             <EmptyState

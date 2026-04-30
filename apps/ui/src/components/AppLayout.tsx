@@ -11,7 +11,6 @@ import BootLoader from "./shell/BootLoader";
 import ShortcutsOverlay from "./ShortcutsOverlay";
 import { useDaemonStore } from "@/store/daemon";
 import { activityKeys, agentKeys, entityKeys, questKeys, runtimeKeys } from "@/queries/keys";
-import { useInboxStore } from "@/store/inbox";
 import { useUIStore } from "@/store/ui";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonSocket } from "@/hooks/useDaemonSocket";
@@ -34,7 +33,6 @@ const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const Dashboard = lazy(() => import("./Dashboard"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
-const SessionRedirect = lazy(() => import("./SessionRedirect"));
 
 // Tabs that route through CompanyPage. Overview is the canonical
 // company landing (the dashboard for this specific company); Roles is
@@ -64,14 +62,7 @@ export default function AppLayout() {
   const setActiveEntity = useUIStore((s) => s.setActiveEntity);
   const activeEntity = useUIStore((s) => s.activeEntity);
 
-  // Declared above any conditional return so the inbox-agent hook below
-  // can read surface.userSessionId without violating React's rules-of-hooks.
   const surface = useShellSurface(path, tab);
-  const inboxAgentId = useInboxStore((s) =>
-    surface.userSessionId
-      ? (s.items.find((i) => i.session_id === surface.userSessionId)?.agent_id ?? null)
-      : null,
-  );
 
   // The entity's root-agent record is the placeholder we synthesize from
   // `/api/entities` — its `entity_id` matches the route token. Every
@@ -169,17 +160,7 @@ export default function AppLayout() {
   const initialLoaded = useDaemonStore((s) => s.initialLoaded);
   const appMode = useAuthStore((s) => s.appMode);
 
-  const {
-    isHome,
-    isSettings,
-    isEconomy,
-    isDrive,
-    isStart,
-    isUserSession,
-    isNotFound,
-    isMyInbox,
-    userSessionId,
-  } = surface;
+  const { isHome, isSettings, isEconomy, isDrive, isStart, isNotFound, isMyInbox } = surface;
 
   if (!initialLoaded) return <BootLoader />;
 
@@ -229,7 +210,6 @@ export default function AppLayout() {
   const mainContent = (() => {
     if (isNotFound) return <NotFoundPage />;
     if (isStart) return <StartPage />;
-    if (isUserSession) return <SessionRedirect />;
     if (isMyInbox) return <MeInboxPage />;
     if (isHome) return <Dashboard />;
     if (isDrive) return <DrivePage />;
@@ -254,38 +234,22 @@ export default function AppLayout() {
     return <AgentPage agentId={activeAgentId} tab={effectiveTab} itemId={itemId} />;
   })();
 
-  // Composer + sessions rail mount only on the chat surface
-  // (`/c/<entity>/agents/<id>/sessions[/...]` and `/sessions/<id>`
-  // user-scope view). Feed surfaces are self-contained: no rail, no
   // The chat composer + sessions rail only belong on the chat surface
-  // (drilled agent at /c/<entity>/agents/<id>/sessions[/<sid>] and
-  // the user-scope /sessions/<id>). Dashboard, inbox, company
-  // overview, list pages — none of these mount the composer.
+  // (drilled agent at /c/<entity>/agents/<id>/sessions[/<sid>]).
+  // Dashboard, inbox, company overview, list pages — none of these
+  // mount the composer. The legacy `/sessions/<id>` URL redirects to
+  // the deep shape outside this shell, so we don't special-case it.
   const sessionsMounted =
     !isNotFound &&
-    (isUserSession ||
-      (!isDrive &&
-        !isSettings &&
-        !isHome &&
-        !isMyInbox &&
-        !isStart &&
-        !isEconomy &&
-        effectiveTab === "sessions"));
+    !isDrive &&
+    !isSettings &&
+    !isHome &&
+    !isMyInbox &&
+    !isStart &&
+    !isEconomy &&
+    effectiveTab === "sessions";
   const showComposer = sessionsMounted;
-  // The sessions rail only mounts in agent mode (drilled agent's
-  // sessions chat). Inbox mode is gone — feed surfaces own the
-  // attention surface for their scope; the dedicated `/me/inbox`
-  // page renders inbox items inline (no rail).
-  const showSessionsRail =
-    isUserSession ||
-    (effectiveTab === "sessions" &&
-      !!routeEntityId &&
-      !!drilledAgent &&
-      !isSettings &&
-      !isDrive &&
-      !isStart &&
-      !isNotFound);
-  const railMode: "inbox" | "agent" = isUserSession ? "inbox" : "agent";
+  const showSessionsRail = sessionsMounted && !!routeEntityId && !!drilledAgent;
 
   // Drilled-agent PageRail. Mounted at the body-row level so it sits
   // as a sibling of the SessionsRail and the chat content column —
@@ -320,7 +284,7 @@ export default function AppLayout() {
                 )}
                 {showSessionsRail && (
                   <aside className="sessions-rail-col">
-                    <SessionsRail mode={railMode} selectedSessionId={userSessionId} />
+                    <SessionsRail />
                   </aside>
                 )}
                 <div className="content-main-col">
@@ -329,10 +293,9 @@ export default function AppLayout() {
                   </div>
                   {showComposer && (
                     <ComposerRow
-                      agentId={activeAgentId || inboxAgentId || null}
+                      agentId={activeAgentId || null}
                       base={base}
                       sessionsMounted={sessionsMounted}
-                      sessionId={isUserSession ? userSessionId : undefined}
                     />
                   )}
                 </div>

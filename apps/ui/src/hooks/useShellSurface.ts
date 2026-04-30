@@ -7,10 +7,6 @@ import { useMemo } from "react";
  * rendering logic — and because every flag is a function of three
  * cheap inputs (path, entityId, tab), so a single `useMemo` is
  * cheaper than the eight inline derivations it replaces.
- *
- * `userSessionId` is parsed from the path because `/sessions/:id`
- * is registered as a literal user-scope route in App.tsx — the
- * `/c/:entityId` matcher would otherwise eat it.
  */
 export interface ShellSurface {
   isHome: boolean;
@@ -19,15 +15,12 @@ export interface ShellSurface {
   isEconomy: boolean;
   isDrive: boolean;
   isStart: boolean;
-  isUserSession: boolean;
   /** True when the path doesn't match any known shell surface — drives the
    *  in-shell 404 dispatch. Stays false for `/`, `/me/...`, `/start`,
-   *  `/sessions/:id`, `/economy/...`, and `/c/:entityId/...`. */
+   *  `/economy/...`, and `/c/:entityId/...`. */
   isNotFound: boolean;
   /** `/me/inbox` — the global human action queue. */
   isMyInbox: boolean;
-  /** Session id from /sessions/:sessionId (user-scope inbox view). */
-  userSessionId: string | null;
   /** Blueprint slug from /economy/blueprints/:slug — null on the catalog
    *  list itself. AppLayout uses this to dispatch the detail page vs the
    *  catalog so authed users don't get stuck on the catalog when
@@ -37,10 +30,6 @@ export interface ShellSurface {
 
 export function useShellSurface(path: string, tab: string | undefined): ShellSurface {
   return useMemo(() => {
-    const userSessionMatch = path.match(/^\/sessions\/([^/]+)\/?$/);
-    const userSessionId = userSessionMatch ? decodeURIComponent(userSessionMatch[1]) : null;
-    const isUserSession = !!userSessionId;
-
     // /me/* family. The user-scope namespace splits into:
     //   - my-inbox: /me/inbox (the global action queue)
     //   - settings: /me, /me/profile, /me/billing, /me/security, …
@@ -61,8 +50,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // segments (`/foo`) that would otherwise fall through to a stale
     // active-entity render.
     const isCompanyRoute = path === "/" || /^\/c\/[^/]+(\/|$)/.test(path);
-    const isKnownShellRoute =
-      isCompanyRoute || isSettings || isEconomy || isStart || isUserSession || isMyInbox;
+    const isKnownShellRoute = isCompanyRoute || isSettings || isEconomy || isStart || isMyInbox;
     const isNotFound = !isKnownShellRoute;
 
     // isHome is now path-based: it fires only at literal `/`, the user
@@ -76,7 +64,6 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
       !isBlueprints &&
       !isEconomy &&
       !isStart &&
-      !isUserSession &&
       !isNotFound;
 
     return {
@@ -86,10 +73,8 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
       isEconomy,
       isDrive,
       isStart,
-      isUserSession,
       isNotFound,
       isMyInbox,
-      userSessionId,
       blueprintSlug,
     };
   }, [path, tab]);

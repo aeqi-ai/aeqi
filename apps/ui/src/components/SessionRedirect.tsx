@@ -4,34 +4,53 @@ import { useDaemonStore } from "@/store/daemon";
 import { useInboxStore } from "@/store/inbox";
 import { api } from "@/lib/api";
 
+interface Resolved {
+  agentId: string;
+  entityId: string;
+}
+
 /**
  * Bounces the legacy flat `/sessions/:sessionId` URL onto the canonical
- * deep shape `/c/<entity>/agents/<agent>/sessions/<sessionId>`. Resolves
- * the owning agent (inbox store first; then `getSessions` for stale or
- * already-answered sessions) and the agent's entity from the daemon
- * store. Bounces home when the session can't be resolved.
+ * deep shape `/c/<entity>/agents/<agent>/sessions/<sessionId>`.
+ *
+ * Resolution order:
+ * 1. Inbox store (sync, populated for awaiting sessions).
+ * 2. Daemon-store agent record (sync, populated after AppLayout fetches).
+ * 3. `getSessions()` (async, last resort — works on cold loads even
+ *    when the redirect renders outside AppLayout).
+ *
+ * Bounces home when the session can't be resolved.
  */
 export default function SessionRedirect() {
   const { sessionId = "" } = useParams<{ sessionId: string }>();
   const inboxItem = useInboxStore((s) => s.items.find((i) => i.session_id === sessionId) ?? null);
   const agents = useDaemonStore((s) => s.agents);
 
-  const [resolvedAgentId, setResolvedAgentId] = useState<string | null>(
-    inboxItem?.agent_id ?? null,
-  );
+  const inboxResolved: Resolved | null =
+    inboxItem?.agent_id && inboxItem?.entity_id
+      ? { agentId: inboxItem.agent_id, entityId: inboxItem.entity_id }
+      : null;
+
+  const [resolved, setResolved] = useState<Resolved | null>(inboxResolved);
   const [resolveFailed, setResolveFailed] = useState(false);
 
   useEffect(() => {
-    if (inboxItem?.agent_id) setResolvedAgentId(inboxItem.agent_id);
-  }, [inboxItem?.agent_id]);
-
-  useEffect(() => {
-    if (resolvedAgentId) return;
-    if (inboxItem?.agent_id) return;
+    if (resolved) return;
+    if (inboxResolved) {
+      setResolved(inboxResolved);
+      return;
+    }
     if (!sessionId) {
       setResolveFailed(true);
       return;
     }
+
+    // Daemon store may have the agent already (warm reload). Look up
+    // the entity from there. Only useful when an agent is loaded that
+    // owns this session, which we don't know without the agent_id —
+    // so this path only kicks in when something earlier set the
+    // resolved agentId (today: inboxResolved). Skip and fall through.
+
     let cancelled = false;
     api
       .getSessions()
@@ -39,9 +58,19 @@ export default function SessionRedirect() {
         if (cancelled) return;
         const sessions = (data?.sessions || []) as Array<Record<string, unknown>>;
         const match = sessions.find((s) => (s.id as string) === sessionId);
-        const aid = match?.agent_id as string | undefined;
-        if (aid) setResolvedAgentId(aid);
-        else setResolveFailed(true);
+        const agentId = match?.agent_id as string | undefined;
+        const entityIdFromRow = match?.entity_id as string | undefined;
+        if (!agentId) {
+          setResolveFailed(true);
+          return;
+        }
+        const entityFromStore = agents.find((a) => a.id === agentId)?.entity_id;
+        const entityId = entityIdFromRow ?? entityFromStore ?? null;
+        if (!entityId) {
+          setResolveFailed(true);
+          return;
+        }
+        setResolved({ agentId, entityId });
       })
       .catch(() => {
         if (!cancelled) setResolveFailed(true);
@@ -49,15 +78,11 @@ export default function SessionRedirect() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, inboxItem?.agent_id, resolvedAgentId]);
+  }, [sessionId, inboxResolved, resolved, agents]);
 
   if (resolveFailed) return <Navigate to="/" replace />;
-  if (!resolvedAgentId) return null;
+  if (!resolved) return null;
 
-  const agent = agents.find((a) => a.id === resolvedAgentId);
-  const entityId = agent?.entity_id ?? inboxItem?.entity_id ?? null;
-  if (!entityId) return null;
-
-  const deep = `/c/${encodeURIComponent(entityId)}/agents/${encodeURIComponent(resolvedAgentId)}/sessions/${encodeURIComponent(sessionId)}`;
+  const deep = `/c/${encodeURIComponent(resolved.entityId)}/agents/${encodeURIComponent(resolved.agentId)}/sessions/${encodeURIComponent(sessionId)}`;
   return <Navigate to={deep} replace />;
 }

@@ -219,6 +219,100 @@ async function auditRoute(context, route) {
   };
 }
 
+/**
+ * Fresh-session streaming probe.
+ *
+ * The streaming-fix regression class (commit c5d72a5c): if the
+ * WebSocket subscribes after the producer has already started, early
+ * events (StepStart, ThinkingStart, the first TextDeltas) drop on the
+ * floor. Symptom: the assistant's first turn renders with no thinking
+ * block, no token-by-token streaming — just a final blob.
+ *
+ * Probe: navigate to the agent's sessions tab, dispatch the composer's
+ * `aeqi:send-message` event in-page (no selector hunting), capture
+ * chat-stream WS frames, assert StepStart + TextDelta arrive before
+ * Complete.
+ *
+ * Skipped when AEQI_AUDIT_ENTITY_ID + AEQI_AUDIT_AGENT_ID aren't set —
+ * they identify a test entity/agent the auditor can spam without
+ * polluting real data.
+ */
+async function probeFreshSessionStreaming(context) {
+  const entityId = process.env.AEQI_AUDIT_ENTITY_ID;
+  const agentId = process.env.AEQI_AUDIT_AGENT_ID;
+  if (!entityId || !agentId) return null;
+
+  const page = await context.newPage();
+  const frames = [];
+  page.on("websocket", (ws) => {
+    if (!ws.url().includes("/api/chat/stream")) return;
+    ws.on("framereceived", ({ payload }) => {
+      const text = typeof payload === "string" ? payload : payload?.toString("utf8") ?? "";
+      try {
+        const ev = JSON.parse(text);
+        frames.push({
+          t: ev.type || (ev.done ? "Done" : "?"),
+          at: Date.now(),
+          excerpt: text.slice(0, 200),
+        });
+      } catch {
+        frames.push({ t: "?", at: Date.now(), excerpt: text.slice(0, 200) });
+      }
+    });
+  });
+
+  await page.addInitScript((tok) => {
+    localStorage.setItem("aeqi_token", tok);
+    localStorage.setItem("aeqi_auth_mode", "secret");
+  }, TOKEN);
+
+  const url = `${BASE}/c/${entityId}/agents/${agentId}/sessions`;
+  await page.goto(url, { waitUntil: "networkidle", timeout: 25000 });
+  await page.waitForTimeout(1500);
+
+  // Dispatch the composer's send event directly. Bypasses selector
+  // brittleness; AgentSessionView listens for this and runs the same
+  // dispatchMessage path the composer uses.
+  await page.evaluate(() => {
+    const id = `audit-${Date.now()}`;
+    const detail = { id, text: "audit ping — checking first-turn streaming" };
+    window.dispatchEvent(new CustomEvent("aeqi:send-message", { detail }));
+  });
+
+  // Long enough for a small turn — StepStart + a few TextDeltas + Complete
+  // is sub-second on the runtime, but cold gateway warm-up can stretch
+  // it to ~10s on a fresh session. 15s is generous; the loop bails when
+  // we see Complete.
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    if (frames.some((f) => f.t === "Complete" || f.t === "Done" || f.t === "Error")) break;
+    await page.waitForTimeout(250);
+  }
+
+  await page.close();
+
+  const order = frames.map((f) => f.t);
+  const idxStepStart = order.indexOf("StepStart");
+  const idxTextDelta = order.indexOf("TextDelta");
+  const idxComplete = order.findIndex((t) => t === "Complete" || t === "Done");
+  const stepStartBeforeComplete =
+    idxStepStart >= 0 && (idxComplete < 0 || idxStepStart < idxComplete);
+  const textDeltaBeforeComplete =
+    idxTextDelta >= 0 && (idxComplete < 0 || idxTextDelta < idxComplete);
+  const passed = stepStartBeforeComplete && textDeltaBeforeComplete;
+
+  return {
+    label: "fresh-session-streaming",
+    passed,
+    frameCount: frames.length,
+    order,
+    diagnosis: passed
+      ? "first-turn StepStart + TextDelta arrived before Complete"
+      : "REGRESSION: chat-stream events dropped before consumer subscribed (see commit c5d72a5c)",
+    frames,
+  };
+}
+
 async function main() {
   console.log(`🔍 AEQI frontend audit → ${OUT_DIR}`);
   const browser = await chromium.launch({ headless: true });
@@ -237,9 +331,22 @@ async function main() {
     );
   }
 
+  process.stdout.write(`  → ${"fresh-session-streaming".padEnd(22)} `);
+  const streamingProbe = await probeFreshSessionStreaming(context);
+  if (streamingProbe) {
+    console.log(
+      `[${streamingProbe.frameCount} frames · ${streamingProbe.passed ? "PASS" : "FAIL"} — ${streamingProbe.diagnosis}]`,
+    );
+  } else {
+    console.log("[skipped — set AEQI_AUDIT_ENTITY_ID + AEQI_AUDIT_AGENT_ID]");
+  }
+
   await browser.close();
 
-  writeFileSync(join(OUT_DIR, "findings.json"), JSON.stringify(findings, null, 2));
+  writeFileSync(
+    join(OUT_DIR, "findings.json"),
+    JSON.stringify({ routes: findings, streamingProbe }, null, 2),
+  );
 
   // Aggregate summary
   const totalRequests = findings.reduce((a, f) => a + f.counts.requests, 0);

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useChatStore } from "@/store/chat";
 import { useDaemonStore } from "@/store/daemon";
@@ -7,7 +7,6 @@ import { useNav } from "@/hooks/useNav";
 import { ThinkingDot } from "@/components/ui";
 import { sessionLabel, type SessionInfo } from "@/components/session/types";
 import { recencyBucket, timeShort, type RecencyBucket } from "@/lib/format";
-import { sessionDeepUrl } from "@/lib/sessionUrl";
 
 const NO_SESSIONS: SessionInfo[] = [];
 
@@ -44,32 +43,13 @@ interface SessionRow {
   sortKey: number;
 }
 
-interface SessionsRailProps {
-  /**
-   * "agent" — per-agent rail at /:agentId/sessions; reads from chat
-   * store. Default for agent-scope routes.
-   *
-   * "inbox" — user-scope rail at /sessions/:id (and /). Reads from
-   * inbox store; rows are awaiting questions across every agent the
-   * user has access to. Click navigates to /sessions/:id (no agent
-   * prefix) so the same shell handles both flows.
-   */
-  mode: "agent" | "inbox";
-  /** When mode="inbox", the currently-selected session_id from the URL. */
-  selectedSessionId?: string | null;
-}
-
 /**
- * Sessions rail — the left-adjacent index column. Two modes:
- *   - agent: per-agent session list (chat store, default)
- *   - inbox: user-scope inbox items (awaiting questions across all
- *            agents). Inbox rows surface the subject as the primary
- *            line and the agent name as a secondary line below — the
- *            question is the unit of triage; truncating it would
- *            force a click just to read what's being asked.
+ * Sessions rail — the left-adjacent index column for the drilled-agent
+ * chat surface. Reads from the chat store; awaiting rows are flagged
+ * via the inbox store. The user-scope inbox lives at `/me/inbox`
+ * (MeInboxPage) — it doesn't share this rail.
  */
-export default function SessionsRail({ mode, selectedSessionId }: SessionsRailProps) {
-  if (mode === "inbox") return <InboxRail selectedSessionId={selectedSessionId ?? null} />;
+export default function SessionsRail() {
   return <AgentRail />;
 }
 
@@ -158,69 +138,6 @@ function AgentRail() {
       streamingSessions={streamingSessions}
       emptyTitle="no sessions yet"
       emptyHint="type below to start one"
-    />
-  );
-}
-
-function InboxRail({ selectedSessionId }: { selectedSessionId: string | null }) {
-  const navigate = useNavigate();
-  const rawItems = useInboxStore((s) => s.items);
-  const pendingDismissal = useInboxStore((s) => s.pendingDismissal);
-  const fetchInbox = useInboxStore((s) => s.fetchInbox);
-  const wsConnected = useDaemonStore((s) => s.wsConnected);
-  const streamingSessions = useChatStore((s) => s.streamingSessions);
-
-  // Hydrate the inbox so deep links (e.g. directly opening
-  // `/sessions/:id`) get a populated rail. Resync on WS reconnect for
-  // any updates dropped while disconnected.
-  useEffect(() => {
-    void fetchInbox();
-  }, [fetchInbox, wsConnected]);
-
-  const items = useMemo<SessionRow[]>(() => {
-    const visible = rawItems.filter((i) => !pendingDismissal.has(i.session_id));
-    return visible
-      .map((it) => {
-        const ts = it.awaiting_at ? new Date(it.awaiting_at).getTime() : 0;
-        const agentLabel = it.agent_name ?? "agent";
-        const showEntity =
-          it.entity_id != null && it.agent_id != null && it.entity_id !== it.agent_id;
-        // Subject is the line the user reads to triage. Fall back to
-        // the session name only if the join is missing (defensive —
-        // backend always populates subject on awaiting rows).
-        const subject = it.awaiting_subject || it.session_name || "(no subject)";
-        const secondary = showEntity ? `${agentLabel} · ${it.entity_id}` : agentLabel;
-        return {
-          id: it.session_id,
-          primary: subject,
-          secondary,
-          wrapPrimary: true,
-          time: timeShort(it.awaiting_at ?? null),
-          status: "awaiting",
-          awaiting: true,
-          group: recencyBucket(it.awaiting_at ?? null),
-          sortKey: ts,
-        };
-      })
-      .sort((a, b) => b.sortKey - a.sortKey);
-  }, [rawItems, pendingDismissal]);
-
-  const handleSelect = useCallback(
-    (id: string) => {
-      const item = rawItems.find((i) => i.session_id === id) ?? null;
-      navigate(sessionDeepUrl(item?.entity_id, item?.agent_id, id), { replace: true });
-    },
-    [navigate, rawItems],
-  );
-
-  return (
-    <RailShell
-      items={items}
-      selectedId={selectedSessionId}
-      onSelect={handleSelect}
-      streamingSessions={streamingSessions}
-      emptyTitle="all caught up"
-      emptyHint="agents will surface things here when they need you"
     />
   );
 }

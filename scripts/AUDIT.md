@@ -123,6 +123,13 @@ The terminal also prints two aggregates:
   init or other module-level crash blanking the React tree before mount.
   Inspect the bundled chunks via `view-source:` on the URL or a
   `page.evaluate(() => document.body.innerHTML)` probe.
+- **`fresh-session-streaming` probe FAILs** → the chat-stream WS opened
+  AFTER the executor started emitting; first-turn StepStart + TextDelta
+  events dropped before the consumer subscribed. Regression of commit
+  `c5d72a5c`. Check `useWebSocketChat.ts` `dispatchMessage` — it must
+  `await ensureLiveAttached(sid)` BEFORE `api.sendSessionMessage`. Set
+  `AEQI_AUDIT_ENTITY_ID` + `AEQI_AUDIT_AGENT_ID` to a test agent to
+  enable the probe; it's skipped otherwise.
 
 ## Anti-patterns — don't do these
 
