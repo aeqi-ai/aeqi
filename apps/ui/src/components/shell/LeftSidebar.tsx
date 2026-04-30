@@ -185,7 +185,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   // (the global human action queue). Both always live at user-scope
   // URLs and don't filter by selected company. Active states are
   // path-equality checks.
-  const homeActive = path === "/" || path.startsWith("/sessions/");
+  const homeActive = path === "/";
   const inboxActive = path === "/me/inbox";
   const isEconomy = path === "/economy" || path.startsWith("/economy/");
 

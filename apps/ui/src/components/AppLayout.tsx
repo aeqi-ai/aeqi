@@ -34,7 +34,7 @@ const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const Dashboard = lazy(() => import("./Dashboard"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
-const UserInboxSessionView = lazy(() => import("./inbox/UserInboxSessionView"));
+const SessionRedirect = lazy(() => import("./SessionRedirect"));
 
 // Tabs that route through CompanyPage. Overview is the canonical
 // company landing (the dashboard for this specific company); Roles is
@@ -229,7 +229,7 @@ export default function AppLayout() {
   const mainContent = (() => {
     if (isNotFound) return <NotFoundPage />;
     if (isStart) return <StartPage />;
-    if (isUserSession && userSessionId) return <UserInboxSessionView sessionId={userSessionId} />;
+    if (isUserSession) return <SessionRedirect />;
     if (isMyInbox) return <MeInboxPage />;
     if (isHome) return <Dashboard />;
     if (isDrive) return <DrivePage />;

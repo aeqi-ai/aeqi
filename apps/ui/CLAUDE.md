@@ -177,7 +177,7 @@ The UI is built around four primitives:
 | ------------ | --------------------------------- | ----------------------------------------------------------------- |
 | Company Home | `/:companyId`                     | Company-scoped inbox and execution surface                        |
 | Quests       | `/:companyId/quests`              | Quest list, filter by status/agent                                |
-| Sessions     | `/:companyId/sessions/:sessionId` | Split pane: session list + transcript. WebSocket chat with agents |
+| Sessions     | `/:companyId/agents/:agentId/sessions/:sessionId` | Split pane: session list + transcript. WebSocket chat with one agent. Legacy `/sessions/:sessionId` redirects to this shape via `SessionRedirect`. |
 | Events       | `/:companyId/events`              | Event stream (audit trail)                                        |
 | Ideas        | `/:companyId/ideas`               | Company knowledge/idea search                                     |
 | Agents       | `/:companyId/agents`              | Company org chart and agent hierarchy                             |

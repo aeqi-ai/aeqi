@@ -156,12 +156,11 @@ export default function App() {
                         wizard. AppLayout dispatches StartPage when
                         path === "/start". */}
                     <Route path="start" element={null} />
-                    {/* User-scope inbox session viewer: opens a single
-                        awaiting session inline at user scope, with the
-                        sessions rail showing all pending items across
-                        every agent the user has access to. The agent_id
-                        is resolved from the inbox item by session_id,
-                        not from the URL. */}
+                    {/* Legacy flat session URL — AppLayout dispatches
+                        SessionRedirect here, which resolves the owning
+                        agent + entity and bounces to the canonical
+                        deep shape `/c/<entity>/agents/<agent>/sessions/<id>`.
+                        Kept so external links and bookmarks keep working. */}
                     <Route path="sessions/:sessionId" element={null} />
                     {/* Canonical company route group. */}
                     <Route path="c/:entityId" element={null}>

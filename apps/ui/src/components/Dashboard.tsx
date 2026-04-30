@@ -6,6 +6,7 @@ import { useInboxStore, selectInboxCount } from "@/store/inbox";
 import { useAuthStore } from "@/store/auth";
 import { BlueprintLaunchPicker } from "@/components/blueprints/BlueprintLaunchPicker";
 import BlockAvatar from "@/components/BlockAvatar";
+import { sessionDeepUrl } from "@/lib/sessionUrl";
 
 /**
  * `/` — global director cockpit. NOT a feed.
@@ -125,7 +126,9 @@ export default function Dashboard() {
                     <button
                       type="button"
                       className="dashboard-list-btn"
-                      onClick={() => navigate(`/sessions/${encodeURIComponent(item.session_id)}`)}
+                      onClick={() =>
+                        navigate(sessionDeepUrl(item.entity_id, item.agent_id, item.session_id))
+                      }
                     >
                       <span className="dashboard-list-from">{fromName}</span>
                       <span className="dashboard-list-text">{preview}</span>

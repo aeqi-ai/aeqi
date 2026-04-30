@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { useDaemonStore } from "@/store/daemon";
 import { useInboxStore } from "@/store/inbox";
 import type { Role, Quest } from "@/lib/types";
+import { sessionDeepUrl } from "@/lib/sessionUrl";
 
 /**
  * `/c/<entity>/overview` — the company cockpit. Lands on every visit
@@ -203,7 +204,9 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
                     <button
                       type="button"
                       className="dashboard-list-btn"
-                      onClick={() => navigate(`/sessions/${encodeURIComponent(item.session_id)}`)}
+                      onClick={() =>
+                        navigate(sessionDeepUrl(item.entity_id, item.agent_id, item.session_id))
+                      }
                     >
                       <span className="dashboard-list-from">{fromName}</span>
                       <span className="dashboard-list-text">{preview}</span>

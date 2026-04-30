@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { useInboxStore, selectInboxCount } from "@/store/inbox";
 import { useDaemonStore } from "@/store/daemon";
+import { sessionDeepUrl } from "@/lib/sessionUrl";
 
 /**
  * `/me/inbox` — the action queue. Blocking items waiting on you,
@@ -62,7 +63,9 @@ export default function MeInboxPage() {
                 <button
                   type="button"
                   className="me-inbox-row-btn"
-                  onClick={() => navigate(`/sessions/${encodeURIComponent(item.session_id)}`)}
+                  onClick={() =>
+                    navigate(sessionDeepUrl(item.entity_id, item.agent_id, item.session_id))
+                  }
                 >
                   <span className="me-inbox-row-from">{fromName}</span>
                   <span className="me-inbox-row-preview">{preview}</span>

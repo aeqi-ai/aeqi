@@ -84,7 +84,7 @@ export default function BillingPanel() {
           // Clear params before navigating away so the user's history
           // doesn't carry the success token across page changes.
           setSearchParams(new URLSearchParams(), { replace: true });
-          navigate(`/${encodeURIComponent(entityId)}/sessions`);
+          navigate(`/c/${encodeURIComponent(entityId)}`);
         });
       })
       .catch(() => {

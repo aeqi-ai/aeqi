@@ -7,6 +7,7 @@ import { useNav } from "@/hooks/useNav";
 import { ThinkingDot } from "@/components/ui";
 import { sessionLabel, type SessionInfo } from "@/components/session/types";
 import { recencyBucket, timeShort, type RecencyBucket } from "@/lib/format";
+import { sessionDeepUrl } from "@/lib/sessionUrl";
 
 const NO_SESSIONS: SessionInfo[] = [];
 
@@ -206,9 +207,10 @@ function InboxRail({ selectedSessionId }: { selectedSessionId: string | null }) 
 
   const handleSelect = useCallback(
     (id: string) => {
-      navigate(`/sessions/${encodeURIComponent(id)}`, { replace: true });
+      const item = rawItems.find((i) => i.session_id === id) ?? null;
+      navigate(sessionDeepUrl(item?.entity_id, item?.agent_id, id), { replace: true });
     },
-    [navigate],
+    [navigate, rawItems],
   );
 
   return (
