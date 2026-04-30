@@ -109,6 +109,33 @@ pub struct SeedQuestSpec {
     pub labels: Vec<String>,
 }
 
+/// A declared role inside the entity. `key` is a stable identifier
+/// (used by `seed_role_edges` to reference this role); `title` is the
+/// user-visible label ("CTO"). `default_occupant_agent` names a
+/// seed_agent (or "root") to slot into this role at spawn time;
+/// when `None`, the role spawns vacant.
+///
+/// v1 round-trips this through the wire so the UI can render the
+/// declared org chart on the blueprint detail page. The orchestrator
+/// doesn't yet use these at spawn (positions are still auto-derived
+/// from seed_agents) — that's the Phase-B refactor. Until then,
+/// declared roles must mirror the agent tree 1:1 to keep the preview
+/// honest.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SeedRoleSpec {
+    pub key: String,
+    pub title: String,
+    #[serde(default)]
+    pub default_occupant_agent: Option<String>,
+}
+
+/// Edge in the role DAG. Both ends reference `SeedRoleSpec.key`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SeedRoleEdgeSpec {
+    pub parent: String,
+    pub child: String,
+}
+
 /// Full template manifest.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Template {
@@ -127,6 +154,10 @@ pub struct Template {
     pub seed_ideas: Vec<SeedIdeaSpec>,
     #[serde(default)]
     pub seed_quests: Vec<SeedQuestSpec>,
+    #[serde(default)]
+    pub seed_roles: Vec<SeedRoleSpec>,
+    #[serde(default)]
+    pub seed_role_edges: Vec<SeedRoleEdgeSpec>,
 }
 
 // ---------------------------------------------------------------------------

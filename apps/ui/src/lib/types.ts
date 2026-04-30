@@ -308,6 +308,19 @@ export interface RootAgentSpec {
   system_prompt?: string;
 }
 
+export interface TemplateSeedRole {
+  key: string;
+  title: string;
+  /** seed_agent name (or "root") that fills this role at spawn time;
+   *  null leaves the role vacant for the operator to fill. */
+  default_occupant_agent?: string | null;
+}
+
+export interface TemplateSeedRoleEdge {
+  parent: string;
+  child: string;
+}
+
 export interface CompanyTemplate {
   slug: string;
   name: string;
@@ -319,6 +332,15 @@ export interface CompanyTemplate {
   seed_events?: TemplateSeedEvent[];
   seed_ideas?: TemplateSeedIdea[];
   seed_quests?: TemplateSeedQuest[];
+  /** Declared role structure. When present, the org-chart preview
+   *  reads from here; when absent, falls back to the implicit
+   *  root → flat seed_agents shape. The orchestrator currently
+   *  auto-derives positions from seed_agents at spawn — declared
+   *  roles are a wire-level POC until that spawn refactor lands.
+   *  Until then, declared roles must mirror the agent tree 1:1
+   *  to keep the preview honest with what spawns. */
+  seed_roles?: TemplateSeedRole[];
+  seed_role_edges?: TemplateSeedRoleEdge[];
 }
 
 export type OccupantKind = "human" | "agent" | "vacant";

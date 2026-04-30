@@ -98,5 +98,10 @@
       "description": "Pick the top candidate feature from the backlog. Produce: (1) a one-paragraph problem statement, (2) a list of three concrete users who hit it, (3) a description of the smallest possible version. Store each as a tagged idea under product-discovery.",
       "labels": ["product", "discovery"]
     }
-  ]
+  ],
+  "seed_roles": [
+    { "key": "founder", "title": "Founder", "default_occupant_agent": "root" },
+    { "key": "scribe", "title": "Scribe", "default_occupant_agent": "Scribe" }
+  ],
+  "seed_role_edges": [{ "parent": "founder", "child": "scribe" }]
 }
