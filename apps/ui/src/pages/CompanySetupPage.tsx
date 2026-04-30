@@ -13,56 +13,12 @@ import {
 } from "@/components/blueprints/BlueprintRolePicker";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import { BlueprintSeedCounts } from "@/components/blueprints/BlueprintSeedCounts";
+import { FREE, PLANS, type PlanId } from "@/lib/pricing";
 import "@/styles/templates.css";
 import "@/styles/blueprints-store.css";
 
-type PlanKey = "solo" | "studio" | "agency";
-
-interface PlanCard {
-  key: PlanKey;
-  name: string;
-  price: string;
-  cadence: string;
-  blurb: string;
-  features: string[];
-}
-
-/**
- * Plan tiers shown at provision time. Solo is the free-trial default
- * (one company, the platform's existing free_company_used gate). Studio
- * and Agency are paid; selecting them captures intent in the spawn
- * payload but real Stripe checkout / subscription_plan persistence is
- * a follow-up — the platform's `/api/start/launch` already returns 402
- * `trial_used` when a non-paying user tries to spawn a second company.
- *
- * Pricing copy is informational, not transactional yet.
- */
-const PLANS: PlanCard[] = [
-  {
-    key: "solo",
-    name: "Solo",
-    price: "$0",
-    cadence: "free trial",
-    blurb: "One company, casual exploration.",
-    features: ["1 company", "Multi-agent org chart", "Full role primitive"],
-  },
-  {
-    key: "studio",
-    name: "Studio",
-    price: "$29",
-    cadence: "per month",
-    blurb: "Multi-company operators.",
-    features: ["Up to 3 companies", "Priority spawn queue", "Email support"],
-  },
-  {
-    key: "agency",
-    name: "Agency",
-    price: "Custom",
-    cadence: "per seat",
-    blurb: "White-label, unlimited scale.",
-    features: ["Unlimited companies", "White-label branding", "Dedicated runtime"],
-  },
-];
+/** Picker key: "free" plus the public PlanId values from pricing.ts. */
+type PickerPlan = "free" | PlanId;
 
 /**
  * `/start/:slug` — the company setup surface. Sits between picking a
@@ -71,12 +27,20 @@ const PLANS: PlanCard[] = [
  *
  *   1. Name — what the company is called (defaults to root.name)
  *   2. Team — role overrides via BlueprintRolePicker
- *   3. Plan — Solo (free) / Studio / Agency
+ *   3. Plan — Free trial / Launch / Scale (mirrored from pricing.ts)
  *
- * On launch, calls `api.spawnBlueprint` with `display_name` +
- * `role_overrides`. Plan selection is captured in the payload as a
- * forward-compatible hint; the platform's billing gate
- * (`free_company_used`) still controls whether the spawn proceeds.
+ * Launch behavior branches on the chosen plan:
+ *
+ *   - free → spawn directly via `api.spawnBlueprint` and land in the
+ *     company. The platform's `free_company_used_at` gate already
+ *     responds with 402 if the user has already burned their trial.
+ *   - launch / scale → `api.createCheckoutSession` with the chosen
+ *     plan + interval + blueprint slug + display_name. The user
+ *     bounces to Stripe checkout; on success the existing
+ *     post-checkout flow on the platform spawns the Company.
+ *     (The role_overrides choice from the picker doesn't yet flow
+ *     through the Stripe-checkout spawn — known follow-up. The
+ *     direct-free spawn applies them.)
  */
 export default function CompanySetupPage() {
   const navigate = useNavigate();
@@ -92,7 +56,8 @@ export default function CompanySetupPage() {
 
   const [name, setName] = useState("");
   const [overrides, setOverrides] = useState<Record<string, RoleOverrideOccupant>>({});
-  const [plan, setPlan] = useState<PlanKey>("solo");
+  const [plan, setPlan] = useState<PickerPlan>("free");
+  const [interval, setInterval] = useState<"monthly" | "annual">("monthly");
 
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
@@ -139,31 +104,56 @@ export default function CompanySetupPage() {
     setLaunching(true);
     setLaunchError(null);
     try {
-      const rolePayload = buildRoleOverridesPayload(blueprint, overrides);
-      const resp = await api.spawnBlueprint({
+      if (plan === "free") {
+        // Free path: direct spawn, role_overrides honored.
+        const rolePayload = buildRoleOverridesPayload(blueprint, overrides);
+        const resp = await api.spawnBlueprint({
+          blueprint: blueprint.slug,
+          display_name: trimmed,
+          ...(rolePayload.length > 0 ? { role_overrides: rolePayload } : {}),
+        });
+        if (!resp.ok || !resp.entity_id) {
+          setLaunchError("Spawn failed — please try again.");
+          setLaunching(false);
+          return;
+        }
+        setActiveEntity(resp.entity_id);
+        await Promise.all([fetchEntities(), fetchAgents()]).catch(() => {});
+        navigate(`/c/${encodeURIComponent(resp.entity_id)}/overview`);
+        return;
+      }
+
+      // Paid path: hand off to Stripe checkout. The platform's
+      // post-checkout webhook + return URL spawn the Company once
+      // payment clears. role_overrides aren't threaded through this
+      // path yet — Phase B of the picker work.
+      const { url } = await api.createCheckoutSession({
+        plan,
+        interval,
         blueprint: blueprint.slug,
         display_name: trimmed,
-        ...(rolePayload.length > 0 ? { role_overrides: rolePayload } : {}),
       });
-      if (!resp.ok || !resp.entity_id) {
-        setLaunchError("Spawn failed — please try again.");
+      if (!url) {
+        setLaunchError("Checkout failed — couldn't reach Stripe.");
         setLaunching(false);
         return;
       }
-      setActiveEntity(resp.entity_id);
-      // Refresh stores so the destination paints immediately.
-      await Promise.all([fetchEntities(), fetchAgents()]).catch(() => {});
-      navigate(`/c/${encodeURIComponent(resp.entity_id)}/overview`);
+      window.location.href = url;
     } catch (err) {
-      setLaunchError(err instanceof Error ? err.message : "Spawn failed.");
+      setLaunchError(err instanceof Error ? err.message : "Launch failed.");
       setLaunching(false);
     }
-    // Plan selection is captured in `plan` state but not yet on the
-    // wire — TODO: thread `subscription_plan` through `/api/start/launch`
-    // when wiring real Stripe checkout. For now the platform's
-    // existing `free_company_used` gate handles trial→paid transition.
-    void plan;
-  }, [blueprint, name, overrides, plan, setActiveEntity, fetchEntities, fetchAgents, navigate]);
+  }, [
+    blueprint,
+    name,
+    overrides,
+    plan,
+    interval,
+    setActiveEntity,
+    fetchEntities,
+    fetchAgents,
+    navigate,
+  ]);
 
   if (loading && !blueprint) {
     return (
@@ -190,6 +180,8 @@ export default function CompanySetupPage() {
       </div>
     );
   }
+
+  const launchLabel = plan === "free" ? "Launch company →" : "Continue to checkout →";
 
   return (
     <div className="company-setup">
@@ -252,29 +244,82 @@ export default function CompanySetupPage() {
             Pick a plan
           </h2>
           <p className="company-setup-section-sub">
-            Solo is free for your first company. Upgrade any time as you scale.
+            Free trial gives you {FREE.tokens} tokens. Upgrade any time as you scale.
           </p>
         </header>
+
+        <div className="plan-interval-toggle" role="tablist" aria-label="Billing interval">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={interval === "monthly"}
+            className={`plan-interval-btn${interval === "monthly" ? " plan-interval-btn--active" : ""}`}
+            onClick={() => setInterval("monthly")}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={interval === "annual"}
+            className={`plan-interval-btn${interval === "annual" ? " plan-interval-btn--active" : ""}`}
+            onClick={() => setInterval("annual")}
+          >
+            Annual <span className="plan-interval-save">save 15%</span>
+          </button>
+        </div>
+
         <ul className="plan-grid" role="list">
+          {/* Free trial card. Same shape as paid cards but with
+              the free-tier copy + token allowance from pricing.ts. */}
+          <li>
+            <button
+              type="button"
+              className={`plan-card${plan === "free" ? " plan-card--selected" : ""}`}
+              onClick={() => setPlan("free")}
+              aria-pressed={plan === "free"}
+            >
+              <span className="plan-card-name">Free</span>
+              <span className="plan-card-price">
+                <span className="plan-card-price-amount">$0</span>
+                <span className="plan-card-price-cadence">free trial</span>
+              </span>
+              <span className="plan-card-blurb">Try a Company before committing.</span>
+              <ul className="plan-card-features" role="list">
+                <li>{FREE.tokens} tokens included</li>
+                <li>Multi-agent org chart</li>
+                <li>One Company per account</li>
+              </ul>
+            </button>
+          </li>
           {PLANS.map((p) => {
-            const selected = plan === p.key;
+            const selected = plan === p.id;
+            const price = interval === "annual" ? p.annualPrice : p.price;
             return (
-              <li key={p.key}>
+              <li key={p.id}>
                 <button
                   type="button"
-                  className={`plan-card${selected ? " plan-card--selected" : ""}`}
-                  onClick={() => setPlan(p.key)}
+                  className={`plan-card${selected ? " plan-card--selected" : ""}${
+                    p.popular ? " plan-card--popular" : ""
+                  }`}
+                  onClick={() => setPlan(p.id)}
                   aria-pressed={selected}
                 >
+                  {p.popular && <span className="plan-card-badge">Most popular</span>}
                   <span className="plan-card-name">{p.name}</span>
                   <span className="plan-card-price">
-                    <span className="plan-card-price-amount">{p.price}</span>
-                    <span className="plan-card-price-cadence">{p.cadence}</span>
+                    <span className="plan-card-price-amount">${price}</span>
+                    <span className="plan-card-price-cadence">
+                      / mo{interval === "annual" ? " · billed annually" : ""}
+                    </span>
                   </span>
-                  <span className="plan-card-blurb">{p.blurb}</span>
+                  <span className="plan-card-blurb">{p.desc}</span>
                   <ul className="plan-card-features" role="list">
                     {p.features.map((f) => (
-                      <li key={f}>{f}</li>
+                      <li key={f.text}>
+                        {f.text}
+                        {f.soon && <span className="plan-card-feature-soon"> · soon</span>}
+                      </li>
                     ))}
                   </ul>
                 </button>
@@ -299,7 +344,7 @@ export default function CompanySetupPage() {
           ← Back to Blueprint
         </Button>
         <Button variant="primary" onClick={launch} loading={launching} disabled={!name.trim()}>
-          Launch company →
+          {launchLabel}
         </Button>
       </div>
     </div>

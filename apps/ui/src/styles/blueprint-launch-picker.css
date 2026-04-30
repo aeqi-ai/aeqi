@@ -276,6 +276,75 @@
 
 /* ── Plan picker ─────────────────────────────────── */
 
+.plan-interval-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-card);
+  border-radius: 999px;
+  align-self: flex-start;
+  margin-bottom: var(--space-2);
+}
+.plan-interval-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.plan-interval-btn:hover {
+  color: var(--text-primary);
+}
+.plan-interval-btn--active {
+  background: var(--bg-paper);
+  color: var(--text-primary);
+}
+.plan-interval-save {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: lowercase;
+}
+.plan-interval-btn--active .plan-interval-save {
+  color: var(--text-secondary);
+}
+.plan-card {
+  position: relative;
+}
+.plan-card--popular {
+  border-color: var(--text-secondary);
+}
+.plan-card-badge {
+  position: absolute;
+  top: -10px;
+  right: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: var(--text-primary);
+  color: var(--bg-paper);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.plan-card-feature-soon {
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: 10px;
+}
+
 .plan-grid {
   list-style: none;
   margin: 0;
