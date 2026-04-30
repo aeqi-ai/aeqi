@@ -132,6 +132,206 @@ async fn record_assistant_complete(
         .await;
 }
 
+/// Mutable state accumulated across the chat-stream events of one session_send
+/// turn. Extracted into a struct so the per-event handler can be reused for
+/// snapshot replay AND live receive without juggling six `&mut` parameters.
+#[derive(Default)]
+struct SessionSendAccumulators {
+    step_text: String,
+    full_text: String,
+    iterations: u32,
+    prompt_tokens: u32,
+    completion_tokens: u32,
+}
+
+/// Outcome of handling a single ChatStreamEvent inside the session_send loop.
+/// `Terminate` signals the caller to break out of the live-receive loop; the
+/// snapshot-replay phase honours it by short-circuiting if a `Complete` is
+/// already in the backlog.
+enum SessionSendStep {
+    Continue,
+    Terminate,
+}
+
+/// Per-event handler shared between the snapshot replay (events emitted before
+/// `snapshot_and_subscribe`) and the live receiver. Mirrors the original
+/// inline `Ok(Ok(event)) => { ... }` arm: stream-mode write, DB persistence,
+/// accumulator updates, termination on `Complete`.
+#[allow(clippy::too_many_arguments)]
+async fn handle_session_send_event(
+    event: &aeqi_core::ChatStreamEvent,
+    writer: &mut tokio::net::unix::OwnedWriteHalf,
+    stream_mode: bool,
+    resolved_session_id: &str,
+    session_store: &Option<Arc<SessionStore>>,
+    event_handler_store: &Option<Arc<crate::event_handler::EventHandlerStore>>,
+    execution_registry: &Arc<crate::execution_registry::ExecutionRegistry>,
+    agent_sender_id: Option<&str>,
+    acc: &mut SessionSendAccumulators,
+) -> SessionSendStep {
+    if stream_mode && let Ok(ev_bytes) = serde_json::to_vec(event) {
+        let mut bytes = ev_bytes;
+        bytes.push(b'\n');
+        let _ = writer.write_all(&bytes).await;
+    }
+    match event {
+        aeqi_core::ChatStreamEvent::StepStart { step, model } => {
+            if let Some(cs) = session_store {
+                let meta = serde_json::json!({
+                    "step": step,
+                    "model": model,
+                });
+                let _ = cs
+                    .record_event_by_session(
+                        resolved_session_id,
+                        "step_start",
+                        "system",
+                        &format!("Step {step}"),
+                        Some("session"),
+                        Some(&meta),
+                    )
+                    .await;
+            }
+        }
+        aeqi_core::ChatStreamEvent::EventFired {
+            event_id,
+            event_name,
+            pattern,
+            idea_ids,
+            prepersisted,
+        } => {
+            if !*prepersisted {
+                if let Some(cs) = session_store {
+                    let metadata = serde_json::json!({
+                        "event_id": event_id,
+                        "event_name": event_name,
+                        "pattern": pattern,
+                        "idea_ids": idea_ids,
+                    });
+                    let _ = cs
+                        .record_event_by_session(
+                            resolved_session_id,
+                            "event_fired",
+                            "system",
+                            "",
+                            Some("web"),
+                            Some(&metadata),
+                        )
+                        .await;
+                }
+                if let Some(ehs) = event_handler_store
+                    && let Err(e) = ehs.record_fire(event_id, 0.0).await
+                {
+                    tracing::warn!(event = %event_id, error = %e, "failed to record event fire");
+                }
+            }
+        }
+        aeqi_core::ChatStreamEvent::TextDelta { text: delta } => {
+            acc.step_text.push_str(delta);
+            acc.full_text.push_str(delta);
+        }
+        aeqi_core::ChatStreamEvent::ToolComplete {
+            tool_use_id,
+            tool_name,
+            success,
+            input_preview,
+            output_preview,
+            duration_ms,
+        } => {
+            if let Some(cs) = session_store {
+                let meta = serde_json::json!({
+                    "tool_use_id": tool_use_id,
+                    "tool_name": tool_name,
+                    "success": success,
+                    "input_preview": input_preview,
+                    "output_preview": output_preview,
+                    "duration_ms": duration_ms,
+                });
+                let _ = cs
+                    .record_event_by_session(
+                        resolved_session_id,
+                        "tool_complete",
+                        "system",
+                        tool_name,
+                        Some("session"),
+                        Some(&meta),
+                    )
+                    .await;
+            }
+        }
+        aeqi_core::ChatStreamEvent::StepComplete {
+            cache_creation_input_tokens,
+            cache_read_input_tokens,
+            ..
+        } => {
+            if !acc.step_text.is_empty() {
+                if let Some(cs) = session_store {
+                    // (T1.11) When the provider reports non-zero prompt-cache
+                    // token counts, surface them in the recorded message's
+                    // metadata so operators can see the cache hit rate per
+                    // step. Zero values omit the keys so historical rows stay
+                    // clean.
+                    let metadata =
+                        if *cache_creation_input_tokens > 0 || *cache_read_input_tokens > 0 {
+                            Some(serde_json::json!({
+                                "cache_creation_input_tokens": *cache_creation_input_tokens,
+                                "cache_read_input_tokens": *cache_read_input_tokens,
+                            }))
+                        } else {
+                            None
+                        };
+                    let _ = cs
+                        .record_event_by_session_with_sender(
+                            resolved_session_id,
+                            "message",
+                            "assistant",
+                            &acc.step_text,
+                            Some("web"),
+                            metadata.as_ref(),
+                            agent_sender_id,
+                            Some("web"),
+                        )
+                        .await;
+                }
+                acc.step_text.clear();
+            }
+        }
+        aeqi_core::ChatStreamEvent::Complete {
+            total_prompt_tokens: pt,
+            total_completion_tokens: ct,
+            iterations: it,
+            ..
+        } => {
+            if !acc.step_text.is_empty() {
+                if let Some(cs) = session_store {
+                    let _ = cs
+                        .record_event_by_session_with_sender(
+                            resolved_session_id,
+                            "message",
+                            "assistant",
+                            &acc.step_text,
+                            Some("web"),
+                            None,
+                            agent_sender_id,
+                            Some("web"),
+                        )
+                        .await;
+                }
+                acc.step_text.clear();
+            }
+            acc.prompt_tokens = *pt;
+            acc.completion_tokens = *ct;
+            acc.iterations = *it;
+            execution_registry
+                .auto_commit(resolved_session_id, *it)
+                .await;
+            return SessionSendStep::Terminate;
+        }
+        _ => {}
+    }
+    SessionSendStep::Continue
+}
+
 pub fn resolve_web_chat_id(
     explicit_chat_id: Option<i64>,
     project_hint: Option<&str>,
@@ -1901,7 +2101,12 @@ impl Daemon {
                                     .stream_registry
                                     .get_or_create(&resolved_session_id)
                                     .await;
-                                let mut rx = sender.subscribe();
+                                // Atomic snapshot+subscribe so any event that
+                                // landed between sender creation and our
+                                // first `recv()` poll is replayed via the
+                                // backlog instead of dropped. Mirrors the
+                                // `session_subscribe` consumer pattern.
+                                let (snapshot, mut rx) = sender.snapshot_and_subscribe();
 
                                 gateway_manager
                                     .activate_persistent(&resolved_session_id, &sender)
@@ -1957,214 +2162,87 @@ impl Daemon {
                                 {
                                     serde_json::json!({"ok": false, "error": e.to_string()})
                                 } else {
-                                    let mut step_text = String::new();
-                                    let mut full_text = String::new();
-                                    let mut iterations = 0u32;
-                                    let mut prompt_tokens = 0u32;
-                                    let mut completion_tokens = 0u32;
+                                    let mut acc = SessionSendAccumulators::default();
+                                    let mut terminated = false;
 
-                                    loop {
-                                        match tokio::time::timeout(
-                                            std::time::Duration::from_secs(300),
-                                            rx.recv(),
-                                        )
-                                        .await
-                                        {
-                                            Ok(Ok(event)) => {
-                                                if stream_mode
-                                                    && let Ok(ev_bytes) = serde_json::to_vec(&event)
-                                                {
-                                                    let mut bytes = ev_bytes;
-                                                    bytes.push(b'\n');
-                                                    let _ = writer.write_all(&bytes).await;
-                                                }
-                                                match &event {
-                                                    aeqi_core::ChatStreamEvent::StepStart {
-                                                        step,
-                                                        model,
-                                                    } => {
-                                                        if let Some(ref cs) = session_store {
-                                                            let meta = serde_json::json!({
-                                                                "step": step,
-                                                                "model": model,
-                                                            });
-                                                            let _ = cs
-                                                                .record_event_by_session(
-                                                                    &resolved_session_id,
-                                                                    "step_start",
-                                                                    "system",
-                                                                    &format!("Step {step}"),
-                                                                    Some("session"),
-                                                                    Some(&meta),
-                                                                )
-                                                                .await;
-                                                        }
-                                                    }
-                                                    aeqi_core::ChatStreamEvent::EventFired {
-                                                        event_id,
-                                                        event_name,
-                                                        pattern,
-                                                        idea_ids,
-                                                        prepersisted,
-                                                    } => {
-                                                        if !*prepersisted {
-                                                            if let Some(ref cs) = session_store {
-                                                                let metadata = serde_json::json!({
-                                                                    "event_id": event_id,
-                                                                    "event_name": event_name,
-                                                                    "pattern": pattern,
-                                                                    "idea_ids": idea_ids,
-                                                                });
-                                                                let _ = cs
-                                                                    .record_event_by_session(
-                                                                        &resolved_session_id,
-                                                                        "event_fired",
-                                                                        "system",
-                                                                        "",
-                                                                        Some("web"),
-                                                                        Some(&metadata),
-                                                                    )
-                                                                    .await;
-                                                            }
-                                                            if let Some(ref ehs) =
-                                                                ipc_ctx.event_handler_store
-                                                                && let Err(e) = ehs
-                                                                    .record_fire(event_id, 0.0)
-                                                                    .await
-                                                            {
-                                                                tracing::warn!(event = %event_id, error = %e, "failed to record event fire");
-                                                            }
-                                                        }
-                                                    }
-                                                    aeqi_core::ChatStreamEvent::TextDelta {
-                                                        text: delta,
-                                                    } => {
-                                                        step_text.push_str(delta);
-                                                        full_text.push_str(delta);
-                                                    }
-                                                    aeqi_core::ChatStreamEvent::ToolComplete {
-                                                        tool_use_id,
-                                                        tool_name,
-                                                        success,
-                                                        input_preview,
-                                                        output_preview,
-                                                        duration_ms,
-                                                    } => {
-                                                        if let Some(ref cs) = session_store {
-                                                            let meta = serde_json::json!({
-                                                                "tool_use_id": tool_use_id,
-                                                                "tool_name": tool_name,
-                                                                "success": success,
-                                                                "input_preview": input_preview,
-                                                                "output_preview": output_preview,
-                                                                "duration_ms": duration_ms,
-                                                            });
-                                                            let _ = cs
-                                                                .record_event_by_session(
-                                                                    &resolved_session_id,
-                                                                    "tool_complete",
-                                                                    "system",
-                                                                    tool_name,
-                                                                    Some("session"),
-                                                                    Some(&meta),
-                                                                )
-                                                                .await;
-                                                        }
-                                                    }
-                                                    aeqi_core::ChatStreamEvent::StepComplete {
-                                                        cache_creation_input_tokens,
-                                                        cache_read_input_tokens,
-                                                        ..
-                                                    } => {
-                                                        if !step_text.is_empty() {
-                                                            if let Some(ref cs) = session_store {
-                                                                // (T1.11) When the provider reports
-                                                                // non-zero prompt-cache token counts,
-                                                                // surface them in the recorded
-                                                                // message's metadata so operators
-                                                                // can see the cache hit rate per
-                                                                // step. Zero values omit the keys
-                                                                // so historical rows stay clean.
-                                                                let metadata =
-                                                                    if *cache_creation_input_tokens
-                                                                        > 0
-                                                                        || *cache_read_input_tokens
-                                                                            > 0
-                                                                    {
-                                                                        Some(serde_json::json!({
-                                                                            "cache_creation_input_tokens": *cache_creation_input_tokens,
-                                                                            "cache_read_input_tokens": *cache_read_input_tokens,
-                                                                        }))
-                                                                    } else {
-                                                                        None
-                                                                    };
-                                                                let _ = cs
-                                                                        .record_event_by_session_with_sender(
-                                                                            &resolved_session_id,
-                                                                            "message",
-                                                                            "assistant",
-                                                                            &step_text,
-                                                                            Some("web"),
-                                                                            metadata.as_ref(),
-                                                                            agent_sender_id.as_deref(),
-                                                                            Some("web"),
-                                                                        )
-                                                                        .await;
-                                                            }
-                                                            step_text.clear();
-                                                        }
-                                                    }
-                                                    aeqi_core::ChatStreamEvent::Complete {
-                                                        total_prompt_tokens: pt,
-                                                        total_completion_tokens: ct,
-                                                        iterations: it,
-                                                        ..
-                                                    } => {
-                                                        if !step_text.is_empty() {
-                                                            if let Some(ref cs) = session_store {
-                                                                let _ = cs
-                                                                        .record_event_by_session_with_sender(
-                                                                            &resolved_session_id,
-                                                                            "message",
-                                                                            "assistant",
-                                                                            &step_text,
-                                                                            Some("web"),
-                                                                            None,
-                                                                            agent_sender_id.as_deref(),
-                                                                            Some("web"),
-                                                                        )
-                                                                        .await;
-                                                            }
-                                                            step_text.clear();
-                                                        }
-                                                        prompt_tokens = *pt;
-                                                        completion_tokens = *ct;
-                                                        iterations = *it;
-                                                        ipc_ctx
-                                                            .execution_registry
-                                                            .auto_commit(&resolved_session_id, *it)
-                                                            .await;
+                                    // Replay any backlog events captured by
+                                    // `snapshot_and_subscribe`. If a `Complete`
+                                    // already landed before we attached, we
+                                    // honour the early-exit signal and skip
+                                    // the live loop entirely.
+                                    for event in snapshot {
+                                        if matches!(
+                                            handle_session_send_event(
+                                                &event,
+                                                &mut writer,
+                                                stream_mode,
+                                                &resolved_session_id,
+                                                &session_store,
+                                                &ipc_ctx.event_handler_store,
+                                                &ipc_ctx.execution_registry,
+                                                agent_sender_id.as_deref(),
+                                                &mut acc,
+                                            )
+                                            .await,
+                                            SessionSendStep::Terminate
+                                        ) {
+                                            terminated = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if !terminated {
+                                        loop {
+                                            match tokio::time::timeout(
+                                                std::time::Duration::from_secs(300),
+                                                rx.recv(),
+                                            )
+                                            .await
+                                            {
+                                                Ok(Ok(event)) => {
+                                                    if matches!(
+                                                        handle_session_send_event(
+                                                            &event,
+                                                            &mut writer,
+                                                            stream_mode,
+                                                            &resolved_session_id,
+                                                            &session_store,
+                                                            &ipc_ctx.event_handler_store,
+                                                            &ipc_ctx.execution_registry,
+                                                            agent_sender_id.as_deref(),
+                                                            &mut acc,
+                                                        )
+                                                        .await,
+                                                        SessionSendStep::Terminate
+                                                    ) {
                                                         break;
                                                     }
-                                                    _ => {}
                                                 }
-                                            }
-                                            Ok(Err(
-                                                tokio::sync::broadcast::error::RecvError::Lagged(n),
-                                            )) => {
-                                                warn!(
-                                                    session_id = %resolved_session_id,
-                                                    lagged = n, "stream subscriber lagged"
-                                                );
-                                            }
-                                            Ok(Err(_)) => break,
-                                            Err(_) => {
-                                                full_text =
-                                                    "Session response timed out".to_string();
-                                                break;
+                                                Ok(Err(
+                                                    tokio::sync::broadcast::error::RecvError::Lagged(n),
+                                                )) => {
+                                                    warn!(
+                                                        session_id = %resolved_session_id,
+                                                        lagged = n, "stream subscriber lagged"
+                                                    );
+                                                }
+                                                Ok(Err(_)) => break,
+                                                Err(_) => {
+                                                    acc.full_text =
+                                                        "Session response timed out".to_string();
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
+
+                                    let SessionSendAccumulators {
+                                        full_text,
+                                        iterations,
+                                        prompt_tokens,
+                                        completion_tokens,
+                                        ..
+                                    } = acc;
 
                                     let cost_usd = aeqi_providers::estimate_cost(
                                         &default_model,

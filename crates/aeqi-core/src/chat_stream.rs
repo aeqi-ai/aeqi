@@ -492,6 +492,35 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_and_subscribe_includes_event_emitted_before_attach() {
+        // Regression guard for the IPC `session_send` parity fix: a bare
+        // `tx.subscribe()` would miss any event emitted between the
+        // sender's creation and the first `rx.recv()` poll.
+        // `snapshot_and_subscribe` must atomically include those events
+        // in the returned snapshot.
+        let (sender, _seed_rx, _backlog) = ChatStreamSender::new_with_backlog(16, 8);
+
+        sender.send(ChatStreamEvent::StepStart {
+            step: 1,
+            model: "m".into(),
+        });
+
+        let (snapshot, _rx) = sender.snapshot_and_subscribe();
+        assert_eq!(
+            snapshot.len(),
+            1,
+            "event sent before snapshot_and_subscribe must be in the snapshot"
+        );
+        match &snapshot[0] {
+            ChatStreamEvent::StepStart { step, model } => {
+                assert_eq!(*step, 1);
+                assert_eq!(model, "m");
+            }
+            other => panic!("expected StepStart, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn backlog_replays_to_late_subscriber_and_clears_on_complete() {
         let (sender, _seed_rx, _backlog) = ChatStreamSender::new_with_backlog(16, 8);
 
