@@ -28,6 +28,7 @@ import GovernancePage from "@/pages/GovernancePage";
 const DrivePage = lazy(() => import("@/pages/DrivePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const StartPage = lazy(() => import("@/pages/StartPage"));
+const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const Dashboard = lazy(() => import("./Dashboard"));
@@ -209,7 +210,13 @@ export default function AppLayout() {
 
   const mainContent = (() => {
     if (isNotFound) return <NotFoundPage />;
-    if (isStart) return <StartPage />;
+    if (isStart) {
+      // /start/<slug> → CompanySetupPage (the name + roles + plan
+      // confirmation surface). Bare /start stays on the catalog
+      // launch picker.
+      if (path.startsWith("/start/")) return <CompanySetupPage />;
+      return <StartPage />;
+    }
     if (isMyInbox) return <MeInboxPage />;
     if (isHome) return <Dashboard />;
     if (isDrive) return <DrivePage />;

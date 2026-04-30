@@ -164,6 +164,7 @@ describe("BlueprintDetailPage", () => {
           <Routes>
             <Route path="/economy/blueprints/:slug" element={<BlueprintDetailPage />} />
             <Route path="/start" element={<Probe />} />
+            <Route path="/start/:slug" element={<Probe />} />
           </Routes>
         </MemoryRouter>
       </StrictMode>,
@@ -175,6 +176,6 @@ describe("BlueprintDetailPage", () => {
     await waitFor(() => {
       expect(landed).not.toBeNull();
     });
-    expect(landed).toBe("/start?blueprint=solo-founder");
+    expect(landed).toBe("/start/solo-founder");
   });
 });

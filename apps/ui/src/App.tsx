@@ -166,6 +166,7 @@ export default function App() {
                         wizard. AppLayout dispatches StartPage when
                         path === "/start". */}
                     <Route path="start" element={null} />
+                    <Route path="start/:slug" element={null} />
                     {/* Canonical company route group. */}
                     <Route path="c/:entityId" element={null}>
                       <Route index element={null} />

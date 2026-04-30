@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import type { Blueprint } from "@/lib/types";
 import { Card, Spinner } from "@/components/ui";
@@ -18,25 +18,26 @@ interface BlueprintLaunchPickerProps {
    *  named seed blocks materialize on spawn (e.g. `["ideas"]` for the
    *  Ideas Import flow). Omit for full-company import. */
   parts?: string[];
-  /** Fired after a successful `spawn-company`. Receives the new entity slug
-   *  so callers can navigate. */
-  onSpawnedCompany?: (slug: string) => void;
   /** Fired after a successful `spawn-into-entity`. Receives the slug of the
    *  blueprint that was merged in (the modal version uses this to close
-   *  itself + refresh). */
+   *  itself + refresh). spawn-company mode no longer fires a callback —
+   *  it navigates to the setup surface instead. */
   onSpawnedAgent?: (slug: string) => void;
 }
 
 /**
  * Shared picker UX for `/start` and the `+ New agent` modal. Three sections:
  *
- *   1. Start blank — promoted top row, spawns the `blank` blueprint.
+ *   1. Start blank — promoted top row.
  *   2. Recommended — 3-4 curated slugs from `recommendedBlueprints.ts`.
  *   3. Browse all → /economy/blueprints — full catalog.
  *
- * Branches on `mode` for the spawn API:
- *   - spawn-company → POST /api/start/launch
+ * Branches on `mode`:
+ *   - spawn-company → navigate to /start/<slug> (CompanySetupPage)
+ *     so the operator confirms name + roles + plan before spawn
  *   - spawn-into-entity → POST /api/blueprints/spawn-into
+ *     (a "merge into existing company" flow — no naming or billing
+ *     concerns to surface)
  *
  * No bespoke colors / sizes — reuses `Card`, `Spinner`, and the
  * `bp-card-*` typography vocabulary from the catalog.
@@ -45,9 +46,9 @@ export function BlueprintLaunchPicker({
   mode,
   entityId,
   parts,
-  onSpawnedCompany,
   onSpawnedAgent,
 }: BlueprintLaunchPickerProps) {
+  const navigate = useNavigate();
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -98,32 +99,34 @@ export function BlueprintLaunchPicker({
         setSubmitError(`Blueprint '${slug}' is not available.`);
         return;
       }
+      // spawn-company mode: route through the setup surface so the
+      // operator can confirm a name, stage role overrides, and pick
+      // a plan before the actual spawn fires. The picker no longer
+      // launches directly — that was a pre-Phase-B shortcut.
+      // spawn-into-entity stays direct because it's a "merge this
+      // blueprint into my existing company" flow with no naming or
+      // billing concerns to surface.
+      if (mode === "spawn-company") {
+        navigate(`/start/${encodeURIComponent(tpl.slug)}`);
+        return;
+      }
       setSubmittingSlug(slug);
       setSubmitError(null);
       try {
-        if (mode === "spawn-company") {
-          const resp = await api.startLaunch({
-            template: tpl.slug,
-            display_name: tpl.name,
-          });
-          if (!resp.ok || !resp.entity_id) throw new Error("Launch returned no entity_id.");
-          onSpawnedCompany?.(resp.entity_id);
-        } else {
-          if (!entityId) throw new Error("Missing entity id for spawn-into-entity.");
-          await api.spawnBlueprintIntoEntity({
-            blueprint: tpl.slug,
-            entity_id: entityId,
-            parts,
-          });
-          onSpawnedAgent?.(tpl.slug);
-        }
+        if (!entityId) throw new Error("Missing entity id for spawn-into-entity.");
+        await api.spawnBlueprintIntoEntity({
+          blueprint: tpl.slug,
+          entity_id: entityId,
+          parts,
+        });
+        onSpawnedAgent?.(tpl.slug);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Could not spawn.";
         setSubmitError(msg);
         setSubmittingSlug(null);
       }
     },
-    [bySlug, mode, entityId, parts, onSpawnedCompany, onSpawnedAgent],
+    [bySlug, mode, entityId, parts, onSpawnedAgent, navigate],
   );
 
   const isBusy = submittingSlug !== null;

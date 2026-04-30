@@ -33,7 +33,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isSettings =
       !isMyInbox && (path === "/me" || path.startsWith("/me/") || tab === "profile");
     const isEconomy = path === "/economy" || path.startsWith("/economy/");
-    const isStart = path === "/start";
+    const isStart = path === "/start" || path.startsWith("/start/");
     const isDrive = tab === "drive";
 
     // A path is "known" when it matches one of the registered shell

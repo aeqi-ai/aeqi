@@ -81,10 +81,7 @@ export default function Dashboard() {
             Pick a blueprint, or start blank. Your agents start moving once you do.
           </p>
         </header>
-        <BlueprintLaunchPicker
-          mode="spawn-company"
-          onSpawnedCompany={(id) => navigate(`/c/${encodeURIComponent(id)}/overview`)}
-        />
+        <BlueprintLaunchPicker mode="spawn-company" />
       </div>
     );
   }
