@@ -292,9 +292,14 @@ function OverviewSection({ template }: { template: Blueprint }) {
         </header>
       )}
 
+      {/* Stats sit directly under the hero — immediate information
+          scent before the user digs into the org chart. Counts answer
+          "what's in this Blueprint" at a glance: roles, default
+          agents, ideas, events, quests. */}
+      <BlueprintSeedCounts template={template} />
+
       <section className="bp-detail-section">
         <BlueprintTreePreview template={template} />
-        <BlueprintSeedCounts template={template} />
       </section>
     </>
   );

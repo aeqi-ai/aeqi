@@ -4,34 +4,31 @@ interface BlueprintSeedCountsProps {
   template: Blueprint;
 }
 
-const LABELS = {
-  roles: "Roles",
-  agents: "Agents",
-  ideas: "Ideas",
-  events: "Events",
-  quests: "Quests",
-} as const;
-
+/**
+ * Compact summary of what a Blueprint seeds — placed directly under the
+ * hero so the reader gets information scent before the org chart. Each
+ * pill is a count + label. The role count comes from declared
+ * `seed_roles` when present (the canonical structure), falling back to
+ * `seed_agents` for un-ported blueprints. Default-agent count always
+ * reflects the seeded identities (the workforce). 1:1 today with roles;
+ * may diverge once multi-instance roles or bench agents land.
+ */
 export function BlueprintSeedCounts({ template }: BlueprintSeedCountsProps) {
-  // Today seed_agents is the source for both — each entry IS a
-  // role + default occupant. When the schema gains explicit
-  // seed_roles, the role count reads from there. The agent count
-  // always reflects the seeded identities (the workforce). 1:1
-  // today, may diverge later (e.g. one agent template → multiple
-  // role instances).
-  const seedCount = template.seed_agents?.length ?? 0;
-  const counts = {
-    roles: seedCount,
-    agents: seedCount,
-    ideas: template.seed_ideas?.length ?? 0,
-    events: template.seed_events?.length ?? 0,
-    quests: template.seed_quests?.length ?? 0,
-  };
+  const declaredRoles = template.seed_roles?.length ?? 0;
+  const seedAgents = template.seed_agents?.length ?? 0;
+  const pills: Array<[label: string, value: number]> = [
+    ["Roles", declaredRoles > 0 ? declaredRoles : seedAgents],
+    ["Default agents", seedAgents],
+    ["Quests", template.seed_quests?.length ?? 0],
+    ["Ideas", template.seed_ideas?.length ?? 0],
+    ["Events", template.seed_events?.length ?? 0],
+  ];
   return (
-    <ul className="bp-detail-monograms" aria-label="What this blueprint seeds">
-      {(Object.keys(LABELS) as Array<keyof typeof LABELS>).map((key) => (
-        <li key={key}>
-          <span className="n">{counts[key]}</span> {LABELS[key]}
+    <ul className="bp-summary-pills" role="list" aria-label="What this blueprint seeds">
+      {pills.map(([label, value]) => (
+        <li key={label} className="bp-summary-pill">
+          <span className="bp-summary-pill-value">{value}</span>
+          <span className="bp-summary-pill-label">{label}</span>
         </li>
       ))}
     </ul>
