@@ -98,29 +98,6 @@ const MetricsIcon = () => (
   </svg>
 );
 
-const OwnershipIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="5.5" />
-    <path d="M8 8 L8 2.5 A5.5 5.5 0 0 1 13.5 8 Z" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-const TreasuryIcon = () => (
-  <svg {...iconProps}>
-    <ellipse cx="8" cy="4" rx="5" ry="1.5" />
-    <path d="M3 4v8c0 0.83 2.24 1.5 5 1.5s5-0.67 5-1.5V4" />
-    <path d="M3 8c0 0.83 2.24 1.5 5 1.5s5-0.67 5-1.5" />
-  </svg>
-);
-
-const GovernanceIcon = () => (
-  <svg {...iconProps}>
-    <path d="M8 2.5v11M3.5 13.5h9" />
-    <path d="M8 4l-3.5 3.5M8 4l3.5 3.5" />
-    <path d="M2.5 7.5h4M9.5 7.5h4" />
-  </svg>
-);
-
 const EconomyIcon = () => (
   <svg {...iconProps}>
     <circle cx="8" cy="8" r="6" />
@@ -356,12 +333,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               {navItem("projects", "Projects", <ProjectsIcon />, { soon: true })}
               {navItem("crm", "CRM", <CRMIcon />, { soon: true })}
               {navItem("metrics", "Metrics", <MetricsIcon />, { soon: true })}
-            </SidebarGroup>
-
-            <SidebarGroup title="Control" groupKey="control" soon>
-              {navItem("ownership", "Ownership", <OwnershipIcon />, { soon: true })}
-              {navItem("treasury", "Treasury", <TreasuryIcon />, { soon: true })}
-              {navItem("governance", "Governance", <GovernanceIcon />, { soon: true })}
             </SidebarGroup>
           </>
         )}

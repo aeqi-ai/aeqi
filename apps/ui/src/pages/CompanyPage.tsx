@@ -1,11 +1,25 @@
 import { useEffect } from "react";
 import AgentPage from "@/components/AgentPage";
 import PageRail from "@/components/PageRail";
+import OwnershipPage from "@/pages/OwnershipPage";
+import TreasuryPage from "@/pages/TreasuryPage";
+import GovernancePage from "@/pages/GovernancePage";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "roles", label: "Roles" },
+  { id: "ownership", label: "Ownership" },
+  { id: "treasury", label: "Treasury" },
+  { id: "governance", label: "Governance" },
 ];
+
+const TAB_TITLES: Record<string, string> = {
+  overview: "overview",
+  roles: "roles",
+  ownership: "ownership",
+  treasury: "treasury",
+  governance: "governance",
+};
 
 interface CompanyPageProps {
   agentId: string;
@@ -17,22 +31,17 @@ interface CompanyPageProps {
 }
 
 /**
- * `/c/:entityId/overview` (and `/c/:entityId/roles`) — the company
- * cockpit and the org chart. Both delegate to AgentPage, which routes
- * by tab. The inner PageRail is the company entity's secondary nav —
- * it sits below the global LeftSidebar's company section (which owns
- * the four primitives + Overview) and lists company-as-an-entity views
- * like Roles, Treasury, Governance, Cap Table — surfaces that grow as
- * the company grows. Distinct from the agent rail (which mounts at
- * AppLayout body-row level and lists agent-scoped destinations).
+ * `/c/:entityId/{overview,roles,ownership,treasury,governance}` — the
+ * company cockpit. The PageRail is the company's secondary nav, sitting
+ * below the global LeftSidebar's company section (which owns the four
+ * primitives + Overview). Overview / Roles delegate to AgentPage;
+ * Ownership / Treasury / Governance are dedicated company-entity views
+ * (cap table, capital, proposals) so they render their own pages inside
+ * the same rail.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
   useEffect(() => {
-    const titles: Record<string, string> = {
-      overview: "overview",
-      roles: "roles",
-    };
-    const section = titles[tab] || "company";
+    const section = TAB_TITLES[tab] ?? "company";
     document.title = `${section} · æqi`;
   }, [tab]);
 
@@ -46,7 +55,15 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
         currentValue={tab}
       />
       <div className="page-rail-content page-rail-content--full">
-        <AgentPage agentId={agentId} tab={tab} itemId={itemId} />
+        {tab === "ownership" ? (
+          <OwnershipPage />
+        ) : tab === "treasury" ? (
+          <TreasuryPage />
+        ) : tab === "governance" ? (
+          <GovernancePage />
+        ) : (
+          <AgentPage agentId={agentId} tab={tab} itemId={itemId} />
+        )}
       </div>
     </div>
   );

@@ -21,9 +21,6 @@ import RateLimitBanner from "./shell/RateLimitBanner";
 import ProjectsPage from "@/pages/ProjectsPage";
 import CRMPage from "@/pages/CRMPage";
 import MetricsPage from "@/pages/MetricsPage";
-import OwnershipPage from "@/pages/OwnershipPage";
-import TreasuryPage from "@/pages/TreasuryPage";
-import GovernancePage from "@/pages/GovernancePage";
 
 const DrivePage = lazy(() => import("@/pages/DrivePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
@@ -36,9 +33,11 @@ const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 // Tabs that route through CompanyPage. Overview is the canonical
-// company landing (the dashboard for this specific company); Roles is
-// the org-chart deeper view.
-const COMPANY_PAGERAIL_TABS = new Set(["overview", "roles"]);
+// company landing; Roles is the org-chart; Ownership / Treasury /
+// Governance are the company's control surfaces (cap table, capital,
+// proposals) — they live as company-scoped tabs because they describe
+// the company entity itself, not anything beneath it.
+const COMPANY_PAGERAIL_TABS = new Set(["overview", "roles", "ownership", "treasury", "governance"]);
 
 export default function AppLayout() {
   const queryClient = useQueryClient();
@@ -225,9 +224,6 @@ export default function AppLayout() {
     if (tab === "projects") return <ProjectsPage />;
     if (tab === "crm") return <CRMPage />;
     if (tab === "metrics") return <MetricsPage />;
-    if (tab === "ownership") return <OwnershipPage />;
-    if (tab === "treasury") return <TreasuryPage />;
-    if (tab === "governance") return <GovernancePage />;
     if (routeEntityId && !drilledAgent && COMPANY_PAGERAIL_TABS.has(effectiveTab)) {
       return (
         <CompanyPage
