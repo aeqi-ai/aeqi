@@ -30,9 +30,9 @@ const InboxIcon = () => (
 
 const PortfolioIcon = () => (
   <svg {...iconProps}>
-    <rect x="2" y="5" width="12" height="8" rx="0.5" />
-    <path d="M5.5 5V3.5h5V5" />
-    <path d="M2 8.5h12" />
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 8 V2.5" />
+    <path d="M8 8 L12.8 10.7" />
   </svg>
 );
 
