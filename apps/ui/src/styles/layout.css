@@ -6193,12 +6193,39 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   display: inline-flex;
   align-items: center;
 }
+/* Dropdown reads as the trigger expanded — same ink surface, same
+   palette, so visually the switcher is one continuous volumetric
+   control rather than a button + a separate panel. The Popover's
+   hosting `[role="dialog"]` panel gets the dark fill via :has() so
+   no white margin peeks around the inner menu. */
 .company-switcher-menu {
   min-width: 200px;
   max-width: 280px;
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: 6px;
+  background: var(--color-accent);
+  border-radius: var(--radius-md);
+  color: rgba(255, 255, 255, 0.92);
+}
+[role="dialog"]:has(> .company-switcher-menu) {
+  background: var(--color-accent);
+  border-color: rgba(255, 255, 255, 0.08);
+  padding: 0;
+}
+.company-switcher-menu [role="option"] {
+  color: rgba(255, 255, 255, 0.92);
+  background: transparent;
+}
+.company-switcher-menu [role="option"]:hover,
+.company-switcher-menu [role="option"]:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+}
+.company-switcher-menu [role="option"][aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 .company-switcher-item {
   display: flex;
