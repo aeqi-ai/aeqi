@@ -18,9 +18,6 @@ import { useShellSurface } from "@/hooks/useShellSurface";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { isRateLimited } from "@/lib/rateLimit";
 import RateLimitBanner from "./shell/RateLimitBanner";
-import ProjectsPage from "@/pages/ProjectsPage";
-import CRMPage from "@/pages/CRMPage";
-import MetricsPage from "@/pages/MetricsPage";
 
 const DrivePage = lazy(() => import("@/pages/DrivePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
@@ -37,7 +34,14 @@ const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 // Governance are the company's control surfaces (cap table, capital,
 // proposals) — they live as company-scoped tabs because they describe
 // the company entity itself, not anything beneath it.
-const COMPANY_PAGERAIL_TABS = new Set(["overview", "roles", "ownership", "treasury", "governance"]);
+const COMPANY_PAGERAIL_TABS = new Set([
+  "overview",
+  "roles",
+  "ownership",
+  "treasury",
+  "transactions",
+  "governance",
+]);
 
 export default function AppLayout() {
   const queryClient = useQueryClient();
@@ -109,12 +113,10 @@ export default function AppLayout() {
       events: "Events",
       quests: "Quests",
       ideas: "Ideas",
-      projects: "Projects",
       overview: "Overview",
-      crm: "CRM",
-      metrics: "Metrics",
       ownership: "Ownership",
       treasury: "Treasury",
+      transactions: "Transactions",
       governance: "Governance",
     };
     const section = tab || "sessions";
@@ -221,9 +223,6 @@ export default function AppLayout() {
     if (isDrive) return <DrivePage />;
     if (isSettings) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
-    if (tab === "projects") return <ProjectsPage />;
-    if (tab === "crm") return <CRMPage />;
-    if (tab === "metrics") return <MetricsPage />;
     if (routeEntityId && !drilledAgent && COMPANY_PAGERAIL_TABS.has(effectiveTab)) {
       return (
         <CompanyPage

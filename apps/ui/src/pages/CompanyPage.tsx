@@ -3,6 +3,7 @@ import AgentPage from "@/components/AgentPage";
 import PageRail from "@/components/PageRail";
 import OwnershipPage from "@/pages/OwnershipPage";
 import TreasuryPage from "@/pages/TreasuryPage";
+import TransactionsPage from "@/pages/TransactionsPage";
 import GovernancePage from "@/pages/GovernancePage";
 
 const TABS = [
@@ -10,6 +11,7 @@ const TABS = [
   { id: "roles", label: "Roles" },
   { id: "ownership", label: "Ownership" },
   { id: "treasury", label: "Treasury" },
+  { id: "transactions", label: "Transactions" },
   { id: "governance", label: "Governance" },
 ];
 
@@ -18,6 +20,7 @@ const TAB_TITLES: Record<string, string> = {
   roles: "roles",
   ownership: "ownership",
   treasury: "treasury",
+  transactions: "transactions",
   governance: "governance",
 };
 
@@ -31,13 +34,13 @@ interface CompanyPageProps {
 }
 
 /**
- * `/c/:entityId/{overview,roles,ownership,treasury,governance}` — the
- * company cockpit. The PageRail is the company's secondary nav, sitting
- * below the global LeftSidebar's company section (which owns the four
- * primitives + Overview). Overview / Roles delegate to AgentPage;
- * Ownership / Treasury / Governance are dedicated company-entity views
- * (cap table, capital, proposals) so they render their own pages inside
- * the same rail.
+ * `/c/:entityId/{overview,roles,ownership,treasury,transactions,governance}`
+ * — the company cockpit. The PageRail is the company's secondary nav,
+ * sitting below the global LeftSidebar's company section (which owns the
+ * four primitives + Overview). Overview / Roles delegate to AgentPage;
+ * Ownership / Treasury / Transactions / Governance are dedicated
+ * company-entity views (cap table, balance state, financial flow,
+ * proposals) so they render their own pages inside the same rail.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
   useEffect(() => {
@@ -59,6 +62,8 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
           <OwnershipPage />
         ) : tab === "treasury" ? (
           <TreasuryPage />
+        ) : tab === "transactions" ? (
+          <TransactionsPage />
         ) : tab === "governance" ? (
           <GovernancePage />
         ) : (

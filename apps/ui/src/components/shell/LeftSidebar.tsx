@@ -3,7 +3,6 @@ import CompanySwitcher from "@/components/shell/CompanySwitcher";
 import AccountDropdown from "@/components/shell/AccountDropdown";
 import NewMenu from "@/components/shell/NewMenu";
 import HelpMenu from "@/components/shell/HelpMenu";
-import SidebarGroup from "@/components/shell/SidebarGroup";
 import Wordmark from "@/components/Wordmark";
 import { Tooltip } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
@@ -70,31 +69,6 @@ const IdeasIcon = () => (
   <svg {...iconProps}>
     <path d="M5 7a3 3 0 0 1 6 0c0 1.5-1 2.5-1 3.5h-4c0-1-1-2-1-3.5z" />
     <path d="M6.5 12h3M7 14h2" />
-  </svg>
-);
-
-const ProjectsIcon = () => (
-  <svg {...iconProps}>
-    <rect x="2" y="2" width="5.5" height="5.5" rx="0.5" />
-    <rect x="8.5" y="2" width="5.5" height="5.5" rx="0.5" />
-    <rect x="2" y="8.5" width="5.5" height="5.5" rx="0.5" />
-    <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="0.5" />
-  </svg>
-);
-
-const CRMIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="6" cy="6" r="2" />
-    <circle cx="11.5" cy="7" r="1.5" />
-    <path d="M2 13c0-2.2 1.8-4 4-4s4 1.8 4 4" />
-    <path d="M9.5 13c0-1.4 1.3-2.5 2.5-2.5s2.5 1.1 2.5 2.5" />
-  </svg>
-);
-
-const MetricsIcon = () => (
-  <svg {...iconProps}>
-    <path d="M2.5 14V9M6.5 14V4.5M10.5 14V11M14 14V7" />
-    <path d="M2 14h12" />
   </svg>
 );
 
@@ -328,12 +302,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               {navItem("ideas", "Ideas", <IdeasIcon />)}
               {navItem("events", "Events", <EventsIcon />)}
             </nav>
-
-            <SidebarGroup title="Operate" groupKey="operate" soon>
-              {navItem("projects", "Projects", <ProjectsIcon />, { soon: true })}
-              {navItem("crm", "CRM", <CRMIcon />, { soon: true })}
-              {navItem("metrics", "Metrics", <MetricsIcon />, { soon: true })}
-            </SidebarGroup>
           </>
         )}
 
