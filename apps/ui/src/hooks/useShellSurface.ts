@@ -14,25 +14,27 @@ export interface ShellSurface {
   isDrive: boolean;
   isStart: boolean;
   /** True when the path doesn't match any known shell surface — drives the
-   *  in-shell 404 dispatch. Stays false for `/`, `/portfolio`, `/me/...`,
-   *  `/start`, `/economy/...`, and `/c/:entityId/...`. */
+   *  in-shell 404 dispatch. Stays false for `/`, `/me/...`, `/start`,
+   *  `/economy/...`, and `/c/:entityId/...`. */
   isNotFound: boolean;
   /** `/` — the global human action queue (Inbox is the canonical root). */
   isMyInbox: boolean;
-  /** `/portfolio` — personal cross-company view (holdings, performance). */
+  /** `/me/portfolio` — personal cross-company view (holdings, performance). */
   isPortfolio: boolean;
 }
 
 export function useShellSurface(path: string, tab: string | undefined): ShellSurface {
   return useMemo(() => {
-    // Inbox lives at root. The user-scope namespace `/me/*` is settings:
-    // /me, /me/profile, /me/billing, /me/security, … Settings owns the
-    // catch-all so any unrecognised /me/<x> falls back to ProfilePage
-    // rather than 404. The legacy /me/inbox URL is redirected to `/`
-    // in AppLayout before this hook resolves it as settings.
+    // Inbox lives at root. The user-scope namespace `/me/*` is split:
+    //   - portfolio: /me/portfolio (cross-company holdings/performance)
+    //   - settings:  /me, /me/profile, /me/billing, /me/security, …
+    // Settings owns the /me/* catch-all so unrecognised /me/<x> still
+    // falls back to ProfilePage rather than 404. Portfolio carves
+    // out one specific path before settings resolves it.
     const isMyInbox = path === "/";
-    const isPortfolio = path === "/portfolio";
-    const isSettings = path === "/me" || path.startsWith("/me/") || tab === "profile";
+    const isPortfolio = path === "/me/portfolio";
+    const isSettings =
+      !isPortfolio && (path === "/me" || path.startsWith("/me/") || tab === "profile");
     const isEconomy = path === "/economy" || path.startsWith("/economy/");
     const isStart = path === "/start" || path.startsWith("/start/");
     const isDrive = tab === "drive";

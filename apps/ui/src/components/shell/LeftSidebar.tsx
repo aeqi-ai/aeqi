@@ -164,13 +164,11 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
     if (id === "overview" && path === base) return true;
     return path === `${base}/${id}` || path.startsWith(`${base}/${id}/`);
   };
-  // Personal items — Home (the global director cockpit) and Inbox
-  // (the global human action queue). Inbox is the canonical root.
-  // Portfolio is the cross-company personal view (holdings,
-  // performance) at `/portfolio`. Both invariant of the active
-  // company.
+  // Personal items — Inbox (canonical root, `/`) and Portfolio
+  // (cross-company holdings/performance at `/me/portfolio`). Both
+  // invariant of the active company.
   const inboxActive = path === "/";
-  const portfolioActive = path === "/portfolio";
+  const portfolioActive = path === "/me/portfolio";
   const isEconomy = path === "/economy" || path.startsWith("/economy/");
 
   const navItem = (
@@ -268,7 +266,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
       <div className="left-sidebar-body">
         {/* Personal zone — Inbox + Portfolio. Inbox (`/`) is the global
-            human action queue. Portfolio (`/portfolio`) is the
+            human action queue. Portfolio (`/me/portfolio`) is the
             cross-company holdings/performance view. Both invariant of
             the active company. Search lives as the Inbox row's
             right-cap. */}
@@ -291,11 +289,11 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           <div className="sidebar-nav-row">
             <a
               className={`sidebar-nav-item ${portfolioActive ? "active" : ""}`}
-              href="/portfolio"
+              href="/me/portfolio"
               title="Portfolio"
               onClick={(e) => {
                 e.preventDefault();
-                navigate("/portfolio");
+                navigate("/me/portfolio");
               }}
             >
               <PortfolioIcon />
