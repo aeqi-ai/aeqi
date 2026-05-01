@@ -6195,27 +6195,50 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 }
 /* Dropdown reads as the trigger expanded — same ink surface, same
    palette, so visually the switcher is one continuous volumetric
-   control rather than a button + a separate panel. The Popover's
-   hosting `[role="dialog"]` panel gets the dark fill via :has() so
-   no white margin peeks around the inner menu. */
+   control rather than a button + a separate panel. Three composed
+   layers (eyebrow / list / footer-CTA) carry structure via low-alpha
+   dividers without breaking the single-surface read. */
 .company-switcher-menu {
-  min-width: 200px;
+  min-width: 220px;
   max-width: 280px;
   display: flex;
   flex-direction: column;
-  padding: 6px;
+  padding: 0;
   background: var(--color-accent);
   border-radius: var(--radius-md);
   color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
 }
 [role="dialog"]:has(> .company-switcher-menu) {
   background: var(--color-accent);
-  border-color: rgba(255, 255, 255, 0.08);
+  border: 0;
   padding: 0;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.company-switcher-eyebrow {
+  padding: 10px 14px 6px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+.company-switcher-list {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 6px 6px;
+}
+.company-switcher-footer {
+  padding: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .company-switcher-menu [role="option"] {
   color: rgba(255, 255, 255, 0.92);
   background: transparent;
+  border-radius: var(--radius-sm);
 }
 .company-switcher-menu [role="option"]:hover,
 .company-switcher-menu [role="option"]:focus-visible {
@@ -6225,6 +6248,12 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 }
 .company-switcher-menu [role="option"][aria-selected="true"] {
   background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.company-switcher-create {
+  color: rgba(255, 255, 255, 0.78);
+}
+.company-switcher-create:hover {
   color: #fff;
 }
 .company-switcher-item {

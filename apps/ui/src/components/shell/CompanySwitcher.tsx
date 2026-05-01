@@ -115,28 +115,38 @@ export default function CompanySwitcher() {
   return (
     <Popover trigger={trigger} open={open} onOpenChange={setOpen} placement="bottom-start" portal>
       <div className="company-switcher-menu" role="menu">
-        {/* The switcher is a workspace picker — companies + create.
-            Personal-scope navigation (Home, Inbox) lives in the
-            sidebar above the switcher; clicking those is how the
-            user leaves company context. Adding a "you" entry here
-            would be a redundant third path with confused semantics. */}
-        {ordered.map((entity) => {
-          const isCurrent = isEntityScope && entity.id === activeEntityId;
-          return (
-            <SelectOption
-              key={entity.id}
-              selected={isCurrent}
-              noIndicator
-              onClick={() => select(entity)}
-              leadingIcon={<BlockAvatar name={entity.name} size={16} />}
-            >
-              {entity.name}
-            </SelectOption>
-          );
-        })}
-        <SelectOption selected={false} onClick={createCompany} leadingIcon={<PlusIcon />}>
-          New company
-        </SelectOption>
+        {/* Three layers: a quiet eyebrow naming what the menu is, the
+            list of workspaces (current + owned), and the create CTA
+            sitting in its own footer band. Personal-scope navigation
+            (Inbox, Portfolio) lives in the sidebar above; the switcher
+            is purely a workspace picker. */}
+        <div className="company-switcher-eyebrow">Workspaces</div>
+        <div className="company-switcher-list">
+          {ordered.map((entity) => {
+            const isCurrent = isEntityScope && entity.id === activeEntityId;
+            return (
+              <SelectOption
+                key={entity.id}
+                selected={isCurrent}
+                noIndicator
+                onClick={() => select(entity)}
+                leadingIcon={<BlockAvatar name={entity.name} size={16} />}
+              >
+                {entity.name}
+              </SelectOption>
+            );
+          })}
+        </div>
+        <div className="company-switcher-footer">
+          <SelectOption
+            selected={false}
+            onClick={createCompany}
+            leadingIcon={<PlusIcon />}
+            className="company-switcher-create"
+          >
+            Start a new company
+          </SelectOption>
+        </div>
       </div>
     </Popover>
   );
