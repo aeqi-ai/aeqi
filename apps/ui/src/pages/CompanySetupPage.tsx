@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import type { Blueprint, RoleOverrideOccupant } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
+import { useDaemonStore } from "@/store/daemon";
+import { useUIStore } from "@/store/ui";
 import { Button, Input, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -33,6 +35,11 @@ export default function CompanySetupPage() {
   const navigate = useNavigate();
   const { slug = "" } = useParams<{ slug: string }>();
   const userId = useAuthStore((s) => s.user?.id ?? null);
+  const subscriptionStatus = useAuthStore((s) => s.user?.subscription_status ?? null);
+  const setActiveEntity = useUIStore((s) => s.setActiveEntity);
+  const fetchEntities = useDaemonStore((s) => s.fetchEntities);
+  const fetchAgents = useDaemonStore((s) => s.fetchAgents);
+  const isInvited = subscriptionStatus === "invited";
 
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +93,27 @@ export default function CompanySetupPage() {
     setLaunching(true);
     setLaunchError(null);
     try {
+      // Invited users (sandbox tier from waitlist redemption) skip
+      // Stripe entirely and spawn directly via the platform's
+      // /api/start/launch endpoint. Paid users hit Stripe Checkout.
+      // role_overrides flow only through the direct path for now —
+      // post-checkout webhook spawn doesn't thread them yet.
+      if (isInvited) {
+        const resp = await api.startLaunch({
+          template: blueprint.slug,
+          display_name: trimmed,
+        });
+        if (!resp.ok || !resp.entity_id) {
+          setLaunchError("Spawn failed — please try again.");
+          setLaunching(false);
+          return;
+        }
+        setActiveEntity(resp.entity_id);
+        await Promise.all([fetchEntities(), fetchAgents()]).catch(() => {});
+        navigate(`/c/${encodeURIComponent(resp.entity_id)}/inbox`);
+        return;
+      }
+
       const rolePayload = buildRoleOverridesPayload(blueprint, overrides);
       const { url } = await api.createCheckoutSession({
         blueprint: blueprint.slug,
@@ -102,7 +130,16 @@ export default function CompanySetupPage() {
       setLaunchError(err instanceof Error ? err.message : "Launch failed.");
       setLaunching(false);
     }
-  }, [blueprint, name, overrides]);
+  }, [
+    blueprint,
+    name,
+    overrides,
+    isInvited,
+    navigate,
+    setActiveEntity,
+    fetchEntities,
+    fetchAgents,
+  ]);
 
   if (loading && !blueprint) {
     return (
@@ -191,8 +228,9 @@ export default function CompanySetupPage() {
             What you get
           </h2>
           <p className="company-setup-section-sub">
-            ${FOUNDER_FEE} today, then ${COMPANY_MONTHLY} / month after {TRIAL_DAYS} days. Cancel
-            anytime — your card won't be charged again.
+            {isInvited
+              ? "You're on the invite-only sandbox tier — no payment required. Your company runs on shared infrastructure with free models."
+              : `$${FOUNDER_FEE} today, then $${COMPANY_MONTHLY} / month after ${TRIAL_DAYS} days. Cancel anytime — your card won't be charged again.`}
           </p>
         </header>
 
@@ -221,7 +259,7 @@ export default function CompanySetupPage() {
           ← Back to Blueprint
         </Button>
         <Button variant="primary" onClick={launch} loading={launching} disabled={!name.trim()}>
-          Continue to checkout — ${FOUNDER_FEE} today →
+          {isInvited ? "Launch your company →" : `Continue to checkout — $${FOUNDER_FEE} today →`}
         </Button>
       </div>
     </div>

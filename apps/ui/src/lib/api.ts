@@ -564,6 +564,17 @@ export const api = {
       created_quests: number;
     }>("/blueprints/spawn-into", { method: "POST", body: JSON.stringify(data) }),
 
+  // Platform-side launch — mints the canonical entity_id (UUID) on the
+  // platform host and provisions a sandbox runtime. Only callable by users
+  // with subscription_status="invited" (sandbox tier) or "active" (paid).
+  // Anyone else gets 402 PAYMENT_REQUIRED — they go through Stripe via
+  // createCheckoutSession instead.
+  startLaunch: (data: { template: string; display_name: string }) =>
+    request<{ ok: boolean; entity_id: string; display_name: string }>("/start/launch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   spawnAgent: (data: {
     name: string;
     template?: string;
