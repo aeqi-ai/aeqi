@@ -6,6 +6,7 @@ import TreasuryPage from "@/pages/TreasuryPage";
 import BudgetsPage from "@/pages/BudgetsPage";
 import TransactionsPage from "@/pages/TransactionsPage";
 import GovernancePage from "@/pages/GovernancePage";
+import CompanySettingsPage from "@/pages/CompanySettingsPage";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -15,6 +16,7 @@ const TABS = [
   { id: "budgets", label: "Budgets" },
   { id: "transactions", label: "Transactions" },
   { id: "governance", label: "Governance" },
+  { id: "settings", label: "Settings" },
 ];
 
 const TAB_TITLES: Record<string, string> = {
@@ -25,6 +27,7 @@ const TAB_TITLES: Record<string, string> = {
   budgets: "budgets",
   transactions: "transactions",
   governance: "governance",
+  settings: "settings",
 };
 
 interface CompanyPageProps {
@@ -37,14 +40,15 @@ interface CompanyPageProps {
 }
 
 /**
- * `/c/:entityId/{overview,roles,cap-table,treasury,budgets,transactions,governance}`
+ * `/c/:entityId/{overview,roles,cap-table,treasury,budgets,transactions,governance,settings}`
  * — the company cockpit. The PageRail is the company's secondary nav,
  * sitting below the global LeftSidebar's company section (which owns the
  * four primitives + Overview). Overview / Roles delegate to AgentPage;
- * Cap Table / Treasury / Budgets / Transactions / Governance are
- * dedicated company-entity views (equity, balance state, planned spend,
- * financial flow, proposals) so they render their own pages inside the
- * same rail.
+ * Cap Table / Treasury / Budgets / Transactions / Governance / Settings
+ * are dedicated company-entity views (equity, balance state, planned
+ * spend, financial flow, proposals, configuration) so they render their
+ * own pages inside the same rail. Settings is company-scoped — distinct
+ * from the user-account settings at `/me/*`.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
   useEffect(() => {
@@ -72,6 +76,8 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
           <TransactionsPage />
         ) : tab === "governance" ? (
           <GovernancePage />
+        ) : tab === "settings" ? (
+          <CompanySettingsPage />
         ) : (
           <AgentPage agentId={agentId} tab={tab} itemId={itemId} />
         )}

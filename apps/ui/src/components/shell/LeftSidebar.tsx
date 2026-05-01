@@ -297,10 +297,11 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           <>
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company">
               {navItem("overview", "Company", <CompanyIcon />)}
+              {/* Order spells the wordmark — Agents · Events · Quests · Ideas. */}
               {navItem("agents", "Agents", <AgentsIcon />)}
+              {navItem("events", "Events", <EventsIcon />)}
               {navItem("quests", "Quests", <QuestsIcon />)}
               {navItem("ideas", "Ideas", <IdeasIcon />)}
-              {navItem("events", "Events", <EventsIcon />)}
             </nav>
           </>
         )}

@@ -43,6 +43,7 @@ const COMPANY_PAGERAIL_TABS = new Set([
   "budgets",
   "transactions",
   "governance",
+  "settings",
 ]);
 
 export default function AppLayout() {
