@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import CompanySwitcher from "@/components/shell/CompanySwitcher";
 import AccountDropdown from "@/components/shell/AccountDropdown";
-import NewMenu from "@/components/shell/NewMenu";
 import HelpMenu from "@/components/shell/HelpMenu";
 import Wordmark from "@/components/Wordmark";
+import { BlueprintPickerModal } from "@/components/blueprints/BlueprintPickerModal";
 import { Tooltip } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 
@@ -87,6 +88,12 @@ const SearchIcon = () => (
   </svg>
 );
 
+const PlusIcon = () => (
+  <svg {...iconProps} width={12} height={12}>
+    <path d="M8 3v10M3 8h10" />
+  </svg>
+);
+
 const PanelGlyph = () => (
   <svg {...iconProps}>
     <rect x="2" y="3" width="12" height="10" rx="1.5" />
@@ -100,10 +107,39 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const isMac =
     typeof navigator !== "undefined" && /mac|iphone|ipad|ipod/i.test(navigator.userAgent);
 
   const openPalette = () => window.dispatchEvent(new CustomEvent("aeqi:open-palette"));
+
+  // Per-row hover actions. Each is a small ghost-circle button that
+  // sits at the right edge of its parent nav row and reveals on hover.
+  // The contract: the row's primary click goes to the row's
+  // destination; the hover-action triggers a creation flow scoped to
+  // the row's primitive. This replaces the floating "+ New" overlay
+  // and the dedicated search button — both now live where they belong.
+  const rowAction = (
+    label: string,
+    icon: React.ReactNode,
+    onClick: () => void,
+    keyHint?: string,
+  ) => (
+    <Tooltip content={keyHint ? `${label} (${keyHint})` : label}>
+      <button
+        type="button"
+        className="sidebar-nav-row-action"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }}
+        aria-label={label}
+      >
+        {icon}
+      </button>
+    </Tooltip>
+  );
 
   // The URL token is canonically the entity_id; sidebar tabs route to
   // `/c/<entity_id>/<tab>` regardless of which sub-agent surface the
@@ -144,36 +180,39 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
     id: string,
     label: string,
     icon: React.ReactNode,
-    opts: { soon?: boolean } = {},
+    opts: { soon?: boolean; action?: React.ReactNode } = {},
   ) => {
     if (opts.soon) {
       return (
-        <button
-          key={id}
-          type="button"
-          className="sidebar-nav-item sidebar-nav-item--soon"
-          disabled
-          title={`${label} — coming soon`}
-        >
-          {icon}
-          <span className="sidebar-nav-label">{label}</span>
-        </button>
+        <div key={id} className="sidebar-nav-row">
+          <button
+            type="button"
+            className="sidebar-nav-item sidebar-nav-item--soon"
+            disabled
+            title={`${label} — coming soon`}
+          >
+            {icon}
+            <span className="sidebar-nav-label">{label}</span>
+          </button>
+        </div>
       );
     }
     return (
-      <a
-        key={id}
-        className={`sidebar-nav-item ${isActive(id) ? "active" : ""}`}
-        href={navHref(id)}
-        title={label}
-        onClick={(e) => {
-          e.preventDefault();
-          navigate(navHref(id));
-        }}
-      >
-        {icon}
-        <span className="sidebar-nav-label">{label}</span>
-      </a>
+      <div key={id} className="sidebar-nav-row">
+        <a
+          className={`sidebar-nav-item ${isActive(id) ? "active" : ""}`}
+          href={navHref(id)}
+          title={label}
+          onClick={(e) => {
+            e.preventDefault();
+            navigate(navHref(id));
+          }}
+        >
+          {icon}
+          <span className="sidebar-nav-label">{label}</span>
+        </a>
+        {opts.action}
+      </div>
     );
   };
 
@@ -237,30 +276,35 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
             regardless of selected company; both decline to silently
             inherit company filter state. */}
         <nav className="sidebar-surface-nav sidebar-zone" aria-label="Personal">
-          <a
-            className={`sidebar-nav-item ${homeActive ? "active" : ""}`}
-            href="/"
-            title="Home"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/");
-            }}
-          >
-            <HomeIcon />
-            <span className="sidebar-nav-label">Home</span>
-          </a>
-          <a
-            className={`sidebar-nav-item ${inboxActive ? "active" : ""}`}
-            href="/me/inbox"
-            title="Inbox"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/me/inbox");
-            }}
-          >
-            <InboxIcon />
-            <span className="sidebar-nav-label">Inbox</span>
-          </a>
+          <div className="sidebar-nav-row">
+            <a
+              className={`sidebar-nav-item ${homeActive ? "active" : ""}`}
+              href="/"
+              title="Home"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/");
+              }}
+            >
+              <HomeIcon />
+              <span className="sidebar-nav-label">Home</span>
+            </a>
+          </div>
+          <div className="sidebar-nav-row">
+            <a
+              className={`sidebar-nav-item ${inboxActive ? "active" : ""}`}
+              href="/me/inbox"
+              title="Inbox"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/me/inbox");
+              }}
+            >
+              <InboxIcon />
+              <span className="sidebar-nav-label">Inbox</span>
+            </a>
+            {rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`)}
+          </div>
         </nav>
 
         {/* Workspace switcher sits at the *junction* — between the
@@ -271,37 +315,29 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           <CompanySwitcher />
         </div>
 
-        {/* +New / search action row. */}
-        <div className="sidebar-action-row">
-          <NewMenu />
-          <Tooltip
-            content={`Search — jump to any agent, quest, or idea (${isMac ? "⌘" : "Ctrl"}K)`}
-          >
-            <button
-              type="button"
-              className="sidebar-row-action-btn"
-              onClick={openPalette}
-              aria-label="Open command palette"
-            >
-              <SearchIcon />
-            </button>
-          </Tooltip>
-        </div>
-
         {/* Company-scope items — visible whenever a company is
             selected in the switcher, regardless of what URL the user
             is on. Home / Inbox keep the section visible so it's one
             click into the workspace. Flat: no "Company" group header.
-            ── */}
+            Row-end hover-actions create the row's primitive: Agents → +
+            opens the blueprint picker; Ideas → + navigates to the
+            ideas page in compose mode. Events have no +; events are
+            emitted by agents, not authored. ── */}
         {hasCompany && (
           <>
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company">
               {navItem("overview", "Company", <CompanyIcon />)}
               {/* Order spells the wordmark — Agents · Events · Quests · Ideas. */}
-              {navItem("agents", "Agents", <AgentsIcon />)}
+              {navItem("agents", "Agents", <AgentsIcon />, {
+                action: rowAction("New agent", <PlusIcon />, () => setPickerOpen(true)),
+              })}
               {navItem("events", "Events", <EventsIcon />)}
               {navItem("quests", "Quests", <QuestsIcon />)}
-              {navItem("ideas", "Ideas", <IdeasIcon />)}
+              {navItem("ideas", "Ideas", <IdeasIcon />, {
+                action: rowAction("New idea", <PlusIcon />, () => {
+                  navigate(`${base}/ideas?compose=1`);
+                }),
+              })}
             </nav>
           </>
         )}
@@ -332,6 +368,14 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           </div>
         </div>
       </div>
+
+      {hasCompany && entityId && (
+        <BlueprintPickerModal
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          entityId={entityId}
+        />
+      )}
 
       {!sidebarCollapsed && (
         <div
