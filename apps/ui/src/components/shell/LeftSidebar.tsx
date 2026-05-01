@@ -113,12 +113,10 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
   const openPalette = () => window.dispatchEvent(new CustomEvent("aeqi:open-palette"));
 
-  // Per-row hover actions. Each is a small ghost-circle button that
-  // sits at the right edge of its parent nav row and reveals on hover.
-  // The contract: the row's primary click goes to the row's
-  // destination; the hover-action triggers a creation flow scoped to
-  // the row's primitive. This replaces the floating "+ New" overlay
-  // and the dedicated search button — both now live where they belong.
+  // Per-row right-cap action. Always visible at the right edge of its
+  // nav row, mirroring the bottom Account+Help row's HelpMenu cap.
+  // Search on Home; "+" on Agents and Ideas. Click does not propagate
+  // to the row's primary navigation.
   const rowAction = (
     label: string,
     icon: React.ReactNode,
@@ -128,7 +126,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
     <Tooltip content={keyHint ? `${label} (${keyHint})` : label}>
       <button
         type="button"
-        className="sidebar-nav-row-action"
+        className="sidebar-row-action-btn"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -289,6 +287,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               <HomeIcon />
               <span className="sidebar-nav-label">Home</span>
             </a>
+            {rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`)}
           </div>
           <div className="sidebar-nav-row">
             <a
@@ -303,7 +302,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               <InboxIcon />
               <span className="sidebar-nav-label">Inbox</span>
             </a>
-            {rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`)}
           </div>
         </nav>
 

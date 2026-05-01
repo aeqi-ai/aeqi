@@ -6434,53 +6434,25 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   font-style: italic;
 }
 
-/* ── Per-row hover-action ──────────────────────────────────────────────
-   Each sidebar nav row is a relative wrapper that holds the row's
-   primary link plus an optional right-edge ghost-circle button (search
-   on Inbox, "+" on Agents/Ideas). The action is opacity:0 at rest and
-   reveals on row-hover or its own focus. Replaces the floating "+New"
-   overlay — every creation path now lives where the thing it creates
-   lives, contextually. Hidden in collapsed-rail mode. */
+/* ── Per-row right-cap action ──────────────────────────────────────────
+   Sidebar nav row = flex container. Primary link stretches via flex:1;
+   an optional small ghost-circle button (search on Home, "+" on
+   Agents/Ideas) sits at the right edge as a fixed-size cap. Same
+   shape as the bottom Account+Help row — visible at rest, not
+   hover-revealed. The button itself uses the canonical
+   `.sidebar-row-action-btn` class (defined above) so the icon-button
+   language is shared across the rail. Hidden in collapsed mode where
+   the rail is icons-only and there's no room for a sibling cap. */
 .sidebar-nav-row {
-  position: relative;
-}
-.sidebar-nav-row > .sidebar-nav-item {
-  width: 100%;
-}
-.sidebar-nav-row-action {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 50%;
-  color: var(--text-secondary);
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease,
-    background 0.12s ease,
-    border-color 0.12s ease;
+  gap: 2px;
 }
-.sidebar-nav-row:hover .sidebar-nav-row-action,
-.sidebar-nav-row-action:focus-visible {
-  opacity: 1;
+.sidebar-nav-row > :first-child {
+  flex: 1;
+  min-width: 0;
 }
-.sidebar-nav-row-action:hover {
-  color: var(--text-primary);
-  background: var(--state-hover);
-  border-color: var(--border-hover);
-  outline: none;
-}
-.left-sidebar.collapsed .sidebar-nav-row-action {
+.left-sidebar.collapsed .sidebar-nav-row .sidebar-row-action-btn {
   display: none;
 }
 
