@@ -80,6 +80,29 @@ runs `cargo test -p <crate> --lib`. Caught one such drift on 2026-04-30
 
 For UI-only changes (no Rust touched), use the lighter UI deploy path documented in `apps/ui/CLAUDE.md` — skip `deploy.sh`.
 
+### Deploy — known traps
+
+**`scripts/deploy.sh` leaves per-tenant host services stopped.** The
+script stops every `aeqi-host-<entity>.service`, swaps the binary,
+restarts only `aeqi-platform.service`, then exits. Every host stays
+dead until the next request triggers the proxy's "host runtime was
+down, restarting" self-heal — and any in-flight WS / fetch in that
+window 503s. Hit twice on 2026-05-01. Workaround until the script is
+fixed:
+
+```bash
+for s in $(systemctl list-units --type=service --all | awk '/aeqi-host-/ {print $1}'); do
+  sudo systemctl start "$s"
+done
+```
+
+**"API error: Service Unavailable" diagnostic walk.** When 503s show
+up after a deploy or for a freshly-created company:
+
+1. `systemctl is-active aeqi-host-<entity>.service` — start it if dead.
+2. `sudo journalctl -u aeqi-platform.service -n 50 | grep -i 'placement\|503'` — look for `runtime placement not ready`.
+3. `sudo sqlite3 /var/lib/aeqi/platform.db "SELECT entity_id, placement_type, status, target_port FROM runtime_placements;"` — `status=pending` with NULL routing fields means provisioning never finished. Repoint the row to a live host as a manual fix; sandbox auto-provisioning is currently broken.
+
 ## Workflow — locked
 
 **Never work on main directly.** Every non-trivial change goes through a worktree.
