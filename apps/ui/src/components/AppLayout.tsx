@@ -30,15 +30,17 @@ const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 // Tabs that route through CompanyPage. Overview is the canonical
-// company landing; Roles is the org-chart; Ownership / Treasury /
-// Governance are the company's control surfaces (cap table, capital,
+// company landing; Roles is the org-chart; Cap Table / Treasury /
+// Budgets / Transactions / Governance are the company's financial and
+// decisions surfaces (equity, balance state, planned spend, flow,
 // proposals) — they live as company-scoped tabs because they describe
 // the company entity itself, not anything beneath it.
 const COMPANY_PAGERAIL_TABS = new Set([
   "overview",
   "roles",
-  "ownership",
+  "cap-table",
   "treasury",
+  "budgets",
   "transactions",
   "governance",
 ]);
@@ -114,8 +116,9 @@ export default function AppLayout() {
       quests: "Quests",
       ideas: "Ideas",
       overview: "Overview",
-      ownership: "Ownership",
+      "cap-table": "Cap Table",
       treasury: "Treasury",
+      budgets: "Budgets",
       transactions: "Transactions",
       governance: "Governance",
     };

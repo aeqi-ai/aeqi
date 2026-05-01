@@ -1,16 +1,18 @@
 import { useEffect } from "react";
 import AgentPage from "@/components/AgentPage";
 import PageRail from "@/components/PageRail";
-import OwnershipPage from "@/pages/OwnershipPage";
+import CapTablePage from "@/pages/CapTablePage";
 import TreasuryPage from "@/pages/TreasuryPage";
+import BudgetsPage from "@/pages/BudgetsPage";
 import TransactionsPage from "@/pages/TransactionsPage";
 import GovernancePage from "@/pages/GovernancePage";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "roles", label: "Roles" },
-  { id: "ownership", label: "Ownership" },
+  { id: "cap-table", label: "Cap Table" },
   { id: "treasury", label: "Treasury" },
+  { id: "budgets", label: "Budgets" },
   { id: "transactions", label: "Transactions" },
   { id: "governance", label: "Governance" },
 ];
@@ -18,8 +20,9 @@ const TABS = [
 const TAB_TITLES: Record<string, string> = {
   overview: "overview",
   roles: "roles",
-  ownership: "ownership",
+  "cap-table": "cap table",
   treasury: "treasury",
+  budgets: "budgets",
   transactions: "transactions",
   governance: "governance",
 };
@@ -34,13 +37,14 @@ interface CompanyPageProps {
 }
 
 /**
- * `/c/:entityId/{overview,roles,ownership,treasury,transactions,governance}`
+ * `/c/:entityId/{overview,roles,cap-table,treasury,budgets,transactions,governance}`
  * — the company cockpit. The PageRail is the company's secondary nav,
  * sitting below the global LeftSidebar's company section (which owns the
  * four primitives + Overview). Overview / Roles delegate to AgentPage;
- * Ownership / Treasury / Transactions / Governance are dedicated
- * company-entity views (cap table, balance state, financial flow,
- * proposals) so they render their own pages inside the same rail.
+ * Cap Table / Treasury / Budgets / Transactions / Governance are
+ * dedicated company-entity views (equity, balance state, planned spend,
+ * financial flow, proposals) so they render their own pages inside the
+ * same rail.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
   useEffect(() => {
@@ -58,10 +62,12 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
         currentValue={tab}
       />
       <div className="page-rail-content page-rail-content--full">
-        {tab === "ownership" ? (
-          <OwnershipPage />
+        {tab === "cap-table" ? (
+          <CapTablePage />
         ) : tab === "treasury" ? (
           <TreasuryPage />
+        ) : tab === "budgets" ? (
+          <BudgetsPage />
         ) : tab === "transactions" ? (
           <TransactionsPage />
         ) : tab === "governance" ? (
