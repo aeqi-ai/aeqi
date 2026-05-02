@@ -272,6 +272,13 @@ git -C /home/claudedev/aeqi-<topic> commit -m "..."
 git -C /home/claudedev/aeqi-<topic> push -u origin design/<topic>
 ```
 
+**Read at the worktree path before editing in the worktree.** The Edit
+tool tracks file Reads per absolute path. Reading
+`/home/claudedev/aeqi/apps/ui/src/foo.tsx` does NOT satisfy a
+subsequent edit at `/home/claudedev/aeqi-<topic>/apps/ui/src/foo.tsx`
+— it errors with "File has not been read yet." Always Read at the
+exact path you intend to Edit.
+
 **Verify before merging:**
 
 ```bash
