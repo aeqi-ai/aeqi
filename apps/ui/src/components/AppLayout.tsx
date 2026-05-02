@@ -306,7 +306,7 @@ export default function AppLayout() {
                   <PageRail
                     tabs={AGENT_RAIL_TABS}
                     defaultTab="sessions"
-                    title={drilledAgent?.name || "Agent"}
+                    title="Agent"
                     basePath={agentRailBase}
                     currentValue={agentRailCurrent}
                   />

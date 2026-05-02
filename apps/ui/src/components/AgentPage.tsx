@@ -13,6 +13,7 @@ import EntityRolesTab from "./EntityRolesTab";
 import EntityOverviewTab from "./EntityOverviewTab";
 import AgentOverviewTab from "./AgentOverviewTab";
 import AgentIntegrationsTab from "@/pages/Agent/Integrations";
+import TreasuryPage from "@/pages/TreasuryPage";
 import { Button } from "./ui";
 import ModelPicker from "./ModelPicker";
 import { ALL_TOOLS, TOOL_BY_ID } from "@/lib/tools";
@@ -38,6 +39,7 @@ export const AGENT_RAIL_TABS = [
   { id: "events", label: "Events" },
   { id: "ideas", label: "Ideas" },
   { id: "channels", label: "Channels" },
+  { id: "treasury", label: "Treasury" },
   { id: "tools", label: "Tools" },
   { id: "integrations", label: "Integrations" },
   { id: "settings", label: "Settings" },
@@ -54,6 +56,7 @@ const TABS = [
   { id: "agents", label: "Agents" },
   { id: "events", label: "Events" },
   { id: "channels", label: "Channels" },
+  { id: "treasury", label: "Treasury" },
   { id: "quests", label: "Quests" },
   { id: "ideas", label: "Ideas" },
   { id: "tools", label: "Tools" },
@@ -150,6 +153,8 @@ export default function AgentPage({
       )}
 
       {activeTab === "channels" && <AgentChannelsTab agentId={resolvedAgentId} />}
+
+      {activeTab === "treasury" && <TreasuryPage />}
 
       {activeTab === "tools" && (
         <ToolsDetail agent={agent} resolvedAgentId={resolvedAgentId} showToast={showToast} />
