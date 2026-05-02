@@ -120,7 +120,7 @@ export default function CompanySwitcher() {
             sitting in its own footer band. Personal-scope navigation
             (Inbox, Portfolio) lives in the sidebar above; the switcher
             is purely a workspace picker. */}
-        <div className="company-switcher-eyebrow">Workspaces</div>
+        <div className="company-switcher-eyebrow">Select company</div>
         <div className="company-switcher-list">
           {ordered.map((entity) => {
             const isCurrent = isEntityScope && entity.id === activeEntityId;
