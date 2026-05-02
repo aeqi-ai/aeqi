@@ -2,7 +2,10 @@ import { useMemo, useState, memo } from "react";
 import { IconButton, Tooltip } from "@/components/ui";
 import { useNav } from "@/hooks/useNav";
 import { useAgentIdeas } from "@/queries/ideas";
+import { useDaemonStore } from "@/store/daemon";
+import { useAuthStore } from "@/store/auth";
 import { RichMarkdown, buildIdeasByName } from "@/components/markdown/RichMarkdown";
+import BlockAvatar from "@/components/BlockAvatar";
 import {
   type Message,
   type MessageSegment,
@@ -11,6 +14,8 @@ import {
   type FileDeletedEvent,
   type ToolSummarizedEvent,
   type EventFire,
+  type ResolvedAuthor,
+  resolveAuthor,
   formatMs,
   formatTime,
   formatStepCount,
@@ -73,7 +78,7 @@ function ToolBlock({ items, live = false }: { items: MessageSegment[]; live?: bo
     >
       {!live && (
         <button className="asv-tools-toggle" onClick={() => setExpanded(!expanded)}>
-          <span className="asv-tools-chevron">{expanded ? "\u25BE" : "\u25B8"}</span>
+          <span className="asv-tools-chevron">{expanded ? "▾" : "▸"}</span>
           <span className="asv-tools-count">
             {count} tool{count !== 1 ? "s" : ""}
           </span>
@@ -218,7 +223,7 @@ function ToolSummarizedChip({ event }: { event: ToolSummarizedEvent }) {
         <span className="asv-tool-summarized-name">{event.tool_name}</span>
         <span className="asv-tool-summarized-label">summarized</span>
         <span className="asv-tool-summarized-size">({formatBytes(event.original_bytes)})</span>
-        <span className="asv-tool-summarized-chevron">{expanded ? "\u25BE" : "\u25B8"}</span>
+        <span className="asv-tool-summarized-chevron">{expanded ? "▾" : "▸"}</span>
       </button>
       {expanded && event.summary && <div className="asv-tool-summarized-body">{event.summary}</div>}
     </div>
@@ -353,7 +358,11 @@ export function SegmentRenderer({
   );
 }
 
-// ── Memoized message item — prevents re-rendering historical messages during streaming ──
+// ── Position author chip — shown for position-kind senders ──
+
+function PositionChip({ title }: { title: string }) {
+  return <span className="asv-position-chip">{title}</span>;
+}
 
 function EventFireItem({ msg }: { msg: Message }) {
   const { goEntity, entityId } = useNav();
@@ -381,7 +390,7 @@ function EventFireItem({ msg }: { msg: Message }) {
       {fire.scope && fire.scope !== "self" && (
         <span className="asv-event-fire-scope">{`(${fire.scope})`}</span>
       )}
-      <span className="asv-event-fire-arrow">{"\u2192"}</span>
+      <span className="asv-event-fire-arrow">{"→"}</span>
       <span className="asv-event-fire-chips">
         {ideaIds.map((id) => (
           <button
@@ -399,17 +408,44 @@ function EventFireItem({ msg }: { msg: Message }) {
   );
 }
 
+// ── Memoized message item — prevents re-rendering historical messages during streaming ──
+
 const MessageItem = memo(function MessageItem({
   msg,
   onFork,
   onEdit,
   onResend,
+  sessionAgentId,
 }: {
   msg: Message;
   onFork?: (messageId: number) => void;
   onEdit?: (messageId: number, text: string) => void;
   onResend?: (text: string) => void;
+  /** The agent ID for this session — used by resolveAuthor for legacy fallback. */
+  sessionAgentId?: string;
 }) {
+  const { entityId } = useNav();
+  const agents = useDaemonStore((s) => s.agents);
+  const userEmail = useAuthStore((s) => s.user?.email ?? "");
+
+  const agentNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of agents) {
+      m.set(a.id, a.name ?? a.id);
+    }
+    return m;
+  }, [agents]);
+
+  const resolvedAgentId = sessionAgentId ?? entityId ?? "";
+  const authorCtx = useMemo(
+    () => ({
+      sessionAgentId: resolvedAgentId,
+      agentNames,
+      userName: userEmail,
+    }),
+    [resolvedAgentId, agentNames, userEmail],
+  );
+
   if (msg.role === "event_fire") {
     return <EventFireItem msg={msg} />;
   }
@@ -420,10 +456,10 @@ const MessageItem = memo(function MessageItem({
           {(msg.eventType || "").includes("create")
             ? "+"
             : (msg.eventType || "").includes("complete") || (msg.eventType || "").includes("close")
-              ? "\u2713"
+              ? "✓"
               : (msg.eventType || "").includes("block")
                 ? "!"
-                : "\u2192"}
+                : "→"}
         </span>
         <span className="asv-quest-event-text">{msg.content}</span>
         {msg.timestamp && <span className="asv-quest-event-time">{formatTime(msg.timestamp)}</span>}
@@ -440,37 +476,61 @@ const MessageItem = memo(function MessageItem({
       </div>
     );
   }
+
+  const author: ResolvedAuthor = resolveAuthor(msg, authorCtx);
+
+  // Map resolved author kind to the CSS bubble class.
+  // "position" renders left-aligned like "assistant".
+  const bubbleClass =
+    author.kind === "user"
+      ? "asv-msg-user"
+      : author.kind === "system"
+        ? "asv-msg-system"
+        : "asv-msg-assistant";
+
+  const isAssistantRole = msg.role === "assistant";
+  // User-role check covers both explicit from_kind="user" and legacy role="user"
+  const isUserRole = author.kind === "user";
+
   const stepCount = msg.stepCount || countStepSegments(msg.segments);
   const metaParts = [
     msg.timestamp && formatTime(msg.timestamp),
     msg.duration,
-    msg.role === "assistant" && stepCount > 0 && formatStepCount(stepCount),
+    isAssistantRole && stepCount > 0 && formatStepCount(stepCount),
     msg.costUsd != null && msg.costUsd > 0 && `$${msg.costUsd.toFixed(4)}`,
     msg.tokenUsage &&
       (msg.tokenUsage.prompt > 0 || msg.tokenUsage.completion > 0) &&
-      `${msg.tokenUsage.prompt}\u2192${msg.tokenUsage.completion} tok`,
+      `${msg.tokenUsage.prompt}→${msg.tokenUsage.completion} tok`,
     msg.queued && "queued",
   ].filter(Boolean) as string[];
+
   const splitAssistant =
-    msg.role === "assistant" && msg.segments && msg.segments.length > 0
+    isAssistantRole && msg.segments && msg.segments.length > 0
       ? splitTrailAndFinal(msg.segments)
       : null;
-  // Collapse the trail whenever it carries something worth inspecting.
-  // A trail with no following final text (async events fired after the
-  // last response, a turn that ended on a tool) still gets the row —
-  // the row is the whole message in that case.
   const useSplit = splitAssistant != null && trailHasMeaningfulContent(splitAssistant.trail);
 
   // Director-ask treatment: when the agent fired `question.ask`, the
   // assistant message carries `source = "question.ask"` and (optionally) a
   // subject. Drape the bubble in an ink panel so the chat user reads it as
-  // "this is a formal ask, not a chat reply" — same visual register as the
-  // home-page inbox row (near-black ink rail, mono uppercase eyebrow).
+  // "this is a formal ask, not a chat reply".
   const isAsk = msg.source === "question.ask";
+
+  // Avatar: agent and position kinds render a left-side BlockAvatar with name.
+  const showAvatar = author.kind === "agent" || author.kind === "position";
+  const avatarName =
+    author.kind === "agent" ? author.name : author.kind === "position" ? author.title : "";
+
   return (
     <div
-      className={`asv-msg asv-msg-${msg.role}${msg.queued ? " asv-msg-queued" : ""}${isAsk ? " asv-msg-ask" : ""}`}
+      className={`asv-msg ${bubbleClass}${msg.queued ? " asv-msg-queued" : ""}${isAsk ? " asv-msg-ask" : ""}`}
     >
+      {showAvatar && (
+        <div className="asv-msg-avatar">
+          <BlockAvatar name={avatarName} size={20} />
+          {author.kind === "position" && <PositionChip title={author.title} />}
+        </div>
+      )}
       <div className="asv-msg-body">
         {isAsk && (
           <div className="asv-msg-ask-header" aria-label="Asking the director">
@@ -494,15 +554,11 @@ const MessageItem = memo(function MessageItem({
           <SegmentRenderer segments={msg.segments} />
         ) : (
           <div className="asv-msg-content">
-            {msg.role === "assistant" ? (
-              <SessionMarkdown body={msg.content} />
-            ) : (
-              <span>{msg.content}</span>
-            )}
+            {isAssistantRole ? <SessionMarkdown body={msg.content} /> : <span>{msg.content}</span>}
           </div>
         )}
         {(metaParts.length > 0 ||
-          (msg.content.trim().length > 0 && (msg.role === "assistant" || msg.role === "user"))) && (
+          (msg.content.trim().length > 0 && (isAssistantRole || isUserRole))) && (
           <div className="asv-msg-chrome">
             {metaParts.length > 0 && (
               <div className="asv-msg-chrome-meta">
@@ -511,37 +567,35 @@ const MessageItem = memo(function MessageItem({
                 ))}
               </div>
             )}
-            {msg.role === "assistant" &&
-              msg.status !== "split" &&
-              msg.content.trim().length > 0 && (
-                <div className="asv-msg-chrome-actions">
-                  <CopyButton text={msg.content} />
-                  {msg.messageId && onFork && (
-                    <IconButton
-                      variant="ghost"
-                      size="xs"
-                      className="asv-msg-action-btn"
-                      onClick={() => onFork(msg.messageId!)}
-                      aria-label="Fork from here"
-                      title="Fork from here"
+            {isAssistantRole && msg.status !== "split" && msg.content.trim().length > 0 && (
+              <div className="asv-msg-chrome-actions">
+                <CopyButton text={msg.content} />
+                {msg.messageId && onFork && (
+                  <IconButton
+                    variant="ghost"
+                    size="xs"
+                    className="asv-msg-action-btn"
+                    onClick={() => onFork(msg.messageId!)}
+                    aria-label="Fork from here"
+                    title="Fork from here"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
                     >
-                      <svg
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinecap="round"
-                      >
-                        <circle cx="4" cy="4" r="1.5" />
-                        <circle cx="12" cy="4" r="1.5" />
-                        <circle cx="4" cy="12" r="1.5" />
-                        <path d="M4 5.5V10.5M5.5 4H10.5" />
-                      </svg>
-                    </IconButton>
-                  )}
-                </div>
-              )}
-            {msg.role === "user" && msg.content.trim().length > 0 && (
+                      <circle cx="4" cy="4" r="1.5" />
+                      <circle cx="12" cy="4" r="1.5" />
+                      <circle cx="4" cy="12" r="1.5" />
+                      <path d="M4 5.5V10.5M5.5 4H10.5" />
+                    </svg>
+                  </IconButton>
+                )}
+              </div>
+            )}
+            {isUserRole && msg.content.trim().length > 0 && (
               <div className="asv-msg-chrome-actions">
                 <CopyButton text={msg.content} />
                 {onResend && (

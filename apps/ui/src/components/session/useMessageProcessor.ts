@@ -130,6 +130,13 @@ export function useMessageProcessor() {
         } else {
           agent.timestamp = Math.min(agent.timestamp, ts);
         }
+        // Carry from_kind / from_id from the DB row (Wave 2 schema fields).
+        if (m.from_kind != null && agent.from_kind == null) {
+          agent.from_kind = m.from_kind as "user" | "agent" | "position" | "system";
+        }
+        if (m.from_id != null && agent.from_id == null) {
+          agent.from_id = String(m.from_id);
+        }
         if (pendingTools.length > 0) {
           agent.segments!.push(...pendingTools);
           pendingTools = [];
@@ -192,6 +199,11 @@ export function useMessageProcessor() {
         sawStoredStepMarkers = false;
         processed.push({
           role: "user",
+          from_kind:
+            m.from_kind != null
+              ? (m.from_kind as "user" | "agent" | "position" | "system")
+              : undefined,
+          from_id: m.from_id != null ? String(m.from_id) : undefined,
           content: String(m.content || ""),
           timestamp: ts,
           messageId: typeof m.id === "number" ? m.id : undefined,

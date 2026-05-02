@@ -53,6 +53,135 @@
   outline-offset: -2px;
 }
 
+/* ── Participant strip ──
+   Quiet horizontal row above the message list. Chrome zone (muted tint),
+   left side: stacked avatars + overflow count; right cap: +add ghost circle.
+   No hairlines — tint shift carries the boundary against the message area. */
+.asv-participant-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px clamp(16px, 3vw, 28px);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+.asv-participant-strip-avatars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.asv-participant-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.asv-participant-overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  min-width: 22px;
+  padding: 0 4px;
+  background: var(--bg-row);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+.asv-participant-add-btn {
+  /* inherits .sidebar-row-action-btn — 24px ghost circle */
+  margin-left: var(--space-2);
+}
+
+/* ── Add-participant stub modal ── */
+.asv-participant-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.asv-participant-modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  min-width: 280px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.asv-participant-modal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+}
+.asv-participant-modal-body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.asv-participant-modal-body code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+  padding: 1px 4px;
+  color: var(--text-primary);
+}
+.asv-participant-modal-close {
+  align-self: flex-end;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.asv-participant-modal-close:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-surface);
+}
+
+/* ── Avatar slot in message rows ──
+   Small BlockAvatar floats to the left of the bubble for agent/position
+   kinds. Position chip sits inline next to it. */
+.asv-msg-avatar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 3px;
+  flex-shrink: 0;
+}
+.asv-position-chip {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
 /* ── Awaiting-context banner ──
    Renders when the displayed session has an unanswered question.ask
    from the agent (driven by inbox-store row presence). Title borrows

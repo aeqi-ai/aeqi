@@ -48,6 +48,16 @@ export type MessageSegment =
 
 export interface Message {
   role: string;
+  /**
+   * WHO sent this message — schema-aligned with session_messages.from_kind.
+   * Nullable; when absent the renderer falls back to `role` mapping.
+   */
+  from_kind?: "user" | "agent" | "position" | "system" | null;
+  /**
+   * The identity ID of the sender (agent UUID, user UUID, or position UUID).
+   * Nullable; only meaningful when from_kind is set.
+   */
+  from_id?: string | null;
   content: string;
   segments?: MessageSegment[];
   timestamp?: number;
@@ -100,6 +110,54 @@ export interface SessionInfo {
   last_active?: string;
   message_count?: number;
   first_message?: string;
+}
+
+// ── Author resolution ──────────────────────────────────────────────────────
+
+export type ResolvedAuthor =
+  | { kind: "user"; id: string; name: string }
+  | { kind: "agent"; id: string; name: string }
+  | { kind: "position"; id: string; title: string }
+  | { kind: "system" };
+
+export interface AuthorContext {
+  sessionAgentId: string;
+  agentNames: Map<string, string>;
+  userName: string;
+  positionTitles?: Map<string, string>;
+}
+
+export function resolveAuthor(msg: Message, ctx: AuthorContext): ResolvedAuthor {
+  const { from_kind, from_id, role } = msg;
+  const { sessionAgentId, agentNames, userName, positionTitles } = ctx;
+
+  // Explicit from_kind — schema-aligned path
+  if (from_kind === "system" || role === "system") {
+    return { kind: "system" };
+  }
+  if (from_kind === "agent") {
+    const id = from_id ?? sessionAgentId;
+    return { kind: "agent", id, name: agentNames.get(id) ?? "Agent" };
+  }
+  if (from_kind === "user") {
+    const id = from_id ?? "";
+    return { kind: "user", id, name: userName };
+  }
+  if (from_kind === "position") {
+    const id = from_id ?? "";
+    return { kind: "position", id, title: positionTitles?.get(id) ?? "Position" };
+  }
+
+  // Legacy fallback — role-based
+  if (role === "assistant") {
+    return { kind: "agent", id: sessionAgentId, name: agentNames.get(sessionAgentId) ?? "Agent" };
+  }
+  if (role === "user" || role === "User") {
+    return { kind: "user", id: "", name: userName };
+  }
+
+  // Default: treat as system for event_fire / quest_event / error roles
+  return { kind: "system" };
 }
 
 export function formatMs(ms: number): string {

@@ -32,6 +32,13 @@ export interface StreamState {
    * the split.
    */
   stepOffset: number;
+  /**
+   * Explicit sender identity — populated when the stream carries from_kind /
+   * from_id (Wave 2 schema). When absent the renderer falls back to the
+   * legacy `role` mapping.
+   */
+  from_kind?: "user" | "agent" | "position" | "system" | null;
+  from_id?: string | null;
 }
 
 /**
@@ -57,6 +64,8 @@ export function initialStreamState(thinkingStart: number, stepOffset = 0): Strea
     thinkingStart,
     status: { kind: "streaming" },
     stepOffset,
+    from_kind: null,
+    from_id: null,
   };
 }
 
@@ -162,8 +171,18 @@ export function hasContent(state: StreamState): boolean {
 
 function applySubscribed(state: StreamState, event: RawEvent): StreamState {
   const msAgo = Number(event.started_ms_ago);
-  if (!Number.isFinite(msAgo) || msAgo <= 0) return state;
-  return { ...state, thinkingStart: Date.now() - msAgo };
+  const next: StreamState = { ...state };
+  if (Number.isFinite(msAgo) && msAgo > 0) {
+    next.thinkingStart = Date.now() - msAgo;
+  }
+  // Capture from_kind / from_id when the Subscribed event carries them
+  if (event.from_kind != null) {
+    next.from_kind = event.from_kind as StreamState["from_kind"];
+  }
+  if (event.from_id != null) {
+    next.from_id = event.from_id as string;
+  }
+  return next;
 }
 
 function appendText(state: StreamState, delta: string): StreamState {

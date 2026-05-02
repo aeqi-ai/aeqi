@@ -382,6 +382,10 @@ function messageFromState(state: StreamState): Message | null {
 function assistantMessage(state: StreamState, endTime: number, meta: TurnMeta): Message {
   return {
     role: "assistant",
+    // Carry explicit from_kind / from_id when the stream supplied them.
+    // Renderer falls back to role mapping when these are null/absent.
+    from_kind: state.from_kind ?? undefined,
+    from_id: state.from_id ?? undefined,
     content: state.fullText,
     segments: state.segments.length > 0 ? [...state.segments] : undefined,
     timestamp: endTime,
