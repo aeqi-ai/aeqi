@@ -1485,6 +1485,10 @@ impl Daemon {
                     crate::ipc::positions::handle_create_position(&ctx, &request, &allowed_roots)
                         .await
                 }
+                "change_occupant" => {
+                    crate::ipc::positions::handle_change_occupant(&ctx, &request, &allowed_roots)
+                        .await
+                }
 
                 "metrics" => {
                     crate::ipc::status::handle_metrics(&ctx, &request, &allowed_roots).await

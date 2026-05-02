@@ -197,6 +197,41 @@ impl PositionRegistry {
         Ok(())
     }
 
+    /// Fetch a single position by id. Returns `None` when not found.
+    pub async fn get(&self, position_id: &str) -> Result<Option<Position>> {
+        let db = self.db.lock().await;
+        let result = db
+            .query_row(
+                "SELECT id, entity_id, title, occupant_kind, occupant_id, created_at, updated_at
+                 FROM positions WHERE id = ?1",
+                params![position_id],
+                row_to_position,
+            )
+            .optional()?;
+        Ok(result)
+    }
+
+    /// Update the occupant of a position in-place.
+    ///
+    /// Called by `handle_change_occupant` after verifying the position exists.
+    /// Stamps `updated_at`.
+    pub async fn update_occupant(
+        &self,
+        position_id: &str,
+        new_kind: OccupantKind,
+        new_occupant_id: Option<&str>,
+    ) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        let db = self.db.lock().await;
+        db.execute(
+            "UPDATE positions \
+             SET occupant_kind = ?1, occupant_id = ?2, updated_at = ?3 \
+             WHERE id = ?4",
+            params![new_kind.as_db(), new_occupant_id, now, position_id],
+        )?;
+        Ok(())
+    }
+
     /// Wipe every position and edge for an entity. Used by
     /// `spawn_blueprint` when the template declares explicit `seed_roles`:
     /// the agent_registry's spawn-time auto-positions get cleared so the
@@ -210,7 +245,10 @@ impl PositionRegistry {
                 OR child_position_id IN (SELECT id FROM positions WHERE entity_id = ?1)",
             params![entity_id],
         )?;
-        db.execute("DELETE FROM positions WHERE entity_id = ?1", params![entity_id])?;
+        db.execute(
+            "DELETE FROM positions WHERE entity_id = ?1",
+            params![entity_id],
+        )?;
         Ok(())
     }
 }

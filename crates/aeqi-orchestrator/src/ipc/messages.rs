@@ -1,10 +1,10 @@
 //! IPC handlers for the three address verbs:
-//!   - `message_to`     — append a message to a session, idea, agent, or user target
+//!   - `message_to`     — append a message to a session, idea, agent, user, or position target
 //!   - `add_participant` — add an identity to a session's participant roster
 //!
 //! Wave 1 implements the `session` and `idea` targets for `message_to`.
-//! The `agent` and `user` targets are stubbed and return a clear "not yet wired"
-//! error rather than silently succeeding or panicking.
+//! Wave 3 (position routing) implements `target_kind="position"`.
+//! The `agent` and `user` targets are wired by the sibling Wave 3 architect.
 
 use super::request_field;
 
@@ -14,11 +14,11 @@ use super::request_field;
 ///
 /// ```json
 /// {
-///   "target_kind": "session" | "idea" | "agent" | "user",
-///   "target_id":   "<id>",
-///   "body":        "<message text>",
-///   "from_kind":   "user" | "agent" | "position" | "system",
-///   "from_id":     "<identity id>",
+///   "target_kind":  "session" | "idea" | "agent" | "user" | "position",
+///   "target_id":    "<id>",
+///   "body":         "<message text>",
+///   "from_kind":    "user" | "agent" | "position" | "system",
+///   "from_id":      "<identity id>",
 ///   "payload_kind": null | "<discriminator>"
 /// }
 /// ```
@@ -26,6 +26,11 @@ use super::request_field;
 /// For `target_kind="idea"`: if `ideas.session_id` is null, a new standalone
 /// session is created and the idea row is updated to point at it before
 /// appending the message.
+///
+/// For `target_kind="position"`: the position's current occupant is resolved;
+/// a vacant position returns an error. A position-anchored session is
+/// created on first use and reused on subsequent calls. The occupant is
+/// added as a participant automatically.
 pub async fn handle_message_to(
     ctx: &super::CommandContext,
     request: &serde_json::Value,
@@ -138,10 +143,104 @@ pub async fn handle_message_to(
             }
         }
 
+        "position" => {
+            // 1. Look up the position.
+            let position = match ctx.position_registry.get(&target_id).await {
+                Ok(Some(p)) => p,
+                Ok(None) => {
+                    return serde_json::json!({
+                        "ok": false,
+                        "error": "position not found",
+                    });
+                }
+                Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+            };
+
+            // 2. Reject vacant positions — nowhere to deliver the message.
+            if matches!(
+                position.occupant_kind,
+                crate::position_registry::OccupantKind::Vacant
+            ) || position.occupant_id.is_none()
+            {
+                return serde_json::json!({
+                    "ok": false,
+                    "error": "position has no occupant",
+                });
+            }
+            let occupant_kind = position.occupant_kind;
+            let occupant_id = position.occupant_id.as_deref().unwrap_or("");
+
+            // 3. Resolve or create the position-anchored session.
+            //    The session is shared across all callers targeting this position;
+            //    we key on (position_id, calling_agent from_id) to find an
+            //    existing session where the caller is already a participant.
+            let caller_agent_id = from_id.as_deref().unwrap_or("");
+            let session_id = if !caller_agent_id.is_empty() {
+                match ss.find_position_session(&target_id, caller_agent_id).await {
+                    Ok(Some(sid)) => sid,
+                    Ok(None) => {
+                        // First addressing — create a fresh position-anchored session.
+                        let title = format!("position:{}", target_id);
+                        let sid = match ss.create_position_session(&target_id, &title).await {
+                            Ok(s) => s,
+                            Err(e) => {
+                                return serde_json::json!({"ok": false, "error": e.to_string()});
+                            }
+                        };
+                        // Add the calling agent as a participant.
+                        let _ = ss
+                            .add_session_participant(&sid, "agent", caller_agent_id, None)
+                            .await;
+                        sid
+                    }
+                    Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+                }
+            } else {
+                // No caller identity — still need a session. Create one.
+                let title = format!("position:{}", target_id);
+                match ss.create_position_session(&target_id, &title).await {
+                    Ok(s) => s,
+                    Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+                }
+            };
+
+            // 4. Ensure the position's current occupant is a participant.
+            let occupant_kind_str = match occupant_kind {
+                crate::position_registry::OccupantKind::Human => "user",
+                crate::position_registry::OccupantKind::Agent => "agent",
+                crate::position_registry::OccupantKind::Vacant => unreachable!(),
+            };
+            let _ = ss
+                .add_session_participant(&session_id, occupant_kind_str, occupant_id, None)
+                .await;
+
+            // 5. Append the message.
+            match ss
+                .append_message_from(
+                    &session_id,
+                    role_for_from_kind(from_kind),
+                    &body,
+                    from_kind,
+                    from_id.as_deref(),
+                    payload_kind.as_deref(),
+                )
+                .await
+            {
+                Ok(msg_id) => {
+                    serde_json::json!({
+                        "ok": true,
+                        "session_id": session_id,
+                        "message_id": msg_id,
+                    })
+                }
+                Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
+            }
+        }
+
         "agent" | "user" => {
             serde_json::json!({
                 "ok": false,
-                "error": format!("target_kind={target_kind} is not yet wired in Wave 1"),
+                "error": format!("target_kind={target_kind} is not yet wired in Wave 3"),
             })
         }
 
@@ -429,5 +528,182 @@ mod tests {
         assert_eq!(timeline.len(), 1);
         assert_eq!(timeline[0].content, "user:user-abc joined");
         assert_eq!(timeline[0].role, "system");
+    }
+
+    // ── Wave 3: position target tests ────────────────────────────────────────
+
+    /// Build a ctx + occupied position for position-routing tests.
+    async fn setup_position_ctx() -> (
+        CommandContext,
+        Arc<crate::session_store::SessionStore>,
+        String, // position_id of an agent-occupied position
+        String, // occupant agent_id
+        tempfile::TempDir,
+    ) {
+        let (ctx, ss, _, dir) = test_ctx_with_ideas().await;
+
+        // Create an entity + position occupied by an agent.
+        let entity = ctx
+            .entity_registry
+            .create_new(
+                "Test Co",
+                "testco",
+                crate::entity_registry::EntityType::Company,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let agent_id = "agent-occupant-001".to_string();
+        let pos = ctx
+            .position_registry
+            .create(
+                &entity.id,
+                "CEO",
+                crate::position_registry::OccupantKind::Agent,
+                Some(&agent_id),
+            )
+            .await
+            .unwrap();
+
+        (ctx, ss, pos.id, agent_id, dir)
+    }
+
+    #[tokio::test]
+    async fn message_to_position_creates_session_and_adds_occupant() {
+        let (ctx, ss, pos_id, agent_id, _dir) = setup_position_ctx().await;
+
+        let req = serde_json::json!({
+            "target_kind": "position",
+            "target_id": pos_id,
+            "body": "hello from calling agent",
+            "from_kind": "agent",
+            "from_id": "agent-caller-001",
+        });
+
+        let resp = handle_message_to(&ctx, &req, &None).await;
+        assert_eq!(resp["ok"], true, "response: {resp}");
+        let session_id = resp["session_id"].as_str().unwrap().to_string();
+        assert!(!session_id.is_empty());
+
+        // Occupant must be a participant.
+        let participants = {
+            let pool = ss.db();
+            let db = pool.lock().await;
+            let mut stmt = db
+                .prepare(
+                    "SELECT identity_kind, identity_id FROM session_participants \
+                     WHERE session_id = ?1",
+                )
+                .unwrap();
+            stmt.query_map(rusqlite::params![session_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect::<Vec<_>>()
+        };
+        assert!(
+            participants
+                .iter()
+                .any(|(k, id)| k == "agent" && id == &agent_id),
+            "occupant agent must be a participant; got {participants:?}"
+        );
+
+        // target_position_id must be set on the session.
+        let session = ss.get_session(&session_id).await.unwrap().unwrap();
+        // We can't read target_position_id via Session struct yet; verify via raw SQL.
+        let stored_pos_id: String = {
+            let pool = ss.db();
+            let db = pool.lock().await;
+            db.query_row(
+                "SELECT target_position_id FROM sessions WHERE id = ?1",
+                rusqlite::params![session_id],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(stored_pos_id, pos_id);
+        // Status must be active.
+        assert_eq!(session.status, "active");
+    }
+
+    #[tokio::test]
+    async fn message_to_vacant_position_returns_error() {
+        let (ctx, _ss, _pos_id, _agent_id, _dir) = setup_position_ctx().await;
+
+        // Create a separate vacant position.
+        let entity = ctx
+            .entity_registry
+            .create_new(
+                "Vacant Co",
+                "vacantco",
+                crate::entity_registry::EntityType::Company,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let vacant_pos = ctx
+            .position_registry
+            .create(
+                &entity.id,
+                "CFO",
+                crate::position_registry::OccupantKind::Vacant,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let req = serde_json::json!({
+            "target_kind": "position",
+            "target_id": vacant_pos.id,
+            "body": "message to nobody",
+            "from_kind": "agent",
+            "from_id": "agent-caller-001",
+        });
+
+        let resp = handle_message_to(&ctx, &req, &None).await;
+        assert_eq!(resp["ok"], false, "vacant position must return error");
+        let err = resp["error"].as_str().unwrap_or("");
+        assert!(
+            err.contains("no occupant"),
+            "error must mention no occupant; got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn message_to_position_reuses_session_after_second_call() {
+        let (ctx, _ss, pos_id, _agent_id, _dir) = setup_position_ctx().await;
+
+        let req = serde_json::json!({
+            "target_kind": "position",
+            "target_id": pos_id,
+            "body": "first message",
+            "from_kind": "agent",
+            "from_id": "agent-caller-001",
+        });
+
+        let resp1 = handle_message_to(&ctx, &req, &None).await;
+        assert_eq!(resp1["ok"], true);
+        let session_id_1 = resp1["session_id"].as_str().unwrap().to_string();
+
+        let req2 = serde_json::json!({
+            "target_kind": "position",
+            "target_id": pos_id,
+            "body": "second message",
+            "from_kind": "agent",
+            "from_id": "agent-caller-001",
+        });
+
+        let resp2 = handle_message_to(&ctx, &req2, &None).await;
+        assert_eq!(resp2["ok"], true);
+        let session_id_2 = resp2["session_id"].as_str().unwrap().to_string();
+
+        assert_eq!(
+            session_id_1, session_id_2,
+            "second message_to same position must reuse the same session"
+        );
     }
 }

@@ -370,6 +370,33 @@ fn ensure_session_messages_from_columns(conn: &Connection) -> rusqlite::Result<(
     Ok(())
 }
 
+/// Idempotent migration that adds a nullable `target_position_id TEXT` column to
+/// `sessions`. A non-null value anchors the session on a position rather than a
+/// specific occupant — when the occupant rotates the session continues under the
+/// same id, with the participant set updated by `handle_change_occupant`.
+fn ensure_sessions_target_position_id(conn: &Connection) -> rusqlite::Result<()> {
+    let cols: std::collections::HashSet<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(sessions)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    if !cols.contains("target_position_id") {
+        conn.execute(
+            "ALTER TABLE sessions ADD COLUMN target_position_id TEXT",
+            [],
+        )?;
+    }
+    // Index lets `sessions_by_target_position` scan cheaply.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sess_target_position \
+         ON sessions(target_position_id) \
+         WHERE target_position_id IS NOT NULL",
+        [],
+    )?;
+    Ok(())
+}
+
 /// Idempotent migration that adds a nullable `gateway_channel_id TEXT` column to
 /// `sessions`, then backfills from the `channel_sessions` × `channels` join.
 ///
@@ -597,6 +624,8 @@ impl SessionStore {
             .context("failed to ensure from_kind/from_id columns on session_messages")?;
         ensure_sessions_gateway_channel_id(conn)
             .context("failed to ensure gateway_channel_id column on sessions")?;
+        ensure_sessions_target_position_id(conn)
+            .context("failed to ensure target_position_id column on sessions")?;
         Ok(())
     }
 
@@ -2172,6 +2201,83 @@ impl SessionStore {
             params![id, session_type, name],
         )?;
         Ok(id)
+    }
+
+    /// Create a new session anchored on a position (position-addressed session).
+    ///
+    /// Sets `target_position_id` so that when the position's occupant changes,
+    /// the same session id is preserved and only the participant set rotates.
+    /// Returns the new session UUID.
+    pub async fn create_position_session(&self, position_id: &str, name: &str) -> Result<String> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let db = self.db.lock().await;
+        db.execute(
+            "INSERT INTO sessions (id, session_type, name, status, target_position_id) \
+             VALUES (?1, 'position', ?2, 'active', ?3)",
+            params![id, name, position_id],
+        )?;
+        Ok(id)
+    }
+
+    /// Find the active session anchored on a position where the given agent is
+    /// a participant. Returns `None` when no such session exists.
+    pub async fn find_position_session(
+        &self,
+        position_id: &str,
+        participant_agent_id: &str,
+    ) -> Result<Option<String>> {
+        let db = self.db.lock().await;
+        let result = db
+            .query_row(
+                "SELECT s.id
+                 FROM sessions s
+                 JOIN session_participants sp
+                   ON sp.session_id = s.id
+                  AND sp.identity_kind = 'agent'
+                  AND sp.identity_id   = ?2
+                 WHERE s.target_position_id = ?1
+                   AND s.status = 'active'
+                 LIMIT 1",
+                params![position_id, participant_agent_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(result)
+    }
+
+    /// Return all active session ids anchored on the given position.
+    /// Used by `handle_change_occupant` to rotate participants across every
+    /// anchored session when the occupant changes.
+    pub async fn sessions_by_target_position(&self, position_id: &str) -> Result<Vec<String>> {
+        let db = self.db.lock().await;
+        let mut stmt = db.prepare(
+            "SELECT id FROM sessions \
+             WHERE target_position_id = ?1 AND status = 'active'",
+        )?;
+        let rows = stmt
+            .query_map(params![position_id], |row| row.get::<_, String>(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(rows)
+    }
+
+    /// Remove a participant from a session's roster.
+    ///
+    /// Returns `true` if a row was deleted, `false` if the participant was not
+    /// present (idempotent call is safe — no error on a no-op).
+    pub async fn remove_session_participant(
+        &self,
+        session_id: &str,
+        identity_kind: &str,
+        identity_id: &str,
+    ) -> Result<bool> {
+        let db = self.db.lock().await;
+        let rows = db.execute(
+            "DELETE FROM session_participants \
+             WHERE session_id = ?1 AND identity_kind = ?2 AND identity_id = ?3",
+            params![session_id, identity_kind, identity_id],
+        )?;
+        Ok(rows > 0)
     }
 
     /// Record an execution trace.
