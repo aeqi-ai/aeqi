@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useDaemonStore } from "@/store/daemon";
 import { useInboxStore } from "@/store/inbox";
-import type { Idea, Quest } from "@/lib/types";
+import type { Idea, Quest, Role } from "@/lib/types";
 import { sessionDeepUrl } from "@/lib/sessionUrl";
 
 /**
@@ -71,6 +71,31 @@ export default function AgentOverviewTab({
       .slice(0, 5);
   }, [events, agent]);
 
+  // Roles this agent occupies inside the active entity. Slice of the
+  // entity's full org chart — same data the entity Roles tab renders.
+  // Cross-entity roles aren't surfaced here yet; the API is
+  // entity-scoped (`getRoles(entityId)`).
+  const [roles, setRoles] = useState<Role[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getRoles(entityId)
+      .then((resp) => {
+        if (cancelled) return;
+        const held = (resp.roles ?? []).filter(
+          (r) => r.occupant_kind === "agent" && r.occupant_id === agentId,
+        );
+        setRoles(held);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRoles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, entityId]);
+
   // Mission: fetch this agent's identity idea (the "Persona" seed
   // every blueprint creates) and take its first paragraph. If the
   // agent doesn't have one, the module quietly disappears — Mission
@@ -126,6 +151,33 @@ export default function AgentOverviewTab({
               </Link>
             </div>
             <p className="dashboard-mission-body">{firstSentence(persona.content)}</p>
+          </section>
+        )}
+
+        {roles.length > 0 && (
+          <section className="dashboard-card" aria-labelledby="agent-roles">
+            <div className="dashboard-card-head">
+              <h2 id="agent-roles" className="dashboard-card-title">
+                Roles
+              </h2>
+              <Link to={`/c/${encodeURIComponent(entityId)}/roles`} className="dashboard-card-link">
+                Org chart →
+              </Link>
+            </div>
+            <ul className="dashboard-list" role="list">
+              {roles.map((r) => (
+                <li key={r.id} className="dashboard-list-row">
+                  <button
+                    type="button"
+                    className="dashboard-list-btn"
+                    onClick={() => navigate(`/c/${encodeURIComponent(entityId)}/roles`)}
+                  >
+                    <span className="dashboard-list-from">role</span>
+                    <span className="dashboard-list-text">{r.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
