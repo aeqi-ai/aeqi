@@ -199,7 +199,9 @@ export default function AppLayout() {
   // defaults to "overview" so CompanyPage handles the bare URL with
   // tab="overview". (An earlier JSX-level <Navigate> caused a render
   // loop; the dispatch path below is the canonical answer instead.)
-  // The Overview sidebar item also lights at `/c/<entity>` to match.
+  // Overview is reached via the Company PageRail, not a global
+  // sidebar item — clicking the Overview tab navigates to the bare
+  // `/c/<entity>` URL since it's the rail's fallback.
 
   // Defensive: route should be unreachable if `agents/<agent>` resolves
   // to nothing — bounce up to the company shell.
