@@ -156,12 +156,28 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   const hasCompany = !!entityId;
 
   const navHref = (id: string) => `${base}/${id}`;
+  // The Company cockpit row stays lit across every Company-rail
+  // sub-page (Overview / Roles / Ownership / Treasury / Governance /
+  // Settings). All of those tabs render inside CompanyPage and share
+  // the company's secondary nav, so the global sidebar's "Company"
+  // anchor is the parent destination — it shouldn't go dark when the
+  // user clicks Roles or Treasury.
+  const COMPANY_TABS_LIGHTING_OVERVIEW = new Set([
+    "overview",
+    "roles",
+    "ownership",
+    "treasury",
+    "governance",
+    "settings",
+  ]);
   const isActive = (id: string) => {
     if (!base) return false;
-    // Overview is the canonical company landing — its sidebar item
-    // also lights at the bare `/c/<id>` URL (which renders Overview
-    // through CompanyPage's effectiveTab default).
-    if (id === "overview" && path === base) return true;
+    if (id === "overview") {
+      if (path === base) return true;
+      const tail = path.startsWith(`${base}/`) ? path.slice(base.length + 1) : "";
+      const firstSeg = tail.split("/")[0];
+      return COMPANY_TABS_LIGHTING_OVERVIEW.has(firstSeg);
+    }
     return path === `${base}/${id}` || path.startsWith(`${base}/${id}/`);
   };
   // Personal items — Inbox (canonical root, `/`) and Portfolio
