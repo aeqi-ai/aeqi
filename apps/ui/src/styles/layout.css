@@ -1057,6 +1057,25 @@
   justify-content: center;
   padding: 8px;
 }
+/* Collapsed-state CompanySwitcher: hide the name + chevron, square the
+   trigger to a 32×32 centered tile so the avatar reads as another rail
+   icon, not a left-aligned button overflowing the 48px column. */
+.left-sidebar.collapsed .sidebar-user-zone {
+  align-items: center;
+  padding: 4px 0 8px;
+}
+.left-sidebar.collapsed .company-switcher-trigger {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+}
+.left-sidebar.collapsed .company-switcher-name,
+.left-sidebar.collapsed .company-switcher-chevron {
+  display: none;
+}
 
 /* ── Sidebar footer — profile anchor, pinned bottom-left (Linear
    pattern). Profile occupies the row with a tiny `?` help affordance
@@ -2579,14 +2598,6 @@
   height: 100%;
   min-height: 0;
 }
-.settings-shell-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
 /* ── Budget meter ──
    Compact $spent / $cap pill with a slim progress bar under the
    numbers. Lives in the chat topbar right slot, replacing the

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useParams } from "react-router-dom";
 import CommandPalette from "./CommandPalette";
-import AgentPage, { AGENT_RAIL_TABS, AGENT_RAIL_SETTINGS_TABS } from "./AgentPage";
+import AgentPage, { AGENT_RAIL_TABS } from "./AgentPage";
 import LeftSidebar from "./shell/LeftSidebar";
 import SessionsRail from "./shell/SessionsRail";
 import PageRail from "./PageRail";
@@ -256,11 +256,10 @@ export default function AppLayout() {
   // Drilled-agent PageRail. Mounted at the body-row level so it sits
   // as a sibling of the SessionsRail and the chat content column —
   // the order reads `[ rail | sessions list | chat ]` matching the
-  // user's mental model. Active state collapses settings / tools /
-  // integrations / plan onto the "settings" rail entry; the inner
-  // SettingsShell renders the finer sub-rail itself.
+  // user's mental model. The rail tabs are flat — Channels, Tools,
+  // Integrations, and Settings are siblings, no nested sub-rail.
   const showAgentRail = !!drilledAgent;
-  const agentRailCurrent = AGENT_RAIL_SETTINGS_TABS.has(effectiveTab) ? "settings" : effectiveTab;
+  const agentRailCurrent = effectiveTab;
   const agentRailBase =
     drilledAgent && encodedEntityId
       ? `/c/${encodedEntityId}/agents/${encodeURIComponent(drilledAgent.id)}`

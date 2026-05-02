@@ -1,12 +1,17 @@
-import { EmptyState } from "@/components/ui/EmptyState";
+import PlanTab from "@/pages/Agent/PlanTab";
 
-export default function CompanySettingsPage() {
-  return (
-    <div className="asv-main">
-      <EmptyState
-        title="Settings"
-        description="Coming soon. Company name, logo, plan, default model, integrations, and danger zone."
-      />
-    </div>
-  );
+interface CompanySettingsPageProps {
+  /** The Company's root-agent id (also the entity id). PlanTab resolves
+   *  the per-Company subscription from this. */
+  agentId: string;
+}
+
+/**
+ * `/c/:entityId/settings` — Company Settings tab. Plan is per-Company
+ * billing and lives here (not on the agent rail). Other Company-scoped
+ * config (name, logo, default model, integrations, danger zone) will
+ * land here as separate sections.
+ */
+export default function CompanySettingsPage({ agentId }: CompanySettingsPageProps) {
+  return <PlanTab agentId={agentId} />;
 }

@@ -68,7 +68,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
         ) : tab === "governance" ? (
           <GovernancePage />
         ) : tab === "settings" ? (
-          <CompanySettingsPage />
+          <CompanySettingsPage agentId={agentId} />
         ) : (
           <AgentPage agentId={agentId} tab={tab} itemId={itemId} />
         )}

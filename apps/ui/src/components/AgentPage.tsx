@@ -13,27 +13,18 @@ import EntityRolesTab from "./EntityRolesTab";
 import EntityOverviewTab from "./EntityOverviewTab";
 import AgentOverviewTab from "./AgentOverviewTab";
 import AgentIntegrationsTab from "@/pages/Agent/Integrations";
-import AgentPlanTab from "@/pages/Agent/PlanTab";
-import PageRail from "./PageRail";
 import { Button } from "./ui";
 import ModelPicker from "./ModelPicker";
 import { ALL_TOOLS, TOOL_BY_ID } from "@/lib/tools";
-
-const SETTINGS_SUB_TABS = [
-  { id: "settings", label: "Settings" },
-  { id: "channels", label: "Channels" },
-  { id: "tools", label: "Tools" },
-  { id: "integrations", label: "Integrations" },
-  { id: "plan", label: "Plan" },
-];
 
 // Agent-scoped page rail — shown only when drilled into a specific
 // agent (`/c/<entity>/agents/<agentId>/...`). Mirrors the Company /
 // Profile / Economy pattern: a left rail of in-scope sections, with
 // the active content rendered in the right pane. Sessions is the
-// agent's home landing (canonical no-tab destination). Settings
-// collapses the existing nested sub-rail (Settings / Tools /
-// Integrations / Plan) under one entry so the rail stays narrow.
+// agent's home landing (canonical no-tab destination). Channels,
+// Tools, Integrations, and Settings are flat siblings — no nested
+// sub-rail. Plan is per-Company billing and lives in the Company
+// Settings page, not on the agent rail.
 //
 // Exported so AppLayout can mount the rail at the outer
 // `.content-body-row` level — it sits as a sibling of the
@@ -47,13 +38,10 @@ export const AGENT_RAIL_TABS = [
   { id: "events", label: "Events" },
   { id: "ideas", label: "Ideas" },
   { id: "channels", label: "Channels" },
+  { id: "tools", label: "Tools" },
+  { id: "integrations", label: "Integrations" },
   { id: "settings", label: "Settings" },
 ];
-
-// Tabs that light the rail's "Settings" entry (the nested sub-rail
-// inside Settings handles finer selection). Channels is excluded —
-// it has its own top-level rail entry.
-export const AGENT_RAIL_SETTINGS_TABS = new Set(["settings", "tools", "integrations", "plan"]);
 
 // Routes that AgentPage knows how to render. No-tab resolves to the Sessions
 // surface — the agent's home landing. ContentTopBar is the primary nav and
@@ -70,7 +58,6 @@ const TABS = [
   { id: "ideas", label: "Ideas" },
   { id: "tools", label: "Tools" },
   { id: "integrations", label: "Integrations" },
-  { id: "plan", label: "Plan" },
 ];
 
 export default function AgentPage({
@@ -153,28 +140,22 @@ export default function AgentPage({
 
       {activeTab === "roles" && <EntityRolesTab entityId={resolvedEntityId} />}
 
-      {(activeTab === "settings" ||
-        activeTab === "channels" ||
-        activeTab === "tools" ||
-        activeTab === "integrations" ||
-        activeTab === "plan") && (
-        <SettingsShell>
-          {activeTab === "settings" && (
-            <SettingsPanel
-              agent={agent}
-              agentId={agentId}
-              resolvedAgentId={resolvedAgentId}
-              showToast={showToast}
-            />
-          )}
-          {activeTab === "channels" && <AgentChannelsTab agentId={resolvedAgentId} />}
-          {activeTab === "tools" && (
-            <ToolsDetail agent={agent} resolvedAgentId={resolvedAgentId} showToast={showToast} />
-          )}
-          {activeTab === "integrations" && <AgentIntegrationsTab agentId={resolvedAgentId} />}
-          {activeTab === "plan" && <AgentPlanTab agentId={resolvedAgentId} />}
-        </SettingsShell>
+      {activeTab === "settings" && (
+        <SettingsPanel
+          agent={agent}
+          agentId={agentId}
+          resolvedAgentId={resolvedAgentId}
+          showToast={showToast}
+        />
       )}
+
+      {activeTab === "channels" && <AgentChannelsTab agentId={resolvedAgentId} />}
+
+      {activeTab === "tools" && (
+        <ToolsDetail agent={agent} resolvedAgentId={resolvedAgentId} showToast={showToast} />
+      )}
+
+      {activeTab === "integrations" && <AgentIntegrationsTab agentId={resolvedAgentId} />}
     </div>
   );
 
@@ -183,23 +164,6 @@ export default function AgentPage({
   // not inside the chat column. Drilled and non-drilled agents return
   // the same body — only the outer chrome differs.
   return body;
-}
-
-/**
- * Settings umbrella. Renders a hairline tab row across Settings / Channels /
- * Tools — the three "configure how this agent works" panes. Sidebar only shows
- * "Settings"; Channels + Tools are reached via this tab row (or directly by
- * URL — /channels and /tools still work as entry points). Tab row uses the
- * shared `PageTabs` primitive so Profile and Settings share one visual
- * treatment (one tab language across the app).
- */
-function SettingsShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="page-rail-shell">
-      <PageRail tabs={SETTINGS_SUB_TABS} mode="path" title="Settings" />
-      <div className="page-rail-content settings-shell-body">{children}</div>
-    </div>
-  );
 }
 
 /**
