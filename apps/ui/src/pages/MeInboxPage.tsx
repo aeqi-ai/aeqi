@@ -1,88 +1,215 @@
-import { useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuthStore } from "@/store/auth";
-import { useInboxStore, selectInboxCount } from "@/store/inbox";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useInboxStore } from "@/store/inbox";
 import { useDaemonStore } from "@/store/daemon";
-import { sessionDeepUrl } from "@/lib/sessionUrl";
+import InboxToolbar from "@/components/inbox/InboxToolbar";
+import InboxList from "@/components/inbox/InboxList";
+import InboxDetail from "@/components/inbox/InboxDetail";
+import { toInboxRow, DEFAULT_FILTER } from "@/components/inbox/types";
+import type { InboxFilterState, InboxRow, InboxSort } from "@/components/inbox/types";
 
 /**
- * `/me/inbox` — the action queue. Blocking items waiting on you,
- * across every company you own. Distinct from `/` (the feed); the
- * feed is the pulse, the inbox is what you go to clear.
+ * `/` — the canonical daily-driver Inbox surface.
  *
- * No composer here. Each row navigates to the source session. Items
- * arrive via the WS stream into `useInboxStore` and are dismissed
- * either by the agent resolving the question or by the user
- * answering inline in the session view.
+ * Two-pane layout: toolbar + time-grouped list (left) + detail/composer (right).
+ * Keyboard: j/k traverse, r focus composer, / focus search, Esc clear/unfocus.
+ * Real-time pulse on new WS-pushed items. Composer via answerItem (POST).
  */
 export default function MeInboxPage() {
-  const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
-  const inboxCount = useInboxStore(selectInboxCount);
-  // Subscribe to raw fields + derive the visible items via useMemo.
-  // Avoiding selectVisibleItems (which builds a new array each call)
-  // is what keeps useSyncExternalStore from looping; see Dashboard
-  // for the same pattern.
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Store subscriptions — field-level to avoid selector churn
   const allItems = useInboxStore((s) => s.items);
   const pending = useInboxStore((s) => s.pendingDismissal);
-  const items = useMemo(
-    () => allItems.filter((i) => !pending.has(i.session_id)),
+  const answerItem = useInboxStore((s) => s.answerItem);
+  const entities = useDaemonStore((s) => s.entities);
+
+  // Convert visible items to client rows
+  const rows: InboxRow[] = useMemo(
+    () => allItems.filter((i) => !pending.has(i.session_id)).map(toInboxRow),
     [allItems, pending],
   );
-  const agents = useDaemonStore((s) => s.agents);
+
+  // Track newly-arrived items for the pulse animation
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const prevRowIdsRef = useRef<Set<string>>(new Set(rows.map((r) => r.id)));
+  useEffect(() => {
+    const currentIds = new Set(rows.map((r) => r.id));
+    const arrived = new Set<string>();
+    for (const id of currentIds) {
+      if (!prevRowIdsRef.current.has(id)) arrived.add(id);
+    }
+    prevRowIdsRef.current = currentIds;
+    if (arrived.size > 0) {
+      setNewIds((prev) => new Set([...prev, ...arrived]));
+      const t = window.setTimeout(() => {
+        setNewIds((prev) => {
+          const next = new Set(prev);
+          for (const id of arrived) next.delete(id);
+          return next;
+        });
+      }, 800);
+      return () => window.clearTimeout(t);
+    }
+  }, [rows]);
+
+  // Toolbar state
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<InboxFilterState>(DEFAULT_FILTER);
+  const [sort, setSort] = useState<InboxSort>("recent");
+
+  const patchFilter = (patch: Partial<InboxFilterState>) =>
+    setFilter((prev) => ({ ...prev, ...patch }));
+
+  // Filter + sort pipeline
+  const visible = useMemo(() => {
+    let result = rows;
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (r) => r.from.name.toLowerCase().includes(q) || r.subject.toLowerCase().includes(q),
+      );
+    }
+
+    if (filter.kind !== "all") {
+      result = result.filter((r) => r.kind === filter.kind);
+    }
+
+    if (filter.entityId !== null) {
+      result = result.filter((r) => r.entity_id === filter.entityId);
+    }
+
+    if (filter.unreadOnly) {
+      result = result.filter((r) => r.unread);
+    }
+
+    if (sort === "unread") {
+      result = [...result].sort((a, b) => {
+        if (a.unread === b.unread) return 0;
+        return a.unread ? -1 : 1;
+      });
+    } else {
+      result = [...result].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+    }
+
+    return result;
+  }, [rows, search, filter, sort]);
+
+  // Selection — URL-synced via ?id=
+  const urlId = searchParams.get("id");
+  const [selectedId, setSelectedId] = useState<string | null>(
+    urlId && rows.some((r) => r.id === urlId) ? urlId : null,
+  );
+
+  // Default-select first row on load or when current selection disappears
+  useEffect(() => {
+    if (visible.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    if (selectedId && visible.some((r) => r.id === selectedId)) return;
+    setSelectedId(visible[0].id);
+  }, [visible, selectedId]);
+
+  // Sync selection to URL
+  useEffect(() => {
+    if (selectedId) {
+      setSearchParams({ id: selectedId }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [selectedId, setSearchParams]);
+
+  const selectedRow = visible.find((r) => r.id === selectedId) ?? null;
+
+  // Entity options for the filter popover
+  const entityOptions = useMemo(
+    () => entities.map((e) => ({ id: e.id, name: e.name ?? e.id })),
+    [entities],
+  );
+
+  // Refs for keyboard focus targets
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Keyboard shortcuts: j/k traverse, r focus composer, / focus search, Esc
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tgt = e.target as HTMLElement | null;
+      const inInput =
+        tgt?.tagName === "INPUT" || tgt?.tagName === "TEXTAREA" || tgt?.isContentEditable;
+
+      if (e.key === "/" && !inInput) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (inInput) {
+          (tgt as HTMLInputElement | HTMLTextAreaElement).blur();
+        } else {
+          setSelectedId(null);
+        }
+        return;
+      }
+
+      if (inInput) return;
+
+      if (e.key === "j") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("inbox:traverse", { detail: { direction: "next" } }));
+      } else if (e.key === "k") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("inbox:traverse", { detail: { direction: "prev" } }));
+      } else if (e.key === "r") {
+        if (selectedRow?.replyable) {
+          e.preventDefault();
+          composerRef.current?.focus();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [selectedRow]);
 
   useEffect(() => {
     document.title = "inbox · æqi";
   }, []);
 
-  const name = firstName(user?.name, user?.email);
-  const heading = name ? `${name}'s inbox` : "Inbox";
-
-  const status =
-    inboxCount === 0
-      ? "Nothing awaiting your input."
-      : inboxCount === 1
-        ? "1 awaiting your input."
-        : `${inboxCount} awaiting your input.`;
-
   return (
-    <div className="me-inbox">
-      <header className="me-inbox-header">
-        <h1 className="me-inbox-heading">{heading}</h1>
-        <p className="me-inbox-status">{status}</p>
-      </header>
+    <div className="inbox-shell">
+      {/* Left pane: toolbar + list */}
+      <div className="inbox-pane-list">
+        <InboxToolbar
+          search={search}
+          filter={filter}
+          sort={sort}
+          entityOptions={entityOptions}
+          onSearch={setSearch}
+          onFilter={patchFilter}
+          onSort={setSort}
+          searchRef={searchRef}
+        />
+        <div className="inbox-pane-list-scroll">
+          <InboxList
+            rows={visible}
+            selectedId={selectedId}
+            newIds={newIds}
+            onSelect={setSelectedId}
+          />
+        </div>
+      </div>
 
-      {items.length > 0 && (
-        <ul className="me-inbox-list" role="list">
-          {items.map((item) => {
-            const agent = item.agent_id ? agents.find((a) => a.id === item.agent_id) : null;
-            const fromName = agent?.name || item.agent_name || "Agent";
-            const preview = item.awaiting_subject || item.last_agent_message || item.session_name;
-            return (
-              <li key={item.session_id} className="me-inbox-row">
-                <button
-                  type="button"
-                  className="me-inbox-row-btn"
-                  onClick={() =>
-                    navigate(sessionDeepUrl(item.entity_id, item.agent_id, item.session_id))
-                  }
-                >
-                  <span className="me-inbox-row-from">{fromName}</span>
-                  <span className="me-inbox-row-preview">{preview}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {/* Right pane: detail + composer */}
+      <div className="inbox-pane-detail">
+        <InboxDetail row={selectedRow} onAnswer={answerItem} composerRef={composerRef} />
+      </div>
     </div>
   );
-}
-
-function firstName(name: string | undefined, email: string | undefined): string | null {
-  const raw = name || email?.split("@")[0] || "";
-  if (!raw) return null;
-  const seg = raw.split(/[\s._-]+/)[0];
-  if (!seg) return null;
-  return seg.charAt(0).toUpperCase() + seg.slice(1);
 }

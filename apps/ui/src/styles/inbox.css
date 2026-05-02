@@ -1,52 +1,401 @@
 /*  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *  aeqi Director Inbox — `/` page surface
+ *  aeqi Inbox — `/` daily-driver surface
  *
- *  At user scope, `/` is just the inbox intro: a greeting and a
- *  one-line status. The rail (left of the content card) carries the
- *  list of awaiting items. Picking a row loads `/sessions/:id` inline
- *  and the conversation renders here with a composer below it. No
- *  list view on this column — the rail does that job exactly once.
+ *  Two-pane layout: toolbar + time-grouped list (left, fixed ~400px)
+ *  + detail/composer (right, flex:1). Mirror the Ideas surface for the
+ *  toolbar — .ideas-list-head / .ideas-toolbar-btn etc. are reused, not
+ *  forked. New classes here are inbox-only layout primitives.
  *
- *  Design principles enforced here (see .impeccable.md):
- *    • Restraint over flourish — one typographic gesture per section.
- *    • Jade is sacred — never used here. "Awaiting" reads as ink.
- *    • Lowercase prose throughout.
+ *  Design rules (from .impeccable.md):
+ *    • Restraint over flourish.
+ *    • No hairlines — spacing + tint for separation.
+ *    • Graphite is accent (#0a0a0b); jade is success only.
+ *    • No literal pixel values outside the 4pt grid.
+ *    • One @keyframes for the real-time pulse. No decorative animation budget.
  *  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* ── Inbox intro (renders at /) ─────────────────────────────── */
+/* ── Two-pane shell ──────────────────────────────────────────── */
 
-.inbox-intro {
+.inbox-shell {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Left pane — fixed width, full height, contains toolbar + scrollable list */
+.inbox-pane-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3, 12px);
-  /* Same line-length register as long-form publishing. The greeting
-     is one Exo 2 line and a status sentence — no list, no chrome.
-     Centered horizontally inside the content card so it sits
-     comfortably with or without the rail. */
-  max-width: 640px;
-  width: 100%;
-  margin: 0 auto;
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 48px) 80px;
+  width: 400px;
+  min-width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-faint);
+  overflow: hidden;
+  background: var(--color-card);
 }
 
-.inbox-greeting {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(22px, 2.4vw, 28px);
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-  color: var(--color-ink-primary);
-  text-transform: lowercase;
+.inbox-head {
+  /* Overrides to make the toolbar flush at the top of the pane */
+  flex-shrink: 0;
 }
 
-.inbox-intro-status {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 400;
+.inbox-pane-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Right pane — fills available space */
+.inbox-pane-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-card);
+}
+
+/* ── List: time groups ───────────────────────────────────────── */
+
+.inbox-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.inbox-list-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.inbox-list-group-label {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-micro);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--section-label-color);
+  background: var(--color-card-subtle);
+  /* Sticky group headers so the label stays visible when scrolling */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ── List: empty state ───────────────────────────────────────── */
+
+.inbox-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+}
+
+.inbox-list-empty-text {
+  font-size: var(--font-size-sm);
   color: var(--color-ink-muted);
+  font-weight: 400;
+}
+
+/* ── List: row ───────────────────────────────────────────────── */
+
+.inbox-list-row {
+  /* Reset button */
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  transition: background var(--transition-normal);
+  position: relative;
+}
+
+.inbox-list-row:hover {
+  background: var(--state-hover);
+}
+
+.inbox-list-row.is-selected {
+  background: var(--state-selected);
+}
+
+.inbox-list-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+/* Real-time pulse — fade-in on arrival, one keyframe, no bounce */
+@keyframes inbox-pulse-in {
+  from {
+    opacity: 0;
+    background: var(--color-accent-bg);
+  }
+  to {
+    opacity: 1;
+    background: transparent;
+  }
+}
+
+.inbox-list-row.is-new {
+  animation: inbox-pulse-in 0.7s ease forwards;
+}
+
+/* Unread dot — 5px graphite circle at the left edge */
+.inbox-row-unread-dot {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  margin-top: 6px; /* optical align with first line of text */
+  opacity: 1;
+}
+
+/* Avatar initials chip */
+.inbox-row-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--color-card-muted);
+  color: var(--color-ink-secondary);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+/* Row content column */
+.inbox-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inbox-row-from {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-ink-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-row-subject {
+  font-size: var(--font-size-xs);
+  color: var(--color-ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* Timestamp — pinned right, muted */
+.inbox-row-time {
+  flex-shrink: 0;
+  font-size: var(--font-size-2xs);
+  color: var(--color-ink-muted);
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
+/* ── Detail pane ─────────────────────────────────────────────── */
+
+.inbox-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.inbox-detail--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.inbox-detail-placeholder {
+  font-size: var(--font-size-sm);
+  color: var(--color-ink-muted);
+}
+
+/* Detail header */
+.inbox-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  flex-shrink: 0;
+  background: var(--color-card-subtle);
+}
+
+.inbox-detail-header-from {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.inbox-detail-header-agent {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-ink-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-detail-header-sep {
+  color: var(--color-ink-muted);
+}
+
+.inbox-detail-header-open {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-ink-muted);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--transition-normal),
+    background var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.inbox-detail-header-open:hover {
+  color: var(--color-ink-text);
+  background: var(--state-hover);
+}
+
+/* Subject / question line */
+.inbox-detail-subject {
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  color: var(--color-ink-primary);
+  line-height: 1.45;
+  flex-shrink: 0;
+}
+
+/* Thread context */
+.inbox-detail-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.inbox-detail-loading,
+.inbox-detail-no-context {
+  font-size: var(--font-size-xs);
+  color: var(--color-ink-muted);
+  padding: var(--space-2) 0;
+}
+
+.inbox-thread-msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.inbox-thread-msg-role {
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+.inbox-thread-msg--assistant .inbox-thread-msg-role {
+  color: var(--color-ink-secondary);
+}
+
+.inbox-thread-msg-content {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-ink-text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* ── Composer ────────────────────────────────────────────────── */
+
+.inbox-composer {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  background: var(--color-card-subtle);
+  flex-shrink: 0;
+}
+
+.inbox-composer-error {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  padding-bottom: var(--space-2);
+}
+
+.inbox-composer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--input-bg);
+  border-radius: var(--input-radius);
+  border: 1px solid var(--input-border);
+  padding: var(--space-2) var(--space-3);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.inbox-composer-inner:focus-within {
+  border-color: var(--input-border-focus);
+  box-shadow: var(--input-ring-focus);
+}
+
+.inbox-composer-textarea {
+  appearance: none;
+  border: none;
+  background: transparent;
+  resize: none;
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--color-ink-text);
   line-height: 1.5;
-  letter-spacing: 0;
+  outline: none;
+  caret-color: var(--accent);
+}
+
+.inbox-composer-textarea::placeholder {
+  color: var(--color-ink-disabled);
+}
+
+.inbox-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inbox-composer-hint {
+  font-size: var(--font-size-2xs);
+  color: var(--color-ink-muted);
 }
 
 /* ── Sessions-rail awaiting dot (lives on the per-agent sidebar) ── */
@@ -60,11 +409,28 @@
   box-shadow: 0 0 0 2px var(--bg-sidebar);
 }
 
+/* ── Legacy intro classes kept for reference — not rendered ─────
+   The old .me-inbox / .inbox-intro / .inbox-greeting selectors are no
+   longer mounted; remove them on the next cleanup wave if nothing else
+   references them. */
+
 /* ── Mobile ─────────────────────────────────────────────────── */
 
-@media (max-width: 640px) {
-  .inbox-intro {
-    padding: 24px 16px 56px;
-    gap: 10px;
+@media (max-width: 900px) {
+  .inbox-pane-list {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .inbox-pane-detail {
+    display: none;
+  }
+
+  .inbox-shell.has-selection .inbox-pane-list {
+    display: none;
+  }
+
+  .inbox-shell.has-selection .inbox-pane-detail {
+    display: flex;
   }
 }
