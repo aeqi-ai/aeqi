@@ -365,41 +365,559 @@ export default function LoginPage() {
   // Secret mode
   if (authMode === "secret") {
     return (
-      <main className="auth-page">
-        <div className="auth-container">
+      <main className="signup-split">
+        <div className="signup-form-side">
+          <div className="auth-container">
+            <div className="auth-logo">
+              <Wordmark size={36} />
+            </div>
+            <h1 className="auth-heading">Welcome back</h1>
+            <p className="auth-subheading">Enter your access key to continue</p>
+            <form className="auth-form" onSubmit={handleSecretSubmit}>
+              <PasswordInput
+                placeholder="Access key"
+                value={secret}
+                onChange={(e) => {
+                  setSecret(e.target.value);
+                  clearError();
+                }}
+                autoFocus
+                hasError={!!error}
+                errorId="auth-error"
+              />
+              {error && (
+                <div className="auth-error" role="alert" id="auth-error">
+                  {error}
+                </div>
+              )}
+              <Button
+                variant="primary"
+                size="lg"
+                type="submit"
+                fullWidth
+                loading={loading}
+                disabled={loading}
+              >
+                Continue
+              </Button>
+            </form>
+            <div className="auth-footer">
+              <p>
+                By continuing, you agree to the{" "}
+                <a href="https://aeqi.ai/terms" target="_blank" rel="noopener noreferrer">
+                  Terms of Service
+                </a>{" "}
+                and{" "}
+                <a href="https://aeqi.ai/privacy" target="_blank" rel="noopener noreferrer">
+                  Privacy Policy
+                </a>
+                .
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="signup-pitch-side">
+          <div className="signup-pitch-content">
+            <h2 className="signup-pitch-heading">Pick up where you left off.</h2>
+            <p className="signup-lead">
+              Companies where humans set direction. Agents turn context into execution.
+            </p>
+            <p className="signup-trust">Open source · Self-hostable · Free to start</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Accounts mode
+  return (
+    <main className="signup-split">
+      <div className="signup-form-side">
+        <div className="auth-container" role="region" aria-live="polite">
           <div className="auth-logo">
             <Wordmark size={36} />
           </div>
-          <h1 className="auth-heading">Welcome back</h1>
-          <p className="auth-subheading">Enter your access key to continue</p>
-          <form className="auth-form" onSubmit={handleSecretSubmit}>
-            <PasswordInput
-              placeholder="Access key"
-              value={secret}
-              onChange={(e) => {
-                setSecret(e.target.value);
-                clearError();
-              }}
-              autoFocus
-              hasError={!!error}
-              errorId="auth-error"
-            />
-            {error && (
-              <div className="auth-error" role="alert" id="auth-error">
-                {error}
-              </div>
+          <h1 className="auth-heading">
+            {step === "credentials"
+              ? "Welcome back"
+              : step === "verify"
+                ? "Verify your email"
+                : step === "2fa"
+                  ? "Verification code"
+                  : step === "totp"
+                    ? "Authenticator code"
+                    : step === "magic-code"
+                      ? "Check your email"
+                      : "Reset password"}
+          </h1>
+          <p className="auth-subheading">
+            {step === "credentials" ? (
+              "Pick up where you left off."
+            ) : step === "verify" ? (
+              <>
+                Code sent to <strong className="auth-email-highlight">{email}</strong>
+              </>
+            ) : step === "2fa" ? (
+              <>
+                We sent a code to <strong className="auth-email-highlight">{email}</strong>
+              </>
+            ) : step === "totp" ? (
+              "Enter the 6-digit code from your authenticator app"
+            ) : step === "magic-code" ? (
+              <>
+                We sent a sign-in code to <strong className="auth-email-highlight">{email}</strong>
+              </>
+            ) : (
+              "Enter your email to receive a reset link"
             )}
-            <Button
-              variant="primary"
-              size="lg"
-              type="submit"
-              fullWidth
-              loading={loading}
-              disabled={loading}
-            >
-              Continue
-            </Button>
-          </form>
+          </p>
+
+          {step === "credentials" && (
+            <>
+              <form
+                className="auth-form"
+                onSubmit={usePassword ? handleCredentialsSubmit : handleMagicLinkRequest}
+                autoComplete="on"
+              >
+                <Input
+                  size="lg"
+                  type="email"
+                  name="email"
+                  placeholder="Email address"
+                  aria-label="Email address"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearError();
+                    setMagicError("");
+                  }}
+                  autoFocus
+                />
+                {usePassword && (
+                  <PasswordInput
+                    placeholder="Password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearError();
+                    }}
+                    hasError={!!error}
+                    errorId="auth-error"
+                  />
+                )}
+                {error && (
+                  <div className="auth-error" role="alert" id="auth-error">
+                    {error}
+                  </div>
+                )}
+                {magicError && !usePassword && (
+                  <div className="auth-error" role="alert">
+                    {magicError}
+                  </div>
+                )}
+                <Button
+                  variant="primary"
+                  size="lg"
+                  type="submit"
+                  fullWidth
+                  loading={loading}
+                  disabled={loading || !email.trim() || (usePassword && !password)}
+                >
+                  {usePassword ? "Sign in" : "Email me a code"}
+                </Button>
+              </form>
+              <p className="auth-switch">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setUsePassword((v) => !v);
+                    clearError();
+                    setMagicError("");
+                  }}
+                >
+                  {usePassword ? "Email me a code instead" : "Use password instead"}
+                </a>
+              </p>
+              {usePassword && (
+                <p className="auth-switch">
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setForgotEmail(email);
+                      setForgotSent(false);
+                      setForgotError("");
+                      setStep("forgot");
+                    }}
+                  >
+                    Forgot password?
+                  </a>
+                </p>
+              )}
+
+              {(googleOAuth || githubOAuth) && (
+                <>
+                  <div className="auth-oauth-recess">
+                    <p className="auth-oauth-recess-label">Or</p>
+                    <div className="auth-oauth-group">
+                      {(googleOAuth || githubOAuth) && (
+                        <div className="auth-oauth-row">
+                          {googleOAuth && (
+                            <Button
+                              variant="secondary"
+                              size="lg"
+                              fullWidth
+                              onClick={handleGoogle}
+                              type="button"
+                            >
+                              <GoogleIcon /> Google
+                            </Button>
+                          )}
+                          {githubOAuth && (
+                            <Button
+                              variant="secondary"
+                              size="lg"
+                              fullWidth
+                              onClick={handleGithub}
+                              type="button"
+                            >
+                              <GitHubIcon /> GitHub
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      <div className="auth-oauth-row">
+                        <ConnectWalletButton onAuthenticated={() => navigate(redirectAfter())} />
+                        <ContinueWithPasskeyButton
+                          onAuthenticated={() => navigate(redirectAfter())}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {step === "verify" && (
+            <>
+              <div className="verify-code-inputs" onPaste={handlePaste}>
+                {code.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => {
+                      inputRefs.current[i] = el;
+                    }}
+                    className={`verify-code-digit${verifyError ? " has-error" : ""}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => {
+                      handleCodeChange(i, e.target.value);
+                      if (verifyError) setVerifyError("");
+                    }}
+                    onKeyDown={(e) => handleKeyDown(i, e)}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+              {verifyError && (
+                <div className="auth-error" role="alert">
+                  {verifyError}
+                </div>
+              )}
+              {verifyLoading && (
+                <p className="auth-subheading auth-verifying">
+                  <Spinner size="sm" />
+                  Verifying…
+                </p>
+              )}
+              <p className="auth-switch">
+                Didn't get the code?{" "}
+                {resendCooldown > 0 ? (
+                  <span className="auth-cooldown">Resend in {resendCooldown}s</span>
+                ) : (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleResend();
+                    }}
+                  >
+                    Resend code
+                  </a>
+                )}
+              </p>
+            </>
+          )}
+
+          {step === "2fa" && (
+            <>
+              <div className="verify-code-inputs" onPaste={handle2faPaste}>
+                {twoFaCode.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => {
+                      twoFaRefs.current[i] = el;
+                    }}
+                    className={`verify-code-digit${twoFaError ? " has-error" : ""}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => {
+                      handle2faCodeChange(i, e.target.value);
+                      if (twoFaError) setTwoFaError("");
+                    }}
+                    onKeyDown={(e) => handle2faKeyDown(i, e)}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+              {twoFaError && (
+                <div className="auth-error" role="alert">
+                  {twoFaError}
+                </div>
+              )}
+              {twoFaLoading && (
+                <p className="auth-subheading auth-verifying">
+                  <Spinner size="sm" />
+                  Verifying…
+                </p>
+              )}
+              <p className="auth-switch">
+                Didn't get the code?{" "}
+                {twoFaResendCooldown > 0 ? (
+                  <span className="auth-cooldown">Resend in {twoFaResendCooldown}s</span>
+                ) : (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handle2faResend();
+                    }}
+                  >
+                    Resend code
+                  </a>
+                )}
+              </p>
+              <p className="auth-switch">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setStep("credentials");
+                    setTwoFaCode(["", "", "", "", "", ""]);
+                    setTwoFaError("");
+                  }}
+                >
+                  Back to login
+                </a>
+              </p>
+            </>
+          )}
+
+          {step === "magic-code" && (
+            <>
+              <div className="verify-code-inputs" onPaste={handleMagicCodePaste}>
+                {magicCode.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => {
+                      magicRefs.current[i] = el;
+                    }}
+                    className={`verify-code-digit${magicError ? " has-error" : ""}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => {
+                      handleMagicCodeChange(i, e.target.value);
+                      if (magicError) setMagicError("");
+                    }}
+                    onKeyDown={(e) => handleMagicCodeKeyDown(i, e)}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+              {magicError && (
+                <div className="auth-error" role="alert">
+                  {magicError}
+                </div>
+              )}
+              {magicLoading && (
+                <p className="auth-subheading auth-verifying">
+                  <Spinner size="sm" />
+                  Signing in…
+                </p>
+              )}
+              <p className="auth-switch">
+                Didn't get the code?{" "}
+                {magicResendCooldown > 0 ? (
+                  <span className="auth-cooldown">Resend in {magicResendCooldown}s</span>
+                ) : (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleMagicCodeResend();
+                    }}
+                  >
+                    Resend code
+                  </a>
+                )}
+              </p>
+              <p className="auth-switch">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setStep("credentials");
+                    setMagicCode(["", "", "", "", "", ""]);
+                    setMagicError("");
+                  }}
+                >
+                  Back to sign in
+                </a>
+              </p>
+            </>
+          )}
+
+          {step === "totp" && (
+            <>
+              <div
+                className="verify-code-inputs"
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+                  if (pasted.length === 6) {
+                    const digits = pasted.split("");
+                    setTwoFaCode(digits);
+                    setTwoFaLoading(true);
+                    setTwoFaError("");
+                    verifyTotp(email, pasted).then((ok) => {
+                      setTwoFaLoading(false);
+                      if (ok) {
+                        navigate(redirectAfter(), { replace: true });
+                      } else {
+                        setTwoFaError("Invalid code");
+                      }
+                    });
+                  }
+                }}
+              >
+                {twoFaCode.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => {
+                      twoFaRefs.current[i] = el;
+                    }}
+                    className={`verify-code-digit${twoFaError ? " has-error" : ""}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleTotpCodeChange(i, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Backspace" && !twoFaCode[i] && i > 0)
+                        twoFaRefs.current[i - 1]?.focus();
+                    }}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+              {twoFaError && (
+                <div className="auth-error" role="alert">
+                  {twoFaError}
+                </div>
+              )}
+              {twoFaLoading && (
+                <p className="auth-subheading auth-verifying">
+                  <Spinner size="sm" />
+                  Verifying…
+                </p>
+              )}
+              <p className="auth-switch">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setStep("credentials");
+                    setTwoFaCode(["", "", "", "", "", ""]);
+                    setTwoFaError("");
+                  }}
+                >
+                  Back to login
+                </a>
+              </p>
+            </>
+          )}
+
+          {step === "forgot" && (
+            <>
+              {!forgotSent ? (
+                <form className="auth-form" onSubmit={handleForgotSubmit}>
+                  <Input
+                    size="lg"
+                    type="email"
+                    placeholder="Email address"
+                    aria-label="Email address"
+                    value={forgotEmail}
+                    onChange={(e) => {
+                      setForgotEmail(e.target.value);
+                      setForgotError("");
+                    }}
+                    autoFocus
+                  />
+                  {forgotError && (
+                    <div className="auth-error" role="alert">
+                      {forgotError}
+                    </div>
+                  )}
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    type="submit"
+                    fullWidth
+                    loading={forgotLoading}
+                    disabled={forgotLoading || !forgotEmail.trim()}
+                  >
+                    Send reset link
+                  </Button>
+                </form>
+              ) : (
+                <div className="auth-form">
+                  <p className="auth-subheading auth-subheading-last">
+                    If an account exists with that email, we've sent a reset link.
+                  </p>
+                </div>
+              )}
+              <p className="auth-switch">
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setStep("credentials");
+                    setForgotSent(false);
+                    setForgotError("");
+                  }}
+                >
+                  Back to login
+                </a>
+              </p>
+            </>
+          )}
+
+          {step !== "verify" && step !== "2fa" && step !== "forgot" && step !== "magic-code" && (
+            <p className="auth-switch">
+              Don't have an account? <Link to="/signup">Sign up</Link>
+            </p>
+          )}
         </div>
         <div className="auth-footer">
           <p>
@@ -414,510 +932,16 @@ export default function LoginPage() {
             .
           </p>
         </div>
-      </main>
-    );
-  }
-
-  // Accounts mode
-  return (
-    <main className="auth-page">
-      <div className="auth-container" role="region" aria-live="polite">
-        <div className="auth-logo">
-          <Wordmark size={36} />
-        </div>
-        <h1 className="auth-heading">
-          {step === "credentials"
-            ? "Welcome back"
-            : step === "verify"
-              ? "Verify your email"
-              : step === "2fa"
-                ? "Verification code"
-                : step === "totp"
-                  ? "Authenticator code"
-                  : step === "magic-code"
-                    ? "Check your email"
-                    : "Reset password"}
-        </h1>
-        <p className="auth-subheading">
-          {step === "credentials" ? (
-            "Pick up where you left off."
-          ) : step === "verify" ? (
-            <>
-              Code sent to <strong className="auth-email-highlight">{email}</strong>
-            </>
-          ) : step === "2fa" ? (
-            <>
-              We sent a code to <strong className="auth-email-highlight">{email}</strong>
-            </>
-          ) : step === "totp" ? (
-            "Enter the 6-digit code from your authenticator app"
-          ) : step === "magic-code" ? (
-            <>
-              We sent a sign-in code to <strong className="auth-email-highlight">{email}</strong>
-            </>
-          ) : (
-            "Enter your email to receive a reset link"
-          )}
-        </p>
-
-        {step === "credentials" && (
-          <>
-            <form
-              className="auth-form"
-              onSubmit={usePassword ? handleCredentialsSubmit : handleMagicLinkRequest}
-              autoComplete="on"
-            >
-              <Input
-                size="lg"
-                type="email"
-                name="email"
-                placeholder="Email address"
-                aria-label="Email address"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  clearError();
-                  setMagicError("");
-                }}
-                autoFocus
-              />
-              {usePassword && (
-                <PasswordInput
-                  placeholder="Password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    clearError();
-                  }}
-                  hasError={!!error}
-                  errorId="auth-error"
-                />
-              )}
-              {error && (
-                <div className="auth-error" role="alert" id="auth-error">
-                  {error}
-                </div>
-              )}
-              {magicError && !usePassword && (
-                <div className="auth-error" role="alert">
-                  {magicError}
-                </div>
-              )}
-              <Button
-                variant="primary"
-                size="lg"
-                type="submit"
-                fullWidth
-                loading={loading}
-                disabled={loading || !email.trim() || (usePassword && !password)}
-              >
-                {usePassword ? "Sign in" : "Email me a code"}
-              </Button>
-            </form>
-            <p className="auth-switch">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setUsePassword((v) => !v);
-                  clearError();
-                  setMagicError("");
-                }}
-              >
-                {usePassword ? "Email me a code instead" : "Use password instead"}
-              </a>
-            </p>
-            {usePassword && (
-              <p className="auth-switch">
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setForgotEmail(email);
-                    setForgotSent(false);
-                    setForgotError("");
-                    setStep("forgot");
-                  }}
-                >
-                  Forgot password?
-                </a>
-              </p>
-            )}
-
-            {(googleOAuth || githubOAuth) && (
-              <>
-                <div className="auth-oauth-recess">
-                  <p className="auth-oauth-recess-label">Or</p>
-                  <div className="auth-oauth-group">
-                    {(googleOAuth || githubOAuth) && (
-                      <div className="auth-oauth-row">
-                        {googleOAuth && (
-                          <Button
-                            variant="secondary"
-                            size="lg"
-                            fullWidth
-                            onClick={handleGoogle}
-                            type="button"
-                          >
-                            <GoogleIcon /> Google
-                          </Button>
-                        )}
-                        {githubOAuth && (
-                          <Button
-                            variant="secondary"
-                            size="lg"
-                            fullWidth
-                            onClick={handleGithub}
-                            type="button"
-                          >
-                            <GitHubIcon /> GitHub
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    <div className="auth-oauth-row">
-                      <ConnectWalletButton onAuthenticated={() => navigate(redirectAfter())} />
-                      <ContinueWithPasskeyButton
-                        onAuthenticated={() => navigate(redirectAfter())}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {step === "verify" && (
-          <>
-            <div className="verify-code-inputs" onPaste={handlePaste}>
-              {code.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    inputRefs.current[i] = el;
-                  }}
-                  className={`verify-code-digit${verifyError ? " has-error" : ""}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => {
-                    handleCodeChange(i, e.target.value);
-                    if (verifyError) setVerifyError("");
-                  }}
-                  onKeyDown={(e) => handleKeyDown(i, e)}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {verifyError && (
-              <div className="auth-error" role="alert">
-                {verifyError}
-              </div>
-            )}
-            {verifyLoading && (
-              <p className="auth-subheading auth-verifying">
-                <Spinner size="sm" />
-                Verifying…
-              </p>
-            )}
-            <p className="auth-switch">
-              Didn't get the code?{" "}
-              {resendCooldown > 0 ? (
-                <span className="auth-cooldown">Resend in {resendCooldown}s</span>
-              ) : (
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleResend();
-                  }}
-                >
-                  Resend code
-                </a>
-              )}
-            </p>
-          </>
-        )}
-
-        {step === "2fa" && (
-          <>
-            <div className="verify-code-inputs" onPaste={handle2faPaste}>
-              {twoFaCode.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    twoFaRefs.current[i] = el;
-                  }}
-                  className={`verify-code-digit${twoFaError ? " has-error" : ""}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => {
-                    handle2faCodeChange(i, e.target.value);
-                    if (twoFaError) setTwoFaError("");
-                  }}
-                  onKeyDown={(e) => handle2faKeyDown(i, e)}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {twoFaError && (
-              <div className="auth-error" role="alert">
-                {twoFaError}
-              </div>
-            )}
-            {twoFaLoading && (
-              <p className="auth-subheading auth-verifying">
-                <Spinner size="sm" />
-                Verifying…
-              </p>
-            )}
-            <p className="auth-switch">
-              Didn't get the code?{" "}
-              {twoFaResendCooldown > 0 ? (
-                <span className="auth-cooldown">Resend in {twoFaResendCooldown}s</span>
-              ) : (
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handle2faResend();
-                  }}
-                >
-                  Resend code
-                </a>
-              )}
-            </p>
-            <p className="auth-switch">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setStep("credentials");
-                  setTwoFaCode(["", "", "", "", "", ""]);
-                  setTwoFaError("");
-                }}
-              >
-                Back to login
-              </a>
-            </p>
-          </>
-        )}
-
-        {step === "magic-code" && (
-          <>
-            <div className="verify-code-inputs" onPaste={handleMagicCodePaste}>
-              {magicCode.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    magicRefs.current[i] = el;
-                  }}
-                  className={`verify-code-digit${magicError ? " has-error" : ""}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => {
-                    handleMagicCodeChange(i, e.target.value);
-                    if (magicError) setMagicError("");
-                  }}
-                  onKeyDown={(e) => handleMagicCodeKeyDown(i, e)}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {magicError && (
-              <div className="auth-error" role="alert">
-                {magicError}
-              </div>
-            )}
-            {magicLoading && (
-              <p className="auth-subheading auth-verifying">
-                <Spinner size="sm" />
-                Signing in…
-              </p>
-            )}
-            <p className="auth-switch">
-              Didn't get the code?{" "}
-              {magicResendCooldown > 0 ? (
-                <span className="auth-cooldown">Resend in {magicResendCooldown}s</span>
-              ) : (
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleMagicCodeResend();
-                  }}
-                >
-                  Resend code
-                </a>
-              )}
-            </p>
-            <p className="auth-switch">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setStep("credentials");
-                  setMagicCode(["", "", "", "", "", ""]);
-                  setMagicError("");
-                }}
-              >
-                Back to sign in
-              </a>
-            </p>
-          </>
-        )}
-
-        {step === "totp" && (
-          <>
-            <div
-              className="verify-code-inputs"
-              onPaste={(e) => {
-                e.preventDefault();
-                const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-                if (pasted.length === 6) {
-                  const digits = pasted.split("");
-                  setTwoFaCode(digits);
-                  setTwoFaLoading(true);
-                  setTwoFaError("");
-                  verifyTotp(email, pasted).then((ok) => {
-                    setTwoFaLoading(false);
-                    if (ok) {
-                      navigate(redirectAfter(), { replace: true });
-                    } else {
-                      setTwoFaError("Invalid code");
-                    }
-                  });
-                }
-              }}
-            >
-              {twoFaCode.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    twoFaRefs.current[i] = el;
-                  }}
-                  className={`verify-code-digit${twoFaError ? " has-error" : ""}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleTotpCodeChange(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !twoFaCode[i] && i > 0)
-                      twoFaRefs.current[i - 1]?.focus();
-                  }}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {twoFaError && (
-              <div className="auth-error" role="alert">
-                {twoFaError}
-              </div>
-            )}
-            {twoFaLoading && (
-              <p className="auth-subheading auth-verifying">
-                <Spinner size="sm" />
-                Verifying…
-              </p>
-            )}
-            <p className="auth-switch">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setStep("credentials");
-                  setTwoFaCode(["", "", "", "", "", ""]);
-                  setTwoFaError("");
-                }}
-              >
-                Back to login
-              </a>
-            </p>
-          </>
-        )}
-
-        {step === "forgot" && (
-          <>
-            {!forgotSent ? (
-              <form className="auth-form" onSubmit={handleForgotSubmit}>
-                <Input
-                  size="lg"
-                  type="email"
-                  placeholder="Email address"
-                  aria-label="Email address"
-                  value={forgotEmail}
-                  onChange={(e) => {
-                    setForgotEmail(e.target.value);
-                    setForgotError("");
-                  }}
-                  autoFocus
-                />
-                {forgotError && (
-                  <div className="auth-error" role="alert">
-                    {forgotError}
-                  </div>
-                )}
-                <Button
-                  variant="primary"
-                  size="lg"
-                  type="submit"
-                  fullWidth
-                  loading={forgotLoading}
-                  disabled={forgotLoading || !forgotEmail.trim()}
-                >
-                  Send reset link
-                </Button>
-              </form>
-            ) : (
-              <div className="auth-form">
-                <p className="auth-subheading auth-subheading-last">
-                  If an account exists with that email, we've sent a reset link.
-                </p>
-              </div>
-            )}
-            <p className="auth-switch">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setStep("credentials");
-                  setForgotSent(false);
-                  setForgotError("");
-                }}
-              >
-                Back to login
-              </a>
-            </p>
-          </>
-        )}
-
-        {step !== "verify" && step !== "2fa" && step !== "forgot" && step !== "magic-code" && (
-          <p className="auth-switch">
-            Don't have an account? <Link to="/signup">Sign up</Link>
-          </p>
-        )}
       </div>
-      <div className="auth-footer">
-        <p>
-          By continuing, you agree to the{" "}
-          <a href="https://aeqi.ai/terms" target="_blank" rel="noopener noreferrer">
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a href="https://aeqi.ai/privacy" target="_blank" rel="noopener noreferrer">
-            Privacy Policy
-          </a>
-          .
-        </p>
+
+      <div className="signup-pitch-side">
+        <div className="signup-pitch-content">
+          <h2 className="signup-pitch-heading">Pick up where you left off.</h2>
+          <p className="signup-lead">
+            Companies where humans set direction. Agents turn context into execution.
+          </p>
+          <p className="signup-trust">Open source · Self-hostable · Free to start</p>
+        </div>
       </div>
     </main>
   );

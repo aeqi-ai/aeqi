@@ -305,17 +305,25 @@
   background: var(--bg-base);
 }
 
-/* Signup pitch side — graphite panel, white text. Echoes the
-   landing's FinalCTA register so users crossing from aeqi.ai land
-   on a familiar surface and the "autonomous companies" promise
-   carries through to the signup moment. */
+/* Signup pitch side — charcoal cityscape illustration with white text
+   overlaid. The graphite accent is preserved as fallback colour and as
+   the layered scrim under the image so reduced-bandwidth or image-load
+   failure still gives a coherent dark panel. Echoes the landing's
+   FinalCTA register so users crossing from aeqi.ai land on a familiar
+   surface and the "autonomous companies" promise carries through. */
 .signup-pitch-side {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-10) var(--space-8);
-  background: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image:
+    linear-gradient(to bottom, rgba(10, 10, 11, 0.45), rgba(10, 10, 11, 0.65)),
+    url("/auth-hero.webp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: #ffffff;
 }
 
