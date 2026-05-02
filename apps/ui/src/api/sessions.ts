@@ -138,10 +138,13 @@ export async function getIdeaComments(ideaId: string): Promise<CommentsPayload> 
       kind: "comment",
       timestamp: item.at,
       // Backend will resolve display names later — for now the raw id is the
-      // best stable string we have. Don't restructure components around it.
-      author: item.from_id,
-      author_kind: item.from_kind,
-      body: item.body,
+      // best stable string we have. Coalesce nullable fields so render-path
+      // helpers (mention parser, hue/initials calculators, body renderer) can
+      // assume strings — pre-migration messages can have null `from_id`/
+      // `body` and the panel was crashing on the first `.length` access.
+      author: item.from_id ?? item.from_kind ?? "unknown",
+      author_kind: item.from_kind ?? "unknown",
+      body: item.body ?? "",
     }));
     return {
       rows,
