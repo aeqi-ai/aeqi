@@ -1,19 +1,19 @@
-//! Position IPC handlers.
+//! Role IPC handlers.
 //!
-//! Three commands: `list_positions`, `create_position`, and `change_occupant`.
+//! Three commands: `list_roles`, `create_role`, and `change_occupant`.
 //!
-//! `change_occupant` swaps the position's occupant and rotates the participant
-//! set on every session anchored to that position, then appends a system
+//! `change_occupant` swaps the role's occupant and rotates the participant
+//! set on every session anchored to that role, then appends a system
 //! hand-off message so the conversation history is continuous.
-//! Tenancy is enforced against the active scope — positions live inside an
+//! Tenancy is enforced against the active scope — roles live inside an
 //! entity, so the caller's `allowed` list filters reads and rejects writes
 //! outside their scope.
 
-use crate::position_registry::OccupantKind;
+use crate::role_registry::OccupantKind;
 
 use super::tenancy::is_allowed;
 
-pub async fn handle_list_positions(
+pub async fn handle_list_roles(
     ctx: &super::CommandContext,
     request: &serde_json::Value,
     allowed: &Option<Vec<String>>,
@@ -27,27 +27,23 @@ pub async fn handle_list_positions(
         return serde_json::json!({"ok": false, "error": "access denied"});
     }
 
-    let positions = match ctx.position_registry.list_for_entity(&entity_id).await {
+    let roles = match ctx.role_registry.list_for_entity(&entity_id).await {
         Ok(v) => v,
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
-    let edges = match ctx
-        .position_registry
-        .list_edges_for_entity(&entity_id)
-        .await
-    {
+    let edges = match ctx.role_registry.list_edges_for_entity(&entity_id).await {
         Ok(v) => v,
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
 
     serde_json::json!({
         "ok": true,
-        "positions": positions,
+        "roles": roles,
         "edges": edges,
     })
 }
 
-pub async fn handle_create_position(
+pub async fn handle_create_role(
     ctx: &super::CommandContext,
     request: &serde_json::Value,
     allowed: &Option<Vec<String>>,
@@ -76,28 +72,24 @@ pub async fn handle_create_position(
         });
     }
 
-    let parent_position_id =
-        super::request_field(request, "parent_position_id").map(str::to_string);
+    let parent_role_id = super::request_field(request, "parent_role_id").map(str::to_string);
 
-    let position = match ctx
-        .position_registry
+    let role = match ctx
+        .role_registry
         .create(&entity_id, &title, kind, occupant_id.as_deref())
         .await
     {
-        Ok(p) => p,
+        Ok(r) => r,
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
 
-    if let Some(parent_id) = parent_position_id.as_deref()
-        && let Err(e) = ctx
-            .position_registry
-            .add_edge(parent_id, &position.id)
-            .await
+    if let Some(parent_id) = parent_role_id.as_deref()
+        && let Err(e) = ctx.role_registry.add_edge(parent_id, &role.id).await
     {
         return serde_json::json!({"ok": false, "error": e.to_string()});
     }
 
-    serde_json::json!({"ok": true, "position": position})
+    serde_json::json!({"ok": true, "role": role})
 }
 
 /// Handle a `change_occupant` IPC command.
@@ -106,7 +98,7 @@ pub async fn handle_create_position(
 ///
 /// ```json
 /// {
-///   "position_id":    "<uuid>",
+///   "role_id":        "<uuid>",
 ///   "occupant_kind":  "human" | "agent" | "vacant",
 ///   "occupant_id":    "<id>"    // required unless kind=vacant
 /// }
@@ -114,7 +106,7 @@ pub async fn handle_create_position(
 ///
 /// # Side effects
 ///
-/// For every active session with `target_position_id = position_id`:
+/// For every active session with `target_role_id = role_id`:
 ///   1. Removes the OLD occupant from `session_participants`.
 ///   2. Adds the NEW occupant to `session_participants` (joined_by="system").
 ///   3. Appends a system message: `"<old_kind>:<old_id> handed off to <new_kind>:<new_id>"`.
@@ -125,9 +117,9 @@ pub async fn handle_change_occupant(
     request: &serde_json::Value,
     _allowed: &Option<Vec<String>>,
 ) -> serde_json::Value {
-    let position_id = match super::request_field(request, "position_id") {
+    let role_id = match super::request_field(request, "role_id") {
         Some(s) if !s.is_empty() => s.to_string(),
-        _ => return serde_json::json!({"ok": false, "error": "position_id is required"}),
+        _ => return serde_json::json!({"ok": false, "error": "role_id is required"}),
     };
     let kind_str = super::request_field(request, "occupant_kind").unwrap_or("vacant");
     let new_kind = match kind_str.parse::<OccupantKind>() {
@@ -143,23 +135,23 @@ pub async fn handle_change_occupant(
     }
 
     // Fetch the current (old) occupant before the update.
-    let position = match ctx.position_registry.get(&position_id).await {
-        Ok(Some(p)) => p,
+    let role = match ctx.role_registry.get(&role_id).await {
+        Ok(Some(r)) => r,
         Ok(None) => return serde_json::json!({"ok": false, "error": "role not found"}),
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
 
-    let old_kind_str = match position.occupant_kind {
+    let old_kind_str = match role.occupant_kind {
         OccupantKind::Human => "user",
         OccupantKind::Agent => "agent",
         OccupantKind::Vacant => "vacant",
     };
-    let old_occupant_id = position.occupant_id.clone();
+    let old_occupant_id = role.occupant_id.clone();
 
     // Persist the update.
     if let Err(e) = ctx
-        .position_registry
-        .update_occupant(&position_id, new_kind, new_occupant_id.as_deref())
+        .role_registry
+        .update_occupant(&role_id, new_kind, new_occupant_id.as_deref())
         .await
     {
         return serde_json::json!({"ok": false, "error": e.to_string()});
@@ -171,7 +163,7 @@ pub async fn handle_change_occupant(
         return serde_json::json!({"ok": true, "sessions_updated": 0});
     };
 
-    let anchored = match ss.sessions_by_target_position(&position_id).await {
+    let anchored = match ss.sessions_by_target_role(&role_id).await {
         Ok(v) => v,
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
@@ -198,7 +190,7 @@ pub async fn handle_change_occupant(
     for session_id in &anchored {
         // Remove old occupant (no-op if vacant or already absent).
         if let Some(ref old_id) = old_occupant_id
-            && !matches!(position.occupant_kind, OccupantKind::Vacant)
+            && !matches!(role.occupant_kind, OccupantKind::Vacant)
         {
             let _ = ss
                 .remove_session_participant(session_id, old_kind_str, old_id)
@@ -224,7 +216,7 @@ pub async fn handle_change_occupant(
 
     serde_json::json!({
         "ok": true,
-        "position_id": position_id,
+        "role_id": role_id,
         "sessions_updated": sessions_updated,
     })
 }
@@ -257,9 +249,7 @@ mod tests {
             event_handler_store: None,
             agent_registry: registry.clone(),
             entity_registry: Arc::new(crate::entity_registry::EntityRegistry::open(registry.db())),
-            position_registry: Arc::new(crate::position_registry::PositionRegistry::open(
-                registry.db(),
-            )),
+            role_registry: Arc::new(crate::role_registry::RoleRegistry::open(registry.db())),
             idea_store: None,
             message_router: None,
             activity_buffer: Arc::new(Mutex::new(ActivityBuffer::default())),
@@ -282,8 +272,8 @@ mod tests {
         (ctx, ss)
     }
 
-    /// Create an entity + agent-occupied position in the given ctx.
-    async fn make_occupied_position(ctx: &CommandContext, agent_id: &str) -> String {
+    /// Create an entity + agent-occupied role in the given ctx.
+    async fn make_occupied_role(ctx: &CommandContext, agent_id: &str) -> String {
         let entity = ctx
             .entity_registry
             .create_new(
@@ -295,12 +285,12 @@ mod tests {
             )
             .await
             .unwrap();
-        let pos = ctx
-            .position_registry
+        let role = ctx
+            .role_registry
             .create(&entity.id, "CEO", OccupantKind::Agent, Some(agent_id))
             .await
             .unwrap();
-        pos.id
+        role.id
     }
 
     #[tokio::test]
@@ -311,12 +301,12 @@ mod tests {
         let old_agent = "agent-old";
         let new_agent = "agent-new";
 
-        let pos_id = make_occupied_position(&ctx, old_agent).await;
+        let role_id = make_occupied_role(&ctx, old_agent).await;
 
-        // Anchor a session on the position and add the old occupant as a
+        // Anchor a session on the role and add the old occupant as a
         // participant so change_occupant has something to rotate.
         let session_id = ss
-            .create_position_session(&pos_id, &format!("position:{pos_id}"))
+            .create_role_session(&role_id, &format!("role:{role_id}"))
             .await
             .unwrap();
         ss.add_session_participant(&session_id, "agent", old_agent, None)
@@ -324,7 +314,7 @@ mod tests {
             .unwrap();
 
         let req = serde_json::json!({
-            "position_id": pos_id,
+            "role_id": role_id,
             "occupant_kind": "agent",
             "occupant_id": new_agent,
         });
@@ -378,17 +368,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (ctx, ss) = build_test_ctx(dir.path()).await;
 
-        let pos_id = make_occupied_position(&ctx, "agent-alpha").await;
+        let role_id = make_occupied_role(&ctx, "agent-alpha").await;
 
         // First message anchors the session.
         let session_id_before = ss
-            .create_position_session(&pos_id, &format!("position:{pos_id}"))
+            .create_role_session(&role_id, &format!("role:{role_id}"))
             .await
             .unwrap();
 
         // Change occupant.
         let req = serde_json::json!({
-            "position_id": pos_id,
+            "role_id": role_id,
             "occupant_kind": "agent",
             "occupant_id": "agent-beta",
         });

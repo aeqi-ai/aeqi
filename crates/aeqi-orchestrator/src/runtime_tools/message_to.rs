@@ -14,8 +14,7 @@
 // "idea"      | lazy-create the idea's session (same as IPC wave-1).
 // "agent"     | find-or-create a 1:1 agent↔agent DM session; append.
 // "user"      | find-or-create a 1:1 agent↔user DM session; append.
-// "role"      | resolve role's occupant; find-or-create position-anchored session; append.
-// "position"  | back-compat alias for "role".
+// "role"      | resolve role's occupant; find-or-create role-anchored session; append.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -99,8 +98,8 @@ impl Tool for MessageToTool {
                         "properties": {
                             "kind": {
                                 "type": "string",
-                                "enum": ["session", "idea", "agent", "user", "role", "position"],
-                                "description": "Target type. Use 'role' to address a named role in the org chart (e.g. CEO, CFO). 'position' is accepted as a back-compat alias for 'role'."
+                                "enum": ["session", "idea", "agent", "user", "role"],
+                                "description": "Target type. Use 'role' to address a named role in the org chart (e.g. CEO, CFO)."
                             },
                             "id": {
                                 "type": "string",
@@ -147,7 +146,7 @@ impl Tool for MessageToTool {
             }
         };
 
-        // "role" and "position" (back-compat alias) are wired through position routing.
+        // "role" is wired through role routing.
 
         let body = match args.get("body").and_then(|v| v.as_str()) {
             Some(b) if !b.trim().is_empty() => b.to_string(),
@@ -287,20 +286,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn position_back_compat_alias_routes_through_fn() {
+    async fn role_target_cfo_routes_through_fn() {
         let (f, captured) = ok_fn();
         let tool = MessageToTool::new(f);
         let result = tool
             .execute(serde_json::json!({
-                "target": {"kind": "position", "id": "pos-cfo"},
+                "target": {"kind": "role", "id": "role-cfo"},
                 "body": "budget approval"
             }))
             .await
             .unwrap();
         assert!(!result.is_error, "unexpected error: {}", result.output);
         let req = captured.lock().unwrap().clone().expect("fn called");
-        assert_eq!(req.target_kind, "position");
-        assert_eq!(req.target_id, "pos-cfo");
+        assert_eq!(req.target_kind, "role");
+        assert_eq!(req.target_id, "role-cfo");
     }
 
     #[tokio::test]

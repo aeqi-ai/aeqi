@@ -380,28 +380,35 @@ fn ensure_session_messages_from_columns(conn: &Connection) -> rusqlite::Result<(
     Ok(())
 }
 
-/// Idempotent migration that adds a nullable `target_position_id TEXT` column to
-/// `sessions`. A non-null value anchors the session on a position rather than a
-/// specific occupant — when the occupant rotates the session continues under the
-/// same id, with the participant set updated by `handle_change_occupant`.
-fn ensure_sessions_target_position_id(conn: &Connection) -> rusqlite::Result<()> {
+/// Idempotent migration that adds/renames to `target_role_id TEXT` on `sessions`.
+///
+/// Handles three states:
+///   1. Fresh DB — column doesn't exist yet: ADD target_role_id.
+///   2. Legacy DB with target_position_id only: RENAME to target_role_id.
+///   3. Already-renamed DB with target_role_id: no-op.
+fn ensure_sessions_target_role_id(conn: &Connection) -> rusqlite::Result<()> {
     let cols: std::collections::HashSet<String> = {
         let mut stmt = conn.prepare("PRAGMA table_info(sessions)")?;
         stmt.query_map([], |row| row.get::<_, String>(1))?
             .filter_map(|r| r.ok())
             .collect()
     };
-    if !cols.contains("target_position_id") {
+    if cols.contains("target_role_id") {
+        // Already renamed — just ensure the index.
+    } else if cols.contains("target_position_id") {
         conn.execute(
-            "ALTER TABLE sessions ADD COLUMN target_position_id TEXT",
+            "ALTER TABLE sessions RENAME COLUMN target_position_id TO target_role_id",
             [],
         )?;
+    } else {
+        conn.execute("ALTER TABLE sessions ADD COLUMN target_role_id TEXT", [])?;
     }
-    // Index lets `sessions_by_target_position` scan cheaply.
+    conn.execute("DROP INDEX IF EXISTS idx_sess_target_position", [])?;
+    // Index lets `sessions_by_target_role` scan cheaply.
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sess_target_position \
-         ON sessions(target_position_id) \
-         WHERE target_position_id IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_sess_target_role \
+         ON sessions(target_role_id) \
+         WHERE target_role_id IS NOT NULL",
         [],
     )?;
     Ok(())
@@ -634,8 +641,8 @@ impl SessionStore {
             .context("failed to ensure from_kind/from_id columns on session_messages")?;
         ensure_sessions_gateway_channel_id(conn)
             .context("failed to ensure gateway_channel_id column on sessions")?;
-        ensure_sessions_target_position_id(conn)
-            .context("failed to ensure target_position_id column on sessions")?;
+        ensure_sessions_target_role_id(conn)
+            .context("failed to ensure target_role_id column on sessions")?;
         Ok(())
     }
 
@@ -2300,27 +2307,27 @@ impl SessionStore {
         Ok(id)
     }
 
-    /// Create a new session anchored on a position (position-addressed session).
+    /// Create a new session anchored on a role (role-addressed session).
     ///
-    /// Sets `target_position_id` so that when the position's occupant changes,
+    /// Sets `target_role_id` so that when the role's occupant changes,
     /// the same session id is preserved and only the participant set rotates.
     /// Returns the new session UUID.
-    pub async fn create_position_session(&self, position_id: &str, name: &str) -> Result<String> {
+    pub async fn create_role_session(&self, role_id: &str, name: &str) -> Result<String> {
         let id = uuid::Uuid::new_v4().to_string();
         let db = self.db.lock().await;
         db.execute(
-            "INSERT INTO sessions (id, session_type, name, status, target_position_id) \
-             VALUES (?1, 'position', ?2, 'active', ?3)",
-            params![id, name, position_id],
+            "INSERT INTO sessions (id, session_type, name, status, target_role_id) \
+             VALUES (?1, 'role', ?2, 'active', ?3)",
+            params![id, name, role_id],
         )?;
         Ok(id)
     }
 
-    /// Find the active session anchored on a position where the given agent is
+    /// Find the active session anchored on a role where the given agent is
     /// a participant. Returns `None` when no such session exists.
-    pub async fn find_position_session(
+    pub async fn find_role_session(
         &self,
-        position_id: &str,
+        role_id: &str,
         participant_agent_id: &str,
     ) -> Result<Option<String>> {
         let db = self.db.lock().await;
@@ -2332,27 +2339,27 @@ impl SessionStore {
                    ON sp.session_id = s.id
                   AND sp.identity_kind = 'agent'
                   AND sp.identity_id   = ?2
-                 WHERE s.target_position_id = ?1
+                 WHERE s.target_role_id = ?1
                    AND s.status = 'active'
                  LIMIT 1",
-                params![position_id, participant_agent_id],
+                params![role_id, participant_agent_id],
                 |row| row.get::<_, String>(0),
             )
             .optional()?;
         Ok(result)
     }
 
-    /// Return all active session ids anchored on the given position.
+    /// Return all active session ids anchored on the given role.
     /// Used by `handle_change_occupant` to rotate participants across every
     /// anchored session when the occupant changes.
-    pub async fn sessions_by_target_position(&self, position_id: &str) -> Result<Vec<String>> {
+    pub async fn sessions_by_target_role(&self, role_id: &str) -> Result<Vec<String>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT id FROM sessions \
-             WHERE target_position_id = ?1 AND status = 'active'",
+             WHERE target_role_id = ?1 AND status = 'active'",
         )?;
         let rows = stmt
-            .query_map(params![position_id], |row| row.get::<_, String>(0))?
+            .query_map(params![role_id], |row| row.get::<_, String>(0))?
             .filter_map(|r| r.ok())
             .collect();
         Ok(rows)

@@ -20,7 +20,8 @@ const AEQI_DEFAULT_JSON: &str = include_str!("../../../../presets/blueprints/aeq
 const BLANK_JSON: &str = include_str!("../../../../presets/blueprints/blank.json");
 const SOLO_FOUNDER_JSON: &str = include_str!("../../../../presets/blueprints/solo-founder.json");
 const STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/studio.json");
-const SMALL_BUSINESS_JSON: &str = include_str!("../../../../presets/blueprints/small-business.json");
+const SMALL_BUSINESS_JSON: &str =
+    include_str!("../../../../presets/blueprints/small-business.json");
 const INDIE_CONSULTANCY_JSON: &str =
     include_str!("../../../../presets/blueprints/indie-consultancy.json");
 const TECH_STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/tech-studio.json");
@@ -50,7 +51,8 @@ pub fn company_blueprints() -> Vec<Blueprint> {
     let mut out: Vec<Blueprint> = COMPANY_BLUEPRINT_JSON
         .iter()
         .map(|raw| {
-            serde_json::from_str::<Blueprint>(raw).expect("shipped company template failed to parse")
+            serde_json::from_str::<Blueprint>(raw)
+                .expect("shipped company template failed to parse")
         })
         .collect();
     out.sort_by(|a, b| a.slug.cmp(&b.slug));

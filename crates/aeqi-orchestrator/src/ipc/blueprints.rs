@@ -309,7 +309,7 @@ pub async fn spawn_blueprint(
     agent_registry: &AgentRegistry,
     event_store: &EventHandlerStore,
     idea_store: Option<&Arc<dyn aeqi_core::traits::IdeaStore>>,
-    position_registry: &crate::position_registry::PositionRegistry,
+    role_registry: &crate::role_registry::RoleRegistry,
     role_overrides: &[RoleOverride],
 ) -> anyhow::Result<SpawnOutcome> {
     let mut warnings: Vec<String> = Vec::new();
@@ -519,7 +519,7 @@ pub async fn spawn_blueprint(
     // vacancies and role-overrides land on the spawned company.
     if !blueprint.seed_roles.is_empty()
         && let Err(err) = install_declared_roles(
-            position_registry,
+            role_registry,
             &entity_id,
             &blueprint.seed_roles,
             &blueprint.seed_role_edges,
@@ -550,7 +550,7 @@ pub async fn spawn_blueprint(
 /// overrides become warnings (the spawn still proceeds).
 #[allow(clippy::too_many_arguments)]
 async fn install_declared_roles(
-    position_registry: &crate::position_registry::PositionRegistry,
+    role_registry: &crate::role_registry::RoleRegistry,
     entity_id: &str,
     seed_roles: &[SeedRoleSpec],
     seed_role_edges: &[SeedRoleEdgeSpec],
@@ -558,7 +558,7 @@ async fn install_declared_roles(
     role_overrides: &[RoleOverride],
     warnings: &mut Vec<String>,
 ) -> anyhow::Result<()> {
-    use crate::position_registry::OccupantKind;
+    use crate::role_registry::OccupantKind;
 
     // Validate operator-supplied overrides early; an override referencing
     // an unknown role key signals UI-side staleness and should warn loudly.
@@ -579,22 +579,22 @@ async fn install_declared_roles(
 
     // Wipe the auto-position residue. Single transaction underneath —
     // edges first (FK to positions), then positions.
-    position_registry.delete_for_entity(entity_id).await?;
+    role_registry.delete_for_entity(entity_id).await?;
 
-    // Mint declared positions; map role_key → fresh position_id so
+    // Mint declared roles; map role_key → fresh role_id so
     // `seed_role_edges` can reference them.
-    let mut key_to_position_id: std::collections::HashMap<String, String> =
+    let mut key_to_role_id: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
-    for role in seed_roles {
+    for role_spec in seed_roles {
         let (kind, occupant_id): (OccupantKind, Option<String>) = match overrides_by_key
-            .get(role.key.as_str())
+            .get(role_spec.key.as_str())
         {
             Some(OverrideOccupant::Agent { agent }) => match owner_to_agent_id.get(agent) {
                 Some(id) => (OccupantKind::Agent, Some(id.clone())),
                 None => {
                     warnings.push(format!(
                             "override for role '{}' names agent '{}' which wasn't seeded; leaving vacant",
-                            role.key, agent,
+                            role_spec.key, agent,
                         ));
                     (OccupantKind::Vacant, None)
                 }
@@ -603,13 +603,13 @@ async fn install_declared_roles(
                 (OccupantKind::Human, Some(user_id.clone()))
             }
             Some(OverrideOccupant::Vacant) => (OccupantKind::Vacant, None),
-            None => match role.default_occupant_agent.as_deref() {
+            None => match role_spec.default_occupant_agent.as_deref() {
                 Some(agent_name) => match owner_to_agent_id.get(agent_name) {
                     Some(id) => (OccupantKind::Agent, Some(id.clone())),
                     None => {
                         warnings.push(format!(
                             "default occupant '{}' for role '{}' wasn't seeded; leaving vacant",
-                            agent_name, role.key,
+                            agent_name, role_spec.key,
                         ));
                         (OccupantKind::Vacant, None)
                     }
@@ -618,16 +618,16 @@ async fn install_declared_roles(
             },
         };
 
-        let position = position_registry
-            .create(entity_id, &role.title, kind, occupant_id.as_deref())
+        let created_role = role_registry
+            .create(entity_id, &role_spec.title, kind, occupant_id.as_deref())
             .await?;
-        key_to_position_id.insert(role.key.clone(), position.id);
+        key_to_role_id.insert(role_spec.key.clone(), created_role.id);
     }
 
     // Wire edges. Unknown keys here are blueprint-author bugs — warn
     // but don't fail the spawn.
     for edge in seed_role_edges {
-        let parent_id = match key_to_position_id.get(&edge.parent) {
+        let parent_id = match key_to_role_id.get(&edge.parent) {
             Some(id) => id,
             None => {
                 warnings.push(format!(
@@ -637,7 +637,7 @@ async fn install_declared_roles(
                 continue;
             }
         };
-        let child_id = match key_to_position_id.get(&edge.child) {
+        let child_id = match key_to_role_id.get(&edge.child) {
             Some(id) => id,
             None => {
                 warnings.push(format!(
@@ -647,7 +647,7 @@ async fn install_declared_roles(
                 continue;
             }
         };
-        position_registry.add_edge(parent_id, child_id).await?;
+        role_registry.add_edge(parent_id, child_id).await?;
     }
 
     Ok(())
@@ -813,7 +813,7 @@ pub async fn handle_spawn_blueprint(
         &ctx.agent_registry,
         event_store.as_ref(),
         ctx.idea_store.as_ref(),
-        ctx.position_registry.as_ref(),
+        ctx.role_registry.as_ref(),
         &role_overrides,
     )
     .await
@@ -907,7 +907,7 @@ pub async fn handle_spawn_blueprint_into_entity(
         &ctx.agent_registry,
         event_store.as_ref(),
         ctx.idea_store.as_ref(),
-        ctx.position_registry.as_ref(),
+        ctx.role_registry.as_ref(),
         &[],
     )
     .await
@@ -1049,7 +1049,7 @@ mod tests {
     async fn spawn_blueprint_creates_root_and_seeds_atomically() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let blueprint = fixture_blueprint();
@@ -1062,7 +1062,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1133,7 +1133,7 @@ mod tests {
     async fn spawn_blueprint_tolerates_missing_idea_store() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
 
         let blueprint = fixture_blueprint();
         let outcome = spawn_blueprint(
@@ -1145,7 +1145,7 @@ mod tests {
             &registry,
             &event_store,
             None,
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1170,7 +1170,7 @@ mod tests {
     async fn spawn_blueprint_warns_on_unknown_owner() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let mut blueprint = fixture_blueprint();
@@ -1194,7 +1194,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1215,7 +1215,7 @@ mod tests {
     async fn spawn_blueprint_applies_override_name() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let blueprint = fixture_blueprint();
@@ -1228,7 +1228,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1247,7 +1247,7 @@ mod tests {
     async fn spawn_blueprint_into_existing_entity_attaches_under_root() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         // Stand up a host entity first.
@@ -1261,7 +1261,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1305,7 +1305,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1339,7 +1339,7 @@ mod tests {
     async fn spawn_blueprint_with_only_ideas_skips_other_seeds() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let blueprint = fixture_blueprint();
@@ -1352,7 +1352,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await
@@ -1380,7 +1380,7 @@ mod tests {
     async fn spawn_blueprint_with_only_quests_skips_other_seeds() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
-        let position_registry = crate::position_registry::PositionRegistry::open(registry.db());
+        let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
         let idea_store = test_idea_store();
 
         let blueprint = fixture_blueprint();
@@ -1393,7 +1393,7 @@ mod tests {
             &registry,
             &event_store,
             Some(&idea_store),
-            &position_registry,
+            &role_registry,
             &[],
         )
         .await

@@ -108,7 +108,7 @@ export default function NewRoleModal({
         ...(occupantId ? { occupant_id: occupantId } : {}),
         ...(parentRoleId ? { parent_role_id: parentRoleId } : {}),
       });
-      onCreated(resp.position);
+      onCreated(resp.role);
       reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create role.");

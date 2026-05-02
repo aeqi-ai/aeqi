@@ -15,8 +15,7 @@ const FONT_BODY: &str =
     "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const FONT_DISPLAY: &str =
     "'Exo 2','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const FONT_MONO: &str =
-    "ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace";
+const FONT_MONO: &str = "ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace";
 
 /// Send a verification code email.
 pub async fn send_verification_email(

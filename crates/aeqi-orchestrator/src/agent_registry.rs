@@ -597,13 +597,13 @@ fn ensure_agent_entity_id_column(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Phase-0 schema for the position primitive. Positions are the canonical
+/// Phase-0 schema for the role primitive. Roles are the canonical
 /// org-chart slot inside an entity; an occupant is a human, an agent, or
-/// vacant. Authority is resolved by transitive closure over `position_edges`
+/// vacant. Authority is resolved by transitive closure over `role_edges`
 /// (DAG — flat boards at the top are first-class).
-fn bootstrap_position_tables(conn: &Connection) -> rusqlite::Result<()> {
+fn bootstrap_role_tables(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS positions (
+        "CREATE TABLE IF NOT EXISTS roles (
              id TEXT PRIMARY KEY,
              entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
              title TEXT NOT NULL DEFAULT '',
@@ -616,19 +616,88 @@ fn bootstrap_position_tables(conn: &Connection) -> rusqlite::Result<()> {
                  OR (occupant_kind IN ('human','agent') AND occupant_id IS NOT NULL)
              )
          );
-         CREATE INDEX IF NOT EXISTS idx_positions_entity ON positions(entity_id);
-         CREATE INDEX IF NOT EXISTS idx_positions_occupant
-             ON positions(occupant_kind, occupant_id);
+         CREATE INDEX IF NOT EXISTS idx_roles_entity ON roles(entity_id);
+         CREATE INDEX IF NOT EXISTS idx_roles_occupant
+             ON roles(occupant_kind, occupant_id);
 
-         CREATE TABLE IF NOT EXISTS position_edges (
-             parent_position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
-             child_position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
-             PRIMARY KEY (parent_position_id, child_position_id),
-             CHECK (parent_position_id <> child_position_id)
+         CREATE TABLE IF NOT EXISTS role_edges (
+             parent_role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+             child_role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+             PRIMARY KEY (parent_role_id, child_role_id),
+             CHECK (parent_role_id <> child_role_id)
          );
-         CREATE INDEX IF NOT EXISTS idx_position_edges_child
-             ON position_edges(child_position_id);",
+         CREATE INDEX IF NOT EXISTS idx_role_edges_child
+             ON role_edges(child_role_id);",
     )?;
+    Ok(())
+}
+
+/// Idempotent rename migration: positions → roles, position_edges → role_edges.
+///
+/// Detects state via sqlite_master:
+///   - `roles` already exists → skip (already renamed or fresh boot ran bootstrap_role_tables).
+///   - `positions` exists but `roles` doesn't → perform the rename sequence.
+///   - Neither exists → no-op (fresh DB; bootstrap_role_tables creates `roles` directly).
+fn ensure_role_rename(conn: &Connection) -> rusqlite::Result<()> {
+    let roles_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='roles'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?
+        .is_some();
+    if roles_exists {
+        return Ok(());
+    }
+
+    let positions_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='positions'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?
+        .is_some();
+    if !positions_exists {
+        return Ok(());
+    }
+
+    // positions exists, roles doesn't — perform rename.
+    conn.execute_batch("ALTER TABLE positions RENAME TO roles;")?;
+    conn.execute_batch("ALTER TABLE position_edges RENAME TO role_edges;")?;
+
+    // Rename columns on role_edges (SQLite >= 3.25).
+    let re_cols: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(role_edges)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    if re_cols.iter().any(|c| c == "parent_position_id") {
+        conn.execute_batch(
+            "ALTER TABLE role_edges RENAME COLUMN parent_position_id TO parent_role_id;",
+        )?;
+    }
+    if re_cols.iter().any(|c| c == "child_position_id") {
+        conn.execute_batch(
+            "ALTER TABLE role_edges RENAME COLUMN child_position_id TO child_role_id;",
+        )?;
+    }
+
+    // Drop old indexes (they referred to the old table/column names).
+    conn.execute_batch(
+        "DROP INDEX IF EXISTS idx_positions_entity;
+         DROP INDEX IF EXISTS idx_positions_occupant;
+         DROP INDEX IF EXISTS idx_position_edges_child;",
+    )?;
+    // Create new canonical indexes.
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_roles_entity ON roles(entity_id);
+         CREATE INDEX IF NOT EXISTS idx_roles_occupant ON roles(occupant_kind, occupant_id);
+         CREATE INDEX IF NOT EXISTS idx_role_edges_child ON role_edges(child_role_id);",
+    )?;
+
     Ok(())
 }
 
@@ -682,25 +751,25 @@ fn legacy_hierarchy_carryover(conn: &Connection) -> rusqlite::Result<()> {
          WHERE entity_id IS NULL;",
     )?;
 
-    // 3. Backfill positions: one per agent inside its entity.
+    // 3. Backfill roles: one per agent inside its entity.
     conn.execute_batch(
-        "INSERT INTO positions (id, entity_id, title, occupant_kind, occupant_id, created_at)
+        "INSERT INTO roles (id, entity_id, title, occupant_kind, occupant_id, created_at)
          SELECT a.id, a.entity_id, a.name, 'agent', a.id, a.created_at
          FROM agents a
          WHERE a.entity_id IS NOT NULL
          ON CONFLICT(id) DO NOTHING;",
     )?;
 
-    // 4. Backfill position_edges from `agents.parent_id`.
+    // 4. Backfill role_edges from `agents.parent_id`.
     conn.execute_batch(
-        "INSERT INTO position_edges (parent_position_id, child_position_id)
+        "INSERT INTO role_edges (parent_role_id, child_role_id)
          SELECT a.parent_id, a.id
          FROM agents a
          WHERE a.parent_id IS NOT NULL
            AND a.entity_id IS NOT NULL
-           AND EXISTS (SELECT 1 FROM positions WHERE id = a.parent_id)
-           AND EXISTS (SELECT 1 FROM positions WHERE id = a.id)
-         ON CONFLICT(parent_position_id, child_position_id) DO NOTHING;",
+           AND EXISTS (SELECT 1 FROM roles WHERE id = a.parent_id)
+           AND EXISTS (SELECT 1 FROM roles WHERE id = a.id)
+         ON CONFLICT(parent_role_id, child_role_id) DO NOTHING;",
     )?;
 
     Ok(())
@@ -800,7 +869,7 @@ fn decouple_entity_uuids_from_agent_uuids(conn: &Connection) -> rusqlite::Result
             params![new_id, old_id],
         )?;
         conn.execute(
-            "UPDATE positions SET entity_id = ?1 WHERE entity_id = ?2",
+            "UPDATE roles SET entity_id = ?1 WHERE entity_id = ?2",
             params![new_id, old_id],
         )?;
 
@@ -1179,12 +1248,15 @@ impl AgentRegistry {
         // 2. Add agents.entity_id column (guarded by PRAGMA table_info check).
         ensure_agent_entity_id_column(&conn)?;
 
-        // 3. Position primitive tables (positions + position_edges).
-        bootstrap_position_tables(&conn)?;
+        // 3a. Rename legacy positions → roles (idempotent; no-op on fresh DBs).
+        ensure_role_rename(&conn)?;
+
+        // 3b. Role primitive tables (roles + role_edges) — only creates if absent.
+        bootstrap_role_tables(&conn)?;
 
         // 4. Legacy carryover — only fires while `agents.parent_id` still
         //    exists on disk. Backfills entities, agents.entity_id,
-        //    positions, and position_edges from the legacy parent_id chain.
+        //    roles, and role_edges from the legacy parent_id chain.
         legacy_hierarchy_carryover(&conn)?;
 
         // 5. Retire the legacy storage: drop `agent_ancestry`, drop the
@@ -1384,11 +1456,11 @@ impl AgentRegistry {
     /// Spawn a new agent.
     ///
     /// - `parent_agent_id = None` → mint a fresh entity, a fresh agent UUID,
-    ///   and a fresh position UUID. Three distinct IDs.
+    ///   and a fresh role UUID. Three distinct IDs.
     /// - `parent_agent_id = Some(pid)` → reuse the parent's entity, mint a
-    ///   fresh agent UUID, mint a fresh position UUID, and add an edge from
-    ///   the parent's primary position to the new position. The parent's
-    ///   primary position is the (single) position this entity has where
+    ///   fresh agent UUID, mint a fresh role UUID, and add an edge from
+    ///   the parent's primary role to the new role. The parent's
+    ///   primary role is the (single) role this entity has where
     ///   `occupant_id == parent_agent_id`.
     pub async fn spawn(
         &self,
@@ -1413,16 +1485,16 @@ impl AgentRegistry {
         entity_id_override: Option<&str>,
     ) -> Result<Agent> {
         let agent_id = uuid::Uuid::new_v4().to_string();
-        let position_id = uuid::Uuid::new_v4().to_string();
+        let role_id = uuid::Uuid::new_v4().to_string();
         let now = Utc::now();
         let session_id = uuid::Uuid::new_v4().to_string();
         let canonical_name = name.trim().to_string();
 
         let db = self.db.lock().await;
 
-        // Resolve entity (and parent position when relevant). Three distinct
+        // Resolve entity (and parent role when relevant). Three distinct
         // IDs for fresh root spawns; reused entity for child spawns.
-        let (entity_id, parent_position_id): (String, Option<String>) = if let Some(pid) =
+        let (entity_id, parent_role_id): (String, Option<String>) = if let Some(pid) =
             parent_agent_id
         {
             let parent_entity_id: String = db
@@ -1437,10 +1509,10 @@ impl AgentRegistry {
                     anyhow::anyhow!("parent agent '{pid}' has no entity_id; cannot attach child")
                 })?;
 
-            // Look up the parent's primary position inside this entity.
+            // Look up the parent's primary role inside this entity.
             let parent_pos: Option<String> = db
                 .query_row(
-                    "SELECT id FROM positions
+                    "SELECT id FROM roles
                          WHERE entity_id = ?1 AND occupant_kind = 'agent' AND occupant_id = ?2
                          ORDER BY created_at ASC
                          LIMIT 1",
@@ -1507,31 +1579,31 @@ impl AgentRegistry {
             ],
         )?;
 
-        // Mint the position and (when this is a child spawn) the DAG edge.
+        // Mint the role and (when this is a child spawn) the DAG edge.
         db.execute(
-            "INSERT INTO positions (id, entity_id, title, occupant_kind, occupant_id, created_at)
+            "INSERT INTO roles (id, entity_id, title, occupant_kind, occupant_id, created_at)
              VALUES (?1, ?2, ?3, 'agent', ?4, ?5)",
             params![
-                position_id,
+                role_id,
                 entity_id,
                 canonical_name,
                 agent.id,
                 now.to_rfc3339(),
             ],
         )?;
-        if let Some(parent_pos) = parent_position_id.as_deref() {
+        if let Some(parent_pos) = parent_role_id.as_deref() {
             db.execute(
-                "INSERT INTO position_edges (parent_position_id, child_position_id)
+                "INSERT INTO role_edges (parent_role_id, child_role_id)
                  VALUES (?1, ?2)
-                 ON CONFLICT(parent_position_id, child_position_id) DO NOTHING",
-                params![parent_pos, position_id],
+                 ON CONFLICT(parent_role_id, child_role_id) DO NOTHING",
+                params![parent_pos, role_id],
             )?;
         }
 
         info!(
             agent_id = %agent.id,
             entity_id = %entity_id,
-            position_id = %position_id,
+            role_id = %role_id,
             parent_agent_id = ?parent_agent_id,
             "agent spawned"
         );
@@ -1727,16 +1799,16 @@ impl AgentRegistry {
         self.get_active_by_name(hint).await
     }
 
-    /// Return the first active root agent — the agent whose position has
-    /// no incoming edges in the position DAG. Returns `None` when no agent
-    /// occupies a topmost position.
+    /// Return the first active root agent — the agent whose role has
+    /// no incoming edges in the role DAG. Returns `None` when no agent
+    /// occupies a topmost role.
     pub async fn get_root_agent(&self) -> Result<Option<Agent>> {
         let db = self.db.lock().await;
         db.query_row(
             "SELECT a.* FROM agents a
-             JOIN positions p ON p.occupant_kind = 'agent' AND p.occupant_id = a.id
+             JOIN roles r ON r.occupant_kind = 'agent' AND r.occupant_id = a.id
              WHERE a.status = 'active'
-               AND p.id NOT IN (SELECT child_position_id FROM position_edges)
+               AND r.id NOT IN (SELECT child_role_id FROM role_edges)
              ORDER BY a.created_at ASC
              LIMIT 1",
             [],
@@ -1801,16 +1873,16 @@ impl AgentRegistry {
         self.get_root_agent().await
     }
 
-    /// Direct reports of `agent_id` resolved through the position DAG.
+    /// Direct reports of `agent_id` resolved through the role DAG.
     pub async fn get_children(&self, agent_id: &str) -> Result<Vec<Agent>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT DISTINCT a.* FROM agents a
-             JOIN positions cp ON cp.occupant_kind = 'agent' AND cp.occupant_id = a.id
-             JOIN position_edges e ON e.child_position_id = cp.id
-             JOIN positions pp ON pp.id = e.parent_position_id
-             WHERE pp.occupant_kind = 'agent'
-               AND pp.occupant_id = ?1
+             JOIN roles cr ON cr.occupant_kind = 'agent' AND cr.occupant_id = a.id
+             JOIN role_edges e ON e.child_role_id = cr.id
+             JOIN roles pr ON pr.id = e.parent_role_id
+             WHERE pr.occupant_kind = 'agent'
+               AND pr.occupant_id = ?1
                AND a.status = 'active'
              ORDER BY a.name ASC",
         )?;
@@ -1836,23 +1908,23 @@ impl AgentRegistry {
     }
 
     /// Ancestor agent IDs starting with `agent_id` itself, walking the
-    /// position DAG upward. Topological order: nearest first, root last.
+    /// role DAG upward. Topological order: nearest first, root last.
     pub async fn get_ancestor_ids(&self, agent_id: &str) -> Result<Vec<String>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
-            "WITH RECURSIVE ancestor_positions(id, depth) AS (
-                 SELECT p.id, 0 FROM positions p
-                 WHERE p.occupant_kind = 'agent' AND p.occupant_id = ?1
+            "WITH RECURSIVE ancestor_roles(id, depth) AS (
+                 SELECT r.id, 0 FROM roles r
+                 WHERE r.occupant_kind = 'agent' AND r.occupant_id = ?1
                  UNION
-                 SELECT e.parent_position_id, ap.depth + 1
-                 FROM position_edges e
-                 JOIN ancestor_positions ap ON e.child_position_id = ap.id
+                 SELECT e.parent_role_id, ar.depth + 1
+                 FROM role_edges e
+                 JOIN ancestor_roles ar ON e.child_role_id = ar.id
              )
-             SELECT DISTINCT p.occupant_id, MIN(ap.depth) AS depth
-             FROM ancestor_positions ap
-             JOIN positions p ON p.id = ap.id
-             WHERE p.occupant_kind = 'agent' AND p.occupant_id IS NOT NULL
-             GROUP BY p.occupant_id
+             SELECT DISTINCT r.occupant_id, MIN(ar.depth) AS depth
+             FROM ancestor_roles ar
+             JOIN roles r ON r.id = ar.id
+             WHERE r.occupant_kind = 'agent' AND r.occupant_id IS NOT NULL
+             GROUP BY r.occupant_id
              ORDER BY depth ASC",
         )?;
         let ids = stmt
@@ -1862,24 +1934,24 @@ impl AgentRegistry {
         Ok(ids)
     }
 
-    /// All descendant agent IDs (excluding `agent_id`). Walks the position
-    /// DAG downward from the agent's position(s).
+    /// All descendant agent IDs (excluding `agent_id`). Walks the role
+    /// DAG downward from the agent's role(s).
     pub async fn list_descendants(&self, agent_id: &str) -> Result<Vec<String>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
-            "WITH RECURSIVE descendant_positions(id) AS (
-                 SELECT p.id FROM positions p
-                 WHERE p.occupant_kind = 'agent' AND p.occupant_id = ?1
+            "WITH RECURSIVE descendant_roles(id) AS (
+                 SELECT r.id FROM roles r
+                 WHERE r.occupant_kind = 'agent' AND r.occupant_id = ?1
                  UNION
-                 SELECT e.child_position_id
-                 FROM position_edges e
-                 JOIN descendant_positions dp ON e.parent_position_id = dp.id
+                 SELECT e.child_role_id
+                 FROM role_edges e
+                 JOIN descendant_roles dr ON e.parent_role_id = dr.id
              )
-             SELECT DISTINCT p.occupant_id FROM descendant_positions dp
-             JOIN positions p ON p.id = dp.id
-             WHERE p.occupant_kind = 'agent'
-               AND p.occupant_id IS NOT NULL
-               AND p.occupant_id <> ?1",
+             SELECT DISTINCT r.occupant_id FROM descendant_roles dr
+             JOIN roles r ON r.id = dr.id
+             WHERE r.occupant_kind = 'agent'
+               AND r.occupant_id IS NOT NULL
+               AND r.occupant_id <> ?1",
         )?;
         let ids = stmt
             .query_map(params![agent_id], |row| row.get::<_, String>(0))?
@@ -1888,22 +1960,22 @@ impl AgentRegistry {
         Ok(ids)
     }
 
-    /// Sibling agent IDs — agents whose positions share at least one parent
-    /// position with `agent_id`'s position(s), excluding `agent_id` itself.
-    /// Returns an empty vec when `agent_id` has no position or no parents.
+    /// Sibling agent IDs — agents whose roles share at least one parent
+    /// role with `agent_id`'s role(s), excluding `agent_id` itself.
+    /// Returns an empty vec when `agent_id` has no role or no parents.
     pub async fn list_siblings(&self, agent_id: &str) -> Result<Vec<String>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
-            "SELECT DISTINCT sp.occupant_id FROM positions sp
-             WHERE sp.occupant_kind = 'agent'
-               AND sp.occupant_id IS NOT NULL
-               AND sp.occupant_id <> ?1
-               AND sp.id IN (
-                   SELECT e2.child_position_id FROM position_edges e2
-                   WHERE e2.parent_position_id IN (
-                       SELECT e1.parent_position_id FROM position_edges e1
-                       JOIN positions p ON p.id = e1.child_position_id
-                       WHERE p.occupant_kind = 'agent' AND p.occupant_id = ?1
+            "SELECT DISTINCT sr.occupant_id FROM roles sr
+             WHERE sr.occupant_kind = 'agent'
+               AND sr.occupant_id IS NOT NULL
+               AND sr.occupant_id <> ?1
+               AND sr.id IN (
+                   SELECT e2.child_role_id FROM role_edges e2
+                   WHERE e2.parent_role_id IN (
+                       SELECT e1.parent_role_id FROM role_edges e1
+                       JOIN roles r ON r.id = e1.child_role_id
+                       WHERE r.occupant_kind = 'agent' AND r.occupant_id = ?1
                    )
                )",
         )?;
@@ -1914,24 +1986,24 @@ impl AgentRegistry {
         Ok(ids)
     }
 
-    /// Self plus every descendant agent (full subtree). Walks the position
-    /// DAG downward from the agent's position(s).
+    /// Self plus every descendant agent (full subtree). Walks the role
+    /// DAG downward from the agent's role(s).
     pub async fn get_subtree(&self, agent_id: &str) -> Result<Vec<Agent>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
-            "WITH RECURSIVE descendant_positions(id) AS (
-                 SELECT p.id FROM positions p
-                 WHERE p.occupant_kind = 'agent' AND p.occupant_id = ?1
+            "WITH RECURSIVE descendant_roles(id) AS (
+                 SELECT r.id FROM roles r
+                 WHERE r.occupant_kind = 'agent' AND r.occupant_id = ?1
                  UNION
-                 SELECT e.child_position_id
-                 FROM position_edges e
-                 JOIN descendant_positions dp ON e.parent_position_id = dp.id
+                 SELECT e.child_role_id
+                 FROM role_edges e
+                 JOIN descendant_roles dr ON e.parent_role_id = dr.id
              )
              SELECT DISTINCT a.* FROM agents a
-             JOIN descendant_positions dp
-               ON dp.id IN (
-                   SELECT p.id FROM positions p
-                   WHERE p.occupant_kind = 'agent' AND p.occupant_id = a.id
+             JOIN descendant_roles dr
+               ON dr.id IN (
+                   SELECT r.id FROM roles r
+                   WHERE r.occupant_kind = 'agent' AND r.occupant_id = a.id
                )
              ORDER BY a.created_at ASC",
         )?;
@@ -1977,17 +2049,17 @@ impl AgentRegistry {
                  WHERE agent_id IS NULL
                     OR agent_id = ?1
                     OR agent_id IN (
-                        WITH RECURSIVE descendant_positions(id) AS (
-                            SELECT p.id FROM positions p
-                            WHERE p.occupant_kind = 'agent' AND p.occupant_id = ?1
+                        WITH RECURSIVE descendant_roles(id) AS (
+                            SELECT r.id FROM roles r
+                            WHERE r.occupant_kind = 'agent' AND r.occupant_id = ?1
                             UNION
-                            SELECT e.child_position_id
-                            FROM position_edges e
-                            JOIN descendant_positions dp ON e.parent_position_id = dp.id
+                            SELECT e.child_role_id
+                            FROM role_edges e
+                            JOIN descendant_roles dr ON e.parent_role_id = dr.id
                         )
-                        SELECT DISTINCT p.occupant_id FROM descendant_positions dp
-                        JOIN positions p ON p.id = dp.id
-                        WHERE p.occupant_kind = 'agent' AND p.occupant_id IS NOT NULL
+                        SELECT DISTINCT r.occupant_id FROM descendant_roles dr
+                        JOIN roles r ON r.id = dr.id
+                        WHERE r.occupant_kind = 'agent' AND r.occupant_id IS NOT NULL
                     )
                  ORDER BY created_at DESC",
             )?;
@@ -2063,35 +2135,35 @@ impl AgentRegistry {
 
         let db = self.db.lock().await;
 
-        let agent_position_ids: Vec<String> = {
+        let agent_role_ids: Vec<String> = {
             let mut stmt = db.prepare(
-                "SELECT id FROM positions WHERE occupant_kind = 'agent' AND occupant_id = ?1",
+                "SELECT id FROM roles WHERE occupant_kind = 'agent' AND occupant_id = ?1",
             )?;
             stmt.query_map(params![agent_id], |row| row.get::<_, String>(0))?
                 .filter_map(|r| r.ok())
                 .collect()
         };
-        if agent_position_ids.is_empty() {
-            anyhow::bail!("agent '{agent_id}' has no position to reparent");
+        if agent_role_ids.is_empty() {
+            anyhow::bail!("agent '{agent_id}' has no role to reparent");
         }
 
-        // Disconnect every incoming edge to this agent's positions.
-        let placeholders = std::iter::repeat_n("?", agent_position_ids.len())
+        // Disconnect every incoming edge to this agent's roles.
+        let placeholders = std::iter::repeat_n("?", agent_role_ids.len())
             .collect::<Vec<_>>()
             .join(",");
-        let sql = format!("DELETE FROM position_edges WHERE child_position_id IN ({placeholders})");
-        let params_vec: Vec<&dyn rusqlite::ToSql> = agent_position_ids
+        let sql = format!("DELETE FROM role_edges WHERE child_role_id IN ({placeholders})");
+        let params_vec: Vec<&dyn rusqlite::ToSql> = agent_role_ids
             .iter()
             .map(|s| s as &dyn rusqlite::ToSql)
             .collect();
         db.execute(&sql, params_vec.as_slice())?;
 
         if let Some(pid) = new_parent_agent_id {
-            // Resolve the new parent's primary position (must be in the same
+            // Resolve the new parent's primary role (must be in the same
             // entity for the edge to make sense).
-            let parent_pos: Option<String> = db
+            let parent_role: Option<String> = db
                 .query_row(
-                    "SELECT id FROM positions
+                    "SELECT id FROM roles
                      WHERE occupant_kind = 'agent' AND occupant_id = ?1
                      ORDER BY created_at ASC
                      LIMIT 1",
@@ -2099,16 +2171,16 @@ impl AgentRegistry {
                     |row| row.get(0),
                 )
                 .optional()?;
-            let Some(parent_pos) = parent_pos else {
-                anyhow::bail!("new parent '{pid}' has no position");
+            let Some(parent_role) = parent_role else {
+                anyhow::bail!("new parent '{pid}' has no role");
             };
 
-            for child_pos in &agent_position_ids {
+            for child_role in &agent_role_ids {
                 db.execute(
-                    "INSERT INTO position_edges (parent_position_id, child_position_id)
+                    "INSERT INTO role_edges (parent_role_id, child_role_id)
                      VALUES (?1, ?2)
-                     ON CONFLICT(parent_position_id, child_position_id) DO NOTHING",
-                    params![parent_pos, child_pos],
+                     ON CONFLICT(parent_role_id, child_role_id) DO NOTHING",
+                    params![parent_role, child_role],
                 )?;
             }
         }
@@ -2179,32 +2251,32 @@ impl AgentRegistry {
     /// and are wiped alongside each deleted agent.
     pub async fn delete_agent(&self, id: &str, cascade: bool) -> Result<usize> {
         if !cascade {
-            // Resolve the agent's positions, their parents, and their
+            // Resolve the agent's roles, their parents, and their
             // children, then rewire children under the grandparent set.
             let db = self.db.lock().await;
-            let agent_position_ids: Vec<String> = {
+            let agent_role_ids: Vec<String> = {
                 let mut stmt = db.prepare(
-                    "SELECT id FROM positions WHERE occupant_kind = 'agent' AND occupant_id = ?1",
+                    "SELECT id FROM roles WHERE occupant_kind = 'agent' AND occupant_id = ?1",
                 )?;
                 stmt.query_map(params![id], |row| row.get::<_, String>(0))?
                     .filter_map(|r| r.ok())
                     .collect()
             };
 
-            // Parents and children of the agent's positions.
+            // Parents and children of the agent's roles.
             let mut parents: Vec<String> = Vec::new();
             let mut children: Vec<String> = Vec::new();
-            if !agent_position_ids.is_empty() {
-                let placeholders = std::iter::repeat_n("?", agent_position_ids.len())
+            if !agent_role_ids.is_empty() {
+                let placeholders = std::iter::repeat_n("?", agent_role_ids.len())
                     .collect::<Vec<_>>()
                     .join(",");
                 let parent_sql = format!(
-                    "SELECT DISTINCT parent_position_id FROM position_edges WHERE child_position_id IN ({placeholders})"
+                    "SELECT DISTINCT parent_role_id FROM role_edges WHERE child_role_id IN ({placeholders})"
                 );
                 let child_sql = format!(
-                    "SELECT DISTINCT child_position_id FROM position_edges WHERE parent_position_id IN ({placeholders})"
+                    "SELECT DISTINCT child_role_id FROM role_edges WHERE parent_role_id IN ({placeholders})"
                 );
-                let p_vec: Vec<&dyn rusqlite::ToSql> = agent_position_ids
+                let p_vec: Vec<&dyn rusqlite::ToSql> = agent_role_ids
                     .iter()
                     .map(|s| s as &dyn rusqlite::ToSql)
                     .collect();
@@ -2228,19 +2300,19 @@ impl AgentRegistry {
             for child in &children {
                 for parent in &parents {
                     db.execute(
-                        "INSERT INTO position_edges (parent_position_id, child_position_id)
+                        "INSERT INTO role_edges (parent_role_id, child_role_id)
                          VALUES (?1, ?2)
-                         ON CONFLICT(parent_position_id, child_position_id) DO NOTHING",
+                         ON CONFLICT(parent_role_id, child_role_id) DO NOTHING",
                         params![parent, child],
                     )?;
                 }
             }
 
-            // Delete the agent — `ON DELETE CASCADE` on positions.entity_id
-            // is not what we want here; positions for this agent get
+            // Delete the agent — `ON DELETE CASCADE` on roles.entity_id
+            // is not what we want here; roles for this agent get
             // dropped explicitly so any other entity references stay clean.
-            for pos in &agent_position_ids {
-                db.execute("DELETE FROM positions WHERE id = ?1", params![pos])?;
+            for role in &agent_role_ids {
+                db.execute("DELETE FROM roles WHERE id = ?1", params![role])?;
             }
             let deleted = db.execute("DELETE FROM agents WHERE id = ?1", params![id])?;
             if deleted == 0 {
@@ -2268,10 +2340,10 @@ impl AgentRegistry {
             subtree.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
         let deleted = db.execute(&sql, params_vec.as_slice())?;
 
-        // Drop the matching positions (positions are scoped to entities and
+        // Drop the matching roles (roles are scoped to entities and
         // `ON DELETE CASCADE` would fire only if the entity was deleted).
         let pos_sql = format!(
-            "DELETE FROM positions WHERE occupant_kind = 'agent' AND occupant_id IN ({placeholders})"
+            "DELETE FROM roles WHERE occupant_kind = 'agent' AND occupant_id IN ({placeholders})"
         );
         db.execute(&pos_sql, params_vec.as_slice())?;
 
@@ -3682,15 +3754,15 @@ impl AgentRegistry {
         Ok(total_affected)
     }
 
-    /// List root agents — agents whose position has no incoming edges in
-    /// the position DAG. A position-DAG model can carry multiple roots per
+    /// List root agents — agents whose role has no incoming edges in
+    /// the role DAG. A role-DAG model can carry multiple roots per
     /// entity (e.g. a board); today every entity has exactly one.
     pub async fn list_root_agents(&self) -> Result<Vec<Agent>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT DISTINCT a.* FROM agents a
-             JOIN positions p ON p.occupant_kind = 'agent' AND p.occupant_id = a.id
-             WHERE p.id NOT IN (SELECT child_position_id FROM position_edges)
+             JOIN roles r ON r.occupant_kind = 'agent' AND r.occupant_id = a.id
+             WHERE r.id NOT IN (SELECT child_role_id FROM role_edges)
              ORDER BY a.name",
         )?;
         let agents = stmt
@@ -4419,15 +4491,15 @@ mod tests {
             "the legacy entity row sharing the agent UUID must be deleted",
         );
 
-        // 4. Position re-pointed.
-        let position_entity_id: String = conn
+        // 4. Role re-pointed.
+        let role_entity_id: String = conn
             .query_row(
-                "SELECT entity_id FROM positions WHERE occupant_id = ?1",
+                "SELECT entity_id FROM roles WHERE occupant_id = ?1",
                 params![agent_id],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(position_entity_id, agent_entity_id);
+        assert_eq!(role_entity_id, agent_entity_id);
 
         // 5. Idempotence: a second open() is a clean no-op.
         drop(conn);

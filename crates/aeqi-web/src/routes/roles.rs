@@ -11,9 +11,7 @@ use crate::server::AppState;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/positions", get(list_positions).post(create_position))
-        .route("/positions/{id}/occupant", post(change_occupant))
-        // /api/roles/:id/occupant is the user-facing alias — same handler.
+        .route("/roles", get(list_roles).post(create_role))
         .route("/roles/{id}/occupant", post(change_occupant))
 }
 
@@ -22,7 +20,7 @@ struct ListQuery {
     entity_id: Option<String>,
 }
 
-async fn list_positions(
+async fn list_roles(
     State(state): State<AppState>,
     scope: Scope,
     Query(q): Query<ListQuery>,
@@ -31,37 +29,37 @@ async fn list_positions(
     ipc_proxy(
         state,
         scope.as_ref(),
-        "list_positions",
+        "list_roles",
         serde_json::json!({"entity_id": entity_id}),
     )
     .await
 }
 
-async fn create_position(
+async fn create_role(
     State(state): State<AppState>,
     scope: Scope,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    ipc_proxy(state, scope.as_ref(), "create_position", body).await
+    ipc_proxy(state, scope.as_ref(), "create_role", body).await
 }
 
-/// POST /api/positions/:id/occupant
+/// POST /api/roles/:id/occupant
 ///
 /// Body: `{ "occupant_kind": "human"|"agent"|"vacant", "occupant_id": "<id>" }`
 ///
 /// Proxies to the `change_occupant` IPC command, which:
-///   - Updates the position row.
+///   - Updates the role row.
 ///   - Rotates participant sets on every anchored session.
 ///   - Appends a system hand-off message in each session.
 ///
 /// Tenancy: the `allowed_roots` scope injected by `ipc_proxy` gates writes
-/// to positions the caller owns.
+/// to roles the caller owns.
 async fn change_occupant(
     State(state): State<AppState>,
     scope: Scope,
     Path(id): Path<String>,
     Json(mut body): Json<serde_json::Value>,
 ) -> Response {
-    body["position_id"] = serde_json::Value::String(id);
+    body["role_id"] = serde_json::Value::String(id);
     ipc_proxy(state, scope.as_ref(), "change_occupant", body).await
 }

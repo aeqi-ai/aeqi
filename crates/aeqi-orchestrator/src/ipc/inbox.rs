@@ -267,9 +267,7 @@ mod tests {
             event_handler_store: None,
             agent_registry: registry.clone(),
             entity_registry: Arc::new(crate::entity_registry::EntityRegistry::open(registry.db())),
-            position_registry: Arc::new(crate::position_registry::PositionRegistry::open(
-                registry.db(),
-            )),
+            role_registry: Arc::new(crate::role_registry::RoleRegistry::open(registry.db())),
             idea_store: Some(idea_store),
             message_router: None,
             activity_buffer: Arc::new(Mutex::new(ActivityBuffer::default())),
@@ -308,9 +306,7 @@ mod tests {
             .unwrap();
 
         // Mark the session as awaiting.
-        ss.set_awaiting(&session_id, "test question")
-            .await
-            .unwrap();
+        ss.set_awaiting(&session_id, "test question").await.unwrap();
 
         let req = serde_json::json!({"session_id": session_id});
         let resp = handle_dismiss_inbox(&ctx, &req, &None).await;

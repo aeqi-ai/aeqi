@@ -347,11 +347,8 @@ export interface Blueprint {
   seed_quests?: BlueprintSeedQuest[];
   /** Declared role structure. When present, the org-chart preview
    *  reads from here; when absent, falls back to the implicit
-   *  root → flat seed_agents shape. The orchestrator currently
-   *  auto-derives positions from seed_agents at spawn — declared
-   *  roles are a wire-level POC until that spawn refactor lands.
-   *  Until then, declared roles must mirror the agent tree 1:1
-   *  to keep the preview honest with what spawns. */
+   *  root → flat seed_agents shape. Declared roles must mirror the
+   *  agent tree 1:1 to keep the preview honest with what spawns. */
   seed_roles?: BlueprintSeedRole[];
   seed_role_edges?: BlueprintSeedRoleEdge[];
 }
@@ -360,13 +357,7 @@ export type OccupantKind = "human" | "agent" | "vacant";
 
 /** A single org-chart slot inside an entity. Occupant is a human, an
  *  agent, or vacant ("we're hiring"). Authority is resolved by transitive
- *  closure over `RoleEdge` (DAG, not tree).
- *
- *  Wire shape note: the Rust side and the SQL schema still use
- *  "position" (table name, struct, columns). Rename is staged — UI flips
- *  to "Role" first, runtime follows in a separate cycle. The API
- *  wrapper (`api.getRoles`) maps the wire's `positions` field to
- *  `roles` so internal callers don't see the legacy term. */
+ *  closure over `RoleEdge` (DAG, not tree). */
 export interface Role {
   id: string;
   entity_id: string;

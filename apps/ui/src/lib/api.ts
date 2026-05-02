@@ -8,7 +8,6 @@ import type {
   InvocationStepRow,
   OccupantKind,
   Role,
-  RoleEdge,
   RoleOverride,
   Quest,
   ScopeValue,
@@ -207,21 +206,17 @@ export const api = {
 
   // Roles — the org-chart primitive. Returns the full set of roles +
   // edges for the entity so the caller can render either a flat list or
-  // a DAG. The wire (Rust + SQL) still calls these "positions"; the
-  // wrapper renames the response so internal callers use "roles" only.
+  // a DAG.
   getRoles: async (entityId: string) => {
     const r = await request<{
       ok: boolean;
-      positions: Role[];
-      edges: { parent_position_id: string; child_position_id: string }[];
-    }>(`/positions?entity_id=${encodeURIComponent(entityId)}`);
+      roles: Role[];
+      edges: { parent_role_id: string; child_role_id: string }[];
+    }>(`/roles?entity_id=${encodeURIComponent(entityId)}`);
     return {
       ok: r.ok,
-      roles: r.positions,
-      edges: r.edges.map<RoleEdge>((e) => ({
-        parent_role_id: e.parent_position_id,
-        child_role_id: e.child_position_id,
-      })),
+      roles: r.roles,
+      edges: r.edges,
     };
   },
   createRole: (data: {
@@ -236,9 +231,9 @@ export const api = {
       title: data.title,
       occupant_kind: data.occupant_kind,
       ...(data.occupant_id ? { occupant_id: data.occupant_id } : {}),
-      ...(data.parent_role_id ? { parent_position_id: data.parent_role_id } : {}),
+      ...(data.parent_role_id ? { parent_role_id: data.parent_role_id } : {}),
     };
-    return request<{ ok: boolean; position: Role }>("/positions", {
+    return request<{ ok: boolean; role: Role }>("/roles", {
       method: "POST",
       body: JSON.stringify(wire),
     });

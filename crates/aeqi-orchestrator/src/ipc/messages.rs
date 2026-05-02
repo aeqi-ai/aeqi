@@ -1,9 +1,9 @@
 //! IPC handlers for the three address verbs:
-//!   - `message_to`     — append a message to a session, idea, agent, user, or position target
+//!   - `message_to`     — append a message to a session, idea, agent, user, or role target
 //!   - `add_participant` — add an identity to a session's participant roster
 //!
 //! Wave 1 implements the `session` and `idea` targets for `message_to`.
-//! Wave 3 (position routing) implements `target_kind="position"`.
+//! Wave 3 (role routing) implements `target_kind="role"`.
 //! Wave 3 (agent tool) implements `target_kind="agent"` and `target_kind="user"`.
 
 use super::request_field;
@@ -14,10 +14,10 @@ use super::request_field;
 ///
 /// ```json
 /// {
-///   "target_kind":  "session" | "idea" | "agent" | "user" | "position" | "role",
+///   "target_kind":  "session" | "idea" | "agent" | "user" | "role",
 ///   "target_id":    "<id>",
 ///   "body":         "<message text>",
-///   "from_kind":    "user" | "agent" | "position" | "system",
+///   "from_kind":    "user" | "agent" | "system",
 ///   "from_id":      "<identity id>",
 ///   "payload_kind": null | "<discriminator>"
 /// }
@@ -27,8 +27,8 @@ use super::request_field;
 /// session is created and the idea row is updated to point at it before
 /// appending the message.
 ///
-/// For `target_kind="position"` or `"role"`: the position's current occupant is resolved;
-/// a vacant position returns an error. A position-anchored session is
+/// For `target_kind="role"`: the role's current occupant is resolved;
+/// a vacant role returns an error. A role-anchored session is
 /// created on first use and reused on subsequent calls. The occupant is
 /// added as a participant automatically.
 pub async fn handle_message_to(
@@ -148,11 +148,10 @@ pub async fn handle_message_to(
             }
         }
 
-        // "role" is the user-facing alias for "position".
-        "position" | "role" => {
-            // 1. Look up the position.
-            let position = match ctx.position_registry.get(&target_id).await {
-                Ok(Some(p)) => p,
+        "role" => {
+            // 1. Look up the role.
+            let role = match ctx.role_registry.get(&target_id).await {
+                Ok(Some(r)) => r,
                 Ok(None) => {
                     return serde_json::json!({
                         "ok": false,
@@ -162,32 +161,32 @@ pub async fn handle_message_to(
                 Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
             };
 
-            // 2. Reject vacant positions — nowhere to deliver the message.
+            // 2. Reject vacant roles — nowhere to deliver the message.
             if matches!(
-                position.occupant_kind,
-                crate::position_registry::OccupantKind::Vacant
-            ) || position.occupant_id.is_none()
+                role.occupant_kind,
+                crate::role_registry::OccupantKind::Vacant
+            ) || role.occupant_id.is_none()
             {
                 return serde_json::json!({
                     "ok": false,
                     "error": "role has no occupant",
                 });
             }
-            let occupant_kind = position.occupant_kind;
-            let occupant_id = position.occupant_id.as_deref().unwrap_or("");
+            let occupant_kind = role.occupant_kind;
+            let occupant_id = role.occupant_id.as_deref().unwrap_or("");
 
-            // 3. Resolve or create the position-anchored session.
-            //    The session is shared across all callers targeting this position;
-            //    we key on (position_id, calling_agent from_id) to find an
+            // 3. Resolve or create the role-anchored session.
+            //    The session is shared across all callers targeting this role;
+            //    we key on (role_id, calling_agent from_id) to find an
             //    existing session where the caller is already a participant.
             let caller_agent_id = from_id.as_deref().unwrap_or("");
             let session_id = if !caller_agent_id.is_empty() {
-                match ss.find_position_session(&target_id, caller_agent_id).await {
+                match ss.find_role_session(&target_id, caller_agent_id).await {
                     Ok(Some(sid)) => sid,
                     Ok(None) => {
-                        // First addressing — create a fresh position-anchored session.
-                        let title = format!("position:{}", target_id);
-                        let sid = match ss.create_position_session(&target_id, &title).await {
+                        // First addressing — create a fresh role-anchored session.
+                        let title = format!("role:{}", target_id);
+                        let sid = match ss.create_role_session(&target_id, &title).await {
                             Ok(s) => s,
                             Err(e) => {
                                 return serde_json::json!({"ok": false, "error": e.to_string()});
@@ -203,18 +202,18 @@ pub async fn handle_message_to(
                 }
             } else {
                 // No caller identity — still need a session. Create one.
-                let title = format!("position:{}", target_id);
-                match ss.create_position_session(&target_id, &title).await {
+                let title = format!("role:{}", target_id);
+                match ss.create_role_session(&target_id, &title).await {
                     Ok(s) => s,
                     Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
                 }
             };
 
-            // 4. Ensure the position's current occupant is a participant.
+            // 4. Ensure the role's current occupant is a participant.
             let occupant_kind_str = match occupant_kind {
-                crate::position_registry::OccupantKind::Human => "user",
-                crate::position_registry::OccupantKind::Agent => "agent",
-                crate::position_registry::OccupantKind::Vacant => unreachable!(),
+                crate::role_registry::OccupantKind::Human => "user",
+                crate::role_registry::OccupantKind::Agent => "agent",
+                crate::role_registry::OccupantKind::Vacant => unreachable!(),
             };
             let _ = ss
                 .add_session_participant(&session_id, occupant_kind_str, occupant_id, None)
@@ -525,9 +524,7 @@ mod tests {
             event_handler_store: None,
             agent_registry: registry.clone(),
             entity_registry: Arc::new(crate::entity_registry::EntityRegistry::open(registry.db())),
-            position_registry: Arc::new(crate::position_registry::PositionRegistry::open(
-                registry.db(),
-            )),
+            role_registry: Arc::new(crate::role_registry::RoleRegistry::open(registry.db())),
             idea_store: Some(idea_store),
             message_router: None,
             activity_buffer: Arc::new(Mutex::new(ActivityBuffer::default())),
@@ -668,11 +665,11 @@ mod tests {
 
     // ── Wave 3: position target tests ────────────────────────────────────────
 
-    /// Build a ctx + occupied position for position-routing tests.
-    async fn setup_position_ctx() -> (
+    /// Build a ctx + occupied role for role-routing tests.
+    async fn setup_role_ctx() -> (
         CommandContext,
         Arc<crate::session_store::SessionStore>,
-        String, // position_id of an agent-occupied position
+        String, // role_id of an agent-occupied role
         String, // occupant agent_id
         tempfile::TempDir,
     ) {
@@ -693,11 +690,11 @@ mod tests {
 
         let agent_id = "agent-occupant-001".to_string();
         let pos = ctx
-            .position_registry
+            .role_registry
             .create(
                 &entity.id,
                 "CEO",
-                crate::position_registry::OccupantKind::Agent,
+                crate::role_registry::OccupantKind::Agent,
                 Some(&agent_id),
             )
             .await
@@ -707,11 +704,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn message_to_position_creates_session_and_adds_occupant() {
-        let (ctx, ss, pos_id, agent_id, _dir) = setup_position_ctx().await;
+    async fn message_to_role_creates_session_and_adds_occupant() {
+        let (ctx, ss, pos_id, agent_id, _dir) = setup_role_ctx().await;
 
         let req = serde_json::json!({
-            "target_kind": "position",
+            "target_kind": "role",
             "target_id": pos_id,
             "body": "hello from calling agent",
             "from_kind": "agent",
@@ -747,14 +744,14 @@ mod tests {
             "occupant agent must be a participant; got {participants:?}"
         );
 
-        // target_position_id must be set on the session.
+        // target_role_id must be set on the session.
         let session = ss.get_session(&session_id).await.unwrap().unwrap();
-        // We can't read target_position_id via Session struct yet; verify via raw SQL.
+        // We can't read target_role_id via Session struct yet; verify via raw SQL.
         let stored_pos_id: String = {
             let pool = ss.db();
             let db = pool.lock().await;
             db.query_row(
-                "SELECT target_position_id FROM sessions WHERE id = ?1",
+                "SELECT target_role_id FROM sessions WHERE id = ?1",
                 rusqlite::params![session_id],
                 |row| row.get(0),
             )
@@ -766,8 +763,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn message_to_vacant_position_returns_error() {
-        let (ctx, _ss, _pos_id, _agent_id, _dir) = setup_position_ctx().await;
+    async fn message_to_vacant_role_returns_error() {
+        let (ctx, _ss, _pos_id, _agent_id, _dir) = setup_role_ctx().await;
 
         // Create a separate vacant position.
         let entity = ctx
@@ -781,27 +778,27 @@ mod tests {
             )
             .await
             .unwrap();
-        let vacant_pos = ctx
-            .position_registry
+        let vacant_role = ctx
+            .role_registry
             .create(
                 &entity.id,
                 "CFO",
-                crate::position_registry::OccupantKind::Vacant,
+                crate::role_registry::OccupantKind::Vacant,
                 None,
             )
             .await
             .unwrap();
 
         let req = serde_json::json!({
-            "target_kind": "position",
-            "target_id": vacant_pos.id,
+            "target_kind": "role",
+            "target_id": vacant_role.id,
             "body": "message to nobody",
             "from_kind": "agent",
             "from_id": "agent-caller-001",
         });
 
         let resp = handle_message_to(&ctx, &req, &None).await;
-        assert_eq!(resp["ok"], false, "vacant position must return error");
+        assert_eq!(resp["ok"], false, "vacant role must return error");
         let err = resp["error"].as_str().unwrap_or("");
         assert!(
             err.contains("no occupant"),
@@ -810,11 +807,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn message_to_position_reuses_session_after_second_call() {
-        let (ctx, _ss, pos_id, _agent_id, _dir) = setup_position_ctx().await;
+    async fn message_to_role_reuses_session_after_second_call() {
+        let (ctx, _ss, pos_id, _agent_id, _dir) = setup_role_ctx().await;
 
         let req = serde_json::json!({
-            "target_kind": "position",
+            "target_kind": "role",
             "target_id": pos_id,
             "body": "first message",
             "from_kind": "agent",
@@ -826,7 +823,7 @@ mod tests {
         let session_id_1 = resp1["session_id"].as_str().unwrap().to_string();
 
         let req2 = serde_json::json!({
-            "target_kind": "position",
+            "target_kind": "role",
             "target_id": pos_id,
             "body": "second message",
             "from_kind": "agent",
@@ -839,7 +836,7 @@ mod tests {
 
         assert_eq!(
             session_id_1, session_id_2,
-            "second message_to same position must reuse the same session"
+            "second message_to same role must reuse the same session"
         );
     }
 

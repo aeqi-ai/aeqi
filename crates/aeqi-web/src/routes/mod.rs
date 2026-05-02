@@ -13,8 +13,8 @@ mod inbox;
 pub mod integrations;
 mod messages;
 mod models;
-mod positions;
 mod quests;
+mod roles;
 mod sessions;
 mod templates;
 mod vfs;
@@ -46,7 +46,7 @@ pub fn api_routes() -> Router<AppState> {
         .merge(vfs::routes())
         .merge(hosting::routes())
         .merge(models::routes())
-        .merge(positions::routes())
+        .merge(roles::routes())
         .merge(templates::routes())
         .merge(integrations::routes())
 }

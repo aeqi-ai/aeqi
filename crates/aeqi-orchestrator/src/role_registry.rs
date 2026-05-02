@@ -1,8 +1,8 @@
-//! Position Registry — the canonical org-chart primitive.
+//! Role Registry — the canonical org-chart primitive.
 //!
-//! A position is a slot in an entity's org chart. Its occupant is a human
+//! A role is a slot in an entity's org chart. Its occupant is a human
 //! (`users.id`), an agent (`agents.id`), or vacant. Authority is resolved by
-//! transitive closure over `position_edges` (DAG, not tree — boards of
+//! transitive closure over `role_edges` (DAG, not tree — boards of
 //! directors are flat sets at the top).
 //!
 //! The registry shares its connection pool with [`AgentRegistry`] and
@@ -15,7 +15,7 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// Who occupies a position. `Vacant` is a first-class state — useful for
+/// Who occupies a role. `Vacant` is a first-class state — useful for
 /// "we're hiring CFO" placeholders that already carry edges in the DAG.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -48,9 +48,9 @@ impl std::str::FromStr for OccupantKind {
     }
 }
 
-/// A single position row.
+/// A single role row.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Position {
+pub struct Role {
     pub id: String,
     pub entity_id: String,
     pub title: String,
@@ -60,15 +60,15 @@ pub struct Position {
     pub updated_at: Option<String>,
 }
 
-/// A directed edge in the position DAG: `parent` controls `child`.
+/// A directed edge in the role DAG: `parent` controls `child`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PositionEdge {
-    pub parent_position_id: String,
-    pub child_position_id: String,
+pub struct RoleEdge {
+    pub parent_role_id: String,
+    pub child_role_id: String,
 }
 
-fn row_to_position(row: &rusqlite::Row<'_>) -> rusqlite::Result<Position> {
-    Ok(Position {
+fn row_to_role(row: &rusqlite::Row<'_>) -> rusqlite::Result<Role> {
+    Ok(Role {
         id: row.get(0)?,
         entity_id: row.get(1)?,
         title: row.get(2)?,
@@ -82,49 +82,49 @@ fn row_to_position(row: &rusqlite::Row<'_>) -> rusqlite::Result<Position> {
     })
 }
 
-fn row_to_edge(row: &rusqlite::Row<'_>) -> rusqlite::Result<PositionEdge> {
-    Ok(PositionEdge {
-        parent_position_id: row.get(0)?,
-        child_position_id: row.get(1)?,
+fn row_to_edge(row: &rusqlite::Row<'_>) -> rusqlite::Result<RoleEdge> {
+    Ok(RoleEdge {
+        parent_role_id: row.get(0)?,
+        child_role_id: row.get(1)?,
     })
 }
 
-/// SQLite-backed position registry. Shares `ConnectionPool` with
+/// SQLite-backed role registry. Shares `ConnectionPool` with
 /// [`AgentRegistry`] and [`EntityRegistry`].
-pub struct PositionRegistry {
+pub struct RoleRegistry {
     db: Arc<ConnectionPool>,
 }
 
-impl PositionRegistry {
+impl RoleRegistry {
     pub fn open(db: Arc<ConnectionPool>) -> Self {
         Self { db }
     }
 
-    /// All positions in the entity, ordered by creation time.
-    pub async fn list_for_entity(&self, entity_id: &str) -> Result<Vec<Position>> {
+    /// All roles in the entity, ordered by creation time.
+    pub async fn list_for_entity(&self, entity_id: &str) -> Result<Vec<Role>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT id, entity_id, title, occupant_kind, occupant_id, created_at, updated_at
-             FROM positions
+             FROM roles
              WHERE entity_id = ?1
              ORDER BY created_at ASC",
         )?;
         let rows = stmt
-            .query_map(params![entity_id], row_to_position)?
+            .query_map(params![entity_id], row_to_role)?
             .filter_map(|r| r.ok())
             .collect();
         Ok(rows)
     }
 
-    /// All edges between positions in this entity (filtered by parent's
-    /// entity_id; edges only ever connect positions inside the same entity).
-    pub async fn list_edges_for_entity(&self, entity_id: &str) -> Result<Vec<PositionEdge>> {
+    /// All edges between roles in this entity (filtered by parent's
+    /// entity_id; edges only ever connect roles inside the same entity).
+    pub async fn list_edges_for_entity(&self, entity_id: &str) -> Result<Vec<RoleEdge>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
-            "SELECT e.parent_position_id, e.child_position_id
-             FROM position_edges e
-             JOIN positions p ON p.id = e.parent_position_id
-             WHERE p.entity_id = ?1",
+            "SELECT e.parent_role_id, e.child_role_id
+             FROM role_edges e
+             JOIN roles r ON r.id = e.parent_role_id
+             WHERE r.entity_id = ?1",
         )?;
         let rows = stmt
             .query_map(params![entity_id], row_to_edge)?
@@ -133,8 +133,8 @@ impl PositionRegistry {
         Ok(rows)
     }
 
-    /// Insert a position with a known id (idempotent — ON CONFLICT DO NOTHING).
-    /// Used by spawn paths that mint the position alongside the agent.
+    /// Insert a role with a known id (idempotent — ON CONFLICT DO NOTHING).
+    /// Used by spawn paths that mint the role alongside the agent.
     pub async fn upsert(
         &self,
         id: &str,
@@ -146,7 +146,7 @@ impl PositionRegistry {
         let now = Utc::now().to_rfc3339();
         let db = self.db.lock().await;
         db.execute(
-            "INSERT INTO positions (id, entity_id, title, occupant_kind, occupant_id, created_at)
+            "INSERT INTO roles (id, entity_id, title, occupant_kind, occupant_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(id) DO NOTHING",
             params![id, entity_id, title, kind.as_db(), occupant_id, now],
@@ -154,32 +154,32 @@ impl PositionRegistry {
         Ok(())
     }
 
-    /// Mint a fresh position with a new UUID. Returns the created row.
+    /// Mint a fresh role with a new UUID. Returns the created row.
     pub async fn create(
         &self,
         entity_id: &str,
         title: &str,
         kind: OccupantKind,
         occupant_id: Option<&str>,
-    ) -> Result<Position> {
+    ) -> Result<Role> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
         let db = self.db.lock().await;
         db.execute(
-            "INSERT INTO positions (id, entity_id, title, occupant_kind, occupant_id, created_at)
+            "INSERT INTO roles (id, entity_id, title, occupant_kind, occupant_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![id, entity_id, title, kind.as_db(), occupant_id, now],
         )?;
-        let position = db
+        let role = db
             .query_row(
                 "SELECT id, entity_id, title, occupant_kind, occupant_id, created_at, updated_at
-                 FROM positions WHERE id = ?1",
+                 FROM roles WHERE id = ?1",
                 params![id],
-                row_to_position,
+                row_to_role,
             )
             .optional()?
-            .ok_or_else(|| anyhow::anyhow!("position not found after insert"))?;
-        Ok(position)
+            .ok_or_else(|| anyhow::anyhow!("role not found after insert"))?;
+        Ok(role)
     }
 
     /// Add an edge to the DAG. Idempotent.
@@ -189,66 +189,63 @@ impl PositionRegistry {
         }
         let db = self.db.lock().await;
         db.execute(
-            "INSERT INTO position_edges (parent_position_id, child_position_id)
+            "INSERT INTO role_edges (parent_role_id, child_role_id)
              VALUES (?1, ?2)
-             ON CONFLICT(parent_position_id, child_position_id) DO NOTHING",
+             ON CONFLICT(parent_role_id, child_role_id) DO NOTHING",
             params![parent_id, child_id],
         )?;
         Ok(())
     }
 
-    /// Fetch a single position by id. Returns `None` when not found.
-    pub async fn get(&self, position_id: &str) -> Result<Option<Position>> {
+    /// Fetch a single role by id. Returns `None` when not found.
+    pub async fn get(&self, role_id: &str) -> Result<Option<Role>> {
         let db = self.db.lock().await;
         let result = db
             .query_row(
                 "SELECT id, entity_id, title, occupant_kind, occupant_id, created_at, updated_at
-                 FROM positions WHERE id = ?1",
-                params![position_id],
-                row_to_position,
+                 FROM roles WHERE id = ?1",
+                params![role_id],
+                row_to_role,
             )
             .optional()?;
         Ok(result)
     }
 
-    /// Update the occupant of a position in-place.
+    /// Update the occupant of a role in-place.
     ///
-    /// Called by `handle_change_occupant` after verifying the position exists.
+    /// Called by `handle_change_occupant` after verifying the role exists.
     /// Stamps `updated_at`.
     pub async fn update_occupant(
         &self,
-        position_id: &str,
+        role_id: &str,
         new_kind: OccupantKind,
         new_occupant_id: Option<&str>,
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         let db = self.db.lock().await;
         db.execute(
-            "UPDATE positions \
+            "UPDATE roles \
              SET occupant_kind = ?1, occupant_id = ?2, updated_at = ?3 \
              WHERE id = ?4",
-            params![new_kind.as_db(), new_occupant_id, now, position_id],
+            params![new_kind.as_db(), new_occupant_id, now, role_id],
         )?;
         Ok(())
     }
 
-    /// Wipe every position and edge for an entity. Used by
+    /// Wipe every role and edge for an entity. Used by
     /// `spawn_blueprint` when the template declares explicit `seed_roles`:
-    /// the agent_registry's spawn-time auto-positions get cleared so the
+    /// the agent_registry's spawn-time auto-roles get cleared so the
     /// declared structure can be installed fresh, in a single transaction
-    /// with the redeclaration. Edges go first (FK to positions).
+    /// with the redeclaration. Edges go first (FK to roles).
     pub async fn delete_for_entity(&self, entity_id: &str) -> Result<()> {
         let db = self.db.lock().await;
         db.execute(
-            "DELETE FROM position_edges
-             WHERE parent_position_id IN (SELECT id FROM positions WHERE entity_id = ?1)
-                OR child_position_id IN (SELECT id FROM positions WHERE entity_id = ?1)",
+            "DELETE FROM role_edges
+             WHERE parent_role_id IN (SELECT id FROM roles WHERE entity_id = ?1)
+                OR child_role_id IN (SELECT id FROM roles WHERE entity_id = ?1)",
             params![entity_id],
         )?;
-        db.execute(
-            "DELETE FROM positions WHERE entity_id = ?1",
-            params![entity_id],
-        )?;
+        db.execute("DELETE FROM roles WHERE entity_id = ?1", params![entity_id])?;
         Ok(())
     }
 }
@@ -264,18 +261,18 @@ mod tests {
         TempDir,
         Arc<AgentRegistry>,
         crate::entity_registry::EntityRegistry,
-        PositionRegistry,
+        RoleRegistry,
     ) {
         let dir = TempDir::new().expect("tempdir");
         let agents = Arc::new(AgentRegistry::open(dir.path()).expect("agent registry"));
         let entities = crate::entity_registry::EntityRegistry::open(agents.db());
-        let positions = PositionRegistry::open(agents.db());
-        (dir, agents, entities, positions)
+        let roles = RoleRegistry::open(agents.db());
+        (dir, agents, entities, roles)
     }
 
     #[tokio::test]
-    async fn create_position_and_list() {
-        let (_dir, _agents, entities, positions) = open_test_registries();
+    async fn create_role_and_list() {
+        let (_dir, _agents, entities, roles) = open_test_registries();
 
         let entity = entities
             .create_new(
@@ -288,20 +285,20 @@ mod tests {
             .await
             .expect("create entity");
 
-        let position = positions
+        let role = roles
             .create(&entity.id, "CEO", OccupantKind::Vacant, None)
             .await
-            .expect("create position");
+            .expect("create role");
 
-        let listed = positions.list_for_entity(&entity.id).await.expect("list");
+        let listed = roles.list_for_entity(&entity.id).await.expect("list");
         assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].id, position.id);
+        assert_eq!(listed[0].id, role.id);
         assert_eq!(listed[0].occupant_kind, OccupantKind::Vacant);
     }
 
     #[tokio::test]
     async fn add_edge_idempotent() {
-        let (_dir, _agents, entities, positions) = open_test_registries();
+        let (_dir, _agents, entities, roles) = open_test_registries();
 
         let entity = entities
             .create_new(
@@ -313,33 +310,33 @@ mod tests {
             )
             .await
             .expect("entity");
-        let p1 = positions
+        let r1 = roles
             .create(&entity.id, "Board", OccupantKind::Vacant, None)
             .await
-            .expect("p1");
-        let p2 = positions
+            .expect("r1");
+        let r2 = roles
             .create(&entity.id, "CEO", OccupantKind::Vacant, None)
             .await
-            .expect("p2");
+            .expect("r2");
 
-        positions.add_edge(&p1.id, &p2.id).await.expect("edge 1");
-        positions
-            .add_edge(&p1.id, &p2.id)
+        roles.add_edge(&r1.id, &r2.id).await.expect("edge 1");
+        roles
+            .add_edge(&r1.id, &r2.id)
             .await
             .expect("edge 2 (idempotent)");
 
-        let edges = positions
+        let edges = roles
             .list_edges_for_entity(&entity.id)
             .await
             .expect("edges");
         assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].parent_position_id, p1.id);
-        assert_eq!(edges[0].child_position_id, p2.id);
+        assert_eq!(edges[0].parent_role_id, r1.id);
+        assert_eq!(edges[0].child_role_id, r2.id);
     }
 
     #[tokio::test]
     async fn self_loop_rejected() {
-        let (_dir, _agents, entities, positions) = open_test_registries();
+        let (_dir, _agents, entities, roles) = open_test_registries();
 
         let entity = entities
             .create_new(
@@ -351,12 +348,12 @@ mod tests {
             )
             .await
             .expect("entity");
-        let p = positions
+        let r = roles
             .create(&entity.id, "CEO", OccupantKind::Vacant, None)
             .await
-            .expect("p");
+            .expect("r");
 
-        let err = positions.add_edge(&p.id, &p.id).await;
+        let err = roles.add_edge(&r.id, &r.id).await;
         assert!(err.is_err(), "self-loop must be rejected");
     }
 }

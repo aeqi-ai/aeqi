@@ -2400,9 +2400,7 @@ mod wave2_tests {
             event_handler_store: None,
             agent_registry: registry.clone(),
             entity_registry: Arc::new(crate::entity_registry::EntityRegistry::open(registry.db())),
-            position_registry: Arc::new(crate::position_registry::PositionRegistry::open(
-                registry.db(),
-            )),
+            role_registry: Arc::new(crate::role_registry::RoleRegistry::open(registry.db())),
             idea_store: Some(idea_store),
             message_router: None,
             activity_buffer: Arc::new(Mutex::new(ActivityBuffer::default())),

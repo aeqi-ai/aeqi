@@ -13,8 +13,8 @@ pub mod files;
 pub mod ideas;
 pub mod inbox;
 pub mod messages;
-pub mod positions;
 pub mod quests;
+pub mod roles;
 pub mod roots;
 pub mod seed;
 pub mod session_stream;
@@ -34,7 +34,7 @@ use crate::event_handler::EventHandlerStore;
 use crate::execution_registry::ExecutionRegistry;
 use crate::message_router::MessageRouter;
 use crate::metrics::AEQIMetrics;
-use crate::position_registry::PositionRegistry;
+use crate::role_registry::RoleRegistry;
 use crate::session_manager::SessionManager;
 use crate::session_store::SessionStore;
 use crate::skill_loader::SkillLoader;
@@ -52,7 +52,7 @@ pub struct CommandContext {
     pub event_handler_store: Option<Arc<EventHandlerStore>>,
     pub agent_registry: Arc<AgentRegistry>,
     pub entity_registry: Arc<EntityRegistry>,
-    pub position_registry: Arc<PositionRegistry>,
+    pub role_registry: Arc<RoleRegistry>,
     pub idea_store: Option<Arc<dyn aeqi_core::traits::IdeaStore>>,
     pub message_router: Option<Arc<MessageRouter>>,
     pub activity_buffer: Arc<Mutex<ActivityBuffer>>,
