@@ -85,11 +85,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </Tooltip>
           ) : (
             <>
-              <Link
-                to="/economy/blueprints"
-                className="sidebar-public-brand"
-                aria-label="aeqi — home"
-              >
+              <Link to="/blueprints" className="sidebar-public-brand" aria-label="aeqi — home">
                 <Wordmark size={20} />
               </Link>
               <Tooltip content={`Collapse sidebar (${isMac ? "⌘" : "Ctrl"}B)`}>

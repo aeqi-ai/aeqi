@@ -158,7 +158,7 @@ export default function CompanySetupPage() {
           title="Blueprint not found."
           description={loadError || "We couldn't find a Blueprint with that slug."}
           action={
-            <Button variant="secondary" onClick={() => navigate("/economy/blueprints")}>
+            <Button variant="secondary" onClick={() => navigate("/blueprints")}>
               Back to the catalog
             </Button>
           }
@@ -253,7 +253,7 @@ export default function CompanySetupPage() {
       <div className="company-setup-foot">
         <Button
           variant="secondary"
-          onClick={() => navigate(`/economy/blueprints/${encodeURIComponent(blueprint.slug)}`)}
+          onClick={() => navigate(`/blueprints/${encodeURIComponent(blueprint.slug)}`)}
           disabled={launching}
         >
           ← Back to Blueprint

@@ -30,7 +30,7 @@ interface BlueprintLaunchPickerProps {
  *
  *   1. Start blank — promoted top row.
  *   2. Recommended — 3-4 curated slugs from `recommendedBlueprints.ts`.
- *   3. Browse all → /economy/blueprints — full catalog.
+ *   3. Browse all → /blueprints — full catalog.
  *
  * Branches on `mode`:
  *   - spawn-company → navigate to /start/<slug> (CompanySetupPage)
@@ -218,7 +218,7 @@ export function BlueprintLaunchPicker({
 
       {/* 3 — Browse all. Link out to the full catalog. */}
       <div className="bp-launch-foot">
-        <Link to="/economy/blueprints" className="bp-launch-browse-link">
+        <Link to="/blueprints" className="bp-launch-browse-link">
           Browse all Blueprints →
         </Link>
       </div>

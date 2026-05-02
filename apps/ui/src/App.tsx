@@ -66,12 +66,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Wrapper for `/economy` (including its `/economy/blueprints` sub-rail).
- * Authed visitors hit the full AppLayout, which dispatches the matching
- * page from the URL. Unauthed visitors bounce to /login — the
- * public-marketing variants of these surfaces are paused until they're
- * production-ready; PublicLayout stays in the tree for when we revive
- * them.
+ * Wrapper for `/economy` and `/blueprints` — both top-level destinations
+ * that mount the app shell. Authed visitors hit the full AppLayout,
+ * which dispatches the matching page from the URL. Unauthed visitors
+ * bounce to /login — the public-marketing variants of these surfaces
+ * are paused until they're production-ready; PublicLayout stays in the
+ * tree for when we revive them.
  */
 function GatedAppShell() {
   const location = useLocation();
@@ -114,20 +114,20 @@ export default function App() {
           <Route path="/auth/magic" element={<MagicLinkPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-          {/* Economy and its Blueprints sub-rail — currently auth-gated
-              end-to-end. GatedAppShell dispatches AppLayout for authed
-              visitors and redirects everyone else to /login?next=<here>.
-              Will revert to a public-marketing variant once those
-              surfaces ship. */}
+          {/* Economy + Blueprints — both top-level destinations,
+              currently auth-gated end-to-end. GatedAppShell dispatches
+              AppLayout for authed visitors and redirects everyone else
+              to /login?next=<here>. Will revert to a public-marketing
+              variant once those surfaces ship. */}
           <Route path="/economy" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/companies" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/agents" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/events" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/quests" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/ideas" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/:slug" element={<GatedAppShell />} />
-          <Route path="/economy/blueprints/:slug/:section" element={<GatedAppShell />} />
+          <Route path="/blueprints" element={<GatedAppShell />} />
+          <Route path="/blueprints/companies" element={<GatedAppShell />} />
+          <Route path="/blueprints/agents" element={<GatedAppShell />} />
+          <Route path="/blueprints/events" element={<GatedAppShell />} />
+          <Route path="/blueprints/quests" element={<GatedAppShell />} />
+          <Route path="/blueprints/ideas" element={<GatedAppShell />} />
+          <Route path="/blueprints/:slug" element={<GatedAppShell />} />
+          <Route path="/blueprints/:slug/:section" element={<GatedAppShell />} />
 
           {/* Protected routes */}
           <Route
@@ -151,12 +151,11 @@ export default function App() {
 
                   {/* Home dashboard + profile + every company at
                       /c/:entityId/... share the same shell — AppLayout
-                      decides content from path + params. /economy
-                      (and its /economy/blueprints sub-rail) is routed
-                      publicly above and never enters the protected
-                      branch. User-scoped routes are registered before
-                      the legacy redirect so react-router prefers the
-                      literal match. */}
+                      decides content from path + params. /economy and
+                      /blueprints are routed publicly above and never
+                      enter the protected branch. User-scoped routes
+                      are registered before the legacy redirect so
+                      react-router prefers the literal match. */}
                   <Route element={<AppLayout />}>
                     <Route index element={null} />
                     <Route path="me" element={null} />

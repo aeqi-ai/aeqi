@@ -37,11 +37,15 @@ const VIEW_ORDER: View[] = ["grid", "list"];
 const VIEW_VALUES = new Set<View>(VIEW_ORDER);
 
 /**
- * `/economy/blueprints` — catalog with a vertical PageRail (Companies /
+ * `/blueprints` — top-level catalog with a vertical PageRail (Companies /
  * Agents / Events / Quests / Ideas) on the left. Companies is the
- * canonical landing route at `/economy/blueprints`; the other kinds
- * live at `/economy/blueprints/:kind` and render empty-state
- * placeholders until v2.
+ * canonical landing route at `/blueprints`; the other kinds live at
+ * `/blueprints/:kind` and render empty-state placeholders until v2.
+ *
+ * Blueprints is its own root destination — it's the supply layer of the
+ * system (the catalog of recipes that everything else gets instantiated
+ * from), not a listing inside /economy. /economy stays as the umbrella
+ * for future financial surfaces.
  *
  * Toolbar grammar mirrors AgentIdeasTab — search · sort · filter · view ·
  * action — with chrome-zone (search + sort/filter/view popovers) and
@@ -57,15 +61,16 @@ export default function BlueprintsPage() {
   const importIntoId = searchParams.get("import_into") || null;
   const isImportMode = !!importIntoId;
 
-  // Resolve the active kind from the URL path. /economy/blueprints →
-  // companies (default); /economy/blueprints/agents → agents, etc.
-  // Anything that doesn't match a known kind falls back to companies —
-  // this also covers the detail page (which uses a different route, but
-  // defensively).
+  // Resolve the active kind from the URL path. /blueprints → companies
+  // (default); /blueprints/agents → agents, etc. Anything that doesn't
+  // match a known kind falls back to companies — this also covers the
+  // detail page (which uses a different route, but defensively).
   const activeKind: Kind = useMemo(() => {
     const segments = location.pathname.split("/").filter(Boolean);
-    const last = segments[segments.length - 1];
-    return KIND_IDS.includes(last as Kind) ? (last as Kind) : "companies";
+    // segments[0] === "blueprints"; segments[1] (if present) is either
+    // a catalog kind tab or a blueprint slug.
+    const second = segments[1];
+    return second && KIND_IDS.includes(second as Kind) ? (second as Kind) : "companies";
   }, [location.pathname]);
 
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
@@ -230,12 +235,7 @@ export default function BlueprintsPage() {
 
   return (
     <div className="page-rail-shell">
-      <PageRail
-        tabs={KIND_TABS}
-        defaultTab="companies"
-        title="Blueprints"
-        basePath="/economy/blueprints"
-      />
+      <PageRail tabs={KIND_TABS} defaultTab="companies" title="Blueprints" basePath="/blueprints" />
       <main className="page-rail-content page-rail-content--full">
         <div className="ideas-list-head">
           <div className="ideas-toolbar">
@@ -354,7 +354,7 @@ export default function BlueprintsPage() {
             <EmptyState
               title={`No standalone ${KIND_TABS.find((t) => t.id === activeKind)?.label.toLowerCase()} yet.`}
               description="v1 ships Companies — full org bundles with agents, ideas, events, and quests pre-threaded. Standalone primitive bundles land next."
-              action={<Link to="/economy/blueprints/companies">Open Companies →</Link>}
+              action={<Link to="/blueprints/companies">Open Companies →</Link>}
             />
           ) : filtered.length === 0 && filtersActive ? (
             <div className="ideas-list-filter-indicator">
@@ -383,9 +383,7 @@ export default function BlueprintsPage() {
                     type="button"
                     className="bp-list-row-btn"
                     onClick={() =>
-                      navigate(
-                        `/economy/blueprints/${encodeURIComponent(t.slug)}${importTargetSuffix}`,
-                      )
+                      navigate(`/blueprints/${encodeURIComponent(t.slug)}${importTargetSuffix}`)
                     }
                   >
                     <span className="bp-list-row-name">{t.name}</span>

@@ -24,10 +24,17 @@ const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const StartPage = lazy(() => import("@/pages/StartPage"));
 const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
+const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
+const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const PortfolioPage = lazy(() => import("@/pages/PortfolioPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+
+// Top-level segments under /blueprints that are catalog-kind tabs, not
+// blueprint slugs. Anything else after /blueprints/ is treated as a slug
+// and dispatches BlueprintDetailPage.
+const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ideas"]);
 
 // Tabs that route through CompanyPage. Overview is the canonical
 // company landing; Roles is the org-chart; Ownership / Treasury /
@@ -161,7 +168,16 @@ export default function AppLayout() {
   const initialLoaded = useDaemonStore((s) => s.initialLoaded);
   const appMode = useAuthStore((s) => s.appMode);
 
-  const { isSettings, isEconomy, isDrive, isStart, isNotFound, isMyInbox, isPortfolio } = surface;
+  const {
+    isSettings,
+    isEconomy,
+    isBlueprints,
+    isDrive,
+    isStart,
+    isNotFound,
+    isMyInbox,
+    isPortfolio,
+  } = surface;
 
   if (!initialLoaded) return <BootLoader />;
 
@@ -223,6 +239,17 @@ export default function AppLayout() {
     if (isDrive) return <DrivePage />;
     if (isSettings) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
+    if (isBlueprints) {
+      // /blueprints/<seg> where <seg> is a known kind (companies / agents /
+      // events / quests / ideas) → catalog tab. Otherwise <seg> is a slug
+      // → detail page. Bare /blueprints also lands on the catalog.
+      const segments = path.split("/").filter(Boolean);
+      // segments[0] === "blueprints"; segments[1] (if present) is either a
+      // catalog kind or a blueprint slug.
+      const second = segments[1];
+      const isDetail = !!second && !BLUEPRINT_KINDS.has(second);
+      return isDetail ? <BlueprintDetailPage /> : <BlueprintsPage />;
+    }
     if (routeEntityId && !drilledAgent && COMPANY_PAGERAIL_TABS.has(effectiveTab)) {
       return (
         <CompanyPage
@@ -249,6 +276,7 @@ export default function AppLayout() {
     !isPortfolio &&
     !isStart &&
     !isEconomy &&
+    !isBlueprints &&
     effectiveTab === "sessions";
   const showComposer = sessionsMounted;
   const showSessionsRail = sessionsMounted && !!routeEntityId && !!drilledAgent;

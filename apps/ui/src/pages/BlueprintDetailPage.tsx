@@ -34,8 +34,8 @@ const EMPTY_SEED_QUESTS: BlueprintSeedQuest[] = [];
 const EMPTY_SEED_IDEAS: BlueprintSeedIdea[] = [];
 
 /**
- * `/economy/blueprints/:slug[/:section]` — inspect a Blueprint and
- * explore its seed primitives.
+ * `/blueprints/:slug[/:section]` — inspect a Blueprint and explore its
+ * seed primitives.
  *
  * Two-column shell mirrors the catalog and `/settings`: vertical
  * PageRail on the left (title = blueprint name; sections = Overview /
@@ -121,7 +121,7 @@ export default function BlueprintDetailPage() {
           <EmptyState
             title="Blueprint not found."
             description={error || "We couldn't find a blueprint with that slug."}
-            action={<Link to="/economy/blueprints">Back to the catalog →</Link>}
+            action={<Link to="/blueprints">Back to the catalog →</Link>}
           />
         </main>
       </div>
@@ -132,7 +132,7 @@ export default function BlueprintDetailPage() {
   // `/start/<slug>` (CompanySetupPage) where the operator confirms a
   // name, stages role overrides, and picks a plan before spawn.
   const launchHref = isImportMode
-    ? `/economy/blueprints/${encodeURIComponent(template.slug)}?import_into=${encodeURIComponent(importIntoId ?? "")}`
+    ? `/blueprints/${encodeURIComponent(template.slug)}?import_into=${encodeURIComponent(importIntoId ?? "")}`
     : `/start/${encodeURIComponent(template.slug)}`;
 
   return (
@@ -141,7 +141,7 @@ export default function BlueprintDetailPage() {
         tabs={SECTION_TABS}
         defaultTab="overview"
         title="Blueprint"
-        basePath={`/economy/blueprints/${encodeURIComponent(template.slug)}`}
+        basePath={`/blueprints/${encodeURIComponent(template.slug)}`}
         currentValue={activeSection}
       />
       <main className="page-rail-content page-rail-content--full">
@@ -150,7 +150,7 @@ export default function BlueprintDetailPage() {
             <button
               type="button"
               className="ideas-toolbar-btn"
-              onClick={() => navigate("/economy/blueprints")}
+              onClick={() => navigate("/blueprints")}
               title="Back to Blueprints"
               aria-label="Back to Blueprints"
             >

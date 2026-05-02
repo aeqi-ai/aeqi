@@ -11,11 +11,12 @@ import { useMemo } from "react";
 export interface ShellSurface {
   isSettings: boolean;
   isEconomy: boolean;
+  isBlueprints: boolean;
   isDrive: boolean;
   isStart: boolean;
   /** True when the path doesn't match any known shell surface — drives the
    *  in-shell 404 dispatch. Stays false for `/`, `/me/...`, `/start`,
-   *  `/economy/...`, and `/c/:entityId/...`. */
+   *  `/economy/...`, `/blueprints/...`, and `/c/:entityId/...`. */
   isNotFound: boolean;
   /** `/` — the global human action queue (Inbox is the canonical root). */
   isMyInbox: boolean;
@@ -36,6 +37,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isSettings =
       !isPortfolio && (path === "/me" || path.startsWith("/me/") || tab === "profile");
     const isEconomy = path === "/economy" || path.startsWith("/economy/");
+    const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isStart = path === "/start" || path.startsWith("/start/");
     const isDrive = tab === "drive";
 
@@ -45,12 +47,19 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // active-entity render.
     const isCompanyRoute = path === "/" || /^\/c\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute =
-      isCompanyRoute || isPortfolio || isSettings || isEconomy || isStart || isMyInbox;
+      isCompanyRoute ||
+      isPortfolio ||
+      isSettings ||
+      isEconomy ||
+      isBlueprints ||
+      isStart ||
+      isMyInbox;
     const isNotFound = !isKnownShellRoute;
 
     return {
       isSettings,
       isEconomy,
+      isBlueprints,
       isDrive,
       isStart,
       isNotFound,

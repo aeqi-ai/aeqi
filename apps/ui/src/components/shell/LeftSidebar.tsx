@@ -80,6 +80,16 @@ const EconomyIcon = () => (
   </svg>
 );
 
+// Stack of layered cards — Blueprints is the catalog of recipes, the
+// supply layer of the system. Three rounded rectangles, slightly offset.
+const BlueprintsIcon = () => (
+  <svg {...iconProps}>
+    <rect x="3" y="3" width="10" height="3" rx="0.5" />
+    <rect x="3" y="7" width="10" height="3" rx="0.5" />
+    <rect x="3" y="11" width="10" height="3" rx="0.5" />
+  </svg>
+);
+
 const SearchIcon = () => (
   <svg {...iconProps}>
     <circle cx="7" cy="7" r="4.5" />
@@ -186,6 +196,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   const inboxActive = path === "/";
   const portfolioActive = path === "/me/portfolio";
   const isEconomy = path === "/economy" || path.startsWith("/economy/");
+  const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
 
   const navItem = (
     id: string,
@@ -362,13 +373,27 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           </>
         )}
 
-        {/* ── Bottom group — Economy + Account, pinned to the rail's foot
-            via mt:auto so the user dropdown always sits at the very
-            bottom regardless of how many workspace items are above.
-            Economy reads as a top-level destination, not a one-item
-            group with a label. ── */}
+        {/* ── Bottom group — Blueprints + Economy + Account, pinned to
+            the rail's foot via mt:auto so the user dropdown always sits
+            at the very bottom regardless of how many workspace items
+            are above. Blueprints (the catalog / supply layer) sits
+            above Economy (the financial substrate / future demand
+            layer). Both read as top-level destinations, not group
+            headers. ── */}
         <div className="sidebar-bottom-group">
-          <nav className="sidebar-surface-nav" aria-label="Economy">
+          <nav className="sidebar-surface-nav" aria-label="Platform">
+            <a
+              className={`sidebar-nav-item ${isBlueprints ? "active" : ""}`}
+              href="/blueprints"
+              title="Blueprints"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/blueprints");
+              }}
+            >
+              <BlueprintsIcon />
+              <span className="sidebar-nav-label">Blueprints</span>
+            </a>
             <a
               className={`sidebar-nav-item ${isEconomy ? "active" : ""}`}
               href="/economy"

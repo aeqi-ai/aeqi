@@ -1,67 +1,20 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
-import { useLocation } from "react-router-dom";
-import PageRail from "@/components/PageRail";
+import { useEffect } from "react";
 import "@/styles/economy.css";
-
-const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
-const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
-
-const TABS = [
-  { id: "discovery", label: "Discovery" },
-  { id: "blueprints", label: "Blueprints" },
-];
-
-const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ideas"]);
 
 /**
  * /economy — the aeqi economic surface.
  *
- * Two-column page-rail-shell: vertical Discovery / Blueprints rail on
- * the left, the active section's content on the right. Discovery is
- * the canonical landing route at `/economy` and renders the coming-
- * soon skeleton (wallets, cap tables, ownership graph, cost telemetry).
- * Blueprints lives at `/economy/blueprints` and mounts the catalog (or
- * the per-blueprint detail page when a slug is present in the URL).
+ * Renders the Discovery skeleton (wallets, cap tables, ownership graph,
+ * cost telemetry — all coming-soon). Blueprints used to live here as a
+ * sub-rail; it's now a top-level destination at /blueprints. /economy
+ * survives as the umbrella for future financial surfaces (marketplace
+ * listings, capital, treasuries, governance markets).
  */
 export default function EconomyPage() {
-  const location = useLocation();
-
-  const isBlueprintsPath =
-    location.pathname === "/economy/blueprints" ||
-    location.pathname.startsWith("/economy/blueprints/");
-  const isDetailPath = useMemo(() => {
-    const match = location.pathname.match(/^\/economy\/blueprints\/([^/]+)/);
-    return !!match && !BLUEPRINT_KINDS.has(match[1]);
-  }, [location.pathname]);
-  const activeTab = isBlueprintsPath ? "blueprints" : "discovery";
-
   useEffect(() => {
-    document.title = isBlueprintsPath ? "blueprints · æqi" : "economy · æqi";
-  }, [isBlueprintsPath]);
+    document.title = "economy · æqi";
+  }, []);
 
-  return (
-    <div className="page-rail-shell">
-      <PageRail
-        tabs={TABS}
-        defaultTab="discovery"
-        title="Economy"
-        basePath="/economy"
-        currentValue={activeTab}
-      />
-      <div className="page-rail-content page-rail-content--full">
-        {isBlueprintsPath ? (
-          <Suspense fallback={null}>
-            {isDetailPath ? <BlueprintDetailPage /> : <BlueprintsPage />}
-          </Suspense>
-        ) : (
-          <DiscoveryView />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DiscoveryView() {
   return (
     <div className="economy-page">
       <header className="economy-hero">
