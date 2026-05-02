@@ -855,6 +855,11 @@ export const api = {
         body: JSON.stringify({ answer }),
       },
     ),
+
+  dismissInbox: (sessionId: string) =>
+    request<{ ok: boolean; error?: string }>(`/inbox/${encodeURIComponent(sessionId)}/dismiss`, {
+      method: "POST",
+    }),
 };
 
 /// One row of the director-inbox query — see `crates/aeqi-orchestrator/src/ipc/inbox.rs`.

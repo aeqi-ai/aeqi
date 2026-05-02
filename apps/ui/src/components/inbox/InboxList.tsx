@@ -83,6 +83,11 @@ export default function InboxList({ rows, selectedId, newIds, onSelect }: InboxL
                   onClick={() => onSelect(row.id)}
                   aria-selected={selected}
                 >
+                  {/* Decision-request accent dot — 3px, accent color, left-edge pin */}
+                  {row.kind === "decision_request" && (
+                    <span className="inbox-row-decision-dot" aria-hidden />
+                  )}
+
                   {/* Unread dot — visual restraint: one 5px graphite dot */}
                   <span className="inbox-row-unread-dot" aria-hidden />
 

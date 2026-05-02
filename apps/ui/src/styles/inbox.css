@@ -145,6 +145,20 @@
   animation: inbox-pulse-in 0.7s ease forwards;
 }
 
+/* Decision-request accent dot — 3px, accent color, absolute at left edge.
+   Distinct from the unread dot (different size + position). Co-exists with it. */
+.inbox-row-decision-dot {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}
+
 /* Unread dot — 5px graphite circle at the left edge */
 .inbox-row-unread-dot {
   flex-shrink: 0;
@@ -282,6 +296,16 @@
   background: var(--state-hover);
 }
 
+/* Decision-request urgency tag — quiet accent strip above subject */
+.inbox-detail-decision-tag {
+  padding: var(--space-2) var(--space-5) 0;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-accent);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
 /* Subject / question line */
 .inbox-detail-subject {
   padding: var(--space-4) var(--space-5) var(--space-3);
@@ -290,6 +314,11 @@
   color: var(--color-ink-primary);
   line-height: 1.45;
   flex-shrink: 0;
+}
+
+/* When decision-tag precedes subject, reduce subject's top padding */
+.inbox-detail-decision-tag + .inbox-detail-subject {
+  padding-top: var(--space-2);
 }
 
 /* Thread context */
@@ -398,6 +427,55 @@
   color: var(--color-ink-muted);
 }
 
+/* Actions group: archive icon + send button */
+.inbox-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Archive button — uses .sidebar-row-action-btn base; color override for context */
+.inbox-archive-btn {
+  color: var(--color-ink-muted);
+}
+
+.inbox-archive-btn:hover:not(:disabled) {
+  color: var(--color-ink-text);
+}
+
+.inbox-archive-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Detail header back button — hidden on desktop, visible on mobile */
+.inbox-detail-back {
+  display: none;
+  appearance: none;
+  border: none;
+  background: none;
+  padding: var(--space-1);
+  cursor: pointer;
+  color: var(--color-ink-muted);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
+}
+
+.inbox-detail-back:hover {
+  color: var(--color-ink-text);
+  background: var(--state-hover);
+}
+
+/* Filter chips strip below toolbar */
+.inbox-filter-chips {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-card);
+  flex-shrink: 0;
+}
+
 /* ── Sessions-rail awaiting dot (lives on the per-agent sidebar) ── */
 
 .sessions-rail-awaiting-dot {
@@ -432,5 +510,12 @@
 
   .inbox-shell.has-selection .inbox-pane-detail {
     display: flex;
+  }
+
+  /* Reveal back button only on mobile */
+  .inbox-detail-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }

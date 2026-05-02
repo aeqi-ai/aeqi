@@ -8,6 +8,8 @@ import type { InboxRow } from "./types";
 export interface InboxDetailProps {
   row: InboxRow | null;
   onAnswer: (sessionId: string, answer: string) => Promise<{ ok: boolean; error?: string }>;
+  onDismiss: (sessionId: string) => Promise<{ ok: boolean; error?: string }>;
+  onBack: () => void;
   composerRef: React.RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -31,7 +33,13 @@ function parseMessages(raw: Record<string, unknown>): SimpleMessage[] {
   return result;
 }
 
-export default function InboxDetail({ row, onAnswer, composerRef }: InboxDetailProps) {
+export default function InboxDetail({
+  row,
+  onAnswer,
+  onDismiss,
+  onBack,
+  composerRef,
+}: InboxDetailProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<SimpleMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,6 +88,27 @@ export default function InboxDetail({ row, onAnswer, composerRef }: InboxDetailP
       {/* Header */}
       <div className="inbox-detail-header">
         <div className="inbox-detail-header-from">
+          {/* Back button — mobile only (<900px), returns to list view */}
+          <button
+            type="button"
+            className="inbox-detail-back"
+            onClick={onBack}
+            aria-label="Back to inbox list"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M7.5 2L3 6l4.5 4" />
+            </svg>
+          </button>
           <span className="inbox-detail-header-agent">{row.from.name}</span>
           {row.entity_id && (
             <span className="inbox-detail-header-sep" aria-hidden>
@@ -109,6 +138,13 @@ export default function InboxDetail({ row, onAnswer, composerRef }: InboxDetailP
         </button>
       </div>
 
+      {/* Decision-request urgency tag — quiet accent strip above subject */}
+      {row.kind === "decision_request" && (
+        <div className="inbox-detail-decision-tag" aria-label="Awaiting your decision">
+          Awaiting your decision
+        </div>
+      )}
+
       {/* Subject / question */}
       <div className="inbox-detail-subject">{row.subject}</div>
 
@@ -130,7 +166,12 @@ export default function InboxDetail({ row, onAnswer, composerRef }: InboxDetailP
 
       {/* Composer — only when item is replyable */}
       {row.replyable && (
-        <InboxComposer sessionId={row.id} onSend={onAnswer} composerRef={composerRef} />
+        <InboxComposer
+          sessionId={row.id}
+          onSend={onAnswer}
+          onDismiss={onDismiss}
+          composerRef={composerRef}
+        />
       )}
     </div>
   );

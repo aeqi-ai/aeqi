@@ -8,6 +8,11 @@ import InboxDetail from "@/components/inbox/InboxDetail";
 import { toInboxRow, DEFAULT_FILTER } from "@/components/inbox/types";
 import type { InboxFilterState, InboxRow, InboxSort } from "@/components/inbox/types";
 
+const KIND_LABEL: Record<string, string> = {
+  decision_request: "Decision requests",
+  system: "System",
+};
+
 /**
  * `/` — the canonical daily-driver Inbox surface.
  *
@@ -22,6 +27,7 @@ export default function MeInboxPage() {
   const allItems = useInboxStore((s) => s.items);
   const pending = useInboxStore((s) => s.pendingDismissal);
   const answerItem = useInboxStore((s) => s.answerItem);
+  const dismissItem = useInboxStore((s) => s.dismissItem);
   const entities = useDaemonStore((s) => s.entities);
 
   // Convert visible items to client rows
@@ -182,9 +188,27 @@ export default function MeInboxPage() {
     document.title = "inbox · æqi";
   }, []);
 
+  // Active filter chips — kind and entity filters, mirroring IdeasListView pattern
+  const activeChips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (filter.kind !== "all") {
+    activeChips.push({
+      key: "kind",
+      label: KIND_LABEL[filter.kind] ?? filter.kind,
+      onRemove: () => patchFilter({ kind: "all" }),
+    });
+  }
+  if (filter.entityId !== null) {
+    const entityName = entityOptions.find((e) => e.id === filter.entityId)?.name ?? filter.entityId;
+    activeChips.push({
+      key: "entity",
+      label: entityName,
+      onRemove: () => patchFilter({ entityId: null }),
+    });
+  }
+
   return (
-    <div className="inbox-shell">
-      {/* Left pane: toolbar + list */}
+    <div className={["inbox-shell", selectedId ? "has-selection" : ""].filter(Boolean).join(" ")}>
+      {/* Left pane: toolbar + filter chips + list */}
       <div className="inbox-pane-list">
         <InboxToolbar
           search={search}
@@ -196,6 +220,38 @@ export default function MeInboxPage() {
           onSort={setSort}
           searchRef={searchRef}
         />
+        {activeChips.length > 0 && (
+          <div
+            className="inbox-filter-chips ideas-list-chips"
+            role="list"
+            aria-label="Active filters"
+          >
+            {activeChips.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                role="listitem"
+                className="ideas-list-chip"
+                onClick={c.onRemove}
+                title={`Remove filter: ${c.label}`}
+              >
+                <span className="ideas-list-chip-label">{c.label}</span>
+                <span className="ideas-list-chip-x" aria-hidden>
+                  ×
+                </span>
+              </button>
+            ))}
+            {activeChips.length > 1 && (
+              <button
+                type="button"
+                className="ideas-list-chip-clear"
+                onClick={() => setFilter(DEFAULT_FILTER)}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
         <div className="inbox-pane-list-scroll">
           <InboxList
             rows={visible}
@@ -208,7 +264,13 @@ export default function MeInboxPage() {
 
       {/* Right pane: detail + composer */}
       <div className="inbox-pane-detail">
-        <InboxDetail row={selectedRow} onAnswer={answerItem} composerRef={composerRef} />
+        <InboxDetail
+          row={selectedRow}
+          onAnswer={answerItem}
+          onDismiss={dismissItem}
+          onBack={() => setSelectedId(null)}
+          composerRef={composerRef}
+        />
       </div>
     </div>
   );

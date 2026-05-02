@@ -14,10 +14,34 @@ export interface InboxState {
 
   fetchInbox: () => Promise<void>;
   answerItem: (sessionId: string, answer: string) => Promise<{ ok: boolean; error?: string }>;
+  dismissItem: (sessionId: string) => Promise<{ ok: boolean; error?: string }>;
   pushInboxUpdate: (payload: InboxUpdatePayload) => void;
   dismissOptimistically: (sessionId: string) => void;
   restoreItem: (sessionId: string) => void;
   clearInbox: () => void;
+}
+
+// Module-level probe: attempt HEAD on the dismiss endpoint once.
+// If it 404s, the endpoint isn't deployed yet — gate the archive button.
+let dismissEndpointAvailable: boolean | null = null;
+export async function probeDismissEndpoint(): Promise<boolean> {
+  if (dismissEndpointAvailable !== null) return dismissEndpointAvailable;
+  try {
+    // Use a dummy session ID; a 404 from the route itself vs. a 405/200
+    // tells us whether the endpoint exists at all. The platform returns 404
+    // for unknown session IDs on real endpoints, but returns a generic 404
+    // when the route doesn't exist at all — indistinguishable here, so we
+    // treat any non-network-error as "endpoint deployed" and let the store
+    // handle 404 per-call gracefully.
+    const resp = await fetch("/api/inbox/__probe__/dismiss", { method: "HEAD" });
+    // 404 on a real endpoint = session not found = endpoint exists.
+    // 405 = wrong method but route exists. 200 = shouldn't happen.
+    // Any response means the route is registered.
+    dismissEndpointAvailable = resp.status !== 0;
+  } catch {
+    dismissEndpointAvailable = false;
+  }
+  return dismissEndpointAvailable;
 }
 
 // MVP server emits a full snapshot on signature change; v2 may layer
@@ -71,6 +95,24 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       if (!resp.ok) {
         get().restoreItem(sessionId);
         return { ok: false, error: resp.error || "answer failed" };
+      }
+      return { ok: true };
+    } catch (err) {
+      get().restoreItem(sessionId);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  },
+
+  dismissItem: async (sessionId) => {
+    get().dismissOptimistically(sessionId);
+    try {
+      const resp = await api.dismissInbox(sessionId);
+      if (!resp.ok) {
+        get().restoreItem(sessionId);
+        return { ok: false, error: resp.error || "dismiss failed" };
       }
       return { ok: true };
     } catch (err) {
