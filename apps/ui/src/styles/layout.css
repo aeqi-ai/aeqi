@@ -1058,19 +1058,29 @@
   padding: 8px;
 }
 /* Collapsed-state CompanySwitcher: hide the name + chevron, square the
-   trigger to a 32×32 centered tile so the avatar reads as another rail
-   icon, not a left-aligned button overflowing the 48px column. */
+   trigger to a 32×32 tile, mirror the nav-item centering recipe
+   (`margin: 0 auto` inside a zero-horizontal-padding parent) so the
+   avatar lines up with the rest of the rail icons exactly. The
+   inner `.company-switcher-avatar` is forced to fill the trigger so
+   its 16×16 SVG inherits the same centered geometry — fixes the
+   half-pixel right shift caused by `width: 16px` on the avatar
+   wrapper colliding with `justify-content: center` on the trigger. */
 .left-sidebar.collapsed .sidebar-user-zone {
-  align-items: center;
   padding: 4px 0 8px;
 }
 .left-sidebar.collapsed .company-switcher-trigger {
   width: 32px;
   height: 32px;
   min-height: 32px;
+  margin: 0 auto;
   padding: 0;
   gap: 0;
   justify-content: center;
+  text-align: center;
+}
+.left-sidebar.collapsed .company-switcher-avatar {
+  width: 16px;
+  height: 16px;
 }
 .left-sidebar.collapsed .company-switcher-name,
 .left-sidebar.collapsed .company-switcher-chevron {
