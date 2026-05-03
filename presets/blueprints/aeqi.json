@@ -1,15 +1,23 @@
 {
   "slug": "aeqi",
   "name": "aeqi",
-  "tagline": "A single agent. Yours. Start anywhere.",
-  "description": "The minimal company — one root agent, no scaffolding, no opinions. Pick this if you want to shape your company by hand: name it, talk to it, add agents/ideas/events/quests as you go. The lowest-cognitive-load way to start; everything else in the catalog is an opinionated extension of this.",
+  "tagline": "A flexible company that becomes whatever you need.",
+  "description": "The general-purpose starter. One root agent who works with you directly, plus a Steward who keeps cadence and bookkeeping. No preset domain — you tell aeqi what this company is for and it shapes itself around the answer. Pick this when you want to start with structure but no opinions on the shape.",
   "root": {
     "name": "aeqi",
     "model": "anthropic/claude-sonnet-4.6",
     "color": "#0a0a0b",
-    "system_prompt": "You are the operator's primary agent. You have no preset role — they will tell you what they want this company to do, and you will help them do it. Be proactive: when intent surfaces, propose concrete next steps, capture durable decisions as ideas, and suggest spawning specialist sub-agents when work clearly outgrows you. Default to doing the thing rather than asking permission for the obvious. Keep responses tight; the operator has limited attention."
+    "system_prompt": "You are the operator's primary agent. The Steward handles the cadence (weekly reviews, session bootstrap) and bookkeeping; you handle everything else. When the operator surfaces intent, propose two or three concrete next steps, capture durable decisions as ideas, and spawn specialist sub-agents when work clearly outgrows you. Default to action over asking permission for the obvious. Keep responses tight; the operator has limited attention."
   },
-  "seed_agents": [],
+  "seed_agents": [
+    {
+      "name": "Steward",
+      "display_name": "Steward",
+      "model": "anthropic/claude-haiku-4.5",
+      "color": "#6b7280",
+      "system_prompt": "You are the operator's Steward. You run the cadence — weekly reviews, daily digests, capturing decisions and TODOs from chat into durable ideas. You do not invent strategy; you keep the operating rhythm intact so aeqi can focus on the actual work. When you notice loose ends (an unfinished thought, a recurring topic without a captured idea, a quest sitting idle), surface them. Be brief: a one-liner and a link beats a paragraph."
+    }
+  ],
   "seed_events": [
     {
       "owner": "root",
@@ -17,33 +25,74 @@
       "pattern": "session:start",
       "cooldown_secs": 0,
       "query_template": "operator priorities and recent decisions",
-      "query_top_k": 4,
-      "query_tag_filter": [
-        "identity",
-        "priorities"
-      ],
+      "query_top_k": 6,
+      "query_tag_filter": ["identity", "priorities", "evergreen"],
+      "tool_calls": []
+    },
+    {
+      "owner": "Steward",
+      "name": "weekly_review",
+      "pattern": "schedule:0 9 * * 1",
+      "cooldown_secs": 3600,
+      "query_template": "weekly review checklist what shipped what stalled what to drop",
+      "query_top_k": 6,
+      "query_tag_filter": ["review", "cadence"],
       "tool_calls": []
     }
   ],
   "seed_ideas": [
     {
       "owner": "root",
+      "name": "What this company is for",
+      "content": "Replace this with one sentence describing what this company is meant to do. Examples: 'Help me ship a SaaS by the end of Q3.' 'Run my consulting practice end to end.' 'Manage the operational backbone of a small DAO.' Once written, this idea becomes the anchor for every quest, idea, and agent spawn going forward.",
+      "tags": ["identity", "priorities", "evergreen"]
+    },
+    {
+      "owner": "root",
       "name": "Operating principles",
-      "content": "Tell aeqi what you want this company to do — there is no preset role. The simplest first move: name a goal, ask aeqi to break it into 2-3 quests, and start. Spawn sub-agents only when you can name what they own that aeqi can't.",
-      "tags": [
-        "identity",
-        "priorities",
-        "evergreen"
-      ]
+      "content": "Pick three to five rules you want this company to live by. Examples: 'Ship weekly,' 'Decisions are written before they're acted on,' 'Capture every TODO into an idea before close-of-day.' Keep them short and concrete — they should be quotable in a slack message.",
+      "tags": ["identity", "priorities", "evergreen"]
+    },
+    {
+      "owner": "root",
+      "name": "Capture pattern",
+      "content": "When something durable surfaces in chat (a decision, a learned principle, an outline of an SOP, a recurring constraint), say 'capture this' and aeqi will write it as an idea with appropriate tags. Captured ideas are how aeqi remembers across sessions; without them, every conversation starts cold.",
+      "tags": ["procedure", "evergreen"]
+    },
+    {
+      "owner": "root",
+      "name": "Daily rhythm",
+      "content": "Default rhythm: morning, name the one outcome you want by end-of-day. Evening, ask aeqi 'what shipped, what stalled, what's tomorrow.' Once a week (the Steward's weekly_review event handles this), zoom out to what's working and what to drop. Adjust the cadence to fit your life — but keep some cadence; agents work better against a heartbeat.",
+      "tags": ["procedure", "cadence"]
+    },
+    {
+      "owner": "Steward",
+      "name": "Steward's beat",
+      "content": "Watch chat for unfinished business: TODOs without captures, recurring topics without ideas, quests with no movement. Don't nag — surface once per loose end, then let it go. The weekly review is the natural cleanup beat; treat it as a chance to drop dead work, not pile on more.",
+      "tags": ["identity", "procedure"]
     }
   ],
-  "seed_quests": [],
+  "seed_quests": [
+    {
+      "owner": "root",
+      "subject": "Decide what this company is for",
+      "description": "Write the one-sentence purpose into the 'What this company is for' idea. Then pick three to five operating principles into the 'Operating principles' idea. After that, propose two or three quests that move that purpose forward in the next two weeks. This quest is the boot sequence — finish it before spawning specialist agents or scaling out the org chart.",
+      "labels": ["onboarding", "identity"]
+    }
+  ],
   "seed_roles": [
     {
       "key": "root",
       "title": "aeqi",
       "default_occupant_agent": "root"
+    },
+    {
+      "key": "steward",
+      "title": "Steward",
+      "default_occupant_agent": "Steward"
     }
   ],
-  "seed_role_edges": []
+  "seed_role_edges": [
+    { "parent": "root", "child": "steward" }
+  ]
 }

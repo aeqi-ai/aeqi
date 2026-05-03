@@ -17,31 +17,17 @@ use crate::ipc::blueprints::Blueprint;
 pub const DEFAULT_BLUEPRINT_SLUG: &str = "aeqi";
 
 const AEQI_DEFAULT_JSON: &str = include_str!("../../../../presets/blueprints/aeqi.json");
-const BLANK_JSON: &str = include_str!("../../../../presets/blueprints/blank.json");
 const SOLO_FOUNDER_JSON: &str = include_str!("../../../../presets/blueprints/solo-founder.json");
 const STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/studio.json");
-const SMALL_BUSINESS_JSON: &str =
-    include_str!("../../../../presets/blueprints/small-business.json");
-const INDIE_CONSULTANCY_JSON: &str =
-    include_str!("../../../../presets/blueprints/indie-consultancy.json");
 const TECH_STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/tech-studio.json");
-const SOLO_CREATOR_JSON: &str = include_str!("../../../../presets/blueprints/solo-creator.json");
-const AGENCY_JSON: &str = include_str!("../../../../presets/blueprints/agency.json");
 const PERSONAL_OS_JSON: &str = include_str!("../../../../presets/blueprints/personal-os.json");
-const COMMUNITY_JSON: &str = include_str!("../../../../presets/blueprints/community.json");
 
 const COMPANY_BLUEPRINT_JSON: &[&str] = &[
     AEQI_DEFAULT_JSON,
-    BLANK_JSON,
     SOLO_FOUNDER_JSON,
     STUDIO_JSON,
-    SMALL_BUSINESS_JSON,
-    INDIE_CONSULTANCY_JSON,
     TECH_STUDIO_JSON,
-    SOLO_CREATOR_JSON,
-    AGENCY_JSON,
     PERSONAL_OS_JSON,
-    COMMUNITY_JSON,
 ];
 
 /// All shipped company templates, sorted by slug so the catalog is stable.
@@ -73,9 +59,10 @@ mod tests {
         let slugs: Vec<String> = company_blueprints().into_iter().map(|t| t.slug).collect();
         for expected in [
             DEFAULT_BLUEPRINT_SLUG,
-            "small-business",
             "solo-founder",
             "studio",
+            "tech-studio",
+            "personal-os",
         ] {
             assert!(
                 slugs.iter().any(|s| s == expected),
