@@ -17,6 +17,7 @@ import MagicLinkPage from "@/pages/MagicLinkPage";
 // App pages -- lazy-loaded for route-level code splitting
 const AgentsPage = lazy(() => import("@/pages/AgentsPage"));
 const ChangePasswordPage = lazy(() => import("@/pages/ChangePasswordPage"));
+const DiscoverPage = lazy(() => import("@/pages/DiscoverPage"));
 
 const LoadingSpinner = () => (
   <div
@@ -114,6 +115,12 @@ export default function App() {
           <Route path="/auth/magic" element={<MagicLinkPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+          {/* Public Discover — the Economy front door at `/`. No auth
+              required; signed-in users hit it the same as visitors. The
+              previous shell-rendered Inbox at `/` shifted to
+              `/c/:entityId/inbox` (Phase-1 sidebar lock). */}
+          <Route path="/" element={<DiscoverPage />} />
+
           {/* Economy + Blueprints — both top-level destinations,
               currently auth-gated end-to-end. GatedAppShell dispatches
               AppLayout for authed visitors and redirects everyone else
@@ -157,7 +164,8 @@ export default function App() {
                       are registered before the legacy redirect so
                       react-router prefers the literal match. */}
                   <Route element={<AppLayout />}>
-                    <Route index element={null} />
+                    {/* `/` is registered publicly above as DiscoverPage;
+                        no index route here. */}
                     <Route path="me" element={null} />
                     <Route path="me/:tab" element={null} />
                     {/* /start renders inside the shell — Company

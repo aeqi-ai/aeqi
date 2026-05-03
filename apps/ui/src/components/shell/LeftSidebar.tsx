@@ -28,14 +28,6 @@ const InboxIcon = () => (
   </svg>
 );
 
-const PortfolioIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="5.5" />
-    <path d="M8 8 V2.5" />
-    <path d="M8 8 L12.8 10.7" />
-  </svg>
-);
-
 const CompanyIcon = () => (
   <svg {...iconProps}>
     <rect x="3" y="2" width="10" height="12" rx="0.5" />
@@ -90,6 +82,59 @@ const BlueprintsIcon = () => (
   </svg>
 );
 
+// Treasury — coin/safe geometry. Concentric circle reads as value/store.
+const TreasuryIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="8" r="5.5" />
+    <circle cx="8" cy="8" r="2.5" />
+    <path d="M2.5 8h2M11.5 8h2" />
+  </svg>
+);
+
+// Ownership — pie/share allocation.
+const OwnershipIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 8 L8 2.5 A5.5 5.5 0 0 1 13.5 8 Z" />
+  </svg>
+);
+
+// Governance — gavel/decision; balanced scale.
+const GovernanceIcon = () => (
+  <svg {...iconProps}>
+    <path d="M8 2v12" />
+    <path d="M3 5h10" />
+    <path d="M5 5l-2 4h4z" />
+    <path d="M11 5l-2 4h4z" />
+  </svg>
+);
+
+// Roles — org chart; one node atop two children.
+const RolesIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="3.5" r="1.5" />
+    <circle cx="4" cy="11.5" r="1.5" />
+    <circle cx="12" cy="11.5" r="1.5" />
+    <path d="M8 5v3M8 8H4v2M8 8h4v2" />
+  </svg>
+);
+
+// Settings — gear simplified.
+const SettingsIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="8" r="2.25" />
+    <path d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M12.6 12.6l-1.4-1.4M4.8 4.8L3.4 3.4" />
+  </svg>
+);
+
+// Account — single user silhouette (mirrors AgentsIcon but solo).
+const AccountIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="5.5" r="2.5" />
+    <path d="M3 13.5c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
+  </svg>
+);
+
 const SearchIcon = () => (
   <svg {...iconProps}>
     <circle cx="7" cy="7" r="4.5" />
@@ -123,8 +168,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
   // Per-row right-cap action. Always visible at the right edge of its
   // nav row, mirroring the bottom Account+Help row's HelpMenu cap.
-  // Search on Home; "+" on Agents and Ideas. Click does not propagate
-  // to the row's primary navigation.
   const rowAction = (
     label: string,
     icon: React.ReactNode,
@@ -148,55 +191,29 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   );
 
   // The URL token is canonically the entity_id; sidebar tabs route to
-  // `/c/<entity_id>/<tab>` regardless of which sub-agent surface the
-  // user is currently looking at. Per-agent drilldowns
+  // `/c/<entity_id>/<tab>`. Per-agent drilldowns
   // (`/c/<entity>/agents/<agent>`) inherit the same sidebar.
   const base = entityId ? `/c/${encodeURIComponent(entityId)}` : "";
-  // Switcher = cursor, URL = page. The company section's *visibility*
-  // is driven by the switcher (a non-empty `entityId` means a company
-  // is selected), NOT by the URL path. That way Home and Inbox — which
-  // are user-scope routes that aggregate cross-company — keep the
-  // company tabs visible and one click away. Pressing Home does not
-  // unselect your company. The URL still drives *active* state below
-  // (which tab is lit), and `isActive` for the bare `/c/<id>` path
-  // already correctly returns false on `/` or `/me/inbox` so nothing
-  // lights up while you're at user scope. If no company is selected,
-  // the section collapses and the switcher trigger reads "Select a
-  // company".
   const hasCompany = !!entityId;
 
   const navHref = (id: string) => `${base}/${id}`;
-  // The Company cockpit row stays lit across every Company-rail
-  // sub-page (Overview / Roles / Ownership / Treasury / Governance /
-  // Settings). All of those tabs render inside CompanyPage and share
-  // the company's secondary nav, so the global sidebar's "Company"
-  // anchor is the parent destination — it shouldn't go dark when the
-  // user clicks Roles or Treasury.
-  const COMPANY_TABS_LIGHTING_OVERVIEW = new Set([
-    "overview",
-    "roles",
-    "ownership",
-    "treasury",
-    "governance",
-    "settings",
-  ]);
-  const isActive = (id: string) => {
+
+  // The Company cockpit row stays lit ONLY at the bare `/c/<entity>`
+  // overview URL — Phase 1 promotes Treasury / Ownership / Governance /
+  // Roles to top-level rows, so they own their own "active" state and
+  // shouldn't double-light Company. (Compare to the previous shape where
+  // those were sub-tabs of CompanyPage and Company stayed lit across
+  // them.)
+  const isActiveTab = (id: string) => {
     if (!base) return false;
-    if (id === "overview") {
-      if (path === base) return true;
-      const tail = path.startsWith(`${base}/`) ? path.slice(base.length + 1) : "";
-      const firstSeg = tail.split("/")[0];
-      return COMPANY_TABS_LIGHTING_OVERVIEW.has(firstSeg);
-    }
     return path === `${base}/${id}` || path.startsWith(`${base}/${id}/`);
   };
-  // Personal items — Inbox (canonical root, `/`) and Portfolio
-  // (cross-company holdings/performance at `/me/portfolio`). Both
-  // invariant of the active company.
-  const inboxActive = path === "/";
-  const portfolioActive = path === "/me/portfolio";
-  const isEconomy = path === "/economy" || path.startsWith("/economy/");
+  const isCompanyOverview = !!base && path === base;
+
+  // Top-level public rows.
+  const isDiscover = path === "/";
   const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
+  const isAccount = path === "/me" || path.startsWith("/me/");
 
   const navItem = (
     id: string,
@@ -219,12 +236,14 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
         </div>
       );
     }
+    const active = isActiveTab(id);
     return (
       <div key={id} className="sidebar-nav-row">
         <a
-          className={`sidebar-nav-item ${isActive(id) ? "active" : ""}`}
+          className={`sidebar-nav-item ${active ? "active" : ""}`}
           href={navHref(id)}
           title={label}
+          aria-current={active ? "page" : undefined}
           onClick={(e) => {
             e.preventDefault();
             navigate(navHref(id));
@@ -237,6 +256,34 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
       </div>
     );
   };
+
+  // Top-level (non-entity-scoped) row helper. Used for Economy /
+  // Blueprints / Account / Discover-anchor — paths that don't compose
+  // off `base`. Mirrors `navItem` but takes an explicit href.
+  const topLevelItem = (
+    href: string,
+    label: string,
+    icon: React.ReactNode,
+    active: boolean,
+    opts: { action?: React.ReactNode } = {},
+  ) => (
+    <div key={href} className="sidebar-nav-row">
+      <a
+        className={`sidebar-nav-item ${active ? "active" : ""}`}
+        href={href}
+        title={label}
+        aria-current={active ? "page" : undefined}
+        onClick={(e) => {
+          e.preventDefault();
+          navigate(href);
+        }}
+      >
+        {icon}
+        <span className="sidebar-nav-label">{label}</span>
+      </a>
+      {opts.action}
+    </div>
+  );
 
   return (
     <div
@@ -292,71 +339,58 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
       </div>
 
       <div className="left-sidebar-body">
-        {/* Personal zone — Inbox + Portfolio. Inbox (`/`) is the global
-            human action queue. Portfolio (`/me/portfolio`) is the
-            cross-company holdings/performance view. Both invariant of
-            the active company. Search lives as the Inbox row's
-            right-cap. */}
-        <nav className="sidebar-surface-nav sidebar-zone" aria-label="Personal">
-          <div className="sidebar-nav-row">
-            <a
-              className={`sidebar-nav-item ${inboxActive ? "active" : ""}`}
-              href="/"
-              title="Inbox"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/");
-              }}
-            >
-              <InboxIcon />
-              <span className="sidebar-nav-label">Inbox</span>
-            </a>
-            {rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`)}
-          </div>
-          <div className="sidebar-nav-row">
-            <a
-              className={`sidebar-nav-item ${portfolioActive ? "active" : ""}`}
-              href="/me/portfolio"
-              title="Portfolio"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/me/portfolio");
-              }}
-            >
-              <PortfolioIcon />
-              <span className="sidebar-nav-label">Portfolio</span>
-            </a>
-          </div>
+        {/* ── Economy — sits ABOVE the CompanySwitcher. Public front
+            door at `/`. Search caps the row. ── */}
+        <nav className="sidebar-surface-nav sidebar-zone" aria-label="Public">
+          {topLevelItem("/", "Economy", <EconomyIcon />, isDiscover, {
+            action: rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`),
+          })}
         </nav>
 
-        {/* Workspace switcher sits at the *junction* — between the
-            invariant personal items above and the scope-conditional
-            workspace items below. It's the pivot, so it lives between
-            the two scopes it pivots between. */}
+        {/* ── Workspace switcher — pivots between user-scope (Economy
+            row above) and the active company below. ── */}
         <div className="sidebar-user-zone">
           <CompanySwitcher />
         </div>
 
-        {/* Company-scope items — visible whenever a company is
-            selected in the switcher, regardless of what URL the user
-            is on. Home / Inbox keep the section visible so it's one
-            click into the workspace. Flat: no "Company" group header.
-            Row-end hover-actions create the row's primitive: Agents → +
-            opens the blueprint picker; Ideas → + navigates to the
-            ideas page in compose mode. Events have no +; events are
-            emitted by agents, not authored. ── */}
+        {/* ── Company-scope items. Visible only when a company is
+            selected. Order matches the Phase-1 lock:
+              Company (cockpit / overview)
+              Inbox
+              ORGANIZATION  (Treasury · Ownership · Governance · Roles)
+              WORKSPACE     (Agents · Events · Quests · Ideas)
+              Settings (standalone, gap above) ── */}
         {hasCompany && (
           <>
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company">
-              {navItem("overview", "Company", <CompanyIcon />)}
+              <div key="overview" className="sidebar-nav-row">
+                <a
+                  className={`sidebar-nav-item ${isCompanyOverview ? "active" : ""}`}
+                  href={base}
+                  title="Company"
+                  aria-current={isCompanyOverview ? "page" : undefined}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate(base);
+                  }}
+                >
+                  <CompanyIcon />
+                  <span className="sidebar-nav-label">Company</span>
+                </a>
+              </div>
+              {navItem("inbox", "Inbox", <InboxIcon />)}
             </nav>
-            {/* Four-primitive zone — separated from the Company cockpit by a
-                small gap (see `.sidebar-zone + .sidebar-zone` rule in
-                layout.css). Order spells the wordmark Agents · Events ·
-                Quests · Ideas. "+" caps on Quests and Ideas (daily drivers);
-                Agents is set up once via the Blueprint flow at /start;
-                Events are emitted by agents, not authored. */}
-            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Primitives">
+
+            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Organization">
+              <div className="sidebar-section-label">Organization</div>
+              {navItem("treasury", "Treasury", <TreasuryIcon />)}
+              {navItem("ownership", "Ownership", <OwnershipIcon />)}
+              {navItem("governance", "Governance", <GovernanceIcon />)}
+              {navItem("roles", "Roles", <RolesIcon />)}
+            </nav>
+
+            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">
+              <div className="sidebar-section-label">Workspace</div>
               {navItem("agents", "Agents", <AgentsIcon />)}
               {navItem("events", "Events", <EventsIcon />)}
               {navItem("quests", "Quests", <QuestsIcon />, {
@@ -370,42 +404,21 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
                 }),
               })}
             </nav>
+
+            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company settings">
+              {navItem("settings", "Settings", <SettingsIcon />)}
+            </nav>
           </>
         )}
 
-        {/* ── Bottom group — Blueprints + Economy + Account, pinned to
-            the rail's foot via mt:auto so the user dropdown always sits
-            at the very bottom regardless of how many workspace items
-            are above. Blueprints (the catalog / supply layer) sits
-            above Economy (the financial substrate / future demand
-            layer). Both read as top-level destinations, not group
-            headers. ── */}
+        {/* ── Bottom group — Blueprints + Account, pinned to the rail's
+            foot via mt:auto so the user dropdown always sits at the very
+            bottom regardless of how many items are above. Blueprints =
+            the catalog (top-level, public). Account = `/me`. ── */}
         <div className="sidebar-bottom-group">
           <nav className="sidebar-surface-nav" aria-label="Platform">
-            <a
-              className={`sidebar-nav-item ${isBlueprints ? "active" : ""}`}
-              href="/blueprints"
-              title="Blueprints"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/blueprints");
-              }}
-            >
-              <BlueprintsIcon />
-              <span className="sidebar-nav-label">Blueprints</span>
-            </a>
-            <a
-              className={`sidebar-nav-item ${isEconomy ? "active" : ""}`}
-              href="/economy"
-              title="Economy"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/economy");
-              }}
-            >
-              <EconomyIcon />
-              <span className="sidebar-nav-label">Economy</span>
-            </a>
+            {topLevelItem("/blueprints", "Blueprints", <BlueprintsIcon />, isBlueprints)}
+            {topLevelItem("/me", "Account", <AccountIcon />, isAccount)}
           </nav>
           <div className="sidebar-action-row sidebar-action-row--account">
             <AccountDropdown />

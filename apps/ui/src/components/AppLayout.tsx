@@ -27,7 +27,6 @@ const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
 const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
 const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
-const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const PortfolioPage = lazy(() => import("@/pages/PortfolioPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
@@ -36,13 +35,15 @@ const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 // and dispatches BlueprintDetailPage.
 const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ideas"]);
 
-// Tabs that route through CompanyPage. Overview is the canonical
-// company landing; Roles is the org-chart; Ownership / Treasury /
-// Governance / Settings are the company's financial, decisions, and
-// configuration surfaces. Treasury holds the full financial picture
-// (balance, budgets, transactions) as sub-views once wired.
-const COMPANY_PAGERAIL_TABS = new Set([
+// Tabs that route through CompanyPage. Each is now a top-level sidebar
+// row in the Phase-1 lock — CompanyPage is a thin per-tab dispatcher.
+// Inbox is the company-scoped action queue; Overview is the cockpit;
+// the rest map 1:1 to the sidebar's Organization + Settings groups.
+// Workspace tabs (agents/events/quests/ideas) bypass CompanyPage and
+// render directly through AgentPage on the entity's root agent.
+const COMPANY_PAGE_TABS = new Set([
   "overview",
+  "inbox",
   "roles",
   "ownership",
   "treasury",
@@ -121,7 +122,9 @@ export default function AppLayout() {
       quests: "Quests",
       ideas: "Ideas",
       overview: "Overview",
-      "cap-table": "Cap Table",
+      inbox: "Inbox",
+      roles: "Roles",
+      ownership: "Ownership",
       treasury: "Treasury",
       governance: "Governance",
     };
@@ -168,16 +171,8 @@ export default function AppLayout() {
   const initialLoaded = useDaemonStore((s) => s.initialLoaded);
   const appMode = useAuthStore((s) => s.appMode);
 
-  const {
-    isSettings,
-    isEconomy,
-    isBlueprints,
-    isDrive,
-    isStart,
-    isNotFound,
-    isMyInbox,
-    isPortfolio,
-  } = surface;
+  const { isSettings, isEconomy, isBlueprints, isDrive, isStart, isNotFound, isPortfolio } =
+    surface;
 
   if (!initialLoaded) return <BootLoader />;
 
@@ -201,9 +196,10 @@ export default function AppLayout() {
 
   const base = encodedEntityId ? `/c/${encodedEntityId}` : "/";
   // No-tab default at entity scope = "overview" (the company
-  // dashboard is the canonical landing). At user scope `/`, isMyInbox
-  // dispatches before the tab default is consulted. Drilled agents
-  // default to "sessions" so the bare drilled URL opens chat.
+  // dashboard is the canonical landing). `/` is served outside this
+  // shell as the public Discover page, so it never reaches AppLayout.
+  // Drilled agents default to "sessions" so the bare drilled URL opens
+  // chat.
   const effectiveTab = tab || (routeEntityId && !drilledAgent ? "overview" : "sessions");
 
   // Runtime mode has no account-level identity surface.
@@ -213,11 +209,8 @@ export default function AppLayout() {
 
   // Bare `/c/<entity>` doesn't render independently — `effectiveTab`
   // defaults to "overview" so CompanyPage handles the bare URL with
-  // tab="overview". (An earlier JSX-level <Navigate> caused a render
-  // loop; the dispatch path below is the canonical answer instead.)
-  // Overview is reached via the Company PageRail, not a global
-  // sidebar item — clicking the Overview tab navigates to the bare
-  // `/c/<entity>` URL since it's the rail's fallback.
+  // tab="overview". The "Company" sidebar row points at this bare URL
+  // and lights up only when no sub-tab is active.
 
   // Defensive: route should be unreachable if `agents/<agent>` resolves
   // to nothing — bounce up to the company shell.
@@ -234,7 +227,6 @@ export default function AppLayout() {
       if (path.startsWith("/start/")) return <CompanySetupPage />;
       return <StartPage />;
     }
-    if (isMyInbox) return <MeInboxPage />;
     if (isPortfolio) return <PortfolioPage />;
     if (isDrive) return <DrivePage />;
     if (isSettings) return <ProfilePage />;
@@ -250,7 +242,7 @@ export default function AppLayout() {
       const isDetail = !!second && !BLUEPRINT_KINDS.has(second);
       return isDetail ? <BlueprintDetailPage /> : <BlueprintsPage />;
     }
-    if (routeEntityId && !drilledAgent && COMPANY_PAGERAIL_TABS.has(effectiveTab)) {
+    if (routeEntityId && !drilledAgent && COMPANY_PAGE_TABS.has(effectiveTab)) {
       return (
         <CompanyPage
           agentId={activeAgentId}
@@ -272,7 +264,6 @@ export default function AppLayout() {
     !isNotFound &&
     !isDrive &&
     !isSettings &&
-    !isMyInbox &&
     !isPortfolio &&
     !isStart &&
     !isEconomy &&

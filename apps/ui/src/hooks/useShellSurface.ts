@@ -7,6 +7,11 @@ import { useMemo } from "react";
  * rendering logic — and because every flag is a function of two cheap
  * inputs (path, tab), so a single `useMemo` is cheaper than the inline
  * derivations it replaces.
+ *
+ * Phase-1 sidebar lock: `/` is now the public Discover surface and is
+ * routed outside this shell (App.tsx). Inbox moved to
+ * `/c/<entity>/inbox` and routes through CompanyPage. The `isMyInbox`
+ * flag is gone.
  */
 export interface ShellSurface {
   isSettings: boolean;
@@ -15,24 +20,21 @@ export interface ShellSurface {
   isDrive: boolean;
   isStart: boolean;
   /** True when the path doesn't match any known shell surface — drives the
-   *  in-shell 404 dispatch. Stays false for `/`, `/me/...`, `/start`,
+   *  in-shell 404 dispatch. Stays false for `/me/...`, `/start`,
    *  `/economy/...`, `/blueprints/...`, and `/c/:entityId/...`. */
   isNotFound: boolean;
-  /** `/` — the global human action queue (Inbox is the canonical root). */
-  isMyInbox: boolean;
   /** `/me/portfolio` — personal cross-company view (holdings, performance). */
   isPortfolio: boolean;
 }
 
 export function useShellSurface(path: string, tab: string | undefined): ShellSurface {
   return useMemo(() => {
-    // Inbox lives at root. The user-scope namespace `/me/*` is split:
+    // The user-scope namespace `/me/*` is split:
     //   - portfolio: /me/portfolio (cross-company holdings/performance)
     //   - settings:  /me, /me/profile, /me/billing, /me/security, …
     // Settings owns the /me/* catch-all so unrecognised /me/<x> still
     // falls back to ProfilePage rather than 404. Portfolio carves
     // out one specific path before settings resolves it.
-    const isMyInbox = path === "/";
     const isPortfolio = path === "/me/portfolio";
     const isSettings =
       !isPortfolio && (path === "/me" || path.startsWith("/me/") || tab === "profile");
@@ -44,16 +46,11 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // A path is "known" when it matches one of the registered shell
     // surfaces. Anything else is a 404 — including bogus top-level
     // segments (`/foo`) that would otherwise fall through to a stale
-    // active-entity render.
-    const isCompanyRoute = path === "/" || /^\/c\/[^/]+(\/|$)/.test(path);
+    // active-entity render. `/` is no longer in this set; it's served
+    // outside the AppLayout shell as the public Discover page.
+    const isCompanyRoute = /^\/c\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute =
-      isCompanyRoute ||
-      isPortfolio ||
-      isSettings ||
-      isEconomy ||
-      isBlueprints ||
-      isStart ||
-      isMyInbox;
+      isCompanyRoute || isPortfolio || isSettings || isEconomy || isBlueprints || isStart;
     const isNotFound = !isKnownShellRoute;
 
     return {
@@ -63,7 +60,6 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
       isDrive,
       isStart,
       isNotFound,
-      isMyInbox,
       isPortfolio,
     };
   }, [path, tab]);

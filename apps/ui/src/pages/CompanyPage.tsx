@@ -1,22 +1,14 @@
 import { useEffect } from "react";
 import AgentPage from "@/components/AgentPage";
-import PageRail from "@/components/PageRail";
 import OwnershipPage from "@/pages/OwnershipPage";
 import TreasuryPage from "@/pages/TreasuryPage";
 import GovernancePage from "@/pages/GovernancePage";
 import CompanySettingsPage from "@/pages/CompanySettingsPage";
-
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "roles", label: "Roles" },
-  { id: "ownership", label: "Ownership" },
-  { id: "treasury", label: "Treasury" },
-  { id: "governance", label: "Governance" },
-  { id: "settings", label: "Settings" },
-];
+import MeInboxPage from "@/pages/MeInboxPage";
 
 const TAB_TITLES: Record<string, string> = {
   overview: "overview",
+  inbox: "inbox",
   roles: "roles",
   ownership: "ownership",
   treasury: "treasury",
@@ -34,16 +26,21 @@ interface CompanyPageProps {
 }
 
 /**
- * `/c/:entityId/{overview,roles,ownership,treasury,governance,settings}`
- * — the company cockpit. The PageRail is the company's secondary nav,
- * sitting below the global LeftSidebar's company section (which owns the
- * four primitives + Overview). Overview / Roles delegate to AgentPage;
- * Ownership / Treasury / Governance / Settings are dedicated
- * company-entity views (cap table, balance + budgets + transactions,
- * proposals, configuration) so they render their own pages inside the
- * same rail. Treasury holds the full financial picture (state, planned
- * spend, realised flow) as sub-views once wired. Settings is
- * company-scoped — distinct from user-account settings at `/me/*`.
+ * Phase-1 sidebar lock: each former Company sub-tab is now a top-level
+ * sidebar row. The internal `PageRail` is removed; CompanyPage just
+ * dispatches the right component per tab.
+ *
+ * Routes:
+ *   /c/:entityId               → AgentPage tab="overview" (cockpit)
+ *   /c/:entityId/inbox         → MeInboxPage
+ *   /c/:entityId/roles         → AgentPage tab="roles" (EntityRolesTab)
+ *   /c/:entityId/ownership     → OwnershipPage
+ *   /c/:entityId/treasury      → TreasuryPage
+ *   /c/:entityId/governance    → GovernancePage
+ *   /c/:entityId/settings      → CompanySettingsPage
+ *
+ * Every other tab name (agents, events, quests, ideas, sessions, …)
+ * falls through to AgentPage, which is the canonical primitive surface.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
   useEffect(() => {
@@ -51,28 +48,17 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     document.title = `${section} · æqi`;
   }, [tab]);
 
-  return (
-    <div className="page-rail-shell">
-      <PageRail
-        tabs={TABS}
-        defaultTab="overview"
-        title="Company"
-        basePath={`/c/${encodeURIComponent(entityId)}`}
-        currentValue={tab}
-      />
-      <div className="page-rail-content page-rail-content--full">
-        {tab === "ownership" ? (
-          <OwnershipPage />
-        ) : tab === "treasury" ? (
-          <TreasuryPage />
-        ) : tab === "governance" ? (
-          <GovernancePage />
-        ) : tab === "settings" ? (
-          <CompanySettingsPage agentId={agentId} />
-        ) : (
-          <AgentPage agentId={agentId} tab={tab} itemId={itemId} />
-        )}
-      </div>
-    </div>
-  );
+  // Inbox is the company-scoped action queue. Visually it's MeInbox
+  // for now (Phase-1 cross-company aggregation lives at top-level
+  // /inbox in WS-57).
+  if (tab === "inbox") return <MeInboxPage />;
+  if (tab === "ownership") return <OwnershipPage />;
+  if (tab === "treasury") return <TreasuryPage />;
+  if (tab === "governance") return <GovernancePage />;
+  if (tab === "settings") return <CompanySettingsPage agentId={agentId} />;
+
+  // Overview, Roles, and any other primitive tab (agents, events,
+  // quests, ideas) render through AgentPage on the entity's root agent.
+  void entityId;
+  return <AgentPage agentId={agentId} tab={tab} itemId={itemId} />;
 }
