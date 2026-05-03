@@ -27,25 +27,34 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 1 (initial scaffold landed)
-PHASE: 0 — environment + scaffold (~80% done)
-LAST ACTION: Scaffolded aeqi-indexer crate; cargo check running in background to validate alloy v1 + async-graphql v7 deps
-NEXT ACTION: Verify cargo check passes (read /tmp/claude-1000/.../blql4a31l.output). If green, commit + move to Phase 0 step 1: install Anvil + start it
-BLOCKER: none yet
-WORKTREE: /home/claudedev/aeqi-indexer-build (branch: indexer-build, off origin/main 7553a083)
-COMMITS:
-  - <pending: initial scaffold not yet committed because edited Cargo.toml after first commit>
+TICK: 2 (cron live + Anvil running)
+PHASE: 0 — environment+scaffold ✓ DONE | next: deploy aeqi-core to Anvil
+LAST ACTION: Scheduled cron 72929ac9 (*/5 * * * *). Started Anvil on 127.0.0.1:8545 (chain 31337, block-time 2s, PID 1274467). cast block-number returns OK.
+NEXT ACTION: Deploy aeqi-core contracts to local Anvil. Approach options:
+  A) Foundry: cd /home/claudedev/projects/aeqi-core && forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --private-key <anvil-default-0>
+     (Anvil default account 0 private key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
+  B) Hardhat: cd /home/claudedev/projects/aeqi-core && npx hardhat run scripts/deploy.ts --network localhost
+  Inspect /home/claudedev/projects/aeqi-core/script /scripts /deploy folders to pick which one is wired up.
+  Goal: write deployed addresses to /tmp/aeqi-anvil-addresses.json so future ticks can read the Factory address.
+BLOCKER: none
+ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
+WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
+COMMITS so far on indexer-build:
+  - 76141446 indexer(phase-0): fix alloy feature flags + lock build log state
+  - d9216b8f indexer: fix loop prompt paths
+  - <plus an earlier scaffold commit>
 DECISIONS LOCKED:
-  - SQLite (rusqlite) instead of Postgres for indexer DB — matches platform pattern, no infra setup, sufficient for MVP scale
-  - alloy v1 features="full" — broad surface, simpler than micro-managing feature flags
+  - SQLite (rusqlite), not Postgres
+  - alloy v1 features="full"
   - async-graphql v7 + async-graphql-axum
-  - Crate name: aeqi-indexer (in workspace at crates/aeqi-indexer/)
-  - ABIs source: /home/claudedev/projects/aeqi-graph/abis/ (17 JSONs incl Factory.json, TRUST.json, all 8 modules)
+  - Crate path: crates/aeqi-indexer/
+  - ABIs source: /home/claudedev/projects/aeqi-graph/abis/
+  - Anvil port 8545, chain 31337, block-time 2s
 ENVIRONMENT VERIFIED:
-  - Foundry: forge/cast/anvil at /home/claudedev/.foundry/bin/
-  - Postgres: running but no claudedev role (not needed — using SQLite)
-  - Rust: 1.94.1
-  - Workspace: edition 2024
+  - Foundry 1.5.1-stable
+  - Anvil RUNNING
+  - Rust 1.94.1, edition 2024
+  - Crate compiles clean
 ```
 
 ## Plan
