@@ -27,29 +27,38 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 6 (decoder + schema written, cargo build running)
-PHASE: 0 — env+scaffold ✓ DONE | decoder.rs + store.rs done | cargo build pending
-LAST ACTION (TICK 6):
-  Wrote crates/aeqi-indexer/src/decode.rs:
-    - alloy sol! macro defining Factory contract event types (TRUST_Created, TRUST_Registered, TRUST_SignerAdded, etc.)
-    - DecodedEvent enum (normalized output)
-    - Round-trip test: encode → decode → assert fields
-  Wrote crates/aeqi-indexer/src/store.rs:
-    - 5 migrations: meta, committed_blocks, accounts, trusts, trust_signers
-    - apply_migrations() — idempotent, tracks IDs
-    - insert_trust_created() — atomic upsert of accounts + trusts
-    - get_trust() — lookup by address
-    - 2 tests: migration idempotency + round-trip insert
-  Copied 4 ABIs into crates/aeqi-indexer/abis/ (Factory, TRUST, Beacon, Role.module)
-  Started `cargo build -p aeqi-indexer` in background (output be3q2gjf4)
+TICK: 8 (PHASE 0 ✓ END-TO-END WORKING)
+PHASE: 0 ✓ COMPLETE | binary boots, GraphQL serves, SQLite persists, 5 tests green
+LAST ACTION (TICK 7+8):
+  TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
+    - Trust GraphQL type with all fields from store::TrustRow
+    - Query: trust(address) -> Option<Trust>, trustsCount, version
+    - GraphiQL playground at GET /graphql
+    - POST /graphql for queries
+    - GET /healthz returns "ok"
+    - Test: graphql_returns_indexed_trust ✓
+  TICK 8 — wired main.rs, ran live binary:
+    - 5 migrations applied to fresh SQLite
+    - GraphQL server boots on :8500 in ~1s
+    - curl /healthz → "ok"
+    - curl POST /graphql with `{ version trustsCount }` → {"data":{"version":"0.14.0","trustsCount":0}}
+    - All 5 tests pass: decode round-trip, sig hash, migration idempotency, store round-trip, graphql query
+
+PHASE 0 COMPLETE. Indexer is a working Rust HTTP service that:
+  - Persists indexed events to SQLite
+  - Exposes them via GraphQL
+  - Decodes Factory event types (alloy sol! generated)
+  - Has reorg-tracking schema in place (committed_blocks)
+  - Idempotent migrations
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (next tick):
-  1. Check build output be3q2gjf4 — fix any errors
-  2. Run `cargo test -p aeqi-indexer` to verify decoder + storage tests pass
-  3. Wire async-graphql endpoint: query trust(address: String!) -> Option<Trust>
-  4. Add simple HTTP server (axum) on port 8500 with /graphql route
-  5. Manual smoke test: build a synthetic Factory_TRUSTCreatedEvent log, feed it through decoder → insert → query via curl GraphQL
-  6. Stretch: connect alloy provider to local Anvil, subscribe to logs (will be empty since no contracts deployed but proves the wiring)
+NEXT ACTION (Phase 1 entry):
+  1. Wire alloy provider to local Anvil (ws://127.0.0.1:8545 — anvil supports both http and ws by default)
+  2. Build a SubscribeLogs stream filtered to (any address, all topics) — log events to stdout to prove subscription works
+  3. Add committed_blocks tracking — on each new block: write block_number + block_hash + parent_hash; verify parent_hash matches previous committed block
+  4. Test reorg: anvil_setStorageAt to fork a new chain, observe parent_hash mismatch, log it
+  5. Add Factory address config — once user fixes deploy script (or we deploy minimal mock), filter logs to factory address only
+  6. Wire decoder to actual subscribed logs: decode → insert into trusts → expose via existing GraphQL trust(address) query
+  7. THEN move to Phase 2: schema for more entities (modules, role assignments, governance proposals)
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)

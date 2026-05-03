@@ -5,6 +5,7 @@
 //!
 //! See `docs/aeqi-indexer-spec.md` for the canonical architecture.
 
+pub mod api;
 pub mod chain;
 pub mod config;
 pub mod decode;
