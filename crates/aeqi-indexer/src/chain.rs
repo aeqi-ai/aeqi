@@ -134,6 +134,54 @@ pub mod poll {
         }
     }
 
+    /// Persist a permissions event after the caller has decoded it. The 3
+    /// variants share an on-wire shape (bytes32 indexed id, uint256 flags)
+    /// but distinct topic0s — alloy's `decode_log` validates topic0, so each
+    /// arm in the dispatcher decodes with its own type and then calls here.
+    async fn persist_permissions_event(
+        db: &Arc<Mutex<Connection>>,
+        log: &alloy::rpc::types::Log,
+        kind: &str,
+        entity_id_hex: &str,
+        flags_hex: &str,
+        block_num: u64,
+        tx_hash: &str,
+    ) -> Result<()> {
+        let trust_address = format!("{:#x}", log.address());
+        let log_index = log.log_index.unwrap_or(0);
+        let conn = db.lock().await;
+        let coord = store::LogCoord {
+            block_number: block_num,
+            tx_hash,
+            log_index,
+        };
+        store::insert_permissions_event(
+            &conn,
+            &trust_address,
+            entity_id_hex,
+            kind,
+            flags_hex,
+            coord,
+        )?;
+        tracing::info!(
+            "indexed Permissions{}: trust={} entity={} flags={} block={}",
+            capitalize(kind),
+            trust_address,
+            entity_id_hex,
+            flags_hex,
+            block_num
+        );
+        Ok(())
+    }
+
+    fn capitalize(s: &str) -> String {
+        let mut c = s.chars();
+        match c.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().chain(c).collect(),
+        }
+    }
+
     /// Spawn the poll loop. Runs until the provided cancellation signal fires
     /// or an unrecoverable error is hit.
     pub async fn run(cfg: PollConfig, db: Arc<Mutex<Connection>>) -> Result<()> {
@@ -206,6 +254,9 @@ pub mod poll {
                         decode::Factory::Factory_TRUSTSignerAdded::SIGNATURE_HASH,
                         // TRUST events (per-trust)
                         decode::TRUST::TRUST_ModuleAdded::SIGNATURE_HASH,
+                        decode::TRUST::PermissionsGranted::SIGNATURE_HASH,
+                        decode::TRUST::PermissionsRevoked::SIGNATURE_HASH,
+                        decode::TRUST::PermissionsSet::SIGNATURE_HASH,
                     ];
                     let filter = Filter::new()
                         .from_block(block_num)
@@ -327,6 +378,69 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode TRUST_ModuleAdded failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::TRUST::PermissionsGranted::SIGNATURE_HASH)
+                        {
+                            match decode::TRUST::PermissionsGranted::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_permissions_event(
+                                        &db,
+                                        &log,
+                                        "granted",
+                                        &format!("{:#x}", ev.id),
+                                        &format!("{:#x}", ev.flags),
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode PermissionsGranted failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::TRUST::PermissionsRevoked::SIGNATURE_HASH)
+                        {
+                            match decode::TRUST::PermissionsRevoked::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_permissions_event(
+                                        &db,
+                                        &log,
+                                        "revoked",
+                                        &format!("{:#x}", ev.id),
+                                        &format!("{:#x}", ev.flags),
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode PermissionsRevoked failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::TRUST::PermissionsSet::SIGNATURE_HASH)
+                        {
+                            match decode::TRUST::PermissionsSet::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_permissions_event(
+                                        &db,
+                                        &log,
+                                        "set",
+                                        &format!("{:#x}", ev.id),
+                                        &format!("{:#x}", ev.flags),
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode PermissionsSet failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

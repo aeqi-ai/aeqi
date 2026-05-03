@@ -127,6 +127,34 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON modules(module_address);
         "#,
     ),
+    (
+        "008_permissions_events",
+        r#"
+        -- Audit log of TRUST permissions changes. The TRUST emits three
+        -- variants — Granted (set bits), Revoked (clear bits), Set (overwrite).
+        -- We persist each as an event row; computing effective flags is the
+        -- consumer's job (frontend / GraphQL aggregator). This is simpler
+        -- than maintaining a derived "current flags" table that would need
+        -- bitwise updates on every event.
+        --
+        -- entity_id is opaque to the indexer — it's a bytes32 hash that the
+        -- TRUST resolves to an agent / role / arbitrary subject internally.
+        CREATE TABLE IF NOT EXISTS permissions_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trust_address TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            kind TEXT NOT NULL,         -- 'granted' | 'revoked' | 'set'
+            flags TEXT NOT NULL,        -- u256 hex
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            UNIQUE (trust_address, block_number, tx_hash, log_index),
+            FOREIGN KEY (trust_address) REFERENCES trusts(address)
+        );
+        CREATE INDEX IF NOT EXISTS idx_perms_trust_entity
+          ON permissions_events(trust_address, entity_id, block_number);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -438,6 +466,82 @@ pub fn get_modules_for_trust(conn: &Connection, trust_address: &str) -> Result<V
     Ok(rows)
 }
 
+/// Identifying coordinates for a single emitted log — block + tx + log index.
+/// Used as the idempotency key when persisting per-event audit rows.
+#[derive(Debug, Clone, Copy)]
+pub struct LogCoord<'a> {
+    pub block_number: u64,
+    pub tx_hash: &'a str,
+    pub log_index: u64,
+}
+
+/// Insert a row in the permissions audit log. UNIQUE on
+/// (trust_address, block_number, tx_hash, log_index) makes this idempotent
+/// across reorg-recovery replays.
+pub fn insert_permissions_event(
+    conn: &Connection,
+    trust_address: &str,
+    entity_id: &str,
+    kind: &str,
+    flags: &str,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO permissions_events
+            (trust_address, entity_id, kind, flags, block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            trust_address,
+            entity_id,
+            kind,
+            flags,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct PermissionsEventRow {
+    pub trust_address: String,
+    pub entity_id: String,
+    pub kind: String,
+    pub flags: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// Audit log of permissions events for an entity within a TRUST, oldest first.
+pub fn get_permissions_events(
+    conn: &Connection,
+    trust_address: &str,
+    entity_id: &str,
+) -> Result<Vec<PermissionsEventRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT trust_address, entity_id, kind, flags, block_number, tx_hash, log_index
+         FROM permissions_events
+         WHERE trust_address = ?1 AND entity_id = ?2
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![trust_address, entity_id], |r| {
+            Ok(PermissionsEventRow {
+                trust_address: r.get(0)?,
+                entity_id: r.get(1)?,
+                kind: r.get(2)?,
+                flags: r.get(3)?,
+                block_number: r.get::<_, i64>(4)? as u64,
+                tx_hash: r.get(5)?,
+                log_index: r.get::<_, i64>(6)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Look up a TRUST by its on-chain address.
 pub fn get_trust(conn: &Connection, address: &str) -> Result<Option<TrustRow>> {
     let row = conn
@@ -649,6 +753,40 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM modules", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn permissions_events_audit_log_round_trip() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let trust_addr = "0x9131b1DEC7d1fE791C599E9D0b94D6414cae0747";
+        let trust_id = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        let creator = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        let entity = "0x000000000000000000000000000000000000000000000000000000000000beef";
+
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xtx0").unwrap();
+
+        // Granted then Revoked then Set
+        let c1 = LogCoord { block_number: 50, tx_hash: "0xtx1", log_index: 0 };
+        let c2 = LogCoord { block_number: 51, tx_hash: "0xtx2", log_index: 0 };
+        let c3 = LogCoord { block_number: 52, tx_hash: "0xtx3", log_index: 0 };
+        insert_permissions_event(&conn, trust_addr, entity, "granted", "0x3", c1).unwrap();
+        insert_permissions_event(&conn, trust_addr, entity, "revoked", "0x1", c2).unwrap();
+        insert_permissions_event(&conn, trust_addr, entity, "set", "0xff", c3).unwrap();
+
+        let events = get_permissions_events(&conn, trust_addr, entity).unwrap();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].kind, "granted");
+        assert_eq!(events[0].flags, "0x3");
+        assert_eq!(events[1].kind, "revoked");
+        assert_eq!(events[2].kind, "set");
+        assert_eq!(events[2].flags, "0xff");
+
+        // Idempotent: re-insert same event is a no-op
+        insert_permissions_event(&conn, trust_addr, entity, "set", "0xff", c3).unwrap();
+        let events = get_permissions_events(&conn, trust_addr, entity).unwrap();
+        assert_eq!(events.len(), 3);
     }
 
     #[test]

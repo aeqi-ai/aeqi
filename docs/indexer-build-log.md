@@ -27,12 +27,12 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 13 (PHASE 3 ✓ MULTI-ADDRESS DISPATCH — DYNAMIC SUBSCRIPTION WORKS)
-PHASE: 3 ✓ STRUCTURALLY COMPLETE | TrustCreated → trust auto-watches itself
-       → next round catches TRUST_ModuleAdded → module auto-watches itself
-       → ready for Role/Governance/Token module events. 18/18 tests green.
-       | next: Phase 4 (more event types: Permissions*, deeper TRUST events,
-                       OR pivot to apps/ui glue, OR docs handoff)
+TICK: 14 (PHASE 4-A ✓ PERMISSIONS AUDIT LOG — 3 TYPES, 1 TX, ORDERED BY LOG INDEX)
+PHASE: 4-A ✓ TRUST CORE COMPLETE | full Factory + TRUST_ModuleAdded +
+       Permissions{Granted,Revoked,Set} all flowing through dispatch.
+       19/19 tests green; clippy clean.
+       | next: Phase 4-B (module-level events — Role/Governance/Token modules)
+               OR Phase 4-C (apps/ui handoff doc)
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -207,42 +207,85 @@ TICK 13 — PHASE 3 MULTI-ADDRESS DISPATCH (THE ARCHITECTURAL CLIFF):
 
 18/18 tests green. 15 commits on indexer-build branch.
 
+TICK 14 — PHASE 4-A PERMISSIONS WIRE-UP:
+  Schema:
+    - 008_permissions_events(id PK, trust_address, entity_id, kind, flags,
+      block_number, tx_hash, log_index) — append-only audit log.
+      UNIQUE (trust_address, block_number, tx_hash, log_index) is the
+      idempotency key; INSERT OR IGNORE drops reorg-replay duplicates.
+  Store:
+    - LogCoord<'a> struct (block_number + tx_hash + log_index) —
+      keeps insert_permissions_event arity under clippy too_many_arguments.
+    - insert_permissions_event(conn, trust_addr, entity_id, kind, flags, coord)
+    - get_permissions_events(conn, trust_addr, entity_id) -> Vec<PermissionsEventRow>
+  Decode: sol! types were already declared in TICK 13; no change needed.
+  Poll loop: 3 new dispatch arms, one per Permissions* variant.
+    - Each arm decodes with its OWN type (decode_log validates topic0,
+      so we can't share the decoder — discovered via live-test bug).
+    - Common persist helper (persist_permissions_event) takes pre-decoded
+      hex strings + kind discriminator. Capitalize helper for tracing labels.
+  GraphQL: PermissionsEvent SimpleObject + permissionsEvents(trustAddress,
+    entityId) query — returns chronological audit log (block_number ASC,
+    log_index ASC). Frontend computes effective flags by replaying.
+  MockTRUST extended:
+    - emitPermissionsGranted/Revoked/Set
+    - emitPermissionsLifecycle: all 3 in one tx (lifecycle for one entity)
+
+  LIVE-TESTED end-to-end (after fixing decode bug):
+    - Initial run: only PermissionsGranted decoded; Revoked + Set warned
+      "invalid signature hash for PermissionsGranted" (the helper had
+      hardcoded PermissionsGranted's decoder).
+    - Fix: refactored handler to per-branch decode. Three explicit match
+      arms, one shared persist function.
+    - Re-test: emitPermissionsLifecycle for entity 0xcafe at block 1970:
+        indexed PermissionsGranted: trust=0xa513e... entity=0xcafe flags=0xff block=1970
+        indexed PermissionsRevoked: trust=0xa513e... entity=0xcafe flags=0xf block=1970
+        indexed PermissionsSet:    trust=0xa513e... entity=0xcafe flags=0xfff block=1970
+    - GraphQL permissionsEvents returned all 3 ordered by logIndex 0,1,2
+      with the right flags (0xff, 0xf, 0xfff).
+
+  ARCHITECTURE NOTE (locked):
+    For events that share an on-wire shape but differ in topic0
+    (the Permissions* trio is one such case), the topic0 dispatcher
+    must call the matching SolEvent::decode_log per branch. alloy's
+    decoder validates topic0 — sharing one decoder across topic0
+    variants drops everything but the matching one.
+
+19/19 tests green. 17 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 4 — breadth across remaining contracts):
-  Phase 3 architecture is DONE. The indexer can now follow the deploy
-  graph dynamically. Next leverage is BREADTH: cover more event types
-  to make the indexer's data surface useful for apps/ui.
+NEXT ACTION (Phase 4-B — module-level events):
+  Phase 4-A (Permissions wire-up) is DONE.
 
-  PATH A — high-impact event types (broader entity coverage):
-    The sol! TRUST block already has Permissions{Granted,Revoked,Set}
-    declared but NOT dispatched. Wire them up:
-      1. Migration 008_permissions(id, trust_address, flags, granted_block)
-         (id is bytes32 — could be agent id, role id, etc. — opaque to indexer)
-      2. insert_permissions_grant + insert_permissions_revoke +
-         set_permissions_set (full overwrite)
-      3. Dispatch arms in chain.rs (3 more topic0 branches)
-      4. GraphQL Permissions type + permissionsForId(id) query
-      5. Extend MockTRUST to emit Permissions* + live-test
+  Module addresses now flow into watched_addresses with kind='module' via
+  insert_module's auto-subscribe (TICK 13). The poll loop's filter spans
+  them automatically. What's missing is the sol! decls + handlers for
+  the events those modules emit.
 
-  PATH B — Module-level events (the Role/Governance module surface):
-    Module addresses are now in watched_addresses (kind='module'), so we
-    just need sol! decls + handlers for module events. Source:
-      ~/projects/aeqi-graph/abis/Role.json
-      ~/projects/aeqi-graph/abis/Governance.json
-      ~/projects/aeqi-graph/abis/Token.json
-      ~/projects/aeqi-graph/abis/Vesting.json
-    Spawn Haiku Explore to enumerate event signatures, then port mechanically.
+  Suggested attack:
+    1. Spawn Haiku Explore on ~/projects/aeqi-graph/abis/ to enumerate
+       module ABIs (Role, Governance, Token, Vesting, Budget, Funding).
+       Distill into a single table: (module, event name, signature).
+    2. For each module, add a sol! contract block in decode.rs.
+    3. For each event type, add: migration + store insert/get +
+       dispatch arm + GraphQL projection. The pattern is mechanical
+       (see TICK 14 Permissions for the template).
+    4. Live test: extend MockTRUST.emitModuleAdded to also deploy a
+       MockRole module that emits Role events; run the lifecycle.
 
-  PATH C — apps/ui glue (handoff prep):
-    Stand up a HANDOFF.md describing:
-      - GraphQL endpoint, schema, available queries
-      - How to start the indexer with custom factory address
-      - How apps/ui hooks would consume it
-      - Open work (event types still to port, deploy script drift,
-        eth_call backfill for non-event state, etc.)
+  PATH C — apps/ui handoff doc (good if many event types):
+    Stand up HANDOFF.md:
+      - GraphQL endpoint, schema overview, the 7 queries currently live
+      - Boot recipe (env vars, AEQI_INDEXER_FACTORY)
+      - Architecture: watched_addresses + topic0 dispatch pattern
+      - Open work: events still to port, eth_call backfill, deploy
+        script drift, multi-Anvil chain support
+      - apps/ui integration: which Treasury/Ownership/Roles tabs
+        currently mock-data and which queries they'd need
 
-  LEVERAGE PRIORITY: A (Permissions* completes the core TRUST surface) →
-  B (modules unlock per-module entities) → C (handoff so user can pick up).
+  LEVERAGE PRIORITY:
+    - If 1+ hour left: Phase 4-B (module breadth = bigger demo surface)
+    - If under 1 hour: Phase 4-C (handoff so user can pick up tomorrow)
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)

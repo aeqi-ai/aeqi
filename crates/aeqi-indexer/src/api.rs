@@ -24,6 +24,34 @@ pub type SharedDb = Arc<Mutex<Connection>>;
 /// Top-level GraphQL Query type.
 pub struct Query;
 
+/// GraphQL projection of a permissions audit-log row.
+#[derive(SimpleObject, Clone)]
+pub struct PermissionsEvent {
+    pub trust_address: String,
+    pub entity_id: String,
+    /// 'granted' | 'revoked' | 'set'
+    pub kind: String,
+    /// uint256 hex
+    pub flags: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::PermissionsEventRow> for PermissionsEvent {
+    fn from(r: store::PermissionsEventRow) -> Self {
+        PermissionsEvent {
+            trust_address: r.trust_address,
+            entity_id: r.entity_id,
+            kind: r.kind,
+            flags: r.flags,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
 /// GraphQL projection of a module attached to a TRUST.
 #[derive(SimpleObject, Clone)]
 pub struct Module {
@@ -158,6 +186,21 @@ impl Query {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
         let rows = store::get_modules_for_trust(&conn, &trust_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Audit log of permissions events for an entity within a TRUST.
+    /// Oldest first. Frontend computes effective flags by replaying.
+    async fn permissions_events(
+        &self,
+        ctx: &Context<'_>,
+        trust_address: String,
+        entity_id: String,
+    ) -> async_graphql::Result<Vec<PermissionsEvent>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_permissions_events(&conn, &trust_address, &entity_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-/// Mock TRUST contract emitting TRUST_ModuleAdded with the same signature
-/// as the real aeqi-core TRUST (sourced from
+/// Mock TRUST contract emitting the same event signatures as the real
+/// aeqi-core TRUST (sourced from
 /// /home/claudedev/projects/aeqi-graph/abis/TRUST.json).
 /// Used to verify the indexer's multi-address dispatch — TRUST events come
 /// from the per-trust contract address, not Factory.
@@ -12,6 +12,9 @@ contract MockTRUST {
         address indexed moduleAddress,
         uint256 moduleAcl
     );
+    event PermissionsGranted(bytes32 indexed id, uint256 flags);
+    event PermissionsRevoked(bytes32 indexed id, uint256 flags);
+    event PermissionsSet(bytes32 indexed id, uint256 flags);
 
     function emitModuleAdded(
         bytes32 moduleId,
@@ -19,5 +22,30 @@ contract MockTRUST {
         uint256 moduleAcl
     ) external {
         emit TRUST_ModuleAdded(moduleId, moduleAddress, moduleAcl);
+    }
+
+    function emitPermissionsGranted(bytes32 id, uint256 flags) external {
+        emit PermissionsGranted(id, flags);
+    }
+
+    function emitPermissionsRevoked(bytes32 id, uint256 flags) external {
+        emit PermissionsRevoked(id, flags);
+    }
+
+    function emitPermissionsSet(bytes32 id, uint256 flags) external {
+        emit PermissionsSet(id, flags);
+    }
+
+    /// Realistic flow for a single agent: grant some flags, revoke a subset,
+    /// later overwrite the entire set. Three events in one tx.
+    function emitPermissionsLifecycle(
+        bytes32 id,
+        uint256 grantedFlags,
+        uint256 revokedFlags,
+        uint256 finalFlags
+    ) external {
+        emit PermissionsGranted(id, grantedFlags);
+        emit PermissionsRevoked(id, revokedFlags);
+        emit PermissionsSet(id, finalFlags);
     }
 }
