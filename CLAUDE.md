@@ -108,10 +108,23 @@ treats any cwd that contains `Cargo.toml` / `.git` / `agents/` /
 `config/` as workspace mode and writes seed agent files into that cwd
 — so a one-off test from `/home/claudedev/aeqi-<branch>/` litters the
 worktree with `agents/shared/WORKFLOW.md` and friends, which then
-needs cleanup before commit. Two ways around it: (1) run
-`scripts/smoke-fresh-install.sh` (uses `env -C $NEUTRAL_CWD HOME=$tmp`),
-or (2) for a one-liner: `tmp=$(mktemp -d) && env -C "$tmp" HOME="$tmp"
-target/debug/aeqi setup --runtime ollama_agent`. Hit once 2026-05-02.
+needs cleanup before commit. Use the wrapper:
+
+```bash
+scripts/dev-isolated-aeqi.sh setup --runtime ollama_agent
+scripts/dev-isolated-aeqi.sh start --bind 127.0.0.1:18403
+scripts/dev-isolated-aeqi.sh doctor --strict
+```
+
+It builds the debug binary if needed, mints a fresh `$HOME` + neutral
+cwd in a tempdir, and execs aeqi with both pointed at it. Don't use
+the bare `HOME=$tmp aeqi …` form — cwd is still the worktree, setup
+detects workspace mode, and you're back to pulling stray
+`agents/shared/` out of the diff. For full curl-install path coverage
+(no manual single-command testing) use
+`scripts/smoke-fresh-install.sh`. Hit twice in two consecutive ship
+cycles 2026-05-02 / 2026-05-03 — wrapper added so muscle memory has
+a shorter right answer than the wrong one.
 
 **`scripts/deploy.sh` swallows UI build failures.** The `[1/4] Building dashboard UI...` step pipes `npm run build` through `2>&1 | tail -3`, so the pipe's exit code (always 0) wins under `set -e` and a failed vite build looks identical to a successful one in the deploy log ("✓ built in Xs" + "staged UI dist"). The Rust binary still ships, but `apps/ui/dist/` stays stale and the live `index-*.js` hash doesn't move. Verify after every full deploy: `cat /home/claudedev/aeqi/apps/ui/dist/index.html | grep -oE 'index-[A-Za-z0-9_-]+\.js'` MUST match `curl -sL https://app.aeqi.ai/ | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1`. If they diverge, the UI build silently failed — run `./node_modules/.bin/vite build` directly from `apps/ui/` to surface the real error (most often the viem partial-tree, fixed via `rm -rf apps/ui/node_modules && npm install`).
 
