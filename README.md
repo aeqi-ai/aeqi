@@ -244,6 +244,7 @@ Pre-push hook runs all three automatically.
 Start at [docs/README.md](docs/README.md) for the full index. Highlights:
 
 - [Quick Start](docs/quickstart.md) -- local setup for daemon, API, and UI
+- [Local Demo](docs/local-demo.md) -- end-to-end walkthrough with no API key (uses Ollama)
 - [Architecture](docs/architecture.md) -- system map, crates, primitives, agent loop
 - [Vision](docs/vision.md) -- product north star and design principles
 - [Deployment](docs/deployment.md) -- production topology, systemd, reverse proxy
@@ -258,11 +259,11 @@ aeqi has four runtime primitives — **agents**, **ideas**, **quests**, **events
 | You'll see | Means | Where it lives |
 |---|---|---|
 | `agent` | A persistent identity in the agent tree | `[[agents]]` in `aeqi.toml`, `agents/<name>/agent.md` on disk, `aeqi.db` at runtime |
-| `agent_spawn` | A repo-bound worker pool the orchestrator can dispatch quests to | `[[agent_spawns]]` in `aeqi.toml` |
-| `company` | User-facing label for a root agent (in dashboard copy and CTAs) | UI only; under the hood it's a root agent + its `agent_spawn` |
-| `project` | Legacy alias for `agent_spawn` in some method names (`runtime_for_project`) | Rust API; not a separate noun |
+| `project` | A repo-bound worker pool the orchestrator can dispatch quests to | `[[projects]]` in `aeqi.toml` |
+| `company` | User-facing label for a root agent (in dashboard copy and CTAs) | UI only; under the hood it's a root agent + its `project` |
+| `agent_spawn` | Internal Rust field name for the same thing as `project` | Rust API only — never write it in `aeqi.toml` for new configs |
 
-Configuration uses `[[agent_spawns]]`; older configs that used `[[companies]]` or `[[projects]]` are no longer recognised by the parser.
+The canonical TOML key is `[[projects]]`. The legacy `[[agent_spawns]]` parses as an alias for back-compat; the older `[[companies]]` is no longer recognised. Pick `[[projects]]` for new work.
 
 ## License
 

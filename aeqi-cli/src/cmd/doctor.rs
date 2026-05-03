@@ -18,6 +18,66 @@ use crate::helpers::{
     load_config_with_agents, provider_secret_store_path,
 };
 
+/// Severity buckets so doctor can distinguish "your install is broken"
+/// from "you haven't finished setup yet" from "this dependency wasn't
+/// reachable but it's optional." `--strict` fails on Blocking only —
+/// NeedsAction is loud but doesn't gate CI/scripts.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Severity {
+    /// Structural breakage — schema invalid, files the system requires
+    /// are missing, secret store unwritable. Fails `--strict`.
+    Blocking,
+    /// Expected during normal first-time setup — provider API key not
+    /// yet entered, etc. The user knows the next step; we just remind
+    /// them. Does NOT fail `--strict`.
+    NeedsAction,
+    /// Environmental / optional — local Ollama not running on a fresh
+    /// box, sqlite-vec module not loaded, repo path that doesn't yet
+    /// exist on this machine. Informational; never fails strict.
+    Optional,
+}
+
+impl Severity {
+    fn tag(self) -> &'static str {
+        match self {
+            Severity::Blocking => "[BLOCK]",
+            Severity::NeedsAction => "[NEEDS]",
+            Severity::Optional => "[OPT]",
+        }
+    }
+}
+
+#[derive(Default)]
+struct Tally {
+    blocking: u32,
+    needs_action: u32,
+    optional: u32,
+    fixed: u32,
+}
+
+impl Tally {
+    fn report(&mut self, severity: Severity, msg: impl AsRef<str>) {
+        match severity {
+            Severity::Blocking => self.blocking += 1,
+            Severity::NeedsAction => self.needs_action += 1,
+            Severity::Optional => self.optional += 1,
+        }
+        println!("{} {}", severity.tag(), msg.as_ref());
+    }
+
+    fn ok(&self, msg: impl AsRef<str>) {
+        println!("[OK] {}", msg.as_ref());
+    }
+
+    fn fixed(&mut self, msg: impl AsRef<str>) {
+        // A fix resolves a previously-counted Blocking; decrement so the
+        // strict-mode tally reflects what's actually still broken.
+        self.blocking = self.blocking.saturating_sub(1);
+        self.fixed += 1;
+        println!("[FIXED] {}", msg.as_ref());
+    }
+}
+
 pub(crate) async fn cmd_doctor(
     config_path: &Option<PathBuf>,
     fix: bool,
@@ -33,18 +93,16 @@ pub(crate) async fn cmd_doctor(
         }
     );
 
-    let mut issues_found = 0u32;
-    let mut fixed = 0u32;
+    let mut t = Tally::default();
 
     match load_config_with_agents(config_path) {
         Ok((config, path)) => {
-            println!("[OK] Config: {}", path.display());
+            t.ok(format!("Config: {}", path.display()));
             for issue in config.validate() {
-                println!("[WARN] Config validation: {issue}");
-                issues_found += 1;
+                t.report(Severity::Blocking, format!("Config validation: {issue}"));
             }
             if let Some(ref runtime) = config.aeqi.default_runtime {
-                println!("[OK] Default runtime: {runtime}");
+                t.ok(format!("Default runtime: {runtime}"));
             }
 
             let store_path = provider_secret_store_path(&config);
@@ -67,17 +125,20 @@ pub(crate) async fn cmd_doctor(
                             Some(&or.default_model),
                         )?;
                         match provider.health_check().await {
-                            Ok(()) => println!("[OK] OpenRouter API key valid"),
-                            Err(e) => {
-                                println!("[FAIL] OpenRouter: {e}");
-                                issues_found += 1;
-                            }
+                            Ok(()) => t.ok("OpenRouter API key valid"),
+                            Err(e) => t.report(
+                                Severity::Blocking,
+                                format!(
+                                    "OpenRouter: {e} (key is set but the provider rejected it)"
+                                ),
+                            ),
                         }
                     }
-                    None => {
-                        println!("[WARN] OpenRouter API key not set (config or secret store)");
-                        issues_found += 1;
-                    }
+                    None => t.report(
+                        Severity::NeedsAction,
+                        "OpenRouter API key not set — run \
+                         `aeqi secrets set OPENROUTER_API_KEY <key>`",
+                    ),
                 }
             }
             if let Some(ref anthropic) = config.providers.anthropic {
@@ -97,17 +158,18 @@ pub(crate) async fn cmd_doctor(
                             Some(&anthropic.default_model),
                         )?;
                         match provider.health_check().await {
-                            Ok(()) => println!("[OK] Anthropic API key valid"),
-                            Err(e) => {
-                                println!("[FAIL] Anthropic: {e}");
-                                issues_found += 1;
-                            }
+                            Ok(()) => t.ok("Anthropic API key valid"),
+                            Err(e) => t.report(
+                                Severity::Blocking,
+                                format!("Anthropic: {e} (key is set but the provider rejected it)"),
+                            ),
                         }
                     }
-                    None => {
-                        println!("[WARN] Anthropic API key not set (config or secret store)");
-                        issues_found += 1;
-                    }
+                    None => t.report(
+                        Severity::NeedsAction,
+                        "Anthropic API key not set — run \
+                         `aeqi secrets set ANTHROPIC_API_KEY <key>`",
+                    ),
                 }
             }
             if let Some(ref ollama) = config.providers.ollama {
@@ -117,36 +179,48 @@ pub(crate) async fn cmd_doctor(
                     Some(&ollama.default_model),
                 )?;
                 match provider.health_check().await {
-                    Ok(()) => println!("[OK] Ollama reachable at {}", ollama.url),
-                    Err(e) => {
-                        println!("[WARN] Ollama: {e}");
-                        issues_found += 1;
-                    }
+                    Ok(()) => t.ok(format!("Ollama reachable at {}", ollama.url)),
+                    Err(e) => t.report(
+                        Severity::Optional,
+                        format!(
+                            "Ollama: {e} (start ollama and pull the configured model \
+                             before running quests)"
+                        ),
+                    ),
                 }
             }
             if config.providers.openrouter.is_none()
                 && config.providers.anthropic.is_none()
                 && config.providers.ollama.is_none()
             {
-                println!("[WARN] No providers configured");
-                issues_found += 1;
+                t.report(
+                    Severity::Blocking,
+                    "No providers configured — agents cannot reason without one. \
+                     Add [providers.openrouter] / [providers.anthropic] / \
+                     [providers.ollama] to aeqi.toml.",
+                );
             }
 
             for pcfg in &config.agent_spawns {
                 let runtime = config.runtime_for_project(&pcfg.name);
                 let mode = config.execution_mode_for_project(&pcfg.name);
                 let repo_ok = PathBuf::from(&pcfg.repo).exists();
-                println!(
-                    "[{}] Project '{}' repo: {} | runtime={} | mode={:?} | model={}",
-                    if repo_ok { "OK" } else { "WARN" },
+                let line = format!(
+                    "Project '{}' repo: {} | runtime={} | mode={:?} | model={}",
                     pcfg.name,
                     pcfg.repo,
                     runtime.provider,
                     mode,
                     config.model_for_project(&pcfg.name),
                 );
-                if !repo_ok {
-                    issues_found += 1;
+                if repo_ok {
+                    t.ok(&line);
+                } else {
+                    // A configured project pointing at a path that doesn't
+                    // exist on this machine is most often a fresh-clone
+                    // situation, not a corrupt install — surface it but
+                    // don't gate strict mode.
+                    t.report(Severity::Optional, &line);
                 }
 
                 match find_project_dir_for_config(&pcfg.name, &path, &config.data_dir()) {
@@ -156,20 +230,23 @@ pub(crate) async fn cmd_doctor(
                         let tasks_dir = d.join(".tasks");
                         let has_tasks = tasks_dir.exists();
                         if !agents_md {
-                            issues_found += 1;
+                            t.report(
+                                Severity::NeedsAction,
+                                format!("    Project '{}' has no AGENTS.md", pcfg.name),
+                            );
                         }
                         println!(
                             "    Project files: AGENTS.md={agents_md} KNOWLEDGE.md={knowledge_md} | Tasks: {has_tasks}"
                         );
 
-                        // --fix: create missing .tasks dir
                         if fix && !has_tasks {
                             std::fs::create_dir_all(&tasks_dir)?;
-                            println!("    [FIXED] Created .tasks directory");
-                            fixed += 1;
+                            t.fixed(format!(
+                                "Created .tasks directory under project '{}'",
+                                pcfg.name
+                            ));
                         }
 
-                        // Check skills directory
                         let skills_dir = d.join("skills");
                         let skill_count = if skills_dir.exists() {
                             Prompt::discover(&skills_dir).map(|s| s.len()).unwrap_or(0)
@@ -200,22 +277,27 @@ pub(crate) async fn cmd_doctor(
                         };
                         println!("    Skills: {skill_count} | Pipelines: {pipeline_count}");
 
-                        // Check legacy per-project memory DB
                         let mem_db = d.join(".aeqi").join("memory.db");
                         if mem_db.exists() {
                             println!("    Memory (legacy): {}", mem_db.display());
                         }
                     }
-                    Err(_) => {
-                        println!("    [WARN] Project dir not found");
-                        issues_found += 1;
-                    }
+                    Err(_) => t.report(
+                        Severity::Optional,
+                        format!(
+                            "    Project dir for '{}' not found on disk \
+                             (fine if you haven't cloned it yet)",
+                            pcfg.name
+                        ),
+                    ),
                 }
             }
 
-            // Check agent seed files. `aeqi setup` writes
-            // `agents/<name>/agent.md`; older repos may still carry the
-            // legacy split (PERSONA.md + IDENTITY.md). Either layout passes.
+            // Agent seed files — `aeqi setup` writes
+            // `agents/<name>/agent.md`; legacy split (PERSONA.md +
+            // IDENTITY.md) still recognised. A configured agent with
+            // neither layout is a Blocking issue: the registry can't
+            // load it.
             for agent_cfg in &config.agents {
                 let runtime = config.runtime_for_agent(&agent_cfg.name);
                 let mode = config.execution_mode_for_agent(&agent_cfg.name);
@@ -225,9 +307,6 @@ pub(crate) async fn cmd_doctor(
                         let has_persona = d.join("PERSONA.md").exists();
                         let has_identity = d.join("IDENTITY.md").exists();
                         let ok = has_agent_md || (has_persona && has_identity);
-                        if !ok {
-                            issues_found += 1;
-                        }
                         let layout = if has_agent_md {
                             "agent.md"
                         } else if has_persona && has_identity {
@@ -235,126 +314,140 @@ pub(crate) async fn cmd_doctor(
                         } else {
                             "missing"
                         };
-                        println!(
-                            "[{}] Agent '{}': {layout} | runtime={} | mode={:?} | model={}",
-                            if ok { "OK" } else { "WARN" },
+                        let line = format!(
+                            "Agent '{}': {layout} | runtime={} | mode={:?} | model={}",
                             agent_cfg.name,
                             runtime.provider,
                             mode,
                             config.model_for_agent(&agent_cfg.name),
                         );
+                        if ok {
+                            t.ok(&line);
+                        } else {
+                            t.report(Severity::Blocking, &line);
+                        }
                     }
-                    Err(_) => {
-                        println!("[WARN] Agent dir not found for '{}'", agent_cfg.name);
-                        issues_found += 1;
-                    }
+                    Err(_) => t.report(
+                        Severity::Blocking,
+                        format!(
+                            "Agent dir not found for '{}' — run `aeqi setup --force` \
+                             to recreate the seed files",
+                            agent_cfg.name
+                        ),
+                    ),
                 }
             }
 
             if store_path.exists() {
-                println!("[OK] Secret store: {}", store_path.display());
+                t.ok(format!("Secret store: {}", store_path.display()));
+            } else if fix {
+                std::fs::create_dir_all(&store_path)?;
+                t.fixed(format!("Created secret store: {}", store_path.display()));
             } else {
-                issues_found += 1;
-                if fix {
-                    std::fs::create_dir_all(&store_path)?;
-                    println!("[FIXED] Created secret store: {}", store_path.display());
-                    fixed += 1;
-                } else {
-                    println!("[WARN] Secret store missing: {}", store_path.display());
-                }
+                t.report(
+                    Severity::Blocking,
+                    format!(
+                        "Secret store missing: {} — run `aeqi doctor --fix` or \
+                         `aeqi setup` to recreate",
+                        store_path.display()
+                    ),
+                );
             }
 
-            // Check ideas in aeqi.db.
             let mem_path = config.data_dir().join("aeqi.db");
             let label = "Ideas DB (aeqi.db)";
-            println!(
-                "[{}] {}: {}",
-                if mem_path.exists() { "OK" } else { "INFO" },
-                label,
-                mem_path.display()
-            );
+            if mem_path.exists() {
+                t.ok(format!("{label}: {}", mem_path.display()));
+            } else {
+                println!(
+                    "[INFO] {label}: {} (will be created on first daemon boot)",
+                    mem_path.display()
+                );
+            }
 
-            // T1.9 — credential lifecycle audit. Lists every row in the
-            // `credentials` table with its reason code (stable strings —
-            // see `CredentialReasonCode`).
             if mem_path.exists() {
                 match audit_credentials(&mem_path, &store_path).await {
                     Ok(report) => {
-                        println!("[OK] Credentials: {} row(s)", report.total);
+                        t.ok(format!("Credentials: {} row(s)", report.total));
                         for entry in &report.entries {
-                            let tag = if entry.code == CredentialReasonCode::Ok {
-                                "OK"
+                            if entry.code == CredentialReasonCode::Ok {
+                                println!(
+                                    "    [OK] {}/{}#{} ({}): {}",
+                                    entry.scope,
+                                    entry.provider,
+                                    entry.name,
+                                    entry.lifecycle,
+                                    entry.code,
+                                );
                             } else {
-                                "WARN"
-                            };
-                            if entry.code != CredentialReasonCode::Ok {
-                                issues_found += 1;
+                                t.report(
+                                    Severity::Blocking,
+                                    format!(
+                                        "    {}/{}#{} ({}): {}",
+                                        entry.scope,
+                                        entry.provider,
+                                        entry.name,
+                                        entry.lifecycle,
+                                        entry.code,
+                                    ),
+                                );
                             }
-                            println!(
-                                "    [{}] {}/{}#{} ({}): {}",
-                                tag,
-                                entry.scope,
-                                entry.provider,
-                                entry.name,
-                                entry.lifecycle,
-                                entry.code,
-                            );
                         }
                     }
-                    Err(e) => {
-                        println!("[WARN] Credentials audit: {e}");
-                        issues_found += 1;
-                    }
+                    Err(e) => t.report(Severity::Blocking, format!("Credentials audit: {e}")),
                 }
             }
 
-            // Check event handlers.
             match aeqi_orchestrator::agent_registry::AgentRegistry::open(&config.data_dir()) {
                 Ok(reg) => {
                     let ehs = aeqi_orchestrator::EventHandlerStore::new(reg.db());
                     let count = ehs.count_enabled().await.unwrap_or(0);
-                    println!("[OK] Event handlers: {count} enabled");
+                    t.ok(format!("Event handlers: {count} enabled"));
                 }
                 Err(_) => println!("[INFO] Event handlers: no agent registry"),
             }
 
-            // Check data dir
             let data_dir = config.data_dir();
             if data_dir.exists() {
-                println!("[OK] Data dir: {}", data_dir.display());
+                t.ok(format!("Data dir: {}", data_dir.display()));
+            } else if fix {
+                std::fs::create_dir_all(&data_dir)?;
+                t.fixed(format!("Created data dir: {}", data_dir.display()));
             } else {
-                issues_found += 1;
-                if fix {
-                    std::fs::create_dir_all(&data_dir)?;
-                    println!("[FIXED] Created data dir: {}", data_dir.display());
-                    fixed += 1;
-                } else {
-                    println!("[WARN] Data dir missing: {}", data_dir.display());
-                }
+                t.report(
+                    Severity::Blocking,
+                    format!("Data dir missing: {}", data_dir.display()),
+                );
             }
         }
         Err(e) => {
-            println!("[FAIL] Config: {e}");
-            println!("       Run `aeqi setup` to create one.");
-            issues_found += 1;
+            t.report(
+                Severity::Blocking,
+                format!("Config: {e} — run `aeqi setup` to create one"),
+            );
         }
     }
 
-    let remaining_issues = issues_found.saturating_sub(fixed);
-
     println!();
-    if issues_found == 0 {
+    let total = t.blocking + t.needs_action + t.optional;
+    if total == 0 && t.fixed == 0 {
         println!("All checks passed.");
-    } else if remaining_issues == 0 {
-        println!("{issues_found} issues found, {fixed} fixed, 0 remaining.");
-    } else if fix {
-        println!("{issues_found} issues found, {fixed} fixed, {remaining_issues} remaining.");
     } else {
-        println!("{issues_found} issues found. Run `aeqi doctor --fix` to auto-repair.");
+        println!(
+            "Summary: {} blocking, {} needs-action, {} optional, {} fixed.",
+            t.blocking, t.needs_action, t.optional, t.fixed
+        );
+        if !fix && t.blocking > 0 {
+            println!("Run `aeqi doctor --fix` to auto-repair structural issues.");
+        }
     }
 
-    if strict && remaining_issues > 0 {
-        bail!("doctor found {remaining_issues} unresolved issue(s)");
+    if strict && t.blocking > 0 {
+        bail!(
+            "doctor found {} blocking issue(s) (--strict). NEEDS / OPT items \
+             do not gate strict mode — use them as a setup checklist.",
+            t.blocking
+        );
     }
 
     Ok(())

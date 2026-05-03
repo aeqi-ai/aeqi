@@ -21,8 +21,12 @@ pub struct AEQIConfig {
     /// Global repo pool — all agents can access all repos.
     #[serde(default)]
     pub repos: HashMap<String, String>,
-    /// Agent spawn configs = repos, tasks, knowledge, budget.
-    #[serde(default)]
+    /// Project configs = repos, tasks, knowledge, budget. Public TOML
+    /// key is `[[projects]]`; the legacy `[[agent_spawns]]` name is
+    /// accepted as an alias so older configs keep parsing. The Rust
+    /// field name (`agent_spawns`) is internal — call sites that read
+    /// it should not be confused for a public surface.
+    #[serde(default, alias = "agent_spawns", rename = "projects")]
     pub agent_spawns: Vec<AgentSpawnConfig>,
     /// Agents = personalities (equal peers).
     #[serde(default)]
@@ -1635,6 +1639,41 @@ repo = "/tmp/test"
         assert_eq!(config.agent_spawns.len(), 1);
         assert_eq!(config.agent_spawns[0].name, "test-domain");
         assert!(config.web.ui_dist_dir.is_none());
+    }
+
+    /// `[[projects]]` is the canonical public TOML key; `[[agent_spawns]]`
+    /// is a serde alias preserved for back-compat. Both must round-trip
+    /// to `config.agent_spawns`. If either stops parsing the rename is
+    /// broken — drop the matching test arm rather than re-naming the
+    /// other.
+    #[test]
+    fn test_projects_and_agent_spawns_aliases_both_parse() {
+        let canonical = r#"
+[aeqi]
+name = "t"
+
+[[projects]]
+name = "alpha"
+prefix = "al"
+repo = "/tmp/a"
+"#;
+        let legacy = r#"
+[aeqi]
+name = "t"
+
+[[agent_spawns]]
+name = "alpha"
+prefix = "al"
+repo = "/tmp/a"
+"#;
+        let from_canonical = AEQIConfig::parse(canonical).expect("[[projects]] must parse");
+        let from_legacy = AEQIConfig::parse(legacy).expect("[[agent_spawns]] alias must parse");
+        assert_eq!(from_canonical.agent_spawns.len(), 1);
+        assert_eq!(from_legacy.agent_spawns.len(), 1);
+        assert_eq!(
+            from_canonical.agent_spawns[0].name,
+            from_legacy.agent_spawns[0].name
+        );
     }
 
     #[test]

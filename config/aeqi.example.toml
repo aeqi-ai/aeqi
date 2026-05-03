@@ -69,11 +69,11 @@ max_background_cost_usd = 0.50
 # infer_deps_threshold = 0.0    # confidence threshold for auto-inferred deps (0=disabled)
 # notes_claim_ttl_hours = 2     # notes claim TTL
 
-# Agent spawn slots — each entry binds a repo to a worker pool the
-# orchestrator can dispatch quests to. The TOML key MUST be
-# `[[agent_spawns]]`; older configs that used `[[companies]]` or
-# `[[projects]]` are no longer recognised by the parser.
-[[agent_spawns]]
+# Projects — each entry binds a repo to a worker pool the orchestrator
+# can dispatch quests to. The legacy key `[[agent_spawns]]` still
+# parses (kept as an alias for older configs); new configs should
+# use `[[projects]]`.
+[[projects]]
 name = "my-project"
 prefix = "mp"
 repo = "/path/to/your/project"

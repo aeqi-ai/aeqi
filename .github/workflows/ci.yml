@@ -132,6 +132,9 @@ jobs:
       - name: Smoke test — fresh install path
         run: AEQI_BIN="$PWD/target/debug/aeqi" bash scripts/smoke-fresh-install.sh
 
+      - name: Smoke test — golden README quickstart
+        run: AEQI_BIN="$PWD/target/debug/aeqi" bash scripts/smoke-quickstart-readme.sh
+
       # 6. Code coverage for Rust
       - name: Install coverage tools
         run: |
