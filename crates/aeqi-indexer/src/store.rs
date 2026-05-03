@@ -204,6 +204,64 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON role_assignments(account_address);
         "#,
     ),
+    (
+        "011_proposals",
+        r#"
+        -- A governance proposal on a Governance module. Created via
+        -- Governance_ProposalCreated. The dynamic-array fields
+        -- (targets/values/signatures/calldatas) are NOT persisted in v1 —
+        -- the ipfs_cid references the human-readable proposal body and the
+        -- executable payload can be fetched on demand. v1 indexer surface
+        -- focuses on proposal lifecycle visibility for the demo.
+        --
+        -- status transitions: 'created' → ('succeeded' | 'canceled') → 'executed'.
+        -- Frontend should treat these as monotonic — Governance modules don't
+        -- emit a "now back to created" event.
+        CREATE TABLE IF NOT EXISTS proposals (
+            module_address TEXT NOT NULL,
+            proposal_id TEXT NOT NULL,
+            governance_config_id TEXT NOT NULL,
+            proposer_address TEXT NOT NULL,
+            vote_start INTEGER NOT NULL,
+            vote_end INTEGER NOT NULL,
+            ipfs_cid TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'created',
+            created_block INTEGER NOT NULL,
+            created_tx TEXT NOT NULL,
+            PRIMARY KEY (module_address, proposal_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_proposals_proposer ON proposals(proposer_address);
+        CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
+        "#,
+    ),
+    (
+        "012_votes",
+        r#"
+        -- A vote cast on a proposal via Governance_VoteCast. The 'support'
+        -- field is OpenZeppelin Bravo convention: 0=Against, 1=For, 2=Abstain.
+        -- weight is u256 hex (vote weight in token-decimal units).
+        --
+        -- One row per (proposal, voter, log_index) — same voter can re-vote
+        -- via tx replay if the governor allows; UNIQUE on log coord prevents
+        -- double-count from indexer reorg replay.
+        CREATE TABLE IF NOT EXISTS votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_address TEXT NOT NULL,
+            proposal_id TEXT NOT NULL,
+            voter_address TEXT NOT NULL,
+            support INTEGER NOT NULL,
+            weight TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            UNIQUE (module_address, block_number, tx_hash, log_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_votes_proposal
+          ON votes(module_address, proposal_id);
+        CREATE INDEX IF NOT EXISTS idx_votes_voter ON votes(voter_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -726,6 +784,199 @@ pub fn get_role_assignments(
     Ok(rows)
 }
 
+/// Insert a governance proposal (Governance_ProposalCreated).
+/// Idempotent on (module, proposal_id).
+#[allow(clippy::too_many_arguments)]
+pub fn insert_proposal_created(
+    conn: &Connection,
+    module_address: &str,
+    proposal_id: &str,
+    governance_config_id: &str,
+    proposer_address: &str,
+    vote_start: u64,
+    vote_end: u64,
+    ipfs_cid: &str,
+    created_block: u64,
+    created_tx: &str,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![proposer_address, created_block as i64, created_tx],
+    )?;
+    tx.execute(
+        "INSERT OR IGNORE INTO proposals
+            (module_address, proposal_id, governance_config_id, proposer_address,
+             vote_start, vote_end, ipfs_cid, status, created_block, created_tx)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'created', ?8, ?9)",
+        params![
+            module_address,
+            proposal_id,
+            governance_config_id,
+            proposer_address,
+            vote_start as i64,
+            vote_end as i64,
+            ipfs_cid,
+            created_block as i64,
+            created_tx
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Update a proposal's status. Used by ProposalSucceeded / ProposalCanceled /
+/// ProposalExecuted handlers. No-op if the proposal isn't yet indexed (the
+/// ProposalCreated must land first; if it doesn't, the status update is lost
+/// and re-indexing from genesis is the fix).
+pub fn update_proposal_status(
+    conn: &Connection,
+    module_address: &str,
+    proposal_id: &str,
+    status: &str,
+) -> Result<()> {
+    let n = conn.execute(
+        "UPDATE proposals SET status = ?1
+         WHERE module_address = ?2 AND proposal_id = ?3",
+        params![status, module_address, proposal_id],
+    )?;
+    if n == 0 {
+        tracing::warn!(
+            "proposal status update for unknown proposal: module={} proposal_id={} (ProposalCreated not indexed?)",
+            module_address, proposal_id
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct ProposalRow {
+    pub module_address: String,
+    pub proposal_id: String,
+    pub governance_config_id: String,
+    pub proposer_address: String,
+    pub vote_start: u64,
+    pub vote_end: u64,
+    pub ipfs_cid: String,
+    pub status: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+/// All proposals on a Governance module, newest first (most useful for UI).
+pub fn get_proposals_for_module(
+    conn: &Connection,
+    module_address: &str,
+) -> Result<Vec<ProposalRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, proposal_id, governance_config_id, proposer_address,
+                vote_start, vote_end, ipfs_cid, status, created_block, created_tx
+         FROM proposals WHERE module_address = ?1
+         ORDER BY created_block DESC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address], |r| {
+            Ok(ProposalRow {
+                module_address: r.get(0)?,
+                proposal_id: r.get(1)?,
+                governance_config_id: r.get(2)?,
+                proposer_address: r.get(3)?,
+                vote_start: r.get::<_, i64>(4)? as u64,
+                vote_end: r.get::<_, i64>(5)? as u64,
+                ipfs_cid: r.get(6)?,
+                status: r.get(7)?,
+                created_block: r.get::<_, i64>(8)? as u64,
+                created_tx: r.get(9)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Insert a vote cast row. Idempotent on the log coord.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_vote(
+    conn: &Connection,
+    module_address: &str,
+    proposal_id: &str,
+    voter_address: &str,
+    support: u8,
+    weight: &str,
+    reason: &str,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![voter_address, coord.block_number as i64, coord.tx_hash],
+    )?;
+    tx.execute(
+        "INSERT OR IGNORE INTO votes
+            (module_address, proposal_id, voter_address, support, weight, reason,
+             block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            module_address,
+            proposal_id,
+            voter_address,
+            support as i64,
+            weight,
+            reason,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct VoteRow {
+    pub module_address: String,
+    pub proposal_id: String,
+    pub voter_address: String,
+    pub support: u8,
+    pub weight: String,
+    pub reason: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// All votes cast on a proposal, oldest first.
+pub fn get_votes_for_proposal(
+    conn: &Connection,
+    module_address: &str,
+    proposal_id: &str,
+) -> Result<Vec<VoteRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, proposal_id, voter_address, support, weight, reason,
+                block_number, tx_hash, log_index
+         FROM votes
+         WHERE module_address = ?1 AND proposal_id = ?2
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address, proposal_id], |r| {
+            Ok(VoteRow {
+                module_address: r.get(0)?,
+                proposal_id: r.get(1)?,
+                voter_address: r.get(2)?,
+                support: r.get::<_, i64>(3)? as u8,
+                weight: r.get(4)?,
+                reason: r.get(5)?,
+                block_number: r.get::<_, i64>(6)? as u64,
+                tx_hash: r.get(7)?,
+                log_index: r.get::<_, i64>(8)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Look up a TRUST by its on-chain address.
 pub fn get_trust(conn: &Connection, address: &str) -> Result<Option<TrustRow>> {
     let row = conn
@@ -1028,6 +1279,77 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM role_assignments", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 3);
+    }
+
+    #[test]
+    fn proposal_lifecycle_round_trip() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let module = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let proposal_id = "0x42";
+        let proposer = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+        insert_proposal_created(
+            &conn,
+            module,
+            proposal_id,
+            "0xcfg",
+            proposer,
+            100,
+            200,
+            "QmCID",
+            42,
+            "0xtx",
+        )
+        .unwrap();
+
+        let proposals = get_proposals_for_module(&conn, module).unwrap();
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].status, "created");
+        assert_eq!(proposals[0].vote_start, 100);
+        assert_eq!(proposals[0].vote_end, 200);
+
+        update_proposal_status(&conn, module, proposal_id, "succeeded").unwrap();
+        let proposals = get_proposals_for_module(&conn, module).unwrap();
+        assert_eq!(proposals[0].status, "succeeded");
+
+        update_proposal_status(&conn, module, proposal_id, "executed").unwrap();
+        let proposals = get_proposals_for_module(&conn, module).unwrap();
+        assert_eq!(proposals[0].status, "executed");
+
+        // Updating an unknown proposal is a no-op (logs a warning)
+        update_proposal_status(&conn, module, "0xnonexistent", "executed").unwrap();
+    }
+
+    #[test]
+    fn vote_round_trip() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let module = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let proposal_id = "0x42";
+        let alice = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
+        let bob = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
+
+        let c1 = LogCoord { block_number: 100, tx_hash: "0xtx1", log_index: 0 };
+        let c2 = LogCoord { block_number: 101, tx_hash: "0xtx2", log_index: 0 };
+
+        insert_vote(&conn, module, proposal_id, alice, 1, "0x64", "yes!", c1).unwrap();
+        insert_vote(&conn, module, proposal_id, bob, 0, "0x32", "nope", c2).unwrap();
+
+        let votes = get_votes_for_proposal(&conn, module, proposal_id).unwrap();
+        assert_eq!(votes.len(), 2);
+        assert_eq!(votes[0].voter_address, alice);
+        assert_eq!(votes[0].support, 1);
+        assert_eq!(votes[0].weight, "0x64");
+        assert_eq!(votes[1].voter_address, bob);
+        assert_eq!(votes[1].support, 0);
+
+        // Idempotent: re-insert same coord drops
+        insert_vote(&conn, module, proposal_id, alice, 1, "0x64", "yes!", c1).unwrap();
+        let votes = get_votes_for_proposal(&conn, module, proposal_id).unwrap();
+        assert_eq!(votes.len(), 2);
     }
 
     #[test]

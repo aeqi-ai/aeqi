@@ -88,6 +88,41 @@ sol! {
     }
 }
 
+// Governance module events — emitted by Governance.module instances.
+// Source: /home/claudedev/projects/aeqi-graph/abis/Governance.module.json
+//
+// v1 indexer covers proposal lifecycle + vote cast. The dynamic-array fields
+// of ProposalCreated (targets/values/signatures/calldatas) are decoded but
+// not persisted — ipfs_cid is the human-readable handle for the demo.
+sol! {
+    #[sol(rpc)]
+    #[allow(clippy::too_many_arguments)]
+    contract Governance {
+        event Governance_ProposalCreated(
+            uint256 indexed proposalId,
+            bytes32 indexed governanceConfigId,
+            address proposer,
+            address[] targets,
+            uint256[] values,
+            string[] signatures,
+            bytes[] calldatas,
+            uint256 voteStart,
+            uint256 voteEnd,
+            bytes ipfsCid
+        );
+        event Governance_ProposalCanceled(uint256 indexed proposalId);
+        event Governance_ProposalSucceeded(uint256 indexed proposalId);
+        event Governance_ProposalExecuted(uint256 indexed proposalId);
+        event Governance_VoteCast(
+            address indexed voter,
+            uint256 indexed proposalId,
+            uint8 support,
+            uint256 weight,
+            string reason
+        );
+    }
+}
+
 /// A normalized indexer event — what we actually persist after decoding raw logs.
 ///
 /// Cross-event uniformity: every variant carries the block + tx context so

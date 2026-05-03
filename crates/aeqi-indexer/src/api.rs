@@ -24,6 +24,71 @@ pub type SharedDb = Arc<Mutex<Connection>>;
 /// Top-level GraphQL Query type.
 pub struct Query;
 
+/// GraphQL projection of a governance proposal.
+#[derive(SimpleObject, Clone)]
+pub struct Proposal {
+    pub module_address: String,
+    pub proposal_id: String,
+    pub governance_config_id: String,
+    pub proposer_address: String,
+    pub vote_start: u64,
+    pub vote_end: u64,
+    pub ipfs_cid: String,
+    /// 'created' | 'succeeded' | 'canceled' | 'executed'
+    pub status: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+impl From<store::ProposalRow> for Proposal {
+    fn from(r: store::ProposalRow) -> Self {
+        Proposal {
+            module_address: r.module_address,
+            proposal_id: r.proposal_id,
+            governance_config_id: r.governance_config_id,
+            proposer_address: r.proposer_address,
+            vote_start: r.vote_start,
+            vote_end: r.vote_end,
+            ipfs_cid: r.ipfs_cid,
+            status: r.status,
+            created_block: r.created_block,
+            created_tx: r.created_tx,
+        }
+    }
+}
+
+/// GraphQL projection of a vote cast on a proposal.
+#[derive(SimpleObject, Clone)]
+pub struct Vote {
+    pub module_address: String,
+    pub proposal_id: String,
+    pub voter_address: String,
+    /// 0=Against, 1=For, 2=Abstain (OpenZeppelin Bravo convention)
+    pub support: u32,
+    /// uint256 hex
+    pub weight: String,
+    pub reason: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::VoteRow> for Vote {
+    fn from(r: store::VoteRow) -> Self {
+        Vote {
+            module_address: r.module_address,
+            proposal_id: r.proposal_id,
+            voter_address: r.voter_address,
+            support: r.support as u32,
+            weight: r.weight,
+            reason: r.reason,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
 /// GraphQL projection of a Role module's role definition.
 #[derive(SimpleObject, Clone)]
 pub struct Role {
@@ -235,6 +300,33 @@ impl Query {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
         let rows = store::get_modules_for_trust(&conn, &trust_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// All proposals on a Governance module, newest first.
+    async fn proposals_for_module(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+    ) -> async_graphql::Result<Vec<Proposal>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_proposals_for_module(&conn, &module_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// All votes cast on a proposal, oldest first.
+    async fn votes_for_proposal(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+        proposal_id: String,
+    ) -> async_graphql::Result<Vec<Vote>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_votes_for_proposal(&conn, &module_address, &proposal_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

@@ -214,6 +214,46 @@ pub mod poll {
         Ok(())
     }
 
+    /// Persist a proposal status update from any of the lifecycle events
+    /// (Canceled, Succeeded, Executed). Each variant's decoder closure
+    /// returns the proposal_id hex on success — the dispatcher passes it.
+    async fn persist_proposal_status<F>(
+        db: &Arc<Mutex<Connection>>,
+        log: &alloy::rpc::types::Log,
+        status: &str,
+        decode_proposal_id: F,
+        block_num: u64,
+        tx_hash: &str,
+    ) -> Result<()>
+    where
+        F: FnOnce(
+            &alloy::primitives::Log,
+        ) -> std::result::Result<String, alloy::sol_types::Error>,
+    {
+        let module_address = format!("{:#x}", log.address());
+        match decode_proposal_id(&log.inner) {
+            Ok(proposal_id_hex) => {
+                let conn = db.lock().await;
+                store::update_proposal_status(&conn, &module_address, &proposal_id_hex, status)?;
+                tracing::info!(
+                    "indexed Governance_Proposal{}: module={} proposal={} block={}",
+                    capitalize(status),
+                    module_address,
+                    proposal_id_hex,
+                    block_num
+                );
+            }
+            Err(e) => tracing::warn!(
+                "decode Governance_Proposal{} failed at block {} tx {}: {}",
+                capitalize(status),
+                block_num,
+                tx_hash,
+                e
+            ),
+        }
+        Ok(())
+    }
+
     fn capitalize(s: &str) -> String {
         let mut c = s.chars();
         match c.next() {
@@ -303,6 +343,12 @@ pub mod poll {
                         decode::Role::Role_RoleResigned::SIGNATURE_HASH,
                         decode::Role::Role_RoleRemoved::SIGNATURE_HASH,
                         decode::Role::Role_RoleTransferred::SIGNATURE_HASH,
+                        // Governance module events (per-module)
+                        decode::Governance::Governance_ProposalCreated::SIGNATURE_HASH,
+                        decode::Governance::Governance_ProposalCanceled::SIGNATURE_HASH,
+                        decode::Governance::Governance_ProposalSucceeded::SIGNATURE_HASH,
+                        decode::Governance::Governance_ProposalExecuted::SIGNATURE_HASH,
+                        decode::Governance::Governance_VoteCast::SIGNATURE_HASH,
                     ];
                     let filter = Filter::new()
                         .from_block(block_num)
@@ -610,6 +656,96 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Role_RoleTransferred failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Governance::Governance_ProposalCreated::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Governance::Governance_ProposalCreated::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let cid = String::from_utf8_lossy(&ev.ipfsCid).to_string();
+                                    store::insert_proposal_created(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.proposalId),
+                                        &format!("{:#x}", ev.governanceConfigId),
+                                        &format!("{:#x}", ev.proposer),
+                                        ev.voteStart.try_into().unwrap_or(0),
+                                        ev.voteEnd.try_into().unwrap_or(0),
+                                        &cid,
+                                        block_num,
+                                        &tx_hash,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Governance_ProposalCreated: module={} proposal={:#x} proposer={:#x} block={}",
+                                        module_address, ev.proposalId, ev.proposer, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Governance_ProposalCreated failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Governance::Governance_ProposalCanceled::SIGNATURE_HASH)
+                        {
+                            persist_proposal_status(
+                                &db, &log, "canceled",
+                                |inner| decode::Governance::Governance_ProposalCanceled::decode_log(inner)
+                                    .map(|ev| format!("{:#x}", ev.proposalId)),
+                                block_num, &tx_hash,
+                            ).await?;
+                        } else if topic0
+                            == Some(decode::Governance::Governance_ProposalSucceeded::SIGNATURE_HASH)
+                        {
+                            persist_proposal_status(
+                                &db, &log, "succeeded",
+                                |inner| decode::Governance::Governance_ProposalSucceeded::decode_log(inner)
+                                    .map(|ev| format!("{:#x}", ev.proposalId)),
+                                block_num, &tx_hash,
+                            ).await?;
+                        } else if topic0
+                            == Some(decode::Governance::Governance_ProposalExecuted::SIGNATURE_HASH)
+                        {
+                            persist_proposal_status(
+                                &db, &log, "executed",
+                                |inner| decode::Governance::Governance_ProposalExecuted::decode_log(inner)
+                                    .map(|ev| format!("{:#x}", ev.proposalId)),
+                                block_num, &tx_hash,
+                            ).await?;
+                        } else if topic0
+                            == Some(decode::Governance::Governance_VoteCast::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            let log_index = log.log_index.unwrap_or(0);
+                            match decode::Governance::Governance_VoteCast::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let coord = store::LogCoord {
+                                        block_number: block_num,
+                                        tx_hash: &tx_hash,
+                                        log_index,
+                                    };
+                                    store::insert_vote(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.proposalId),
+                                        &format!("{:#x}", ev.voter),
+                                        ev.support,
+                                        &format!("{:#x}", ev.weight),
+                                        &ev.reason,
+                                        coord,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Governance_VoteCast: module={} proposal={:#x} voter={:#x} support={} weight={:#x} block={}",
+                                        module_address, ev.proposalId, ev.voter, ev.support, ev.weight, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Governance_VoteCast failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

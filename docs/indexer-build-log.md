@@ -27,13 +27,12 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 15 (PHASE 4-B ✓ ROLE MODULE — 3-LEVEL DYNAMIC DISPATCH PROVEN)
-PHASE: 4-B ✓ FIRST MODULE LIVE | factory→trust→module subscription chain
-       handles Role_RoleCreated/Assigned/Resigned/Removed/Transferred.
-       Transferred event splits to 2 audit rows (transferred_from + _to).
-       21/21 tests green; clippy clean. 18 commits.
-       | next: more modules (Governance, Token, Vesting) via same template,
-               OR Phase 4-C apps/ui handoff doc
+TICK: 16 (PHASE 4-C ✓ GOVERNANCE MODULE — FULL PROPOSAL LIFECYCLE)
+PHASE: 4-C ✓ DAO IN MOTION | one tx fires Proposal+2Votes+Succeeded+Executed;
+       all 5 events indexed, status updates correctly applied,
+       audit log of votes preserved with For/Against + weight + reason.
+       23/23 tests green; clippy clean.
+       | next: more modules (Token, Vesting) OR apps/ui handoff doc
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -312,39 +311,119 @@ TICK 15 — PHASE 4-B FIRST MODULE (ROLE) LIVE:
 
 21/21 tests green. 18 commits on indexer-build branch.
 
+TICK 16 — PHASE 4-C GOVERNANCE MODULE:
+  Subagent: Haiku Explore enumerated Governance.module ABI (12 events;
+  cherry-picked 5 lifecycle ones for v1).
+  Schema:
+    - 011_proposals(module_address PK, proposal_id PK, governance_config_id,
+      proposer_address, vote_start, vote_end, ipfs_cid, status, ...)
+      Status: 'created' → ('succeeded' | 'canceled') → 'executed'.
+      Dynamic-array fields (targets/values/calldatas) NOT persisted in v1
+      — ipfs_cid is the demo handle.
+    - 012_votes(id PK, module_address, proposal_id, voter_address, support,
+      weight, reason, log coord) — append-only, UNIQUE on log coord.
+  Decode: sol! Governance contract (5 events, 1 with dynamic arrays).
+    Note: alloy `sol!` on a Governance event with multiple arrays needed
+    `#[allow(clippy::too_many_arguments)]` on the contract block to suppress
+    the generated builder warning.
+  Poll loop: 5 new dispatch arms.
+    persist_proposal_status<F> generic helper takes a decoder closure
+    `FnOnce(&Log) -> Result<String>` returning the proposal_id hex —
+    Canceled/Succeeded/Executed all use it. Closures invoke each event's
+    own decode_log so topic0 validation passes.
+  GraphQL: Proposal + Vote SimpleObjects;
+    proposalsForModule(moduleAddress) + votesForProposal(moduleAddress, proposalId).
+  MockGovernance with emitFullProposalLifecycle —
+    one tx: ProposalCreated + 2× VoteCast + ProposalSucceeded + ProposalExecuted.
+
+  LIVE-TESTED THE FULL DAO FLOW:
+    block 2524: TrustCreated → trust auto-watched
+    block 2541: TRUST_ModuleAdded(moduleId 0x600d, MockGovernance address)
+                → governance module auto-watched
+    block 2563: emitFullProposalLifecycle(proposal=42, voter1=alice For 1000,
+                                          voter2=bob Against 500)
+                → 5 indexed events, all dispatched correctly
+    GraphQL proposalsForModule:
+      [{ proposalId: "0x2a", proposerAddress, voteStart 100, voteEnd 500,
+         ipfsCid "QmProposalCID1", status: "EXECUTED", createdBlock 2563 }]
+    GraphQL votesForProposal:
+      [{ voter: alice, support: 1, weight: "0x3e8", reason: "for the win" },
+       { voter: bob,   support: 0, weight: "0x1f4", reason: "against" }]
+
+  STATUS UPDATES CONFIRMED: ProposalCreated wrote status='created',
+  then ProposalSucceeded UPDATEd to 'succeeded', then ProposalExecuted
+  UPDATEd to 'executed' — all in the same tx, all caught by the dispatcher,
+  final status correctly reflects the last event.
+
+  The indexer surface now covers the full v2 demo:
+    - Trust + Module deployment (Factory + TRUST events)
+    - Org chart (Role module)
+    - DAO governance (Governance module: proposals + votes)
+    - Permissions (TRUST module-level access flags)
+
+  9 entity types, 5 contracts (Factory + TRUST + Role + Governance + accounts),
+  ~13 dispatched event types across 3 levels of dynamic subscription.
+
+23/23 tests green. 19 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 4-C — Governance module OR handoff doc):
-  Phase 4-B (Role module) is DONE. The 3-level dispatch is proven.
+NEXT ACTION (Phase 5 — handoff doc + apps/ui glue):
+  Phase 4-C (Governance) is DONE. The indexer covers the full v2 demo
+  surface (Trust+Module+Role+Governance+Permissions). 19 commits in,
+  23/23 tests green. Time to make this real for tomorrow's user.
 
-  PATH A — Governance module (highest-impact remaining demo surface):
-    The Governance.module ABI defines proposal + vote events.
-    Spawn Haiku Explore on /home/claudedev/projects/aeqi-graph/abis/Governance.module.json
-    to enumerate. Probable highlights:
-      Governance_ProposalCreated(proposalId, proposer, ...)
-      Governance_VoteCast(proposalId, voter, support, weight)
-      Governance_ProposalExecuted(proposalId)
-      Governance_ProposalCanceled(proposalId)
-    Same template as TICK 15 (sol! decl, migration, store, dispatch, GraphQL,
-    MockGovernance + live test). With the proven pattern this is a 2-tick job.
+  PATH A — apps/ui HANDOFF.md (highest leverage for tomorrow):
+    Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
+      1. What this is + why it exists (replaces TheGraph subgraph)
+      2. Boot recipe:
+         - cargo build --release -p aeqi-indexer
+         - Anvil up (chain 31337, port 8545)
+         - AEQI_INDEXER_FACTORY=<address> ./target/release/aeqi-indexer
+      3. GraphQL schema overview — list every query currently live:
+         trust(address), trustsCount, version, trustSigners(addr),
+         trustModules(trustAddress), permissionsEvents(trust, entity),
+         rolesForModule(module), roleAssignments(module, role),
+         proposalsForModule(module), votesForProposal(module, proposal)
+      4. Architecture diagram (text):
+         Anvil → poll loop → SQLite → axum/async-graphql → apps/ui
+         watched_addresses table = dispatch source-of-truth
+         3-level auto-subscribe: factory → trust → module
+      5. Test contracts inventory:
+         test-contracts/MockFactory.sol — Factory event sigs
+         test-contracts/MockTRUST.sol — TRUST + Permissions sigs
+         test-contracts/MockRole.sol — Role module sigs
+         test-contracts/MockGovernance.sol — Governance module sigs
+         How to redeploy + run a lifecycle smoke
+      6. Open work / known limitations:
+         - Real aeqi-core deploy script drift (deploy was the original blocker)
+         - Token/Vesting/Funding modules not yet ported
+         - eth_call backfill for non-event state (e.g. current treasury balance)
+         - WebSocket log subscription (currently HTTP polling every 2s)
+         - Reorg handling tested only on parent-hash mismatch detection
+           — never run against a reorg in the wild
+         - Governance ProposalCreated dynamic arrays NOT stored
+           (ipfs_cid is the handle)
+         - Permissions audit log doesn't compute effective flags
+           (frontend job)
+         - Multi-chain: indexer is single-rpc; multi-chain support
+           would need per-chain DBs or a chain_id column everywhere
+      7. apps/ui integration sketch:
+         - Treasury tab: trust(address) + trustModules + module-level queries
+         - Ownership tab: rolesForModule + roleAssignments per Role module
+         - Governance tab: proposalsForModule + votesForProposal
+         - Replace existing TheGraph queries with these (URL change +
+           field rename — apps/ui currently hits subgraph at
+           ${VITE_GRAPH_URL}; point at http://127.0.0.1:8500/graphql instead)
 
-  PATH B — Token + Vesting modules (cap table financial surface):
-    Token: Token_TokenCreated, Token_Transfer (lots of these — denial-of-service
-      worry; consider filtering or sampling).
-    Vesting: Vesting_PositionCreated, Vesting_VestingClaimed.
-    Strategically less urgent than Governance for the demo.
-
-  PATH C — apps/ui HANDOFF.md:
-    By this tick, the indexer has 9+ event types live. Stand up:
-      - Boot recipe with env vars
-      - GraphQL schema (queries + types)
-      - Architecture (watched_addresses + topic0 dispatch + auto-subscribe)
-      - Diagram: Anvil → poll → SQLite → axum/async-graphql
-      - Test contracts inventory: MockFactory + MockTRUST + MockRole
-      - Open work for the apps/ui side
+  PATH B — Token module (financial surface; can defer to later session):
+    Token.module ABI has Token_TokenCreated + Token_Transfer.
+    Token_Transfer is high-frequency — implement with care
+    (sample / filter for non-zero amounts, consider rolling balances vs
+    every-transfer audit log).
 
   LEVERAGE PRIORITY:
-    - Path A (Governance) if 1.5+ hours of cron remain — biggest demo lift
-    - Path C (handoff) if approaching session end — tomorrow's pickup
+    Path A (handoff) is the right next move. Without docs, tomorrow's
+    user can't pick this up cleanly. Modules can be added later.
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
