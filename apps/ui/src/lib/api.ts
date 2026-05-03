@@ -794,9 +794,9 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Stripe billing — single Company offer. $19 today (Founder fee, one-time)
-  // + $49/mo from day 15 (Company subscription, 14-day trial). Stripe handles
-  // both as one subscription. No plan / interval params — see lib/pricing.ts.
+  // Stripe billing — single Company offer. $19 first month, $49/mo after
+  // (single subscription with first-month coupon). No plan / interval params
+  // — see lib/pricing.ts.
   createCheckoutSession: (data: {
     blueprint?: string;
     // not entity_id — entity is minted post-checkout when user lands on /start.

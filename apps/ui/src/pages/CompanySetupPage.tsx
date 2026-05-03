@@ -13,7 +13,7 @@ import {
 } from "@/components/blueprints/BlueprintRolePicker";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import { BlueprintSeedCounts } from "@/components/blueprints/BlueprintSeedCounts";
-import { COMPANY_MONTHLY, FEATURES, FOUNDER_FEE, TRIAL_DAYS } from "@/lib/pricing";
+import { COMPANY_MONTHLY, FEATURES, FOUNDER_FEE } from "@/lib/pricing";
 import "@/styles/templates.css";
 import "@/styles/blueprints-store.css";
 
@@ -26,10 +26,10 @@ import "@/styles/blueprints-store.css";
  *   2. Team — role overrides via BlueprintRolePicker
  *   3. Confirm — single CTA that bounces to Stripe checkout
  *
- * Pricing is a single offer: $19 today (Founder fee), $49/mo from day 15
- * (Company subscription). Stripe handles this as one subscription with a
- * one-time line item plus a 14-day trial on the recurring price. No free
- * tier, no annual, no tier picker — see lib/pricing.ts.
+ * Pricing is a single offer: $19 first month, $49/mo after. Stripe handles
+ * this as one $49/mo Product with an auto-applied first-month coupon
+ * (-$30, duration: once). No trial, no annual, no tier picker — see
+ * lib/pricing.ts.
  */
 export default function CompanySetupPage() {
   const navigate = useNavigate();
@@ -230,7 +230,7 @@ export default function CompanySetupPage() {
           <p className="company-setup-section-sub">
             {isInvited
               ? "You're on the invite-only sandbox tier — no payment required. Your company runs on shared infrastructure with free models."
-              : `$${FOUNDER_FEE} today, then $${COMPANY_MONTHLY} / month after ${TRIAL_DAYS} days. Cancel anytime — your card won't be charged again.`}
+              : `$${FOUNDER_FEE} first month, then $${COMPANY_MONTHLY} / month. Cancel anytime — your card won't be charged again.`}
           </p>
         </header>
 

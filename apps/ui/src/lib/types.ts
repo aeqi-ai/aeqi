@@ -183,9 +183,12 @@ export interface User {
   roots?: string[];
   phone?: string;
   phishing_code?: string;
-  /** Subscription state from the accounts table. `"none"` means no
-   *  active Company subscription; `"trialing"` is the 14-day Founder
-   *  window; `"active"` is post-trial monthly billing. */
+  /** Subscription state from the accounts table. Mirrors Stripe's
+   *  subscription status. `"none"` means no active Company subscription;
+   *  `"active"` is the standard monthly billing state. `"trialing"` is a
+   *  legacy state — new subs ship with no trial period (first month is
+   *  $19 via coupon, then $49/mo). Only grandfathered customers from the
+   *  pre-coupon dual-product setup can still be in `"trialing"`. */
   subscription_status?: string;
   subscription_plan?: string;
 }

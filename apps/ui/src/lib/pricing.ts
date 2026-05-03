@@ -1,14 +1,14 @@
 /** Mirrored from aeqi-landing/src/pricing.ts. Single source of truth for pricing.
  *  Update both files when prices change.
  *
- *  One offer. Day 0: $19 founder fee. Day 15+: $49 / month. Stripe runs this
- *  as a single subscription with a one-time line item + 14-day trial on the
- *  recurring price. No tier picker, no free trial, no annual.
+ *  One offer. $19 first month, $49 / month after. Stripe runs this as a single
+ *  $49 / mo Product with an auto-applied first-month coupon (-$30, duration:
+ *  once). Day-0 charge is $19; every subsequent month is $49. No tier picker,
+ *  no trial, no annual. `FOUNDER_FEE` is the effective first-month price.
  */
 
 export const FOUNDER_FEE = 19;
 export const COMPANY_MONTHLY = 49;
-export const TRIAL_DAYS = 14;
 
 export const RESOURCE_PACK = {
   tokens: "16M",

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { COMPANY_MONTHLY, FOUNDER_FEE, TRIAL_DAYS } from "@/lib/pricing";
+import { COMPANY_MONTHLY, FOUNDER_FEE } from "@/lib/pricing";
 import { Badge, Button, Card, type BadgeVariant } from "@/components/ui";
 
 export type Company = {
@@ -110,7 +110,7 @@ export function CompanyPlanCard({
 
       {company.status === "trialing" && (
         <p className="billing-company-trial-note">
-          {TRIAL_DAYS}-day Founder trial — ${COMPANY_MONTHLY}/mo billing starts at trial end.
+          ${FOUNDER_FEE} first month, ${COMPANY_MONTHLY}/mo after.
         </p>
       )}
     </Card>
