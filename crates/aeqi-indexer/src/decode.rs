@@ -63,6 +63,31 @@ sol! {
     }
 }
 
+// Role module events — emitted by Role.module instances attached to a TRUST.
+// Source: /home/claudedev/projects/aeqi-graph/abis/Role.module.json
+//
+// Cherry-picked the high-leverage events for the Company switcher / org-chart
+// surface. The full Role module emits 17+ events; admin/internal ones can be
+// added incrementally with no architecture change.
+sol! {
+    #[sol(rpc)]
+    contract Role {
+        event Role_RoleCreated(bytes32 indexed roleId, address indexed creator);
+        event Role_RoleAssigned(bytes32 indexed roleId, address indexed occupant);
+        event Role_RoleResigned(bytes32 indexed roleId, address indexed occupant);
+        event Role_RoleRemoved(
+            bytes32 indexed authorizedRoleId,
+            bytes32 indexed roleId,
+            address indexed account
+        );
+        event Role_RoleTransferred(
+            bytes32 indexed roleId,
+            address indexed oldHolder,
+            address indexed newHolder
+        );
+    }
+}
+
 /// A normalized indexer event — what we actually persist after decoding raw logs.
 ///
 /// Cross-event uniformity: every variant carries the block + tx context so

@@ -24,6 +24,55 @@ pub type SharedDb = Arc<Mutex<Connection>>;
 /// Top-level GraphQL Query type.
 pub struct Query;
 
+/// GraphQL projection of a Role module's role definition.
+#[derive(SimpleObject, Clone)]
+pub struct Role {
+    pub module_address: String,
+    pub role_id: String,
+    pub creator_address: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+impl From<store::RoleRow> for Role {
+    fn from(r: store::RoleRow) -> Self {
+        Role {
+            module_address: r.module_address,
+            role_id: r.role_id,
+            creator_address: r.creator_address,
+            created_block: r.created_block,
+            created_tx: r.created_tx,
+        }
+    }
+}
+
+/// GraphQL projection of a role assignment audit row.
+#[derive(SimpleObject, Clone)]
+pub struct RoleAssignment {
+    pub module_address: String,
+    pub role_id: String,
+    pub account_address: String,
+    /// 'assigned' | 'resigned' | 'removed' | 'transferred_from' | 'transferred_to'
+    pub kind: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::RoleAssignmentRow> for RoleAssignment {
+    fn from(r: store::RoleAssignmentRow) -> Self {
+        RoleAssignment {
+            module_address: r.module_address,
+            role_id: r.role_id,
+            account_address: r.account_address,
+            kind: r.kind,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
 /// GraphQL projection of a permissions audit-log row.
 #[derive(SimpleObject, Clone)]
 pub struct PermissionsEvent {
@@ -186,6 +235,34 @@ impl Query {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
         let rows = store::get_modules_for_trust(&conn, &trust_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// All roles defined on a Role module, oldest first.
+    async fn roles_for_module(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+    ) -> async_graphql::Result<Vec<Role>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_roles_for_module(&conn, &module_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Audit log of role assignments for a (module, role), oldest first.
+    /// Frontend computes the current occupant by replaying.
+    async fn role_assignments(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+        role_id: String,
+    ) -> async_graphql::Result<Vec<RoleAssignment>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_role_assignments(&conn, &module_address, &role_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

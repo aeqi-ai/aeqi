@@ -174,6 +174,46 @@ pub mod poll {
         Ok(())
     }
 
+    /// Persist a role assignment audit row for any of the Role_Role*
+    /// account-event variants (Assigned, Resigned, Removed, Transferred).
+    /// `kind` discriminates the variant; for Role_RoleTransferred the
+    /// caller invokes this helper twice (transferred_from + transferred_to).
+    async fn persist_role_assignment(
+        db: &Arc<Mutex<Connection>>,
+        log: &alloy::rpc::types::Log,
+        role_id_hex: &str,
+        account_hex: &str,
+        kind: &str,
+        block_num: u64,
+        tx_hash: &str,
+    ) -> Result<()> {
+        let module_address = format!("{:#x}", log.address());
+        let log_index = log.log_index.unwrap_or(0);
+        let conn = db.lock().await;
+        let coord = store::LogCoord {
+            block_number: block_num,
+            tx_hash,
+            log_index,
+        };
+        store::insert_role_assignment(
+            &conn,
+            &module_address,
+            role_id_hex,
+            account_hex,
+            kind,
+            coord,
+        )?;
+        tracing::info!(
+            "indexed Role_{}: module={} role={} account={} block={}",
+            kind,
+            module_address,
+            role_id_hex,
+            account_hex,
+            block_num
+        );
+        Ok(())
+    }
+
     fn capitalize(s: &str) -> String {
         let mut c = s.chars();
         match c.next() {
@@ -257,6 +297,12 @@ pub mod poll {
                         decode::TRUST::PermissionsGranted::SIGNATURE_HASH,
                         decode::TRUST::PermissionsRevoked::SIGNATURE_HASH,
                         decode::TRUST::PermissionsSet::SIGNATURE_HASH,
+                        // Role module events (per-module)
+                        decode::Role::Role_RoleCreated::SIGNATURE_HASH,
+                        decode::Role::Role_RoleAssigned::SIGNATURE_HASH,
+                        decode::Role::Role_RoleResigned::SIGNATURE_HASH,
+                        decode::Role::Role_RoleRemoved::SIGNATURE_HASH,
+                        decode::Role::Role_RoleTransferred::SIGNATURE_HASH,
                     ];
                     let filter = Filter::new()
                         .from_block(block_num)
@@ -441,6 +487,129 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode PermissionsSet failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Role::Role_RoleCreated::SIGNATURE_HASH)
+                        {
+                            // Role events come from the module address.
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Role::Role_RoleCreated::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::insert_role_created(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.roleId),
+                                        &format!("{:#x}", ev.creator),
+                                        block_num,
+                                        &tx_hash,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Role_RoleCreated: module={} role={:#x} creator={:#x} block={}",
+                                        module_address, ev.roleId, ev.creator, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Role_RoleCreated failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Role::Role_RoleAssigned::SIGNATURE_HASH)
+                        {
+                            match decode::Role::Role_RoleAssigned::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_role_assignment(
+                                        &db,
+                                        &log,
+                                        &format!("{:#x}", ev.roleId),
+                                        &format!("{:#x}", ev.occupant),
+                                        "assigned",
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Role_RoleAssigned failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Role::Role_RoleResigned::SIGNATURE_HASH)
+                        {
+                            match decode::Role::Role_RoleResigned::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_role_assignment(
+                                        &db,
+                                        &log,
+                                        &format!("{:#x}", ev.roleId),
+                                        &format!("{:#x}", ev.occupant),
+                                        "resigned",
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Role_RoleResigned failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Role::Role_RoleRemoved::SIGNATURE_HASH)
+                        {
+                            match decode::Role::Role_RoleRemoved::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_role_assignment(
+                                        &db,
+                                        &log,
+                                        &format!("{:#x}", ev.roleId),
+                                        &format!("{:#x}", ev.account),
+                                        "removed",
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Role_RoleRemoved failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Role::Role_RoleTransferred::SIGNATURE_HASH)
+                        {
+                            // Transfer is split into two audit rows so
+                            // get_role_assignments(module, role) returns the
+                            // full chain regardless of which side it queries.
+                            match decode::Role::Role_RoleTransferred::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    persist_role_assignment(
+                                        &db,
+                                        &log,
+                                        &format!("{:#x}", ev.roleId),
+                                        &format!("{:#x}", ev.oldHolder),
+                                        "transferred_from",
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                    persist_role_assignment(
+                                        &db,
+                                        &log,
+                                        &format!("{:#x}", ev.roleId),
+                                        &format!("{:#x}", ev.newHolder),
+                                        "transferred_to",
+                                        block_num,
+                                        &tx_hash,
+                                    )
+                                    .await?;
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Role_RoleTransferred failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

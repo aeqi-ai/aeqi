@@ -155,6 +155,55 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON permissions_events(trust_address, entity_id, block_number);
         "#,
     ),
+    (
+        "009_roles",
+        r#"
+        -- A role created on a Role module. The Role module is identified by
+        -- module_address (which lives in modules.module_address with a TRUST
+        -- backref). Created via Role_RoleCreated(roleId, creator).
+        CREATE TABLE IF NOT EXISTS roles (
+            module_address TEXT NOT NULL,
+            role_id TEXT NOT NULL,
+            creator_address TEXT NOT NULL,
+            created_block INTEGER NOT NULL,
+            created_tx TEXT NOT NULL,
+            PRIMARY KEY (module_address, role_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_roles_creator ON roles(creator_address);
+        "#,
+    ),
+    (
+        "010_role_assignments",
+        r#"
+        -- An audit log of role assignments. Each row is one event:
+        -- Role_RoleAssigned (kind='assigned'), Role_RoleResigned ('resigned'),
+        -- Role_RoleRemoved ('removed'), Role_RoleTransferred ('transferred_to'
+        -- + 'transferred_from' as two rows). UNIQUE on the log coord makes
+        -- replay-safe.
+        --
+        -- account_address is the occupant for assigned/resigned/removed,
+        -- and the new holder for 'transferred_to' (old holder for
+        -- 'transferred_from').
+        CREATE TABLE IF NOT EXISTS role_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_address TEXT NOT NULL,
+            role_id TEXT NOT NULL,
+            account_address TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            -- kind in the UNIQUE because Role_RoleTransferred produces TWO
+            -- audit rows (transferred_from + transferred_to) for ONE log;
+            -- they share the log_index so the kind discriminator is needed.
+            UNIQUE (module_address, block_number, tx_hash, log_index, kind)
+        );
+        CREATE INDEX IF NOT EXISTS idx_role_assign_module_role
+          ON role_assignments(module_address, role_id);
+        CREATE INDEX IF NOT EXISTS idx_role_assign_account
+          ON role_assignments(account_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -542,6 +591,141 @@ pub fn get_permissions_events(
     Ok(rows)
 }
 
+/// Insert a role created by Role_RoleCreated. Idempotent on (module, role_id).
+pub fn insert_role_created(
+    conn: &Connection,
+    module_address: &str,
+    role_id: &str,
+    creator_address: &str,
+    created_block: u64,
+    created_tx: &str,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![creator_address, created_block as i64, created_tx],
+    )?;
+    tx.execute(
+        "INSERT OR IGNORE INTO roles
+            (module_address, role_id, creator_address, created_block, created_tx)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            module_address,
+            role_id,
+            creator_address,
+            created_block as i64,
+            created_tx
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct RoleRow {
+    pub module_address: String,
+    pub role_id: String,
+    pub creator_address: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+/// All roles defined on a Role module, oldest first.
+pub fn get_roles_for_module(conn: &Connection, module_address: &str) -> Result<Vec<RoleRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, role_id, creator_address, created_block, created_tx
+         FROM roles WHERE module_address = ?1
+         ORDER BY created_block ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address], |r| {
+            Ok(RoleRow {
+                module_address: r.get(0)?,
+                role_id: r.get(1)?,
+                creator_address: r.get(2)?,
+                created_block: r.get::<_, i64>(3)? as u64,
+                created_tx: r.get(4)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Insert a role assignment audit-log row. UNIQUE (module, block, tx, log_index)
+/// makes this replay-safe.
+pub fn insert_role_assignment(
+    conn: &Connection,
+    module_address: &str,
+    role_id: &str,
+    account_address: &str,
+    kind: &str,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![account_address, coord.block_number as i64, coord.tx_hash],
+    )?;
+    tx.execute(
+        "INSERT OR IGNORE INTO role_assignments
+            (module_address, role_id, account_address, kind, block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            module_address,
+            role_id,
+            account_address,
+            kind,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct RoleAssignmentRow {
+    pub module_address: String,
+    pub role_id: String,
+    pub account_address: String,
+    pub kind: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// Audit log of role assignments for a (module, role), oldest first.
+pub fn get_role_assignments(
+    conn: &Connection,
+    module_address: &str,
+    role_id: &str,
+) -> Result<Vec<RoleAssignmentRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, role_id, account_address, kind,
+                block_number, tx_hash, log_index
+         FROM role_assignments
+         WHERE module_address = ?1 AND role_id = ?2
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address, role_id], |r| {
+            Ok(RoleAssignmentRow {
+                module_address: r.get(0)?,
+                role_id: r.get(1)?,
+                account_address: r.get(2)?,
+                kind: r.get(3)?,
+                block_number: r.get::<_, i64>(4)? as u64,
+                tx_hash: r.get(5)?,
+                log_index: r.get::<_, i64>(6)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Look up a TRUST by its on-chain address.
 pub fn get_trust(conn: &Connection, address: &str) -> Result<Option<TrustRow>> {
     let row = conn
@@ -787,6 +971,63 @@ mod tests {
         insert_permissions_event(&conn, trust_addr, entity, "set", "0xff", c3).unwrap();
         let events = get_permissions_events(&conn, trust_addr, entity).unwrap();
         assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn role_creation_round_trip() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let module_addr = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let role_id = "0x0000000000000000000000000000000000000000000000000000000000000aaa";
+        let creator = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+        insert_role_created(&conn, module_addr, role_id, creator, 100, "0xtx").unwrap();
+        let roles = get_roles_for_module(&conn, module_addr).unwrap();
+        assert_eq!(roles.len(), 1);
+        assert_eq!(roles[0].role_id, role_id);
+        assert_eq!(roles[0].creator_address, creator);
+
+        // Idempotent on (module, role_id)
+        insert_role_created(&conn, module_addr, role_id, creator, 100, "0xtx").unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM roles", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn role_assignment_audit_log_with_transferred_split() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let module_addr = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let role_id = "0x0000000000000000000000000000000000000000000000000000000000000aaa";
+        let alice = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
+        let bob = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
+
+        // assigned to alice, then transferred to bob (two rows for one log)
+        let c1 = LogCoord { block_number: 100, tx_hash: "0xtx1", log_index: 0 };
+        let c2 = LogCoord { block_number: 101, tx_hash: "0xtx2", log_index: 0 };
+
+        insert_role_assignment(&conn, module_addr, role_id, alice, "assigned", c1).unwrap();
+        insert_role_assignment(&conn, module_addr, role_id, alice, "transferred_from", c2)
+            .unwrap();
+        insert_role_assignment(&conn, module_addr, role_id, bob, "transferred_to", c2).unwrap();
+
+        let log = get_role_assignments(&conn, module_addr, role_id).unwrap();
+        assert_eq!(log.len(), 3);
+        assert_eq!(log[0].kind, "assigned");
+        assert_eq!(log[1].kind, "transferred_from");
+        assert_eq!(log[2].kind, "transferred_to");
+
+        // Idempotent: re-insert same triple is no-op
+        insert_role_assignment(&conn, module_addr, role_id, alice, "transferred_from", c2)
+            .unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM role_assignments", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 3);
     }
 
     #[test]

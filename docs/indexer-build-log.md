@@ -27,12 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 14 (PHASE 4-A ✓ PERMISSIONS AUDIT LOG — 3 TYPES, 1 TX, ORDERED BY LOG INDEX)
-PHASE: 4-A ✓ TRUST CORE COMPLETE | full Factory + TRUST_ModuleAdded +
-       Permissions{Granted,Revoked,Set} all flowing through dispatch.
-       19/19 tests green; clippy clean.
-       | next: Phase 4-B (module-level events — Role/Governance/Token modules)
-               OR Phase 4-C (apps/ui handoff doc)
+TICK: 15 (PHASE 4-B ✓ ROLE MODULE — 3-LEVEL DYNAMIC DISPATCH PROVEN)
+PHASE: 4-B ✓ FIRST MODULE LIVE | factory→trust→module subscription chain
+       handles Role_RoleCreated/Assigned/Resigned/Removed/Transferred.
+       Transferred event splits to 2 audit rows (transferred_from + _to).
+       21/21 tests green; clippy clean. 18 commits.
+       | next: more modules (Governance, Token, Vesting) via same template,
+               OR Phase 4-C apps/ui handoff doc
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -253,39 +254,97 @@ TICK 14 — PHASE 4-A PERMISSIONS WIRE-UP:
 
 19/19 tests green. 17 commits on indexer-build branch.
 
+TICK 15 — PHASE 4-B FIRST MODULE (ROLE) LIVE:
+  Subagent dispatch:
+    Haiku Explore enumerated /home/claudedev/projects/aeqi-graph/abis/Role.module.json
+    — 19 events including admin/internal. Cherry-picked the 5 high-leverage
+    org-chart ones for the Company switcher north-star:
+      Role_RoleCreated(roleId, creator)
+      Role_RoleAssigned(roleId, occupant)
+      Role_RoleResigned(roleId, occupant)
+      Role_RoleRemoved(authorizedRoleId, roleId, account)
+      Role_RoleTransferred(roleId, oldHolder, newHolder)
+    Other module ABIs available in the directory:
+      Beacon, Budget.module, Dao, Foundation.module, Funding.module,
+      Fund.module, Governance.module, Module, Token.module, TRUST,
+      Unifutures.module, UnifuturesPositionManager.module,
+      Uniswap.module, UniswapPositionManager.module, Vesting.module.
+  Schema:
+    - 009_roles(module_address, role_id, creator_address, created_block,
+      created_tx) — Role_RoleCreated landing
+    - 010_role_assignments(id, module_address, role_id, account_address,
+      kind, block_number, tx_hash, log_index) — append-only audit log
+      UNIQUE (module, block, tx, log_index, KIND) — kind in the unique
+      because Role_RoleTransferred produces TWO rows for ONE log
+      (transferred_from + transferred_to)
+  Decode: sol! Role contract block (5 events).
+  Poll loop: 5 new dispatch arms, persist_role_assignment helper for the
+    4 account-event variants. Role_RoleTransferred branch invokes the
+    helper twice with different kind values.
+  GraphQL: Role + RoleAssignment SimpleObjects;
+    rolesForModule(moduleAddress) + roleAssignments(moduleAddress, roleId).
+  MockRole module added with emitFounderLifecycle(roleId, founder, successor)
+    — one tx emits Created + Assigned + Transferred for a 3-step founder flow.
+
+  LIVE-TESTED THE FULL 3-LEVEL DISPATCH CHAIN:
+    Factory → TRUST → Module → Role events
+    block 2202: emitTrustCreated(creator, trustId 0xcc, trustAddress=MockTRUST)
+      → indexer: Factory_TRUSTCreatedEvent → trust auto-watched (kind='trust')
+    block 2224: MockTRUST.emitModuleAdded(moduleId 0xfeed, MockRole.address, acl=255)
+      → indexer: TRUST_ModuleAdded → module auto-watched (kind='module')
+    block 2246: MockRole.emitFounderLifecycle(roleId 0xf01, founder, successor)
+      → indexer: Role_RoleCreated AND Role_RoleAssigned AND Role_RoleTransferred
+        (which split into Role_transferred_from + Role_transferred_to)
+      → 4 audit rows written for one cast send.
+
+    GraphQL trustModules(trust) returned the module (1 row).
+    GraphQL rolesForModule(module) returned the role (1 row).
+    GraphQL roleAssignments(module, role) returned 3 audit rows:
+      assigned (logIndex 1), transferred_from (logIndex 2),
+      transferred_to (logIndex 2). Replaying gives current = successor.
+
+  THIS IS THE V2 ARCHITECTURE WORKING. The indexer now follows the deploy
+  graph dynamically across 3 levels of contract creation. Adding more
+  modules (Governance, Token, Vesting) is the same mechanical recipe:
+    sol! decl + migration + insert/get fns + dispatch arm + GraphQL field.
+  Every module added makes the v2 demo more complete — but no new
+  architecture is required.
+
+21/21 tests green. 18 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 4-B — module-level events):
-  Phase 4-A (Permissions wire-up) is DONE.
+NEXT ACTION (Phase 4-C — Governance module OR handoff doc):
+  Phase 4-B (Role module) is DONE. The 3-level dispatch is proven.
 
-  Module addresses now flow into watched_addresses with kind='module' via
-  insert_module's auto-subscribe (TICK 13). The poll loop's filter spans
-  them automatically. What's missing is the sol! decls + handlers for
-  the events those modules emit.
+  PATH A — Governance module (highest-impact remaining demo surface):
+    The Governance.module ABI defines proposal + vote events.
+    Spawn Haiku Explore on /home/claudedev/projects/aeqi-graph/abis/Governance.module.json
+    to enumerate. Probable highlights:
+      Governance_ProposalCreated(proposalId, proposer, ...)
+      Governance_VoteCast(proposalId, voter, support, weight)
+      Governance_ProposalExecuted(proposalId)
+      Governance_ProposalCanceled(proposalId)
+    Same template as TICK 15 (sol! decl, migration, store, dispatch, GraphQL,
+    MockGovernance + live test). With the proven pattern this is a 2-tick job.
 
-  Suggested attack:
-    1. Spawn Haiku Explore on ~/projects/aeqi-graph/abis/ to enumerate
-       module ABIs (Role, Governance, Token, Vesting, Budget, Funding).
-       Distill into a single table: (module, event name, signature).
-    2. For each module, add a sol! contract block in decode.rs.
-    3. For each event type, add: migration + store insert/get +
-       dispatch arm + GraphQL projection. The pattern is mechanical
-       (see TICK 14 Permissions for the template).
-    4. Live test: extend MockTRUST.emitModuleAdded to also deploy a
-       MockRole module that emits Role events; run the lifecycle.
+  PATH B — Token + Vesting modules (cap table financial surface):
+    Token: Token_TokenCreated, Token_Transfer (lots of these — denial-of-service
+      worry; consider filtering or sampling).
+    Vesting: Vesting_PositionCreated, Vesting_VestingClaimed.
+    Strategically less urgent than Governance for the demo.
 
-  PATH C — apps/ui handoff doc (good if many event types):
-    Stand up HANDOFF.md:
-      - GraphQL endpoint, schema overview, the 7 queries currently live
-      - Boot recipe (env vars, AEQI_INDEXER_FACTORY)
-      - Architecture: watched_addresses + topic0 dispatch pattern
-      - Open work: events still to port, eth_call backfill, deploy
-        script drift, multi-Anvil chain support
-      - apps/ui integration: which Treasury/Ownership/Roles tabs
-        currently mock-data and which queries they'd need
+  PATH C — apps/ui HANDOFF.md:
+    By this tick, the indexer has 9+ event types live. Stand up:
+      - Boot recipe with env vars
+      - GraphQL schema (queries + types)
+      - Architecture (watched_addresses + topic0 dispatch + auto-subscribe)
+      - Diagram: Anvil → poll → SQLite → axum/async-graphql
+      - Test contracts inventory: MockFactory + MockTRUST + MockRole
+      - Open work for the apps/ui side
 
   LEVERAGE PRIORITY:
-    - If 1+ hour left: Phase 4-B (module breadth = bigger demo surface)
-    - If under 1 hour: Phase 4-C (handoff so user can pick up tomorrow)
+    - Path A (Governance) if 1.5+ hours of cron remain — biggest demo lift
+    - Path C (handoff) if approaching session end — tomorrow's pickup
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
