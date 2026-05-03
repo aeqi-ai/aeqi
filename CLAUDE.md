@@ -103,6 +103,16 @@ up after a deploy or for a freshly-created company:
 2. `sudo journalctl -u aeqi-platform.service -n 50 | grep -i 'placement\|503'` — look for `runtime placement not ready`.
 3. `sudo sqlite3 /var/lib/aeqi/platform.db "SELECT entity_id, placement_type, status, target_port FROM runtime_placements;"` — `status=pending` with NULL routing fields means provisioning never finished. Repoint the row to a live host as a manual fix; sandbox auto-provisioning is currently broken.
 
+**Don't manually exercise `aeqi setup` from the worktree root.** Setup
+treats any cwd that contains `Cargo.toml` / `.git` / `agents/` /
+`config/` as workspace mode and writes seed agent files into that cwd
+— so a one-off test from `/home/claudedev/aeqi-<branch>/` litters the
+worktree with `agents/shared/WORKFLOW.md` and friends, which then
+needs cleanup before commit. Two ways around it: (1) run
+`scripts/smoke-fresh-install.sh` (uses `env -C $NEUTRAL_CWD HOME=$tmp`),
+or (2) for a one-liner: `tmp=$(mktemp -d) && env -C "$tmp" HOME="$tmp"
+target/debug/aeqi setup --runtime ollama_agent`. Hit once 2026-05-02.
+
 **`scripts/deploy.sh` swallows UI build failures.** The `[1/4] Building dashboard UI...` step pipes `npm run build` through `2>&1 | tail -3`, so the pipe's exit code (always 0) wins under `set -e` and a failed vite build looks identical to a successful one in the deploy log ("✓ built in Xs" + "staged UI dist"). The Rust binary still ships, but `apps/ui/dist/` stays stale and the live `index-*.js` hash doesn't move. Verify after every full deploy: `cat /home/claudedev/aeqi/apps/ui/dist/index.html | grep -oE 'index-[A-Za-z0-9_-]+\.js'` MUST match `curl -sL https://app.aeqi.ai/ | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1`. If they diverge, the UI build silently failed — run `./node_modules/.bin/vite build` directly from `apps/ui/` to surface the real error (most often the viem partial-tree, fixed via `rm -rf apps/ui/node_modules && npm install`).
 
 ## Workflow — locked
