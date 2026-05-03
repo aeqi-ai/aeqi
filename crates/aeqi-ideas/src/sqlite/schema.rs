@@ -299,8 +299,17 @@ fn initial_schema(conn: &Connection) -> Result<()> {
     // credential the runtime needs (LLM keys, OAuth tokens, device sessions,
     // GitHub App keys, GCP service-account JSON). The blob is encrypted
     // with ChaCha20-Poly1305 using the SecretStore key.
+    //
+    // CREATE TABLE IF NOT EXISTS, not bare CREATE: aeqi-core's
+    // CredentialStore::initialize_schema (an identical CREATE TABLE IF NOT
+    // EXISTS) runs earlier in the production runtime startup, against the
+    // same connection. The bare form failed on every fresh sandbox spawn
+    // with "table credentials already exists" — invisible in unit tests
+    // (which don't initialize the credential store first) but fatal at
+    // production boot. The two definitions are kept in sync; idempotency
+    // here makes the order-of-initialization safe.
     conn.execute_batch(
-        "CREATE TABLE credentials (
+        "CREATE TABLE IF NOT EXISTS credentials (
             id TEXT PRIMARY KEY,
             scope_kind TEXT NOT NULL,
             scope_id TEXT NOT NULL,
@@ -315,13 +324,13 @@ fn initial_schema(conn: &Connection) -> Result<()> {
             last_used_at TEXT,
             UNIQUE (scope_kind, scope_id, provider, name)
          );
-         CREATE INDEX idx_credentials_scope
+         CREATE INDEX IF NOT EXISTS idx_credentials_scope
             ON credentials(scope_kind, scope_id);
-         CREATE INDEX idx_credentials_provider
+         CREATE INDEX IF NOT EXISTS idx_credentials_provider
             ON credentials(provider);
-         CREATE INDEX idx_credentials_lifecycle
+         CREATE INDEX IF NOT EXISTS idx_credentials_lifecycle
             ON credentials(lifecycle_kind);
-         CREATE INDEX idx_credentials_expires
+         CREATE INDEX IF NOT EXISTS idx_credentials_expires
             ON credentials(expires_at)
             WHERE expires_at IS NOT NULL;",
     )?;
