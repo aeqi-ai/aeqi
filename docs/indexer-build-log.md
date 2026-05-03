@@ -27,17 +27,29 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 5 (PIVOT — deploy script out of date, building indexer against ABIs)
-PHASE: 0 — env+scaffold ✓ DONE | building decoder + schema against ABIs (no deployed contracts needed)
-LAST ACTION: After installing deps with --legacy-peer-deps (works), `forge script scripts/foundry/Deploy.s.sol` STILL fails — Beacon.setImplementation signature changed from (bytes32, address) to (address, bytes32, address) but script wasn't updated. This is contract-vs-script drift in aeqi-core repo, not my problem to fix in this autonomous session.
-PIVOT DECISION: Skip live deploy for now. Build indexer code AGAINST THE ABIS using synthetic event data. The ABI is the type contract — Rust decoder can be tested without on-chain deployment. When indexer is functional, USER (when awake) can fix the deploy script OR I can use a minimal hand-written test contract.
-NEXT ACTION:
-  1. Generate alloy sol! types from /home/claudedev/projects/aeqi-graph/abis/Factory.json
-  2. Write decoder for Factory_TRUSTCreatedEvent (event sig: trustId bytes32 indexed, creatorAddress address indexed, trustAddress address indexed)
-  3. Write SQLite schema for `trusts` + `accounts` tables (rusqlite, additive migration)
-  4. Wire async-graphql endpoint with `trust(id: String!) -> Trust?` query
-  5. Synthesize a fake event log + verify end-to-end: decode → insert → query
-  6. THEN come back to live deploy as a separate concern
+TICK: 6 (decoder + schema written, cargo build running)
+PHASE: 0 — env+scaffold ✓ DONE | decoder.rs + store.rs done | cargo build pending
+LAST ACTION (TICK 6):
+  Wrote crates/aeqi-indexer/src/decode.rs:
+    - alloy sol! macro defining Factory contract event types (TRUST_Created, TRUST_Registered, TRUST_SignerAdded, etc.)
+    - DecodedEvent enum (normalized output)
+    - Round-trip test: encode → decode → assert fields
+  Wrote crates/aeqi-indexer/src/store.rs:
+    - 5 migrations: meta, committed_blocks, accounts, trusts, trust_signers
+    - apply_migrations() — idempotent, tracks IDs
+    - insert_trust_created() — atomic upsert of accounts + trusts
+    - get_trust() — lookup by address
+    - 2 tests: migration idempotency + round-trip insert
+  Copied 4 ABIs into crates/aeqi-indexer/abis/ (Factory, TRUST, Beacon, Role.module)
+  Started `cargo build -p aeqi-indexer` in background (output be3q2gjf4)
+PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
+NEXT ACTION (next tick):
+  1. Check build output be3q2gjf4 — fix any errors
+  2. Run `cargo test -p aeqi-indexer` to verify decoder + storage tests pass
+  3. Wire async-graphql endpoint: query trust(address: String!) -> Option<Trust>
+  4. Add simple HTTP server (axum) on port 8500 with /graphql route
+  5. Manual smoke test: build a synthetic Factory_TRUSTCreatedEvent log, feed it through decoder → insert → query via curl GraphQL
+  6. Stretch: connect alloy provider to local Anvil, subscribe to logs (will be empty since no contracts deployed but proves the wiring)
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
