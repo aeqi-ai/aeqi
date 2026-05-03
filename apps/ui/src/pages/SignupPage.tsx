@@ -29,7 +29,14 @@ export default function SignupPage() {
 
   // When waitlist=true, default to waitlist mode. "Have an invite code?" switches to signup.
   const [mode, setMode] = useState<"waitlist" | "signup">("signup");
-  const [step, setStep] = useState<"email" | "info" | "verify">("email");
+  // Pre-launch is invite-only: every signup starts on the "invite" step,
+  // validates the code, then moves to email/password. The OAuth/Wallet/
+  // Passkey buttons appear on step="email" so the alternate paths also
+  // require a validated code on the same form.
+  const [step, setStep] = useState<"invite" | "email" | "info" | "verify">("invite");
+  const [inviteValidating, setInviteValidating] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const oauthError = params.get("error") === "invite_required";
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -82,6 +89,26 @@ export default function SignupPage() {
   };
 
   // ── Signup steps ──
+  const handleInviteContinue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = inviteCode.trim();
+    if (!code) return;
+    setInviteValidating(true);
+    setInviteError("");
+    try {
+      const resp = await api.checkInviteCode(code);
+      if (resp.valid) {
+        setStep("email");
+      } else {
+        setInviteError("That code isn't valid or has already been used.");
+      }
+    } catch {
+      setInviteError("Couldn't validate the code. Try again.");
+    } finally {
+      setInviteValidating(false);
+    }
+  };
+
   const handleCredentialsContinue = (e: React.FormEvent) => {
     e.preventDefault();
     if (email.trim() && password.length >= 8) {
@@ -92,8 +119,8 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || (waitlist && !inviteCode.trim())) return;
-    const result = await signup(email, password, fullName, inviteCode || undefined);
+    if (!firstName.trim() || !lastName.trim() || !inviteCode.trim()) return;
+    const result = await signup(email, password, fullName, inviteCode);
     if (result === "pending") {
       track(Events.AuthSignupVerifySent, { method: "email" });
       setStep("verify");
@@ -259,6 +286,66 @@ export default function SignupPage() {
       );
     }
 
+    // ── Signup: invite code (step 0 — required pre-launch gate) ──
+    if (step === "invite") {
+      return (
+        <>
+          <h1 className="auth-heading">Have an invite code?</h1>
+          <p className="auth-subheading">aeqi is invite-only while we finish launching.</p>
+          {oauthError && (
+            <div className="auth-error" role="alert">
+              You need an invite code to sign up. Once your account exists, you can sign in with
+              Google.
+            </div>
+          )}
+          <form className="auth-form" onSubmit={handleInviteContinue}>
+            <Input
+              size="lg"
+              type="text"
+              placeholder="Invite code"
+              aria-label="Invite code"
+              value={inviteCode}
+              onChange={(e) => {
+                setInviteCode(e.target.value);
+                setInviteError("");
+              }}
+              autoFocus
+            />
+            {inviteError && (
+              <div className="auth-error" role="alert">
+                {inviteError}
+              </div>
+            )}
+            <Button
+              variant="primary"
+              size="lg"
+              type="submit"
+              fullWidth
+              loading={inviteValidating}
+              disabled={inviteValidating || !inviteCode.trim()}
+            >
+              Continue
+            </Button>
+          </form>
+          <p className="auth-switch">
+            No code?{" "}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                switchToWaitlist();
+              }}
+            >
+              Join the waitlist
+            </a>
+          </p>
+          <p className="auth-switch">
+            Already have an account? <Link to="/login">Sign in</Link>
+          </p>
+        </>
+      );
+    }
+
     // ── Signup: email + password (step 1) ──
     if (step === "email") {
       return (
@@ -390,16 +477,6 @@ export default function SignupPage() {
                 onChange={(e) => setLastName(e.target.value)}
               />
             </div>
-            {waitlist && (
-              <Input
-                size="lg"
-                type="text"
-                placeholder="Invite code"
-                aria-label="Invite code"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-              />
-            )}
             {error && (
               <div className="auth-error" role="alert" id="auth-error">
                 {error}
@@ -411,9 +488,7 @@ export default function SignupPage() {
               type="submit"
               fullWidth
               loading={loading}
-              disabled={
-                loading || !firstName.trim() || !lastName.trim() || (waitlist && !inviteCode.trim())
-              }
+              disabled={loading || !firstName.trim() || !lastName.trim() || !inviteCode.trim()}
             >
               Create account
             </Button>

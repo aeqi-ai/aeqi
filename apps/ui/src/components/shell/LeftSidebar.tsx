@@ -128,14 +128,6 @@ const SettingsIcon = () => (
   </svg>
 );
 
-// Account — single user silhouette (mirrors AgentsIcon but solo).
-const AccountIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="5.5" r="2.5" />
-    <path d="M3 13.5c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
-  </svg>
-);
-
 // Admin — shield silhouette.
 const AdminIcon = () => (
   <svg {...iconProps}>
@@ -221,7 +213,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   // Top-level public rows.
   const isDiscover = path === "/";
   const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
-  const isAccount = path === "/me" || path.startsWith("/me/");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
 
@@ -421,15 +412,14 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
           </>
         )}
 
-        {/* ── Bottom group — Blueprints + Account, pinned to the rail's
-            foot via mt:auto so the user dropdown always sits at the very
-            bottom regardless of how many items are above. Blueprints =
-            the catalog (top-level, public). Account = `/me`. ── */}
+        {/* ── Bottom group — Blueprints + (admin) + AccountDropdown.
+            Account isn't a nav row anymore: the AccountDropdown trigger
+            below already routes to /me on click, and a duplicate row is
+            redundant. Blueprints = the catalog (top-level, public). ── */}
         <div className="sidebar-bottom-group">
           <nav className="sidebar-surface-nav" aria-label="Platform">
             {topLevelItem("/blueprints", "Blueprints", <BlueprintsIcon />, isBlueprints)}
             {isAdminUser && topLevelItem("/admin", "Admin", <AdminIcon />, isAdmin)}
-            {topLevelItem("/me", "Account", <AccountIcon />, isAccount)}
           </nav>
           <div className="sidebar-action-row sidebar-action-row--account">
             <AccountDropdown />
