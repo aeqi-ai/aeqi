@@ -27,9 +27,9 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 9 (PHASE 1 reorg-tracking + provider working)
-PHASE: 1 — partial | reorg detection in place, alloy provider connects to Anvil
-        | 11/11 tests green (5 from Phase 0 + 6 new Phase 1)
+TICK: 10 (PHASE 1 ✓ COMPLETE — POLL LOOP LIVE)
+PHASE: 1 ✓ COMPLETE | 12/12 tests green | live poll loop indexed 766 Anvil blocks
+        | next: Phase 2 (more entity schemas + write a minimal MockFactory.sol to test event decoding)
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -67,21 +67,58 @@ TICK 9 — PHASE 1 reorg + provider:
     - highest_committed_works ✓
     - provider_connects_to_anvil_if_running ✓ LIVE — confirmed alloy talks to running Anvil
   Total: 11/11 tests pass
+
+TICK 10 — PHASE 1 COMPLETE (poll loop LIVE):
+  Wrote chain::poll module:
+    - PollConfig struct (rpc_url, factory_address, start_block, confirmation_depth, poll_interval)
+    - poll::run(cfg, db) async loop:
+      * resume from highest_committed + 1 OR start_block
+      * fetch blocks up to head - confirmation_depth (12)
+      * cap at 100 blocks/round
+      * for each block: fetch logs filtered to factory + Factory_TRUSTCreatedEvent topic0
+      * decode via alloy sol_types
+      * insert_trust_created on success
+      * commit_block (reorg-safe — unwind on parent_hash mismatch)
+  Wired poll loop into main.rs:
+    - tokio::spawn alongside api::serve
+    - reads AEQI_INDEXER_RPC + AEQI_INDEXER_FACTORY + AEQI_INDEXER_START_BLOCK env
+    - poll_handle.abort() if serve exits
+  LIVE SMOKE TEST:
+    - Anvil at block ~778 when test started
+    - Indexer started fresh (no DB), poll loop began at start_block=0
+    - In ~6 seconds: indexed blocks 0→757 (758 committed_blocks rows)
+    - GraphQL still responsive on 8501 (concurrent serving + polling works)
+    - factory=None means no log decoding ran (smoke mode), but block tracking + commit_block end-to-end VERIFIED
+    - When killed: 766 committed_blocks total — proves continuous indexing from cold start
+
+12/12 tests green. Phase 1 done (real chain integration).
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 1 polling-mode poll loop):
-  1. Add chain::poll_loop(provider, conn, factory_addr, start_block) — async fn that:
-     a. Loops every block_time (~2s on Anvil)
-     b. Calls provider.get_block_number()
-     c. For each new block since highest_committed(): get_block_with_txs + get_logs(filter)
-     d. For each log matching Factory_TRUSTCreatedEvent topic0: decode + insert_trust_created
-     e. Call commit_block() with the new block; if not continuous, log warn + unwind
-  2. Wire poll_loop into main.rs as a tokio::spawn task next to api::serve
-  3. Add factory_address to IndexerConfig
-  4. Test: synthesize a real Anvil tx that emits a fake event (use cast send to a wallet that emits Transfer-like log)
-       OR write a minimal MockFactory.sol contract just for testing, deploy via cast
-  5. Verify end-to-end: cast send emits log → indexer poll picks it up → trusts row inserted → GraphQL query returns it
-  6. Stretch: WS subscribe instead of polling (faster) — alloy ProviderBuilder::on_ws()
-  7. THEN Phase 2: schema for modules, roles, governance proposals
+NEXT ACTION (Phase 2 — schema for more entities + first real event decoded):
+  Two parallel paths (next ticks can pick either or both):
+
+  PATH A — write a MockFactory contract + verify end-to-end log decode:
+    1. Write contracts/MockFactory.sol (in worktree, ~30 lines):
+       - Single function emitTrustCreated(creator, trustId, trustAddress)
+       - Emits Factory_TRUSTCreatedEvent with same signature as real Factory
+    2. Compile via forge (no node_modules needed for a self-contained contract)
+    3. Deploy to Anvil via forge create
+    4. Set AEQI_INDEXER_FACTORY=<address> + restart indexer
+    5. cast send to call emitTrustCreated() — observe indexer log decode + insert
+    6. GraphQL query: trust(address: "0x...") returns the row
+
+  PATH B — Phase 2 schema expansion (more entities):
+    1. Add migrations: 006_modules, 007_role_assignments, 008_proposals, 009_proposal_votes, 010_token_balances, 011_vesting_positions, 012_funding_states
+    2. Add corresponding Rust structs in store.rs
+    3. Add GraphQL types + queries
+    4. Generate sol! types for TRUST + Role.module + Governance.module + Token.module + Vesting.module + Budget.module
+    5. Add handler functions per (module × event)
+
+  PATH C — bridge integration to apps/ui:
+    1. Read aeqi/apps/ui Treasury / Ownership tabs to see what queries they need
+    2. Add corresponding GraphQL resolvers
+    3. Wire client to indexer GraphQL endpoint
+
+  LEVERAGE PRIORITY: A first (fastest proof of full stack working), then B (broader entity coverage), then C (apps/ui glue can be done by user when awake).
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)

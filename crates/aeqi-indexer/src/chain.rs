@@ -1,14 +1,14 @@
 //! Chain interaction: alloy provider, block + log subscription, reorg tracking.
 //!
-//! Phase 1 deliverable. Connects to a JSON-RPC endpoint (HTTP for poll mode,
-//! WS for subscribe mode) and streams events into the indexer store.
+//! Phase 1 deliverable. Connects to a JSON-RPC endpoint and polls for new
+//! blocks, decoding Factory events into the SQLite store.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rusqlite::{params, Connection};
 
 /// Record a freshly committed block in `committed_blocks` and verify its
 /// `parent_hash` matches the previously-committed block. Returns `Ok(true)`
-/// if continuous, `Ok(false)` if a reorg is detected (caller should unwind).
+/// if continuous, `Ok(false)` if a reorg/gap is detected.
 pub fn commit_block(
     conn: &Connection,
     block_number: u64,
@@ -25,9 +25,7 @@ pub fn commit_block(
         .ok();
 
     let continuous = match &prev {
-        // No prior block → genesis-or-cold-start; always accept.
         None => true,
-        // Prior block must be exactly one less + its hash must match parent_hash.
         Some((prev_num, prev_hash)) => {
             *prev_num as u64 + 1 == block_number && prev_hash == parent_hash
         }
@@ -49,9 +47,6 @@ pub fn commit_block(
 }
 
 /// Unwind committed blocks above `safe_block` — invoked on reorg detection.
-/// Currently this only deletes the committed_blocks rows; entity-row unwind
-/// (deleting/reverting `trusts`, `accounts` etc.) is a Phase 2+ concern that
-/// requires the full row_history table from the spec.
 pub fn unwind_above(conn: &Connection, safe_block: u64) -> Result<usize> {
     let n = conn.execute(
         "DELETE FROM committed_blocks WHERE block_number > ?1",
@@ -67,7 +62,7 @@ pub fn unwind_above(conn: &Connection, safe_block: u64) -> Result<usize> {
     Ok(n)
 }
 
-/// Look up the highest committed block_number, used as the indexer's resume point.
+/// Look up the highest committed block_number, used as the resume point.
 pub fn highest_committed(conn: &Connection) -> Result<Option<u64>> {
     let n: Option<i64> = conn
         .query_row(
@@ -79,21 +74,175 @@ pub fn highest_committed(conn: &Connection) -> Result<Option<u64>> {
     Ok(n.map(|x| x as u64))
 }
 
-/// Provider helpers — thin wrapper over alloy. Async because RPC calls are.
 pub mod provider {
     use alloy::providers::{Provider, ProviderBuilder};
     use anyhow::{Context, Result};
 
-    /// Build an HTTP provider for a given JSON-RPC URL. Use for polling-mode
-    /// indexing (simpler than WS, fine for local Anvil and most testnets).
-    pub fn http_provider(rpc_url: &str) -> Result<impl Provider> {
+    pub fn http_provider(rpc_url: &str) -> Result<impl Provider + Clone> {
         let url = rpc_url.parse().context("parse rpc url")?;
         Ok(ProviderBuilder::new().connect_http(url))
     }
 
-    /// Latest block number reachable from this provider — sanity check.
     pub async fn latest_block(p: &impl Provider) -> Result<u64> {
         Ok(p.get_block_number().await?)
+    }
+}
+
+pub mod poll {
+    //! Poll-mode log fetcher. Walks blocks `from..=to`, fetches Factory logs,
+    //! decodes via the `decode::Factory` sol! types, inserts TRUSTs into store,
+    //! commits blocks (reorg-safe).
+
+    use crate::{chain, decode, store};
+    use alloy::primitives::Address;
+    use alloy::providers::Provider;
+    use alloy::rpc::types::{BlockNumberOrTag, Filter};
+    use alloy::sol_types::SolEvent;
+    use anyhow::{Context, Result};
+    use rusqlite::Connection;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::Mutex;
+
+    /// Configuration for the poll loop.
+    #[derive(Debug, Clone)]
+    pub struct PollConfig {
+        /// JSON-RPC endpoint (HTTP).
+        pub rpc_url: String,
+        /// Factory contract address to filter logs to.
+        /// If `None`, the loop fetches blocks but skips log decoding (smoke mode).
+        pub factory_address: Option<Address>,
+        /// First block to start indexing from (inclusive).
+        pub start_block: u64,
+        /// Confirmation depth — only commit blocks once `head - depth` ≥ block_number.
+        pub confirmation_depth: u64,
+        /// Sleep between catch-up rounds (typical: ~block time on the chain).
+        pub poll_interval: Duration,
+    }
+
+    impl Default for PollConfig {
+        fn default() -> Self {
+            Self {
+                rpc_url: "http://127.0.0.1:8545".into(),
+                factory_address: None,
+                start_block: 0,
+                confirmation_depth: 12,
+                poll_interval: Duration::from_secs(2),
+            }
+        }
+    }
+
+    /// Spawn the poll loop. Runs until the provided cancellation signal fires
+    /// or an unrecoverable error is hit.
+    pub async fn run(cfg: PollConfig, db: Arc<Mutex<Connection>>) -> Result<()> {
+        let provider = chain::provider::http_provider(&cfg.rpc_url)
+            .context("connect provider")?;
+        tracing::info!(
+            "poll loop starting: rpc={} factory={:?} start_block={} depth={}",
+            cfg.rpc_url,
+            cfg.factory_address,
+            cfg.start_block,
+            cfg.confirmation_depth
+        );
+
+        loop {
+            // Resume from highest_committed + 1, or start_block on cold start.
+            let from = {
+                let conn = db.lock().await;
+                chain::highest_committed(&conn)?
+                    .map(|h| h + 1)
+                    .unwrap_or(cfg.start_block)
+            };
+
+            let head = provider.get_block_number().await?;
+            // Don't process blocks that haven't reached confirmation depth.
+            let safe_head = head.saturating_sub(cfg.confirmation_depth);
+            if from > safe_head {
+                tokio::time::sleep(cfg.poll_interval).await;
+                continue;
+            }
+
+            let to = safe_head.min(from + 99); // Cap at 100 blocks per round
+            tracing::debug!("poll round: blocks {}..={} (head={})", from, to, head);
+
+            for block_num in from..=to {
+                let blk = provider
+                    .get_block_by_number(BlockNumberOrTag::Number(block_num))
+                    .await
+                    .with_context(|| format!("fetch block {}", block_num))?;
+
+                let Some(blk) = blk else {
+                    tracing::warn!("block {} returned None — skipping", block_num);
+                    continue;
+                };
+
+                let block_hash = format!("{:#x}", blk.header.hash);
+                let parent_hash = format!("{:#x}", blk.header.parent_hash);
+
+                // Fetch logs scoped to this block + factory (if configured).
+                if let Some(factory) = cfg.factory_address {
+                    let mut filter = Filter::new()
+                        .from_block(block_num)
+                        .to_block(block_num)
+                        .address(factory);
+                    // Only decode the events we currently know how to handle.
+                    filter = filter.event_signature(
+                        decode::Factory::Factory_TRUSTCreatedEvent::SIGNATURE_HASH,
+                    );
+
+                    let logs = provider
+                        .get_logs(&filter)
+                        .await
+                        .with_context(|| format!("get_logs block {}", block_num))?;
+
+                    for log in logs {
+                        let tx_hash = log
+                            .transaction_hash
+                            .map(|h| format!("{:#x}", h))
+                            .unwrap_or_default();
+                        match decode::Factory::Factory_TRUSTCreatedEvent::decode_log(&log.inner) {
+                            Ok(ev) => {
+                                let conn = db.lock().await;
+                                store::insert_trust_created(
+                                    &conn,
+                                    &format!("{:#x}", ev.trustAddress),
+                                    &format!("{:#x}", ev.trustId),
+                                    &format!("{:#x}", ev.creatorAddress),
+                                    block_num,
+                                    &tx_hash,
+                                )?;
+                                tracing::info!(
+                                    "indexed Factory_TRUSTCreatedEvent: trust={:#x} creator={:#x} block={}",
+                                    ev.trustAddress,
+                                    ev.creatorAddress,
+                                    block_num
+                                );
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "decode failed for block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Commit the block. If discontinuous, unwind + restart from safe point.
+                let conn = db.lock().await;
+                let continuous = chain::commit_block(&conn, block_num, &block_hash, &parent_hash)?;
+                if !continuous {
+                    tracing::warn!(
+                        "REORG/GAP at block {} (hash={}, parent={}); unwinding",
+                        block_num, block_hash, parent_hash
+                    );
+                    let safe = block_num.saturating_sub(1);
+                    chain::unwind_above(&conn, safe)?;
+                    // Loop will re-derive `from` next iteration via highest_committed.
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -112,12 +261,8 @@ mod tests {
     #[test]
     fn commit_continuous_blocks_reports_true() {
         let (_dir, conn) = fresh_db();
-
-        // Block 1 (no prior) → continuous=true
         let ok1 = commit_block(&conn, 1, "0xhash1", "0xgenesis").unwrap();
         assert!(ok1);
-
-        // Block 2 with parent=hash1 → continuous=true
         let ok2 = commit_block(&conn, 2, "0xhash2", "0xhash1").unwrap();
         assert!(ok2);
     }
@@ -126,7 +271,6 @@ mod tests {
     fn commit_with_wrong_parent_reports_false() {
         let (_dir, conn) = fresh_db();
         commit_block(&conn, 1, "0xhash1", "0xgenesis").unwrap();
-        // Block 2 claims a different parent — reorg signal
         let ok = commit_block(&conn, 2, "0xhash2-fork", "0xWRONG").unwrap();
         assert!(!ok);
     }
@@ -135,7 +279,6 @@ mod tests {
     fn commit_with_skipped_block_reports_false() {
         let (_dir, conn) = fresh_db();
         commit_block(&conn, 1, "0xhash1", "0xgenesis").unwrap();
-        // Skip block 2 → claim block 3 with valid hash → continuous=false
         let ok = commit_block(&conn, 3, "0xhash3", "0xhash1").unwrap();
         assert!(!ok);
     }
@@ -146,10 +289,8 @@ mod tests {
         commit_block(&conn, 1, "0xhash1", "0xg").unwrap();
         commit_block(&conn, 2, "0xhash2", "0xhash1").unwrap();
         commit_block(&conn, 3, "0xhash3", "0xhash2").unwrap();
-
         let removed = unwind_above(&conn, 1).unwrap();
         assert_eq!(removed, 2);
-
         let highest = highest_committed(&conn).unwrap();
         assert_eq!(highest, Some(1));
     }
@@ -165,8 +306,6 @@ mod tests {
 
     #[tokio::test]
     async fn provider_connects_to_anvil_if_running() {
-        // Best-effort live check: only asserts when Anvil is actually up at 8545.
-        // Skipped silently otherwise so CI doesn't depend on Anvil.
         let result = async {
             let p = provider::http_provider("http://127.0.0.1:8545")?;
             provider::latest_block(&p).await
@@ -176,11 +315,19 @@ mod tests {
         match result {
             Ok(n) => {
                 tracing::info!("anvil latest block: {}", n);
-                assert!(n >= 1, "expected anvil to have mined at least 1 block");
+                assert!(n >= 1);
             }
             Err(_) => {
                 eprintln!("anvil not reachable at :8545 — skipping live provider test");
             }
         }
+    }
+
+    #[test]
+    fn poll_config_default_is_sensible() {
+        let cfg = poll::PollConfig::default();
+        assert_eq!(cfg.confirmation_depth, 12);
+        assert_eq!(cfg.start_block, 0);
+        assert!(cfg.factory_address.is_none());
     }
 }
