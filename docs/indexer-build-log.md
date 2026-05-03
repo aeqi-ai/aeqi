@@ -27,18 +27,17 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 3 (npm install running for aeqi-core deps)
-PHASE: 0 — environment+scaffold ✓ DONE | deploy in progress
-LAST ACTION: Tried `forge script scripts/foundry/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast` from /home/claudedev/projects/aeqi-core with PRIVATE_KEY=anvil-account-0. Failed: node_modules missing (OpenZeppelin + Uniswap v4-core imports unresolved). Started `npm install --silent` in background, output at /tmp/claude-1000/.../bu4h0odi0.output.
-NEXT ACTION (next tick):
-  1. Check /tmp/claude-1000/.../bu4h0odi0.output for `npm install` completion (will be many minutes for ~500 OZ+Uniswap deps)
-  2. If green: re-run the forge script command (same PRIVATE_KEY env, same script path)
-  3. Forge will write to /home/claudedev/projects/aeqi-core/broadcast/Deploy.s.sol/31337/run-latest.json — extract Factory + TRUST + Beacon addresses from there
-  4. Save those into /tmp/aeqi-anvil-addresses.json for next ticks
-  5. THEN move to Phase 0 step 2 (decode TRUST_Created event in indexer)
-  6. If npm install fails (e.g., dep conflict): try `npm install --legacy-peer-deps`. If still fails: pivot to Hardhat task `npx hardhat deploy --network localhost`
-DEPLOYER ADDRESS: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 (Anvil account 0, derived from privkey 0xac09...)
-FORGE SCRIPT PATH: scripts/foundry/Deploy.s.sol (NOT script/Deploy.s.sol — note non-standard location)
+TICK: 5 (PIVOT — deploy script out of date, building indexer against ABIs)
+PHASE: 0 — env+scaffold ✓ DONE | building decoder + schema against ABIs (no deployed contracts needed)
+LAST ACTION: After installing deps with --legacy-peer-deps (works), `forge script scripts/foundry/Deploy.s.sol` STILL fails — Beacon.setImplementation signature changed from (bytes32, address) to (address, bytes32, address) but script wasn't updated. This is contract-vs-script drift in aeqi-core repo, not my problem to fix in this autonomous session.
+PIVOT DECISION: Skip live deploy for now. Build indexer code AGAINST THE ABIS using synthetic event data. The ABI is the type contract — Rust decoder can be tested without on-chain deployment. When indexer is functional, USER (when awake) can fix the deploy script OR I can use a minimal hand-written test contract.
+NEXT ACTION:
+  1. Generate alloy sol! types from /home/claudedev/projects/aeqi-graph/abis/Factory.json
+  2. Write decoder for Factory_TRUSTCreatedEvent (event sig: trustId bytes32 indexed, creatorAddress address indexed, trustAddress address indexed)
+  3. Write SQLite schema for `trusts` + `accounts` tables (rusqlite, additive migration)
+  4. Wire async-graphql endpoint with `trust(id: String!) -> Trust?` query
+  5. Synthesize a fake event log + verify end-to-end: decode → insert → query
+  6. THEN come back to live deploy as a separate concern
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
@@ -118,6 +117,7 @@ Stretch (if hours remain): Phase 4 partial (Task #20)
 4. **ABIs source: `/home/claudedev/projects/aeqi-graph/abis/`** — 17 JSONs. Don't move them yet; reference in place.
 5. **Local Anvil for testing**, no public testnet. Default port 8545.
 6. **Ship workflow**: each phase that produces meaningful working code → /ship cycle. Don't accumulate uncommitted state across many phases.
+7. **PIVOT (TICK 5): Build indexer against ABIs first, defer live deploy.** The aeqi-core Foundry deploy script (`scripts/foundry/Deploy.s.sol`) is out of date — Beacon.setImplementation signature evolved to require `(source, moduleId, impl)` (3 args), script still passes `(moduleId, impl)` (2 args). Fixing that script properly requires understanding the new "source" semantics in Beacon — that's a real contract-design question, not a 5-min fix. So the indexer is being built against ABIs (which are accurate to current contracts) using synthetic event data. Live deploy can be solved separately by the user when awake, or by patching the script in a later session. The indexer code is independent of whether contracts are actually live.
 
 ## Blockers encountered
 
