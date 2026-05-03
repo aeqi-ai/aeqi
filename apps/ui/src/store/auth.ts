@@ -36,6 +36,9 @@ interface User {
    *  (waitlist-redeemed, no billing). "active" = paid Stripe sub. */
   subscription_status?: string;
   subscription_plan?: string;
+  /** Admin flag — only set on the founder account. Gates the invite
+   *  codes panel and any admin-only surface in the dashboard. */
+  is_admin?: boolean;
 }
 
 interface AuthState {

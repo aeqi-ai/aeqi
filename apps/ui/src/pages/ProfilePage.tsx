@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import PageRail from "@/components/PageRail";
 import ProfilePanel from "@/pages/Settings/ProfilePanel";
@@ -10,8 +10,9 @@ import ApiKeyPanel from "@/pages/Settings/ApiKeyPanel";
 import InvitesPanel from "@/pages/Settings/InvitesPanel";
 import PreferencesPanel from "@/pages/Settings/PreferencesPanel";
 import WalletsPanel from "@/pages/Settings/WalletsPanel";
+import { useAuthStore } from "@/store/auth";
 
-const TABS = [
+const BASE_TABS = [
   { id: "profile", label: "Profile" },
   { id: "billing", label: "Billing" },
   { id: "security", label: "Security" },
@@ -19,9 +20,9 @@ const TABS = [
   { id: "devices", label: "Devices" },
   { id: "integrations", label: "Integrations" },
   { id: "api", label: "API keys" },
-  { id: "invites", label: "Invites" },
   { id: "preferences", label: "Preferences" },
 ];
+const ADMIN_TAB = { id: "invites", label: "Invites" };
 
 /**
  * `/me` — user-scoped account shell. Each tab lives in its own
@@ -38,6 +39,9 @@ export default function ProfilePage() {
   const { tab } = useParams<{ tab?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isAdmin = useAuthStore((s) => s.user?.is_admin === true);
+
+  const tabs = useMemo(() => (isAdmin ? [...BASE_TABS, ADMIN_TAB] : BASE_TABS), [isAdmin]);
 
   // Backwards-compat: old bookmarks of `/me?tab=security` get
   // bounced to `/me/security` once on mount, then the param is
@@ -45,16 +49,16 @@ export default function ProfilePage() {
   useEffect(() => {
     const legacy = searchParams.get("tab");
     if (!legacy) return;
-    const known = TABS.some((t) => t.id === legacy);
+    const known = tabs.some((t) => t.id === legacy);
     const target = known && legacy !== "profile" ? `/me/${legacy}` : "/me";
     navigate(target, { replace: true });
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, tabs]);
 
-  const activeTab = tab && TABS.some((t) => t.id === tab) ? tab : "profile";
+  const activeTab = tab && tabs.some((t) => t.id === tab) ? tab : "profile";
 
   return (
     <div className="page-rail-shell">
-      <PageRail tabs={TABS} defaultTab="profile" title="Account" basePath="/me" />
+      <PageRail tabs={tabs} defaultTab="profile" title="Account" basePath="/me" />
       <div className="account-page page-rail-content">
         {activeTab === "profile" && <ProfilePanel />}
         {activeTab === "billing" && <BillingPanel />}

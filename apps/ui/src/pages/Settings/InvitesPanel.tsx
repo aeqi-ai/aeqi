@@ -8,21 +8,32 @@ interface InviteCode {
 }
 
 /**
- * Settings → Invites tab. Surfaces single-use invite codes the user
- * can share. Copy-to-clipboard with a brief "Copied!" affordance.
+ * Settings → Invites tab. Admin-only — renders nothing for regular users.
+ * Founder mints invite codes on demand to onboard friends and family on
+ * the sandbox tier (no billing) before public launch.
  */
 export default function InvitesPanel() {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [copiedCode, setCopiedCode] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     api
       .getInviteCodes()
       .then((data: Record<string, unknown>) => {
         const list = (data as { codes?: InviteCode[] }).codes;
         if (Array.isArray(list)) setCodes(list);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.message.includes("403")) {
+          setForbidden(true);
+        }
+      });
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   const copy = (code: string) => {
@@ -31,14 +42,31 @@ export default function InvitesPanel() {
     setTimeout(() => setCopiedCode(""), 2000);
   };
 
+  const generate = async () => {
+    setCreating(true);
+    try {
+      await api.createInviteCode();
+      load();
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (forbidden) return null;
+
   return (
     <>
       <p className="account-field-desc account-invites-desc">
-        Share invite codes with friends. Each code is single-use. New users get 3 codes of their
-        own.
+        Mint single-use invite codes for friends and family. Redeemers join on the sandbox tier — no
+        billing, no recursive invites.
       </p>
+      <div className="account-invites-actions">
+        <Button variant="primary" size="sm" onClick={generate} disabled={creating}>
+          {creating ? "Generating…" : "Generate code"}
+        </Button>
+      </div>
       {codes.length === 0 ? (
-        <div className="account-invites-empty">No invite codes available.</div>
+        <div className="account-invites-empty">No invite codes yet.</div>
       ) : (
         <div className="account-invites-list">
           {codes.map((inv) => (

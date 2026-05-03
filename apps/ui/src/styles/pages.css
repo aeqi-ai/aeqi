@@ -1986,6 +1986,11 @@
   margin-bottom: var(--space-4);
 }
 
+.account-invites-actions {
+  display: flex;
+  margin-bottom: var(--space-3);
+}
+
 .account-invites-empty {
   color: var(--text-muted);
   font-size: var(--font-size-sm);

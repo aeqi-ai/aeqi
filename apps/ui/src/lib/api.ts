@@ -94,6 +94,9 @@ export const api = {
   getInviteCodes: () =>
     request<{ ok: boolean; codes: Array<{ code: string; used: boolean }> }>("/auth/invite-codes"),
 
+  createInviteCode: () =>
+    request<{ ok: boolean; code: string }>("/auth/invite-codes", { method: "POST" }),
+
   getMe: () => request<Record<string, unknown>>("/auth/me"),
 
   deleteAccount: () => request<{ ok: boolean }>("/auth/delete-account", { method: "DELETE" }),
