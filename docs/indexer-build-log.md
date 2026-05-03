@@ -27,15 +27,18 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 2 (cron live + Anvil running)
-PHASE: 0 — environment+scaffold ✓ DONE | next: deploy aeqi-core to Anvil
-LAST ACTION: Scheduled cron 72929ac9 (*/5 * * * *). Started Anvil on 127.0.0.1:8545 (chain 31337, block-time 2s, PID 1274467). cast block-number returns OK.
-NEXT ACTION: Deploy aeqi-core contracts to local Anvil. Approach options:
-  A) Foundry: cd /home/claudedev/projects/aeqi-core && forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --private-key <anvil-default-0>
-     (Anvil default account 0 private key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
-  B) Hardhat: cd /home/claudedev/projects/aeqi-core && npx hardhat run scripts/deploy.ts --network localhost
-  Inspect /home/claudedev/projects/aeqi-core/script /scripts /deploy folders to pick which one is wired up.
-  Goal: write deployed addresses to /tmp/aeqi-anvil-addresses.json so future ticks can read the Factory address.
+TICK: 3 (npm install running for aeqi-core deps)
+PHASE: 0 — environment+scaffold ✓ DONE | deploy in progress
+LAST ACTION: Tried `forge script scripts/foundry/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast` from /home/claudedev/projects/aeqi-core with PRIVATE_KEY=anvil-account-0. Failed: node_modules missing (OpenZeppelin + Uniswap v4-core imports unresolved). Started `npm install --silent` in background, output at /tmp/claude-1000/.../bu4h0odi0.output.
+NEXT ACTION (next tick):
+  1. Check /tmp/claude-1000/.../bu4h0odi0.output for `npm install` completion (will be many minutes for ~500 OZ+Uniswap deps)
+  2. If green: re-run the forge script command (same PRIVATE_KEY env, same script path)
+  3. Forge will write to /home/claudedev/projects/aeqi-core/broadcast/Deploy.s.sol/31337/run-latest.json — extract Factory + TRUST + Beacon addresses from there
+  4. Save those into /tmp/aeqi-anvil-addresses.json for next ticks
+  5. THEN move to Phase 0 step 2 (decode TRUST_Created event in indexer)
+  6. If npm install fails (e.g., dep conflict): try `npm install --legacy-peer-deps`. If still fails: pivot to Hardhat task `npx hardhat deploy --network localhost`
+DEPLOYER ADDRESS: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 (Anvil account 0, derived from privkey 0xac09...)
+FORGE SCRIPT PATH: scripts/foundry/Deploy.s.sol (NOT script/Deploy.s.sol — note non-standard location)
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
