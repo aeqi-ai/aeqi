@@ -40,11 +40,17 @@ async fn require_roles_manage(
     }
     match ctx
         .role_registry
-        .user_has_grant(entity_id, caller_id, crate::role_registry::GRANT_ROLES_MANAGE)
+        .user_has_grant(
+            entity_id,
+            caller_id,
+            crate::role_registry::GRANT_ROLES_MANAGE,
+        )
         .await
     {
         Ok(true) => None,
-        Ok(false) => Some(serde_json::json!({"ok": false, "error": "forbidden: roles.manage required", "code": "forbidden"})),
+        Ok(false) => Some(
+            serde_json::json!({"ok": false, "error": "forbidden: roles.manage required", "code": "forbidden"}),
+        ),
         Err(e) => Some(serde_json::json!({"ok": false, "error": e.to_string()})),
     }
 }
@@ -95,7 +101,7 @@ pub async fn handle_get_role(
     let role = match ctx.role_registry.get(&role_id).await {
         Ok(Some(r)) => r,
         Ok(None) => {
-            return serde_json::json!({"ok": false, "error": "role not found", "code": "not_found"})
+            return serde_json::json!({"ok": false, "error": "role not found", "code": "not_found"});
         }
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
@@ -202,14 +208,11 @@ pub async fn handle_create_role(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let grants: Option<Vec<String>> = request
-        .get("grants")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        });
+    let grants: Option<Vec<String>> = request.get("grants").and_then(|v| v.as_array()).map(|arr| {
+        arr.iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect()
+    });
 
     let parent_role_id = super::request_field(request, "parent_role_id").map(str::to_string);
 
@@ -266,7 +269,7 @@ pub async fn handle_update_role(
     let entity_id = match ctx.role_registry.get(&role_id).await {
         Ok(Some(r)) => r.entity_id,
         Ok(None) => {
-            return serde_json::json!({"ok": false, "error": "role not found", "code": "not_found"})
+            return serde_json::json!({"ok": false, "error": "role not found", "code": "not_found"});
         }
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
@@ -285,14 +288,11 @@ pub async fn handle_update_role(
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
 
-    let grants: Option<Vec<String>> = request
-        .get("grants")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        });
+    let grants: Option<Vec<String>> = request.get("grants").and_then(|v| v.as_array()).map(|arr| {
+        arr.iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect()
+    });
 
     if let Err(e) = ctx
         .role_registry
@@ -332,7 +332,7 @@ pub async fn handle_archive_role(
     let entity_id = match ctx.role_registry.get(&role_id).await {
         Ok(Some(r)) => r.entity_id,
         Ok(None) => {
-            return serde_json::json!({"ok": false, "error": "role not found", "code": "not_found"})
+            return serde_json::json!({"ok": false, "error": "role not found", "code": "not_found"});
         }
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };
@@ -774,12 +774,7 @@ mod tests {
         let resp = handle_archive_role(&ctx, &req, &None).await;
         assert_eq!(resp["ok"], true, "{resp}");
 
-        let get_resp = handle_get_role(
-            &ctx,
-            &serde_json::json!({"role_id": role.id}),
-            &None,
-        )
-        .await;
+        let get_resp = handle_get_role(&ctx, &serde_json::json!({"role_id": role.id}), &None).await;
         assert_eq!(get_resp["ok"], false);
         assert_eq!(get_resp["code"], "not_found");
     }
@@ -796,7 +791,9 @@ mod tests {
         assert_eq!(resp["ok"], true, "{resp}");
         let grants = resp["grants"].as_array().unwrap();
         assert!(
-            grants.iter().any(|g| g == crate::role_registry::GRANT_ROLES_MANAGE),
+            grants
+                .iter()
+                .any(|g| g == crate::role_registry::GRANT_ROLES_MANAGE),
             "director must have roles.manage"
         );
     }

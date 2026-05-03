@@ -41,11 +41,7 @@ async fn list_roles(
     .await
 }
 
-async fn get_role(
-    State(state): State<AppState>,
-    scope: Scope,
-    Path(id): Path<String>,
-) -> Response {
+async fn get_role(State(state): State<AppState>, scope: Scope, Path(id): Path<String>) -> Response {
     ipc_proxy(
         state,
         scope.as_ref(),
@@ -134,7 +130,7 @@ async fn user_grants(
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"ok": false, "error": "entity_id is required"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     let user_id = match q.user_id.filter(|s| !s.is_empty()) {
@@ -144,7 +140,7 @@ async fn user_grants(
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"ok": false, "error": "user_id is required"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     ipc_proxy(

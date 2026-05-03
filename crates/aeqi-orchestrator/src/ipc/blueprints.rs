@@ -127,6 +127,14 @@ pub struct SeedRoleSpec {
     pub title: String,
     #[serde(default)]
     pub default_occupant_agent: Option<String>,
+    /// Role classification. Defaults to `operational` when absent so
+    /// pre-rework Blueprint JSON continues to parse without changes.
+    #[serde(default)]
+    pub role_type: Option<crate::role_registry::RoleType>,
+    /// Optional explicit grant set. `None` means "use the type-default
+    /// bundle" — the common case for Blueprint-declared roles.
+    #[serde(default)]
+    pub grants: Option<Vec<String>>,
 }
 
 /// Edge in the role DAG. Both ends reference `SeedRoleSpec.key`.
@@ -618,8 +626,19 @@ async fn install_declared_roles(
             },
         };
 
+        let role_type = role_spec
+            .role_type
+            .unwrap_or(crate::role_registry::RoleType::Operational);
         let created_role = role_registry
-            .create(entity_id, &role_spec.title, kind, occupant_id.as_deref())
+            .create_with_type(
+                entity_id,
+                &role_spec.title,
+                kind,
+                occupant_id.as_deref(),
+                role_type,
+                false,
+                role_spec.grants.clone(),
+            )
             .await?;
         key_to_role_id.insert(role_spec.key.clone(), created_role.id);
     }
@@ -762,6 +781,10 @@ pub async fn handle_spawn_blueprint(
     // runtime adopts it instead of minting its own — the canonical
     // `/start/launch` path.
     let entity_id_override = super::request_field(request, "entity_id").map(str::to_string);
+    // The platform-side user UUID for the creator. Injected by the web
+    // route when a JWT is present. Used to auto-create the founding Director
+    // role; absent for scope/proxy tokens that have no user context.
+    let creator_user_id = super::request_field(request, "creator_user_id").map(str::to_string);
 
     let blueprint = match crate::blueprints::company_blueprint(slug) {
         Some(t) => t,
@@ -818,21 +841,48 @@ pub async fn handle_spawn_blueprint(
     )
     .await
     {
-        Ok(outcome) => serde_json::json!({
-            "ok": true,
-            "entity_id": outcome.entity_id,
-            "root_agent_id": outcome.root_agent_id,
-            "root_agent_name": outcome.root_agent_name,
-            "spawned_agents": outcome.spawned_agents,
-            "created_events": outcome.created_events,
-            "created_ideas": outcome.created_ideas,
-            "created_quests": outcome.created_quests,
-            "warnings": outcome.warnings,
-            "blueprint": {
-                "slug": blueprint.slug,
-                "name": blueprint.name,
-            },
-        }),
+        Ok(outcome) => {
+            // Auto-create the founding Director role for the creator. Every
+            // Company has exactly one founding Director (founder=1, all 6
+            // grants, occupant_kind=human). This is system-invariant —
+            // Blueprints may declare additional Directors or Advisors, but
+            // the founding Director is always created here, idempotently.
+            if let Some(ref uid) = creator_user_id {
+                match ctx
+                    .role_registry
+                    .ensure_founding_director(&outcome.entity_id, uid)
+                    .await
+                {
+                    Ok(role) => tracing::info!(
+                        role_id = %role.id,
+                        entity_id = %outcome.entity_id,
+                        user_id = %uid,
+                        "auto-created founding Director role",
+                    ),
+                    Err(e) => tracing::error!(
+                        error = %e,
+                        entity_id = %outcome.entity_id,
+                        user_id = %uid,
+                        "failed to auto-create founding Director role",
+                    ),
+                }
+            }
+            serde_json::json!({
+                "ok": true,
+                "entity_id": outcome.entity_id,
+                "root_agent_id": outcome.root_agent_id,
+                "root_agent_name": outcome.root_agent_name,
+                "spawned_agents": outcome.spawned_agents,
+                "created_events": outcome.created_events,
+                "created_ideas": outcome.created_ideas,
+                "created_quests": outcome.created_quests,
+                "warnings": outcome.warnings,
+                "blueprint": {
+                    "slug": blueprint.slug,
+                    "name": blueprint.name,
+                },
+            })
+        }
         Err(err) => serde_json::json!({"ok": false, "error": err.to_string()}),
     }
 }

@@ -49,10 +49,11 @@ impl std::str::FromStr for OccupantKind {
 }
 
 /// Classification of a role's authority level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RoleType {
     Director,
+    #[default]
     Operational,
     Advisor,
 }
@@ -77,12 +78,6 @@ impl std::str::FromStr for RoleType {
             "advisor" => Ok(RoleType::Advisor),
             other => bail!("unknown role type: {}", other),
         }
-    }
-}
-
-impl Default for RoleType {
-    fn default() -> Self {
-        RoleType::Operational
     }
 }
 
@@ -471,7 +466,10 @@ impl RoleRegistry {
     pub async fn set_grants(&self, role_id: &str, grants: Vec<String>) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         let db = self.db.lock().await;
-        db.execute("DELETE FROM role_grants WHERE role_id = ?1", params![role_id])?;
+        db.execute(
+            "DELETE FROM role_grants WHERE role_id = ?1",
+            params![role_id],
+        )?;
         for grant in &grants {
             db.execute(
                 "INSERT INTO role_grants (role_id, grant, created_at)
@@ -522,7 +520,10 @@ impl RoleRegistry {
         }
 
         if let Some(new_grants) = grants {
-            db.execute("DELETE FROM role_grants WHERE role_id = ?1", params![role_id])?;
+            db.execute(
+                "DELETE FROM role_grants WHERE role_id = ?1",
+                params![role_id],
+            )?;
             for grant in &new_grants {
                 db.execute(
                     "INSERT INTO role_grants (role_id, grant, created_at)
@@ -594,6 +595,55 @@ impl RoleRegistry {
         )?;
         db.execute("DELETE FROM roles WHERE entity_id = ?1", params![entity_id])?;
         Ok(())
+    }
+
+    /// Idempotent: create the founding Director role for this entity if one
+    /// doesn't already exist. Used by both the spawn flow (always invoked)
+    /// and a one-shot endpoint for migrating pre-rework entities.
+    ///
+    /// A founding Director is defined as: `entity_id = ? AND role_type =
+    /// 'director' AND founder = 1`. If one already exists, the existing role
+    /// is returned unchanged. Otherwise, a new Director role with all 6
+    /// default grants is created with `user_id` as the occupant.
+    pub async fn ensure_founding_director(&self, entity_id: &str, user_id: &str) -> Result<Role> {
+        // Check for an existing founding Director before acquiring the write lock.
+        {
+            let db = self.db.lock().await;
+            let existing = db
+                .query_row(
+                    "SELECT id, entity_id, title, occupant_kind, occupant_id,
+                            role_type, founder, created_at, updated_at
+                     FROM roles
+                     WHERE entity_id = ?1
+                       AND role_type = 'director'
+                       AND founder = 1
+                     LIMIT 1",
+                    params![entity_id],
+                    row_to_role,
+                )
+                .optional()?;
+            if let Some(mut role) = existing {
+                // Populate grants inline (same lock already held).
+                let mut stmt =
+                    db.prepare("SELECT grant FROM role_grants WHERE role_id = ?1 ORDER BY grant")?;
+                role.grants = stmt
+                    .query_map(params![role.id], |row| row.get::<_, String>(0))?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                return Ok(role);
+            }
+        }
+        // No founding Director — create one.
+        self.create_with_type(
+            entity_id,
+            "Director",
+            OccupantKind::Human,
+            Some(user_id),
+            RoleType::Director,
+            true,
+            None, // default grants for Director (all 6)
+        )
+        .await
     }
 }
 
@@ -842,5 +892,80 @@ mod tests {
                 "missing grant {g}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn ensure_founding_director_creates_when_absent() {
+        let (_dir, _agents, entities, roles) = open_test_registries();
+        let entity = make_entity(&entities, "startup").await;
+
+        let role = roles
+            .ensure_founding_director(&entity.id, "user-founder")
+            .await
+            .expect("ensure founding director");
+
+        assert_eq!(role.role_type, RoleType::Director);
+        assert!(role.founder);
+        assert_eq!(role.occupant_kind, OccupantKind::Human);
+        assert_eq!(role.occupant_id.as_deref(), Some("user-founder"));
+        assert_eq!(role.grants.len(), ALL_GRANTS.len());
+
+        // Only one Director row exists.
+        let listed = roles.list_for_entity(&entity.id).await.expect("list");
+        assert_eq!(listed.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn ensure_founding_director_idempotent() {
+        let (_dir, _agents, entities, roles) = open_test_registries();
+        let entity = make_entity(&entities, "startup2").await;
+
+        let first = roles
+            .ensure_founding_director(&entity.id, "user-founder")
+            .await
+            .expect("first call");
+        let second = roles
+            .ensure_founding_director(&entity.id, "user-founder")
+            .await
+            .expect("second call");
+
+        // Same role returned both times; exactly one row in the DB.
+        assert_eq!(first.id, second.id);
+        let listed = roles.list_for_entity(&entity.id).await.expect("list");
+        assert_eq!(listed.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn ensure_founding_director_skips_when_director_exists() {
+        let (_dir, _agents, entities, roles) = open_test_registries();
+        let entity = make_entity(&entities, "startup3").await;
+
+        // Pre-create a founding Director (simulates a Blueprint that already
+        // declares one, or a repeat call from a migration path).
+        let pre = roles
+            .create_with_type(
+                &entity.id,
+                "Founder",
+                OccupantKind::Human,
+                Some("user-original"),
+                RoleType::Director,
+                true,
+                None,
+            )
+            .await
+            .expect("pre-create");
+
+        // ensure_founding_director must return the existing role unchanged.
+        let returned = roles
+            .ensure_founding_director(&entity.id, "user-different")
+            .await
+            .expect("ensure");
+
+        assert_eq!(returned.id, pre.id);
+        assert_eq!(returned.occupant_id.as_deref(), Some("user-original"));
+
+        // Still only one row.
+        let listed = roles.list_for_entity(&entity.id).await.expect("list");
+        assert_eq!(listed.len(), 1);
     }
 }

@@ -111,11 +111,16 @@ async fn spawn_blueprint(
     // Inject scope so the daemon can filter — mirrors what ipc_proxy
     // does internally.
     let mut params = body;
+    if !params.is_object() {
+        params = serde_json::json!({});
+    }
     if let Some(scope_ref) = scope.as_ref() {
-        if !params.is_object() {
-            params = serde_json::json!({});
-        }
         params["allowed_roots"] = serde_json::json!(scope_ref.roots);
+    }
+    // Pass the authenticated user's id so the daemon can auto-create the
+    // founding Director role. Absent on scope/proxy tokens (no user context).
+    if let Some(uid) = acting_user_id.as_deref() {
+        params["creator_user_id"] = serde_json::json!(uid);
     }
 
     let resp = match state.ipc.cmd_with("spawn_blueprint", params).await {
