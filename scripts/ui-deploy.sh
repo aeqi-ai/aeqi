@@ -48,6 +48,28 @@ fi
 npm rebuild >/dev/null 2>&1 || true
 
 ./node_modules/.bin/vite build
+
+# Post-build assertion. `vite build` has been seen to exit 0 while
+# leaving dist/index.html missing — the surrounding `--delete` rsync
+# then ships a half-written bundle (assets present, no entry HTML),
+# and the live site 404s on `/`. Hit once 2026-05-03; root cause not
+# yet pinned (suspected race with a concurrent build). Assert here
+# so the script fails loud instead of shipping the gap.
+test -f dist/index.html || {
+  echo "build did not produce dist/index.html — refusing to rsync"
+  exit 1
+}
+
 rsync -a --delete dist/ "$TARGET/"
+
+# Post-rsync assertion. Defends against an empty source dir, a wrong
+# TARGET path, or a partial rsync that drops the entry HTML. Without
+# this, `echo deployed: $(stat …)` swallows the missing file because
+# the stat error lives inside `$(...)` in an echo and doesn't trip
+# `set -e`.
+test -f "$TARGET/index.html" || {
+  echo "rsync completed but $TARGET/index.html is missing"
+  exit 1
+}
 
 echo "deployed: $(stat -c %y dist/index.html | cut -d. -f1)"
