@@ -27,8 +27,9 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 8 (PHASE 0 ✓ END-TO-END WORKING)
-PHASE: 0 ✓ COMPLETE | binary boots, GraphQL serves, SQLite persists, 5 tests green
+TICK: 9 (PHASE 1 reorg-tracking + provider working)
+PHASE: 1 — partial | reorg detection in place, alloy provider connects to Anvil
+        | 11/11 tests green (5 from Phase 0 + 6 new Phase 1)
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -50,15 +51,37 @@ PHASE 0 COMPLETE. Indexer is a working Rust HTTP service that:
   - Decodes Factory event types (alloy sol! generated)
   - Has reorg-tracking schema in place (committed_blocks)
   - Idempotent migrations
+
+TICK 9 — PHASE 1 reorg + provider:
+  Wrote chain.rs:
+    - commit_block(block_number, block_hash, parent_hash) → returns continuous?
+    - unwind_above(safe_block) → unwinds committed_blocks above safe point
+    - highest_committed() → lookup resume point
+    - provider::http_provider(rpc_url) → alloy HTTP provider
+    - provider::latest_block() → sanity check
+  Tests added (6 new):
+    - commit_continuous_blocks_reports_true ✓
+    - commit_with_wrong_parent_reports_false ✓ (reorg detection)
+    - commit_with_skipped_block_reports_false ✓ (gap detection)
+    - unwind_clears_blocks_above_safe ✓
+    - highest_committed_works ✓
+    - provider_connects_to_anvil_if_running ✓ LIVE — confirmed alloy talks to running Anvil
+  Total: 11/11 tests pass
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 1 entry):
-  1. Wire alloy provider to local Anvil (ws://127.0.0.1:8545 — anvil supports both http and ws by default)
-  2. Build a SubscribeLogs stream filtered to (any address, all topics) — log events to stdout to prove subscription works
-  3. Add committed_blocks tracking — on each new block: write block_number + block_hash + parent_hash; verify parent_hash matches previous committed block
-  4. Test reorg: anvil_setStorageAt to fork a new chain, observe parent_hash mismatch, log it
-  5. Add Factory address config — once user fixes deploy script (or we deploy minimal mock), filter logs to factory address only
-  6. Wire decoder to actual subscribed logs: decode → insert into trusts → expose via existing GraphQL trust(address) query
-  7. THEN move to Phase 2: schema for more entities (modules, role assignments, governance proposals)
+NEXT ACTION (Phase 1 polling-mode poll loop):
+  1. Add chain::poll_loop(provider, conn, factory_addr, start_block) — async fn that:
+     a. Loops every block_time (~2s on Anvil)
+     b. Calls provider.get_block_number()
+     c. For each new block since highest_committed(): get_block_with_txs + get_logs(filter)
+     d. For each log matching Factory_TRUSTCreatedEvent topic0: decode + insert_trust_created
+     e. Call commit_block() with the new block; if not continuous, log warn + unwind
+  2. Wire poll_loop into main.rs as a tokio::spawn task next to api::serve
+  3. Add factory_address to IndexerConfig
+  4. Test: synthesize a real Anvil tx that emits a fake event (use cast send to a wallet that emits Transfer-like log)
+       OR write a minimal MockFactory.sol contract just for testing, deploy via cast
+  5. Verify end-to-end: cast send emits log → indexer poll picks it up → trusts row inserted → GraphQL query returns it
+  6. Stretch: WS subscribe instead of polling (faster) — alloy ProviderBuilder::on_ws()
+  7. THEN Phase 2: schema for modules, roles, governance proposals
 BLOCKER: none
 ANVIL: RUNNING, PID 1274467, log /tmp/anvil.log
 WORKTREE: /home/claudedev/aeqi-indexer-build (branch indexer-build, off origin/main 7553a083)
