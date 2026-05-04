@@ -93,6 +93,8 @@ runs `cargo test -p <crate> --lib`. Caught one such drift on 2026-04-30
 
 For UI-only changes (no Rust touched), use the lighter UI deploy path documented in `apps/ui/CLAUDE.md` — skip `deploy.sh`.
 
+**`presets/blueprints/*.json` are compiled into the binary via `include_str!`.** Changes to any blueprint JSON require a full `./scripts/deploy.sh` — NOT the UI-only rsync path. Two consumers embed them at compile time: `crates/aeqi-orchestrator/src/blueprints/mod.rs` (runtime) and `aeqi-platform/src/blueprints.rs` (platform). Changing a blueprint JSON means both repos need a Rust rebuild and deploy to pick up the change. Caught 2026-05-04 when adding `templateSlug` field — the `/ship` skill correctly routed to full deploy because the files aren't under `apps/ui/`, but the reason (compile-time embedding) wasn't obvious.
+
 ### Deploy — known traps
 
 **`scripts/deploy.sh` leaves per-tenant host services stopped.** The
