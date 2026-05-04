@@ -49,6 +49,35 @@ runs `cargo test -p <crate> --lib`. Caught one such drift on 2026-04-30
 - No `#[allow(dead_code)]` unless justified
 - Use `spawn_blocking` for all SQLite operations in async context
 
+### New-crate bootstrapping traps (edition 2024)
+
+**`std::env::set_var` is `unsafe` in edition 2024.** Any test that
+calls `std::env::set_var` must wrap it in an `unsafe {}` block with a
+`// SAFETY: single-threaded test context; no concurrent env reads.`
+comment. Applies to unit tests (`#[cfg(test)]` blocks) AND integration
+tests (`tests/*.rs`). The compiler error is `call to unsafe function
+requires unsafe block` on the `set_var` line. Cost (2026-05-04): two
+edit passes — once in `src/signer.rs` unit tests, once in
+`tests/api_smoke.rs` — when adding `aeqi-paymaster`.
+
+**`anyhow::Result` vs a concrete error type mismatch in `spawn_blocking`
+closures.** When a closure is typed as `Result<T, MyError>` but calls a
+helper that returns `anyhow::Result<T>`, the `?` operator fails with
+`From<anyhow::Error>` not implemented. Fix: add
+`.map_err(|e| MyError::Internal(e.to_string()))` after the
+`anyhow`-returning call, or add `#[from] anyhow::Error` to the error
+enum if you own it. Cost (2026-05-04): one edit pass in `aeqi-paymaster`
+`api.rs` `spawn_blocking` closure.
+
+**SQLite test isolation: use `TempDir`, not `NamedTempFile`.** When
+a test seeds a SQLite DB, then passes the path to a `spawn_blocking`
+closure that opens it independently, using `tempfile::NamedTempFile`
+causes `Error code 1032: Database cannot be modified because database
+file has moved`. The fix is `tempfile::TempDir::new()` — keep the
+`TempDir` value alive for the full test duration (e.g. as `_tmp` in a
+destructuring tuple). Cost (2026-05-04): test rewrite and second
+`cargo test` pass when adding `aeqi-paymaster`.
+
 ### Frontend
 
 - Prettier enforced (double quotes, trailing commas, 100 width)
