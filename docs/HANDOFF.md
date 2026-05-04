@@ -118,6 +118,62 @@ fully closed at Phase 9 (intra-block multi-level cascade). It exercises
 all 4 layers of dispatch (Factory → TRUST proxy → 3 module proxies)
 against actual aeqi-core contracts in one tx.
 
+### Multi-sig variant (cross-block flow)
+
+Same setup as steps 0–2 above. Then in step 3, run the multi-sig script
+with two anvil keys (deployer + cosigner):
+
+```bash
+cd /home/claudedev/projects/aeqi-core-deploy-fix
+DEPLOYER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+COSIGNER_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
+FACTORY_ADDRESS=<factory-from-step-1> \
+  forge script scripts/foundry/CreateMultiSigTrust.s.sol \
+  --rpc-url http://127.0.0.1:8545 --broadcast --skip-simulation
+```
+
+Phase A (deployer broadcast, block N): `replaceTemplate` + `registerTRUST`
+with `declaredSigners=[deployer, cosigner]`. `trustStatus = REGISTERED`,
+NO auto-create — cosigner hasn't signed.
+Phase B (cosigner broadcast, block N+M): `approveTRUST(trustId, ipfsCid)`.
+Last signer signs → `trustStatus = APPROVED` + auto-creates the TRUST.
+
+After 12+ confirmation blocks, query the TRUST:
+
+```bash
+curl -s -X POST http://127.0.0.1:8500/graphql \
+  -H 'content-type: application/json' \
+  --data '{"query":"{ trust(address: \"<trust-from-stdout>\") { trustId templateId ipfsCid signersCount valueConfigsCount createdBlock } trustSigners(trustAddress: \"<trust>\") { signerAddress hasSigned addedBlock } }"}' | jq
+```
+
+Expected: full TRUST row with `signersCount=2`, both signers with
+`hasSigned=true`. Pre-create lookup via `trustById(trustId)` works too —
+returns the row with `address: null` between Phase A and Phase B.
+
+---
+
+## Cross-block ordering semantics
+
+The indexer tolerates arbitrary tx-grouping of TRUST creation events. Four
+ordering fixes layer:
+
+| Fix | Tick | Problem | Solution |
+|---|---|---|---|
+| Intra-fetch priority sort | 21 | Real `registerTRUST` emits SignerAdded → Registered → Created in one tx; handlers that look up trust by id ran before Created populated it | Sort logs within each block by topic0 priority (Created → Registered → others) before the dispatch loop |
+| Per-block delta-fetch loop | 22 | `TrustCreated` registers the trust as watched, but the trust's own `TRUST_ModuleAdded` events fired in the SAME block weren't in the filter | Per-block dispatch loops; each iteration re-reads `watched_addresses` and fetches logs from the delta until no new addresses |
+| `trust_signers` schema v2 | 24 | Multi-sig flow: SignerAdded fires in tx N (registration); TrustCreated only in tx N+M (approval). v1 PK `(trust_address, signer)` required address known | PK `(trust_id, signer)` with `trust_address` as backfilled helper; `insert_trust_created` UPDATEs trust_signers' address when the trust lands |
+| `trusts` schema v2 | 25 | Same root cause: TRUSTRegisteredEvent metadata (template, ipfs, counts) fires in tx N before Created in tx N+M; v1 update_trust_registered did UPDATE which missed | PK `(trust_id)` with address/creator/created_* all NULLable; both Created and Registered handlers UPSERT on `trust_id` |
+
+Together these mean: **the indexer is correct for any tx-grouping of TRUST
+creation events on real aeqi-core**. Single-tx single-signer (Phase 8)
+and multi-tx multi-sig (Phase 11) flows both produce a complete row.
+
+Schema v2 design rationale: `trust_id` is the on-chain stable identity;
+`address` is a runtime artifact emitted only by the Created event. Keying
+on `address` (v1) tied the row's existence to a specific event ordering.
+Keying on `trust_id` (v2) lets either Created or Registered land first
+and merge via UPSERT.
+
 ---
 
 ## Architecture
@@ -183,6 +239,9 @@ Replays from reorg recovery don't double-insert.
 | `016_vesting_contributions` | `vesting_contributions` | Vesting funder deposits |
 | `017_vesting_claims` | `vesting_claims` | Vesting beneficiary withdrawals |
 | `018_templates` | `templates` | Factory templates (TemplateReplaced upserts) |
+| `019_trust_signers_v2` | `trust_signers` | **schema v2** — PK on `(trust_id, signer_address)` so signers can land before TrustCreated (multi-sig flow) |
+| `020_trusts_v2` | `trusts` | **schema v2** — PK on `trust_id`, address `UNIQUE` NULLable so Registered metadata can land before Created |
+| `021_factory_admin_events` | `factory_admin_events` | AdminsAdded/AdminsRemoved audit log (one row per address) |
 
 ---
 
@@ -221,6 +280,10 @@ type Query {
 
   # Factory admin
   templatesForFactory(factoryAddress: String!): [Template!]!
+  factoryAdminEvents(factoryAddress: String!): [FactoryAdminEvent!]!
+
+  # Multi-sig pre-create lookup (TRUST exists by trust_id, address NULL)
+  trustById(trustId: String!): Trust
 }
 ```
 
@@ -239,6 +302,8 @@ GraphiQL playground is live at `GET /graphql` for interactive exploration.
 | `MockTRUST.sol` | TRUST_ModuleAdded + Permissions{Granted,Revoked,Set} | TICK 13 + 14 |
 | `MockRole.sol` | Role module 5 events incl. emitFounderLifecycle | TICK 15 |
 | `MockGovernance.sol` | Governance module 5 events incl. emitFullProposalLifecycle | TICK 16 |
+| `MockToken.sol` | ERC20 Transfer (mint/burn via zero address) | TICK 18 |
+| `MockVesting.sol` | Vesting lifecycle (Created→Activated→Contributed→Claimed→Removed) | TICK 19 |
 
 To rebuild + redeploy a mock:
 
@@ -288,14 +353,15 @@ to camelCase automatically — so apps/ui sees `trustAddress`, `voteStart`,
 
 ### Already-known gaps (non-blocking for v1)
 
-- **Token + Vesting + Funding + Budget modules not yet ported.** Each is a
-  ~30-min mechanical port: sol! decl + migration + store fns + dispatch arms +
-  GraphQL fields + Mock contract. The pattern is locked (see TICKs 14–16).
+- **Token + Vesting modules SHIPPED** (TICKs 18–19). Funding + Budget +
+  Foundation + Fund still pending; each is a ~30-min mechanical port.
 - **Token_Transfer high-frequency.** Will need filtering or sampling
-  strategy — straight per-transfer audit log will balloon.
+  strategy on Base mainnet — straight per-transfer audit log will balloon.
+  Fine on Anvil for v1 demo.
 - **eth_call backfill** for non-event state (current treasury balance,
-  module-level configuration, etc.). Currently zero. Pattern needed:
-  periodic snapshot job that calls view functions on watched addresses.
+  module-level configuration, vesting position metadata beyond positionId).
+  Currently zero. Pattern needed: periodic snapshot job that calls view
+  functions on watched addresses.
 - **WebSocket log subscription.** Currently HTTP polling every 2s; alloy
   supports WSS via `ProviderBuilder::connect_pubsub` — drop-in upgrade
   for tighter latency.
@@ -304,12 +370,18 @@ to camelCase automatically — so apps/ui sees `trustAddress`, `voteStart`,
   the real validation.
 - **Single-chain.** Indexer assumes one RPC. Multi-chain support would need
   per-chain DBs OR a `chain_id` column on every entity table.
-- **Governance ProposalCreated dynamic arrays NOT stored.** ipfs_cid is the
-  v1 demo handle. To execute proposals, frontend or a separate decoder needs
-  to pull the full payload.
+- **Governance ProposalCreated dynamic arrays NOT stored** (targets, values,
+  signatures, calldatas). ipfs_cid is the v1 demo handle. To execute
+  proposals, frontend or a separate decoder needs to pull the full payload.
 - **Permissions audit log doesn't compute effective flags.** Frontend job
   to replay granted/revoked/set into a current bitmask. Could be added as
   a derived materialized view or a GraphQL resolver method.
+- **`PRAGMA foreign_keys = OFF`** in `store::open`. The schema v1→v2
+  migrations DROP+recreate `trusts` and `trust_signers`; SQLite flagged
+  the older tables' FKs to `trusts(address)` as mismatched at commit time
+  even when address became `UNIQUE`. FKs are advisory in this indexer
+  (we never violate them); disabling enforcement is the simplest fix.
+  If migrating to Postgres later, the FK semantics will need re-evaluation.
 
 ### Original blockers (still open)
 
