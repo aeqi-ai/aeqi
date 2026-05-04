@@ -27,12 +27,12 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 40 (PHASE 21 ✓ WRAP HEARTBEAT — SESSION COMPLETE)
-PHASE: 21 ✓ AUTONOMOUS BUILD DONE | cargo test passes (33/33). No new
-       code. Cron 72929ac9 still firing every 5 min — user should
-       CronDelete to stop. Successive heartbeats will be no-ops.
-       33/33 tests; 53 commits.
-       | next: cron deletion (user action) OR continued heartbeats
+TICK: 41 (PHASE 22 ✓ HYGIENE — STRAY ARTIFACTS REMOVED)
+PHASE: 22 ✓ DISK CLEANUP | rm 19 test DBs at worktree root (6.2MB) +
+       ~10 /tmp/indexer-*.log files. All gitignored — no commit needed.
+       target/ (2.8GB) preserved (build cache; clean rebuild penalty
+       not worth it for the user). 33/33 tests; 53 commits.
+       | next: cron deletion (user action). Worktree is now clean.
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -1274,6 +1274,30 @@ TICK 40 — PHASE 21 WRAP HEARTBEAT:
   Did NOT delete the cron unilaterally — destructive action without
   explicit re-authorization is the wrong move per the careful-action
   protocol in CLAUDE.md.
+
+33/33 tests green. 53 commits on indexer-build branch.
+
+TICK 41 — PHASE 22 HYGIENE:
+  Worktree root had 19 stray test DB files (~6.2 MB) from per-tick
+  smokes — aeqi-indexer-{phase2,phase3,phase4,phase4b,phase4c,phase6,
+  phase6b,multisig,multisig-v2,multisig-v3,real,real-v3,smoke,
+  templates,admin,budget,config,fund,funding}.db. All were properly
+  gitignored (*.db pattern in .gitignore) but cluttering the dir
+  listing. Removed.
+
+  /tmp had ~10 /tmp/indexer-*.log files from same smokes. Removed.
+  /tmp/anvil.log preserved (Anvil still running with that log handle).
+
+  target/ (2.8 GB build cache) preserved — clean rebuild would cost
+  the user 1+ minute on next cargo invocation; not worth saving the
+  disk space.
+
+  Net: worktree now clean except for the build cache (which belongs
+  there). No commit needed — no tracked files changed.
+
+  Did not delete cron 72929ac9 (per careful-action protocol). Tick 42
+  will likely be a no-op heartbeat since there's nothing left to do
+  without user direction.
 
 33/33 tests green. 53 commits on indexer-build branch.
 
