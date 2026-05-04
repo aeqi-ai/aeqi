@@ -27,12 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 19 (PHASE 6-B ✓ VESTING MODULE — POSITION LIFECYCLE + AUDIT LOGS)
-PHASE: 6-B ✓ FOUNDER VESTING | position created→active→contributed→claimed→removed
-       all 5 events flowed through dispatch in 1 tx. Status updates correctly applied.
-       25/25 tests green; 25 commits.
-       | next: aeqi-core deploy script fix (Path C — original blocker)
-               OR more modules (Funding, Budget) OR apps/ui glue (Path B)
+TICK: 20 (PHASE 7-C ✓ AEQI-CORE DEPLOY FIX — ORIGINAL BLOCKER RESOLVED)
+PHASE: 7-C ✓ REAL CONTRACTS DEPLOY | aeqi-core Deploy.s.sol updated for
+       new Beacon ctor + Factory 0-arg init + Factory.replaceImplementations
+       flow. ONCHAIN EXECUTION COMPLETE & SUCCESSFUL on Anvil.
+       25/25 tests green; indexer unchanged.
+       | next: full createTRUST flow against real Factory (template setup
+               required) OR more modules OR apps/ui glue
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -489,51 +490,111 @@ TICK 19 — PHASE 6-B VESTING MODULE (FOUNDER VESTING):
 
 25/25 tests green. 25 commits on indexer-build branch.
 
+TICK 20 — PHASE 7-C AEQI-CORE DEPLOY FIX (ORIGINAL BLOCKER):
+  Cut worktree at /home/claudedev/projects/aeqi-core-deploy-fix on
+  branch deploy-fix-2026-05-04 (off main). Symlinked node_modules and
+  lib/ from sibling for forge-std + dependencies.
+
+  RECON of the drift (TICK 5 finding revisited):
+    Beacon.constructor(address _defaultDelegatedSource) — was no-arg
+      Now: stores fallback source for BeaconProxy(beacon, 0x0, ...)
+    Factory.initialize() — was 3-arg (beacon, daoImpl, uniswap)
+      Now: zero-arg, just adds deployer as admin
+    Beacon.setImplementation(source, moduleId, impl) — was 2-arg
+      Now: gated by onlySourceOwner(source); only the source itself can
+      write its own slots. So deployer can't directly setImplementation
+      under Factory's source slot.
+    NEW required flow: Factory.setFactoryConfig(beacon) auto-calls
+      beacon.initializeSource(factory, factory) — making factory a
+      first-class beacon source. Then Factory.replaceImplementations(
+      impls, ids) writes to beacon[factory][moduleId] slots — which is
+      what BeaconProxy(beacon, factory, ...) and BeaconProxy(beacon, 0x0,
+      ...) → defaultDelegatedSource fall through.
+
+  Fixed flow in Deploy.s.sol:
+    1. new Beacon(deployer)              — deployer as initial default
+    2. new TRUST()                       — implementation contract
+    3. new Factory(); .initialize()      — admin = deployer
+    4. factory.setFactoryConfig(beacon)  — auto-init factory as source
+    5. beacon.setDefaultDelegatedSource(factory)  — switch default
+    6. Deploy 8 module impls
+    7. factory.replaceImplementations(impls, ids)  — register all 9
+       (TRUST + 8 modules) under beacon[factory] slots
+
+  Type fix: factory typed as `address payable` (Factory has receive).
+  Removed vm.writeFile (foundry fs_permissions blocks it; JSON on stdout).
+
+  LIVE-VERIFIED on Anvil:
+    PRIVATE_KEY=... forge script Deploy.s.sol --rpc-url ... --broadcast
+    --skip-simulation
+    → Factory deployed at 0x67d269191c92Caf3cD7723F116c85e6E9bf55933
+    → Beacon  deployed at 0x09635F643e140090A9A8Dcd712eD6285858ceBef
+    → TRUST   impl     at 0xc5a5C42992dECbae36851359345FE25997F5C42d
+    → 8 module impls at known addresses
+    → ONCHAIN EXECUTION COMPLETE & SUCCESSFUL
+    → cast call beacon.owner() = deployer
+    → cast call beacon.isInitialized(factory) = true
+
+  Original blocker resolved. The indexer can now point at this real
+  Factory address; mocks emit byte-identical signatures so no indexer-
+  side change is needed.
+
+  FOLLOW-UP (deferred): exercising full TRUST creation against the
+  real Factory requires template setup (admin-only setTemplate) +
+  registerTRUST + createTRUST. Non-trivial — left as the next-tick
+  validation. The indexer ALREADY catches the deploy events (Factory
+  emitted Factory_FactoryConfigSet + AdminsAdded which exist as sol!
+  decls but aren't yet wired to the dispatch — easy adds when needed).
+
+  Worktree commit: aeqi-core-deploy-fix@965b3c3 (1 file changed,
+  204 insertions(+), 182 deletions(-)). The worktree branch
+  deploy-fix-2026-05-04 is ready for the user to review + merge.
+
+25/25 tests green. 25 commits on indexer-build branch (no indexer
+changes this tick — fix was in aeqi-core).
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 7 — close the original loop OR keep porting):
-  Phase 6-B (Vesting) is DONE. The cap-table story is now complete:
-    Token = current ownership snapshot
-    Vesting = scheduled ownership / future grants
-  Together with Role/Governance, this is the full demo surface.
+NEXT ACTION (Phase 8 — full createTRUST against real contracts):
+  Phase 7-C (deploy fix) is DONE. Real aeqi-core deploys cleanly to Anvil.
+  The indexer is unchanged — mocks emit byte-identical signatures.
 
-  PATH C — aeqi-core deploy script drift (HIGHEST LEVERAGE):
-    THIS IS THE ORIGINAL BLOCKER. Fix
-    /home/claudedev/projects/aeqi-core/scripts/foundry/Deploy.s.sol
-    so we can deploy the REAL Factory + TRUST + module contracts to Anvil
-    and re-run the same indexer end-to-end against actual aeqi-core code
-    instead of Mock* contracts.
+  Highest leverage now is the REAL-CONTRACT createTRUST smoke test:
 
-    The indexer's mocks emit byte-identical event signatures (verified by
-    Haiku Explore against each ABI), so swapping in real contracts is
-    a deploy-side fix, not an indexer-side fix. Once real Factory deploys,
-    the existing indexer just works against it.
+  STEP 1 — write a "create one TRUST" forge script:
+    Source: /home/claudedev/projects/aeqi-core-deploy-fix/scripts/foundry/
+            CreateTrust.s.sol (new file)
+    Flow:
+      1. Read deployment addresses from previous Deploy.s.sol run
+         (or import Deploy.s.sol and reuse its state)
+      2. Add a template via Factory.replaceTemplate (admin-only):
+         - templateId = keccak256('demo')
+         - moduleConfigs = [role, token, governance]
+      3. registerTRUST with TRUSTConfigRequest:
+         - trustId = some bytes32
+         - templateId = the demo template
+         - declaredSigners = [deployer]
+         - valueConfigs = []
+      4. createTRUST(trustId, deployer)
+      5. Verify Factory_TRUSTCreatedEvent fires
 
-    Specific drift (TICK 5 finding): Beacon.setImplementation signature
-    changed from (bytes32, address) to (address source, bytes32 moduleId,
-    address impl) — 3 args. Deploy script still calls 2-arg version.
-    Fix is mechanical; ~30 min of script editing + verification.
+  STEP 2 — point indexer at real Factory:
+    AEQI_INDEXER_FACTORY=0x67d269191c92Caf3cD7723F116c85e6E9bf55933
+    Run indexer fresh. It should pick up the createTRUST event,
+    auto-watch the new TRUST, then catch the cascade of TRUST_ModuleAdded
+    events as the TRUST attaches its 3 modules. Then catch the
+    sub-cascade of Role_RoleCreated etc. when the role module init fires.
 
-    NB: This requires editing /home/claudedev/projects/aeqi-core/ NOT
-    this worktree. Cut a separate worktree off aeqi-core to do it.
+    THIS WOULD CLOSE THE LOOP: the indexer that we built against ABI
+    signatures via Mock contracts indexes a real on-chain TRUST creation
+    end-to-end across all 3 dispatch levels.
 
-  PATH B — apps/ui glue (Ownership tab → live indexer):
-    Cut worktree off ~/aeqi. Add VITE_INDEXER_URL env. Rewrite Ownership
-    tab data layer to query rolesForModule + roleAssignments. Replace
-    the existing TheGraph hook. Defer for human design review.
+  PATH B (deferred) — apps/ui glue: Ownership tab via VITE_INDEXER_URL.
+  PATH A'' (deferred) — Funding/Budget module ports.
 
-  PATH A'' — Funding/Budget modules (more breadth):
-    /home/claudedev/projects/aeqi-graph/abis/Funding.module.json
-    /home/claudedev/projects/aeqi-graph/abis/Budget.module.json
-    Mechanical ports per the locked recipe.
-
-  LEVERAGE PRIORITY:
-    PATH C is now first. It's the original loop close — converts the
-    indexer from "mock-tested complete" to "real-contract-tested complete"
-    which is a much stronger artifact. Estimate: 1 tick to fix Deploy.s.sol,
-    1 tick to verify indexer against real contracts. Then PATH B integration
-    is the natural follow-up.
-
-    Funding/Budget can be deferred indefinitely without losing the demo.
+  ESTIMATE: STEP 1 + STEP 2 = 1-2 ticks if no surprises in template
+  setup. The Factory_FactoryConfigSet + AdminsAdded events that the deploy
+  itself emits are easy to wire if useful (sol! decls already present in
+  decode::Factory; just need dispatch arms — 5-min adds).
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
