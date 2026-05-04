@@ -27,14 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 37 (PHASE 19-C3 ✓ CHANGELOG.md DISTILLED FROM BUILD LOG)
-PHASE: 19-C3 ✓ NAVIGATION AID | docs/CHANGELOG.md (~225 lines) extracts
-       per-phase Added/Refactored/Verified entries from the 1500-line
-       build log, latest-first with TICK cross-refs. Plus architectural-
-       milestones timeline table + explicit Out-of-Scope callout.
-       INDEXER.md + HANDOFF.md repo-layout updated to point at it.
-       33/33 tests green; 49 commits.
-       | next: PATH C4 (rerun live demo end-to-end smoke) OR wrap
+TICK: 38 (PHASE 19-C4 ✓ LIVE-DEMO SMOKE — HANDOFF RECIPE VERIFIED)
+PHASE: 19-C4 ✓ NO ENVIRONMENTAL DRIFT | reran the documented HANDOFF
+       demo recipe step-for-step against existing real Factory
+       (0x67d269...). 7 events at blocks 7573–7574; GraphQL response
+       matches HANDOFF expectation: signersCount=1, valueConfigsCount=2,
+       3 modules attached, templatesForFactory=1. 33/33 tests; 50 commits.
+       | next: PATH C2 (DEPLOY.md sketch) OR genuine wrap
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -1184,31 +1183,63 @@ TICK 37 — PHASE 19-C3 CHANGELOG:
 
 33/33 tests green. 49 commits on indexer-build branch.
 
+TICK 38 — PHASE 19-C4 LIVE-DEMO SMOKE:
+  Anvil up at block 7560 (head 0x1d88). Real Factory still alive at
+  0x67d269... with 40k bytecode — no redeploy needed.
+
+  Smoke flow per HANDOFF.md "Live demo" recipe:
+    1. Boot indexer fresh (port 8521, start_block 7550)
+    2. Run CreateTrust.s.sol against real Factory
+       → Template registered; TRUST created at 0x787c8676...
+       → trust_id 0x...0099
+    3. Mine 15 confirmation blocks
+    4. Indexer log shows all 7 events:
+       block 7573: Factory_TemplateReplaced
+       block 7574 (single tx — registerTRUST → auto-create cascade):
+         Factory_TRUSTCreatedEvent
+         Factory_TRUSTRegisteredEvent
+         Factory_TRUSTSignerAdded
+         TRUST_ModuleAdded × 3 (factory + role + token)
+    5. GraphQL query exactly per HANDOFF demo recipe:
+       trust(0x787c8676...) returns:
+         signersCount: 1, valueConfigsCount: 2, templateId 0x7a79b2e3...
+       trustModules returns 3 modules (factory + role module proxy +
+         token module proxy)
+       templatesForFactory returns the demo template, replaceCount: 1
+
+  HANDOFF documented expectations matched the actual response 1:1.
+  No drift since Phase 11. Architecture stable + reproducible.
+
+33/33 tests green. 50 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 19 — wind-down candidates):
-  Phase 19-C3 (CHANGELOG) done. Five artifacts current at HEAD:
-    INDEXER.md + docs/HANDOFF.md + docs/CHANGELOG.md +
-    crates/aeqi-indexer/ + test-contracts/.
-  Plus 2 sister-worktree commits in aeqi-core-deploy-fix.
+NEXT ACTION (Phase 20 — last polish or wrap):
+  Phase 19-C4 (live-demo smoke) done. Demo recipe in HANDOFF.md
+  matches real-Factory response 1:1; no drift to fix.
 
-  Remaining low-risk polish options if cron continues:
-
-  PATH C4 — rerun the live demo end-to-end one more time:
-    anvil up (if not already), deploy real aeqi-core via Deploy.s.sol,
-    boot indexer, create TRUST via CreateTrust.s.sol, query GraphQL.
-    ~5 min. Catches any environmental drift since the last run.
-    Genuine smoke test of the HANDOFF "Live demo" recipe.
+  Remaining low-risk polish:
 
   PATH C2 — sketch docs/DEPLOY.md:
     systemd unit template + reverse-proxy snippet + Prometheus
     metrics scaffolding + WSS-upgrade path notes. ~15 min. Useful
     for graduating to Base mainnet but defers actual implementation.
+    Outside the v1 demo scope but a good thinking-aid for the user
+    when they pick up production-hardening work.
 
   PATH D — apps/ui glue: interactive session.
-  PATH E — production hardening proper: out of scope (multi-tick).
+  PATH E — production hardening proper: out of scope.
 
-  My read: PATH C4 next (smoke test surfaces drift before user wakes),
-  PATH C2 last if cron persists.
+  My read: PATH C2 next (durable thinking-aid), then genuine wrap.
+  After that, the autonomous session has nothing else low-risk to add
+  without requiring user design input. The artifact set is solid:
+    INDEXER.md (worktree signpost)
+    docs/HANDOFF.md (pickup doc)
+    docs/CHANGELOG.md (phase summary)
+    docs/indexer-build-log.md (per-tick reasoning)
+    docs/DEPLOY.md (production-hardening notes)  ← Phase C2
+    crates/aeqi-indexer/ (33/33 tests)
+    test-contracts/ (9 mocks, byte-identical sigs)
+  Plus 2 sister-worktree commits in aeqi-core-deploy-fix.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
