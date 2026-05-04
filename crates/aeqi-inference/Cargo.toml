@@ -18,9 +18,7 @@ tower-http = { workspace = true }
 reqwest = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-
-# async-stream is not in workspace deps — pin directly
-async-stream = "0.3"
+async-stream = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

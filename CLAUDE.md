@@ -20,6 +20,19 @@ cd apps/ui && npx tsc --noEmit && npx prettier --check "src/**/*.{ts,tsx,css}"
 All must pass before merge. The pre-commit hook only enforces the UI subset
 when `apps/ui` files are staged; Rust checks remain a manual/CI responsibility.
 
+**`cargo fmt` workspace false-positives.** `cargo fmt --check` run at the
+workspace root may flag pre-existing formatting issues in sibling crates
+(e.g. `aeqi-indexer` has known style drift). When adding a new crate, run
+`cargo fmt -p <your-crate> -- --check` to isolate the check to your crate
+only. Fix your crate's fmt; don't fix siblings unless you own that diff.
+
+**`.observations/` lives in the main working tree, not worktrees.** The
+`.observations/` directory is only present in `/home/claudedev/aeqi/` (the
+main checkout). Worktrees don't have their own copy. When autonomous
+subagents need to write to the state file, use the absolute path
+`/home/claudedev/aeqi/.observations/autonomous-push-state.md` — not a
+relative path from the worktree root.
+
 `cargo test --workspace` is non-negotiable — `cargo check --workspace` does
 NOT compile test code. A required-field added to a public struct (e.g. `Template`
 gaining `seed_roles` in `35113194`) can leave test fixtures uncompilable while
