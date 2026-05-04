@@ -1,0 +1,19 @@
+[package]
+name = "aeqi-ipfs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kubo HTTP-API client for IPFS content-addressed storage — pin, fetch, and manage CIDs"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true, features = ["multipart"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+axum = { workspace = true }

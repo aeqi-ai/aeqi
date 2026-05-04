@@ -186,6 +186,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aeqi-ipfs"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aeqi-mcp"
 version = "0.15.0"
 dependencies = [
@@ -5235,6 +5249,7 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime_guess",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
