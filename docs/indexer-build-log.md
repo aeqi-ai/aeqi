@@ -27,12 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 17 (PHASE 5 ✓ HANDOFF.md — TOMORROW-USER CAN PICK THIS UP COLD)
-PHASE: 5 ✓ DELIVERABLE COMPLETE | docs/HANDOFF.md covers boot, schema,
-       architecture, test contracts, apps/ui wire-up, open work,
-       per-event recipe. 23/23 tests green; 21 commits.
-       | next: pick a module (Token most demo-relevant) OR wire apps/ui
-               OR fix aeqi-core deploy script to test against real contracts
+TICK: 18 (PHASE 6-A ✓ TOKEN MODULE — CAP TABLE WITH U256 ARITHMETIC)
+PHASE: 6-A ✓ ERC20 + CAP TABLE | mint/transfer/burn with atomic balance
+       updates inside SQLite tx. U256 round-trips through TEXT hex.
+       Holders view sorted by balance, excludes zero address + zero balances.
+       24/24 tests green; 23 commits.
+       | next: aeqi-core deploy script fix (Path C) OR Vesting/Funding
+               module ports OR apps/ui glue (Path B) — handoff doc covers it
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -390,40 +391,92 @@ TICK 17 — PHASE 5 HANDOFF DOC:
 
 23/23 tests green. 21 commits on indexer-build branch.
 
+TICK 18 — PHASE 6-A TOKEN MODULE (ERC20 + CAP TABLE):
+  Subagent: Haiku Explore enumerated Token.module ABI. Confirmed:
+    - Per-instance ERC20 (one module = one token; no token_id field)
+    - Standard Transfer(from indexed, to indexed, value)
+    - No separate Mint/Burn — uses Transfer with zero address
+    - 11 events total; v1 cherry-picks just Transfer (the only one needed
+      for cap-table view; Approval/Delegate/etc. can be added later)
+  Schema:
+    - 013_token_balances(token_address, holder_address, balance, last_updated_block)
+      PK (token, holder); balance is u256 hex (TEXT)
+    - 014_token_transfers(id, token, from, to, value, log coord)
+      Append-only audit log; UNIQUE on log coord for replay safety
+  Decode: sol! Token contract block — single Transfer event.
+  Store insert_token_transfer is the architectural new bit:
+    - Uses alloy::primitives::U256 for actual arithmetic
+    - Both balance updates + audit row insert are in ONE rusqlite tx
+    - Replay-safe: if INSERT OR IGNORE on the audit row affects 0 rows
+      (already exists), early-return WITHOUT touching balances
+    - Mint = from is ZERO_ADDRESS → only update receiver
+    - Burn = to is ZERO_ADDRESS → only update sender
+    - Saturating sub/add prevents underflow/overflow panics
+    - First-time holder gets a row inserted; existing holders get updated
+      via ON CONFLICT (upsert)
+  GraphQL: TokenBalance + TokenTransfer SimpleObjects;
+    tokenHolders(tokenAddress) — cap-table view, balance DESC,
+    excludes zero address + zero-balance rows.
+    tokenTransfers(tokenAddress) — full audit log, oldest first.
+  MockToken with emitCapTableLifecycle — 3 events in one tx
+    (mint to founder, transfer to employee, burn).
+
+  LIVE-TESTED FULL ERC20 LIFECYCLE:
+    block 2944: TrustCreated → trust auto-watched
+    block 2962: TRUST_ModuleAdded(module_id 0x700f, MockToken) → token auto-watched
+    block 2985: emitCapTableLifecycle(founder, employee, mint=1M, xfer=100k, burn=50k)
+      → 3 Transfer events:
+        Transfer(0x0, founder, 1000000)   = mint
+        Transfer(founder, employee, 100000) = transfer
+        Transfer(founder, 0x0, 50000)      = burn
+
+    GraphQL tokenHolders returned EXACTLY:
+      [{ founder, balance: "0xcf850", last_updated_block: 2985 },  // 850000
+       { employee, balance: "0x186a0", last_updated_block: 2985 }] // 100000
+
+    Math correct: 1M - 100k - 50k = 850k.
+    Audit log preserves all 3 transfers with zero-address mint/burn intact.
+
+  THE CAP-TABLE SURFACE WORKS. tokenHolders is now the query that powers
+  apps/ui Treasury "who owns what" — once a Token module is attached to a
+  TRUST, the cap-table populates automatically.
+
+24/24 tests green. 23 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 6 — extend or integrate):
-  Phase 5 (HANDOFF.md) is DONE. The deliverable is complete.
+NEXT ACTION (Phase 6-B — Vesting module OR Path C aeqi-core deploy fix):
+  Phase 6-A (Token + cap-table) is DONE. Remaining options unchanged
+  except Path A is now Vesting (next module after Token):
 
-  Three high-leverage next moves remain. Pick one per tick:
+  PATH A' — Vesting module:
+    Source: ~/projects/aeqi-graph/abis/Vesting.module.json
+    Probably: Vesting_PositionCreated, Vesting_VestingClaimed,
+              Vesting_PositionTransferred, Vesting_PositionRevoked.
+    Pattern is locked — Haiku Explore the ABI, then 30-min mechanical port:
+      sol! decl + migrations(015_vesting_positions, 016_vesting_claims) +
+      store fns + dispatch arms + GraphQL fields + MockVesting + live test.
 
-  PATH A — Token module (financial demo surface):
-    Highest demo value next module. Token.module ABI has Token_TokenCreated
-    + Token_Transfer. Token_Transfer is high-frequency — for v1 indexer
-    just persist all of them; sampling can come later. Add cap_table query
-    that aggregates current balances per holder.
+  PATH B — apps/ui glue (real user-visible win):
+    Pick ONE tab (Ownership simplest — rolesForModule + roleAssignments)
+    and rewrite its data layer to query our indexer. Requires editing
+    aeqi/apps/ui in a SEPARATE worktree off ~/aeqi (not ~/aeqi-indexer-build).
 
-  PATH B — apps/ui glue (real integration, biggest user-visible win):
-    Add a feature flag `VITE_INDEXER_URL` to apps/ui. Pick ONE tab
-    (Ownership is simplest — rolesForModule + roleAssignments) and
-    rewrite its data layer to query our indexer instead of the subgraph.
-    See HANDOFF.md "apps/ui integration sketch" for per-tab mapping.
-    NB: this requires editing aeqi/apps/ui in a SEPARATE worktree.
-
-  PATH C — fix aeqi-core deploy script drift (unblocks real-contract test):
-    The 3-arg Beacon.setImplementation signature was the original blocker.
-    Fix scripts/foundry/Deploy.s.sol so deploy works against current
-    aeqi-core contracts. Then re-test the indexer against the real
-    Factory + TRUST + module deployments instead of mocks. Mocks emit
-    byte-identical signatures so this is a deploy-side fix, not an
-    indexer-side fix — but it would close the original loop.
+  PATH C — aeqi-core deploy script drift (the original blocker):
+    Fix /home/claudedev/projects/aeqi-core/scripts/foundry/Deploy.s.sol
+    Beacon.setImplementation signature mismatch. This unblocks
+    real-contract testing — the indexer's mocks emit byte-identical
+    signatures, so the indexer code needs no changes; only deploy works.
 
   LEVERAGE PRIORITY:
-    Path A = breadth (more demo content)
-    Path B = depth (real user-visible win)
-    Path C = correctness (proves the indexer against real contracts)
-    Pick based on what's most valuable to the user when they wake up.
-    My read: PATH A first (more visible), PATH C second (validation),
-    PATH B in tomorrow's session (needs more user input on UI design).
+    PATH A' = breadth (Vesting completes the cap-table financial story:
+              Token = current ownership, Vesting = scheduled ownership)
+    PATH B  = depth (one real apps/ui tab swapped to live indexer data)
+    PATH C  = original-loop close (proves it against real contracts)
+
+    My read: PATH A' first if cron is still running (~30 min), then
+    pivot to PATH C since real-contract validation is more durable
+    than another mock-tested module. PATH B benefits from human design
+    input — defer to tomorrow's session.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

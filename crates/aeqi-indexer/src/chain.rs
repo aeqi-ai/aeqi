@@ -349,6 +349,8 @@ pub mod poll {
                         decode::Governance::Governance_ProposalSucceeded::SIGNATURE_HASH,
                         decode::Governance::Governance_ProposalExecuted::SIGNATURE_HASH,
                         decode::Governance::Governance_VoteCast::SIGNATURE_HASH,
+                        // Token module events (per-module / ERC20)
+                        decode::Token::Transfer::SIGNATURE_HASH,
                     ];
                     let filter = Filter::new()
                         .from_block(block_num)
@@ -746,6 +748,41 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Governance_VoteCast failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Token::Transfer::SIGNATURE_HASH)
+                        {
+                            // Token Transfer fires from the Token module address
+                            // (which IS the ERC20 contract). Atomic balance
+                            // update happens inside store::insert_token_transfer.
+                            let token_address = format!("{:#x}", log.address());
+                            let log_index = log.log_index.unwrap_or(0);
+                            match decode::Token::Transfer::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let coord = store::LogCoord {
+                                        block_number: block_num,
+                                        tx_hash: &tx_hash,
+                                        log_index,
+                                    };
+                                    store::insert_token_transfer(
+                                        &conn,
+                                        &token_address,
+                                        &format!("{:#x}", ev.from),
+                                        &format!("{:#x}", ev.to),
+                                        &format!("{:#x}", ev.value),
+                                        ev.value,
+                                        coord,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Token Transfer: token={} from={:#x} to={:#x} value={:#x} block={}",
+                                        token_address, ev.from, ev.to, ev.value, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Token Transfer failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

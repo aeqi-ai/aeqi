@@ -262,6 +262,58 @@ const MIGRATIONS: &[(&str, &str)] = &[
         CREATE INDEX IF NOT EXISTS idx_votes_voter ON votes(voter_address);
         "#,
     ),
+    (
+        "013_token_balances",
+        r#"
+        -- Per-(token, holder) balance, mutated on every Transfer event.
+        -- Token modules in AEQI are ERC20s — one module = one token —
+        -- so token_address is the module address.
+        --
+        -- balance is stored as u256 hex (TEXT). u256 doesn't fit in
+        -- SQLite's 64-bit INTEGER, and arithmetic is done in alloy U256
+        -- before the write. Mint = Transfer(from=0x0,to,value),
+        -- burn = Transfer(from,to=0x0,value); both update only the
+        -- non-zero side.
+        CREATE TABLE IF NOT EXISTS token_balances (
+            token_address TEXT NOT NULL,
+            holder_address TEXT NOT NULL,
+            balance TEXT NOT NULL DEFAULT '0x0',
+            last_updated_block INTEGER NOT NULL,
+            PRIMARY KEY (token_address, holder_address)
+        );
+        CREATE INDEX IF NOT EXISTS idx_token_balances_holder
+          ON token_balances(holder_address);
+        "#,
+    ),
+    (
+        "014_token_transfers",
+        r#"
+        -- Append-only audit log of every Transfer event. UNIQUE on log coord
+        -- makes replay-safe. value is u256 hex.
+        --
+        -- Per-token cap-table view = SELECT holder_address, balance
+        --   FROM token_balances WHERE token_address = ? ORDER BY balance DESC.
+        -- Per-holder portfolio view = SELECT token_address, balance
+        --   FROM token_balances WHERE holder_address = ?.
+        CREATE TABLE IF NOT EXISTS token_transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_address TEXT NOT NULL,
+            from_address TEXT NOT NULL,
+            to_address TEXT NOT NULL,
+            value TEXT NOT NULL,
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            UNIQUE (token_address, block_number, tx_hash, log_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_token_transfers_token
+          ON token_transfers(token_address, block_number);
+        CREATE INDEX IF NOT EXISTS idx_token_transfers_from
+          ON token_transfers(from_address);
+        CREATE INDEX IF NOT EXISTS idx_token_transfers_to
+          ON token_transfers(to_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -977,6 +1029,191 @@ pub fn get_votes_for_proposal(
     Ok(rows)
 }
 
+/// The canonical zero address — Transfer(from=0x0, ...) means mint;
+/// Transfer(..., to=0x0) means burn. Both branches skip the zero-side update.
+pub const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+
+/// Persist a Token Transfer event AND atomically update both balance rows.
+/// Token modules in AEQI are ERC20s (one module = one token), so
+/// `token_address` is the module address.
+///
+/// `value_hex` and `value` parallel each other — the caller has already
+/// formatted both because we need the alloy U256 for arithmetic and the
+/// hex string for the audit-log row + balance write-back.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_token_transfer(
+    conn: &Connection,
+    token_address: &str,
+    from_address: &str,
+    to_address: &str,
+    value_hex: &str,
+    value: alloy::primitives::U256,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+
+    // Account fan-in for both sides (zero address is a normal Account row;
+    // we don't filter — easier query patterns and tiny extra storage).
+    for addr in [from_address, to_address] {
+        tx.execute(
+            "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+             VALUES (?1, ?2, ?3)",
+            params![addr, coord.block_number as i64, coord.tx_hash],
+        )?;
+    }
+
+    // Audit log row (idempotent on log coord).
+    let n = tx.execute(
+        "INSERT OR IGNORE INTO token_transfers
+            (token_address, from_address, to_address, value, block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            token_address,
+            from_address,
+            to_address,
+            value_hex,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    if n == 0 {
+        // Replay: row already exists. Don't double-update balances.
+        tx.commit()?;
+        return Ok(());
+    }
+
+    // Decrement sender (skip if mint).
+    if from_address != ZERO_ADDRESS {
+        let prev: String = tx
+            .query_row(
+                "SELECT balance FROM token_balances
+                 WHERE token_address = ?1 AND holder_address = ?2",
+                params![token_address, from_address],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|_| "0x0".to_string());
+        let prev_u: alloy::primitives::U256 =
+            prev.parse().unwrap_or(alloy::primitives::U256::ZERO);
+        let new_balance = prev_u.saturating_sub(value);
+        tx.execute(
+            "INSERT INTO token_balances (token_address, holder_address, balance, last_updated_block)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(token_address, holder_address) DO UPDATE SET
+                balance = excluded.balance,
+                last_updated_block = excluded.last_updated_block",
+            params![
+                token_address,
+                from_address,
+                format!("{:#x}", new_balance),
+                coord.block_number as i64
+            ],
+        )?;
+    }
+
+    // Increment receiver (skip if burn).
+    if to_address != ZERO_ADDRESS {
+        let prev: String = tx
+            .query_row(
+                "SELECT balance FROM token_balances
+                 WHERE token_address = ?1 AND holder_address = ?2",
+                params![token_address, to_address],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|_| "0x0".to_string());
+        let prev_u: alloy::primitives::U256 =
+            prev.parse().unwrap_or(alloy::primitives::U256::ZERO);
+        let new_balance = prev_u.saturating_add(value);
+        tx.execute(
+            "INSERT INTO token_balances (token_address, holder_address, balance, last_updated_block)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(token_address, holder_address) DO UPDATE SET
+                balance = excluded.balance,
+                last_updated_block = excluded.last_updated_block",
+            params![
+                token_address,
+                to_address,
+                format!("{:#x}", new_balance),
+                coord.block_number as i64
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenBalanceRow {
+    pub token_address: String,
+    pub holder_address: String,
+    pub balance: String,
+    pub last_updated_block: u64,
+}
+
+/// Cap-table view: all holders of a token, largest balance first.
+/// Excludes the zero address (mint/burn pseudo-account) and zero-balance rows.
+pub fn get_token_holders(conn: &Connection, token_address: &str) -> Result<Vec<TokenBalanceRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT token_address, holder_address, balance, last_updated_block
+         FROM token_balances
+         WHERE token_address = ?1
+           AND holder_address != ?2
+           AND balance != '0x0'
+         ORDER BY length(balance) DESC, balance DESC",
+    )?;
+    let rows = stmt
+        .query_map(params![token_address, ZERO_ADDRESS], |r| {
+            Ok(TokenBalanceRow {
+                token_address: r.get(0)?,
+                holder_address: r.get(1)?,
+                balance: r.get(2)?,
+                last_updated_block: r.get::<_, i64>(3)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenTransferRow {
+    pub token_address: String,
+    pub from_address: String,
+    pub to_address: String,
+    pub value: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// Audit log of all Transfer events for a token, oldest first.
+pub fn get_token_transfers(
+    conn: &Connection,
+    token_address: &str,
+) -> Result<Vec<TokenTransferRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT token_address, from_address, to_address, value,
+                block_number, tx_hash, log_index
+         FROM token_transfers
+         WHERE token_address = ?1
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![token_address], |r| {
+            Ok(TokenTransferRow {
+                token_address: r.get(0)?,
+                from_address: r.get(1)?,
+                to_address: r.get(2)?,
+                value: r.get(3)?,
+                block_number: r.get::<_, i64>(4)? as u64,
+                tx_hash: r.get(5)?,
+                log_index: r.get::<_, i64>(6)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Look up a TRUST by its on-chain address.
 pub fn get_trust(conn: &Connection, address: &str) -> Result<Option<TrustRow>> {
     let row = conn
@@ -1350,6 +1587,61 @@ mod tests {
         insert_vote(&conn, module, proposal_id, alice, 1, "0x64", "yes!", c1).unwrap();
         let votes = get_votes_for_proposal(&conn, module, proposal_id).unwrap();
         assert_eq!(votes.len(), 2);
+    }
+
+    #[test]
+    fn token_transfer_mint_then_transfer_then_burn() {
+        use alloy::primitives::U256;
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let token = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let alice = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
+        let bob = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
+
+        // Mint 1000 to alice
+        let v1000 = U256::from(1000u64);
+        insert_token_transfer(
+            &conn, token, ZERO_ADDRESS, alice, "0x3e8", v1000,
+            LogCoord { block_number: 1, tx_hash: "0xtx1", log_index: 0 },
+        ).unwrap();
+
+        // Alice → Bob 300
+        let v300 = U256::from(300u64);
+        insert_token_transfer(
+            &conn, token, alice, bob, "0x12c", v300,
+            LogCoord { block_number: 2, tx_hash: "0xtx2", log_index: 0 },
+        ).unwrap();
+
+        // Burn 100 from bob
+        let v100 = U256::from(100u64);
+        insert_token_transfer(
+            &conn, token, bob, ZERO_ADDRESS, "0x64", v100,
+            LogCoord { block_number: 3, tx_hash: "0xtx3", log_index: 0 },
+        ).unwrap();
+
+        let holders = get_token_holders(&conn, token).unwrap();
+        assert_eq!(holders.len(), 2, "should be 2 non-zero holders");
+        // alice has 700, bob has 200
+        let alice_row = holders.iter().find(|r| r.holder_address == alice).unwrap();
+        let bob_row = holders.iter().find(|r| r.holder_address == bob).unwrap();
+        assert_eq!(alice_row.balance, "0x2bc"); // 700
+        assert_eq!(bob_row.balance, "0xc8");    // 200
+
+        // Audit log has 3 transfers
+        let transfers = get_token_transfers(&conn, token).unwrap();
+        assert_eq!(transfers.len(), 3);
+        assert_eq!(transfers[0].from_address, ZERO_ADDRESS);
+        assert_eq!(transfers[2].to_address, ZERO_ADDRESS);
+
+        // Replay protection: re-insert same transfer doesn't double-mutate balance
+        insert_token_transfer(
+            &conn, token, alice, bob, "0x12c", v300,
+            LogCoord { block_number: 2, tx_hash: "0xtx2", log_index: 0 },
+        ).unwrap();
+        let alice_row = get_token_holders(&conn, token).unwrap()
+            .into_iter().find(|r| r.holder_address == alice).unwrap();
+        assert_eq!(alice_row.balance, "0x2bc"); // still 700
     }
 
     #[test]

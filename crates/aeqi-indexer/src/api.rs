@@ -24,6 +24,54 @@ pub type SharedDb = Arc<Mutex<Connection>>;
 /// Top-level GraphQL Query type.
 pub struct Query;
 
+/// GraphQL projection of a token holder's balance.
+#[derive(SimpleObject, Clone)]
+pub struct TokenBalance {
+    pub token_address: String,
+    pub holder_address: String,
+    /// uint256 hex
+    pub balance: String,
+    pub last_updated_block: u64,
+}
+
+impl From<store::TokenBalanceRow> for TokenBalance {
+    fn from(r: store::TokenBalanceRow) -> Self {
+        TokenBalance {
+            token_address: r.token_address,
+            holder_address: r.holder_address,
+            balance: r.balance,
+            last_updated_block: r.last_updated_block,
+        }
+    }
+}
+
+/// GraphQL projection of a Token Transfer audit-log row.
+#[derive(SimpleObject, Clone)]
+pub struct TokenTransfer {
+    pub token_address: String,
+    pub from_address: String,
+    pub to_address: String,
+    /// uint256 hex
+    pub value: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::TokenTransferRow> for TokenTransfer {
+    fn from(r: store::TokenTransferRow) -> Self {
+        TokenTransfer {
+            token_address: r.token_address,
+            from_address: r.from_address,
+            to_address: r.to_address,
+            value: r.value,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
 /// GraphQL projection of a governance proposal.
 #[derive(SimpleObject, Clone)]
 pub struct Proposal {
@@ -300,6 +348,33 @@ impl Query {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
         let rows = store::get_modules_for_trust(&conn, &trust_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Cap-table view: all holders of a token, largest balance first.
+    /// Excludes the zero address (mint/burn pseudo-account) and zero-balance rows.
+    async fn token_holders(
+        &self,
+        ctx: &Context<'_>,
+        token_address: String,
+    ) -> async_graphql::Result<Vec<TokenBalance>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_token_holders(&conn, &token_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Audit log of all Transfer events for a token, oldest first.
+    async fn token_transfers(
+        &self,
+        ctx: &Context<'_>,
+        token_address: String,
+    ) -> async_graphql::Result<Vec<TokenTransfer>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_token_transfers(&conn, &token_address)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

@@ -123,6 +123,24 @@ sol! {
     }
 }
 
+// Token module events — emitted by Token.module instances.
+// Source: /home/claudedev/projects/aeqi-graph/abis/Token.module.json
+//
+// AEQI's Token module is a per-instance ERC20 (one module = one token).
+// v1 covers standard Transfer; mint = Transfer(from=0x0,...), burn = Transfer(...,to=0x0).
+// Approval, DelegateChanged, etc. can be added later — Transfer is the
+// minimum for a working cap-table view.
+sol! {
+    #[sol(rpc)]
+    contract Token {
+        event Transfer(
+            address indexed from,
+            address indexed to,
+            uint256 value
+        );
+    }
+}
+
 /// A normalized indexer event — what we actually persist after decoding raw logs.
 ///
 /// Cross-event uniformity: every variant carries the block + tx context so
