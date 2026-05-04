@@ -362,7 +362,7 @@ node /home/claudedev/aeqi/apps/ui/node_modules/typescript/bin/tsc --noEmit
 node /home/claudedev/aeqi/apps/ui/node_modules/prettier/bin/prettier.cjs --check "src/**/*.{ts,tsx,css,mdx}"
 node /home/claudedev/aeqi/apps/ui/node_modules/eslint/bin/eslint.js src/
 node /home/claudedev/aeqi/apps/ui/node_modules/vitest/vitest.mjs run
-node /home/claudedev/aeqi/apps/ui/node_modules/vite/bin/vite.js build
+./node_modules/.bin/vite build
 node scripts/hygiene-check.mjs
 ```
 
@@ -371,6 +371,15 @@ The `PATH=".../node_modules/.bin:$PATH" npm run verify` pattern does
 NOT work in this project — npm spawns a fresh shell that resets PATH,
 so the binary injections never reach the subprocess. The `node` form
 is the only reliable approach when `.bin/` is contested.
+
+**vite is the exception: use `./node_modules/.bin/vite`, NOT the absolute
+`node .../vite/bin/vite.js` form.** Vite resolves its internal plugins
+relative to CWD, not its own location — calling it via absolute `node`
+path from a worktree directory (which has no real node_modules, only a
+symlink) causes `Cannot find module '@vitejs/...'` or `lit-element`
+resolution failures. The `.bin/` symlink follows to the parent's vite
+and runs with the correct base. Cost (2026-05-05): one failed build
+pass before switching to `./node_modules/.bin/vite build`.
 
 **UI-only deploy (no Rust changed):**
 
