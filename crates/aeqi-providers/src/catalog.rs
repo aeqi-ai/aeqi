@@ -116,6 +116,33 @@ static CATALOG: &[ModelEntry] = &[
     },
     // --------------------------------------------------------------- CHEAP
     ModelEntry {
+        id: "deepseek/deepseek-v4-flash",
+        display_name: "DeepSeek V4 Flash",
+        family: "deepseek",
+        tier: Tier::Cheap,
+        context_window: 1_048_576,
+        price_in: 0.14,
+        price_out: 0.28,
+        notes: "1M context, cheapest strong tool-caller — aeqi default",
+        recommended: true,
+        tags: &["tools", "code"],
+    },
+    ModelEntry {
+        id: "deepseek/deepseek-v4-pro",
+        display_name: "DeepSeek V4 Pro",
+        family: "deepseek",
+        // Pricing-wise this is sub-$1 (Cheap), but quality + 1M context put
+        // it in the "real work" slot. Balanced tier captures positioning,
+        // not just absolute price.
+        tier: Tier::Balanced,
+        context_window: 1_048_576,
+        price_in: 0.435,
+        price_out: 0.87,
+        notes: "1M context, frontier reasoning at sub-$1/Mtok — the real-work hero",
+        recommended: true,
+        tags: &["tools", "code", "reasoning"],
+    },
+    ModelEntry {
         id: "deepseek/deepseek-v3.2",
         display_name: "DeepSeek V3.2",
         family: "deepseek",
@@ -123,8 +150,8 @@ static CATALOG: &[ModelEntry] = &[
         context_window: 131_072,
         price_in: 0.25,
         price_out: 0.38,
-        notes: "Ranked #2 overall — aeqi default",
-        recommended: true,
+        notes: "Legacy — kept for existing agents; new agents use V4",
+        recommended: false,
         tags: &["tools", "code"],
     },
     ModelEntry {
@@ -237,18 +264,6 @@ static CATALOG: &[ModelEntry] = &[
     },
     // ------------------------------------------------------------ BALANCED
     ModelEntry {
-        id: "anthropic/claude-sonnet-4.6",
-        display_name: "Claude Sonnet 4.6",
-        family: "anthropic",
-        tier: Tier::Balanced,
-        context_window: 1_000_000,
-        price_in: 3.0,
-        price_out: 15.0,
-        notes: "Ranked #1 overall — flagship for real work",
-        recommended: true,
-        tags: &["tools", "code", "long-context", "vision"],
-    },
-    ModelEntry {
         id: "xiaomi/mimo-v2.5-pro",
         display_name: "MiMo V2.5 Pro",
         family: "xiaomi",
@@ -310,18 +325,6 @@ static CATALOG: &[ModelEntry] = &[
     },
     // ------------------------------------------------------------- PREMIUM
     ModelEntry {
-        id: "anthropic/claude-opus-4.7",
-        display_name: "Claude Opus 4.7",
-        family: "anthropic",
-        tier: Tier::Premium,
-        context_window: 1_000_000,
-        price_in: 5.0,
-        price_out: 25.0,
-        notes: "Anthropic’s deepest reasoning tier",
-        recommended: true,
-        tags: &["tools", "code", "long-context", "thinking"],
-    },
-    ModelEntry {
         id: "openai/gpt-5-pro",
         display_name: "GPT-5 Pro",
         family: "openai",
@@ -330,7 +333,7 @@ static CATALOG: &[ModelEntry] = &[
         price_in: 15.0,
         price_out: 120.0,
         notes: "Frontier — reserve for the hardest problems",
-        recommended: false,
+        recommended: true,
         tags: &["tools", "thinking"],
     },
 ];
@@ -400,7 +403,8 @@ mod tests {
 
     #[test]
     fn find_returns_known_slug() {
-        assert!(find("anthropic/claude-sonnet-4.6").is_some());
+        assert!(find("deepseek/deepseek-v4-flash").is_some());
+        assert!(find("deepseek/deepseek-v4-pro").is_some());
         assert!(find("deepseek/deepseek-v3.2").is_some());
         assert!(find("bogus/nonexistent").is_none());
     }

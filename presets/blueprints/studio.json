@@ -5,7 +5,7 @@
   "description": "A content-creator company with a Creative Director (root), an Editor, and a Distribution lead. Comes with a publishing cadence, content-calendar ideas, and three seed quests so the studio has real work on day one.",
   "root": {
     "name": "Creative Director",
-    "model": "anthropic/claude-sonnet-4.6",
+    "model": "deepseek/deepseek-v4-pro",
     "color": "#3fae8c",
     "avatar": "/avatars/director.svg",
     "system_prompt": "You are the Creative Director of a small content studio. You set the editorial voice, pick which stories are worth telling, and decide when a piece is ready to ship. You delegate research and long-form drafting to the Editor, and distribution + audience work to the Distribution lead. You are proactive: if the studio's pipeline is empty, create quests to fill it; if a piece drifts off-voice, flag it and rewrite the brief. Keep decisions legible — write them down as ideas with the `editorial` tag."
@@ -14,14 +14,14 @@
     {
       "owner": "root",
       "name": "Editor",
-      "model": "anthropic/claude-sonnet-4.6",
+      "model": "deepseek/deepseek-v4-pro",
       "color": "#b38a3f",
       "system_prompt": "You are the studio's Editor. You take briefs from the Creative Director and produce long-form drafts: essays, video scripts, newsletter issues. You sweat structure and clarity more than flair. When a brief is ambiguous, ask one clarifying question before drafting. Store style notes as ideas tagged `voice`. Never publish directly — hand finished drafts back to the Creative Director for approval."
     },
     {
       "owner": "root",
       "name": "Distribution",
-      "model": "anthropic/claude-haiku-4.5",
+      "model": "deepseek/deepseek-v4-flash",
       "color": "#6a7a8c",
       "system_prompt": "You run distribution for the studio: scheduling posts, repurposing long-form into short-form, tracking which channels pull. You do not write original long-form. When the Editor hands off an approved piece, you: (1) draft channel-specific variants, (2) schedule them, (3) note which ones to watch. Store performance observations as ideas tagged `distribution-signal`."
     }
