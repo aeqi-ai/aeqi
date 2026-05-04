@@ -20,7 +20,7 @@ import { isRateLimited } from "@/lib/rateLimit";
 import RateLimitBanner from "./shell/RateLimitBanner";
 
 const DrivePage = lazy(() => import("@/pages/DrivePage"));
-const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const MePage = lazy(() => import("@/pages/MePage"));
 const StartPage = lazy(() => import("@/pages/StartPage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
@@ -248,7 +248,7 @@ export default function AppLayout() {
     }
     if (isAdmin) return <AdminPage />;
     if (isDrive) return <DrivePage />;
-    if (isSettings) return <ProfilePage />;
+    if (isSettings) return <MePage />;
     if (isEconomy) return <EconomyPage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /

@@ -14,6 +14,9 @@ import { useMemo } from "react";
  * flag is gone.
  */
 export interface ShellSurface {
+  /** True for all `/me/*` paths — MePage dispatches further. */
+  isMeRoute: boolean;
+  /** @deprecated Use isMeRoute. Kept for AppLayout dispatch compat. */
   isSettings: boolean;
   isEconomy: boolean;
   isBlueprints: boolean;
@@ -35,10 +38,11 @@ export interface ShellSurface {
 
 export function useShellSurface(path: string, tab: string | undefined): ShellSurface {
   return useMemo(() => {
-    // The user-scope namespace `/me/*` is owned by settings so any
-    // unrecognised /me/<x> falls back to ProfilePage rather than 404.
     const isAdmin = path === "/admin" || path.startsWith("/admin/");
-    const isSettings = path === "/me" || path.startsWith("/me/") || tab === "profile";
+    // All /me/* paths are handled by MePage; isSettings is an alias kept
+    // so AppLayout's single dispatch point stays unchanged.
+    const isMeRoute = path === "/me" || path.startsWith("/me/") || tab === "profile";
+    const isSettings = isMeRoute;
     // `/` is the canonical Economy URL — the front door of the app
     // shell. `/economy` is kept as an alias and redirects to `/` in
     // App.tsx, but the shell-side flag must match either path so the
@@ -68,6 +72,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isNotFound = !isKnownShellRoute;
 
     return {
+      isMeRoute,
       isSettings,
       isEconomy,
       isBlueprints,
