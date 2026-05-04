@@ -1,17 +1,33 @@
 /** Mirrored from aeqi-landing/src/pricing.ts. Single source of truth for pricing.
  *  Update both files when prices change.
  *
- *  One offer. $19 first month, $49 / month after. Stripe runs this as a single
- *  $49 / mo Product with an auto-applied first-month coupon (-$30, duration:
- *  once). Day-0 charge is $19; every subsequent month is $49. No tier picker,
- *  no trial, no annual. `FOUNDER_FEE` is the effective first-month price.
+ *  One offer, two payment rails.
+ *
+ *  Card (default): $19 first month → $49 / month after. Stripe runs this as a
+ *  single $49 / mo Product with an auto-applied first-month coupon (-$30,
+ *  duration: once). Day-0 charge is $19; every subsequent month is $49.
+ *
+ *  USDC: $19 first month → $45 / month after (the $4 discount is the Stripe
+ *  fee passed through). Phase A: SIWE users only — ERC-20 approve + monthly
+ *  platform-side cron pull from external EOA. Phase B (after wallet build):
+ *  default rail; passkey-Entity USDC pull, paymaster-sponsored gas.
+ *
+ *  Subscription includes $25 / month of inference credit, denominated in
+ *  dollars (any model). Top up anytime via card or USDC. External callers
+ *  pay per-call via x402 (cost + 20%) — see aeqi-economy-plan.md.
+ *
+ *  No tier picker, no trial, no annual. `FOUNDER_FEE` is the effective
+ *  first-month price on both rails.
  */
 
 export const FOUNDER_FEE = 19;
 export const COMPANY_MONTHLY = 49;
+export const COMPANY_MONTHLY_USDC = 45;
+
+export const INFERENCE_CREDIT_USD = 25;
 
 export const RESOURCE_PACK = {
-  tokens: "16M",
+  inferenceUsd: `$${INFERENCE_CREDIT_USD}`,
   cpu: "4 vCPU",
   ram: "8 GB",
   storage: "80 GB",
@@ -28,8 +44,11 @@ export const FEATURES: Feature[] = [
   { text: "Unlimited agents" },
   { text: "Managed hosting + custom domain" },
   { text: "Built-in ownership & governance" },
-  { text: "On-demand token top-ups" },
-  { text: `${RESOURCE_PACK.tokens} tokens / month`, highlight: true },
+  {
+    text: `${RESOURCE_PACK.inferenceUsd} / month inference credit (any model)`,
+    highlight: true,
+  },
+  { text: "Top up anytime — card or USDC" },
   {
     text: `${RESOURCE_PACK.cpu} · ${RESOURCE_PACK.ram} RAM · ${RESOURCE_PACK.storage} storage`,
     highlight: true,

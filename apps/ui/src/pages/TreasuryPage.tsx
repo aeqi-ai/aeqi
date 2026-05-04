@@ -224,7 +224,7 @@ function BillingCard({ billing, paymentLast4, onManage, portalBusy }: BillingCar
 
 function ResourcePack() {
   const items = [
-    { label: "Tokens / month", value: RESOURCE_PACK.tokens },
+    { label: "Inference / month", value: RESOURCE_PACK.inferenceUsd },
     { label: "Compute", value: RESOURCE_PACK.cpu },
     { label: "Memory", value: RESOURCE_PACK.ram },
     { label: "Storage", value: RESOURCE_PACK.storage },
