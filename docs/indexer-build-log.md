@@ -27,13 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 33 (PHASE 16-B ✓ FUND MODULE — NAVS + FLOWS + POSITIONS)
-PHASE: 16-B ✓ FUND VEHICLE INDEXED | NAV time series + flow lifecycle
-       (requested → claimed | cancelled) + position lifecycle
-       (open → closed) + interactions audit. Live-verified: 6 events in
-       1 tx (NAV + flow + position cycle) → all entities populated.
-       33/33 tests green; 41 commits.
-       | next: HANDOFF micro-refresh OR apps/ui glue (interactive)
+TICK: 34 (PHASE 17-A ✓ HANDOFF FINAL REFRESH — V2 SCOPE COMPLETE)
+PHASE: 17-A ✓ DOC FREEZE READY | HANDOFF.md updated for Fund + final
+       status callout. 10 contract types covered, 30 migrations,
+       25 GraphQL queries. Explicit 'What's NOT in v1' carve-out:
+       Foundation skipped, Unifutures + Uniswap deferred. 33/33 tests
+       green; 43 commits.
+       | next: optional final HANDOFF freeze pass OR pivot to interactive
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -1087,28 +1087,60 @@ TICK 33 — PHASE 16-B FUND MODULE PORT:
 
 33/33 tests green. 41 commits on indexer-build branch.
 
+TICK 34 — PHASE 17-A HANDOFF FINAL REFRESH:
+  HANDOFF.md updates (~30 lines):
+    - Status header: 10 contract types, 10 mocks, 33/33 tests, 42 commits
+      (was 9/9/31/36 from TICK 29)
+    - Explicit "What's NOT in v1" carve-out: Foundation skipped (no
+      domain events); Unifutures/UnifuturesPositionManager/Uniswap
+      deferred (derivative + DEX niche)
+    - Schema migration table: rows 027-030 for fund_navs, fund_flows,
+      fund_positions, fund_position_interactions
+    - GraphQL surface: fundNavs + fundFlows + fundPositions +
+      fundPositionInteractions queries
+    - Test contracts: MockFund row
+    - Per-tab apps/ui mapping: Fund/NAV tab row (NAV timeline + LP
+      flow pipeline + portfolio composition); Admin tab extended with
+      factoryConfig
+    - Open work: Fund marked SHIPPED; Foundation + Unifutures + Uniswap
+      deferred with rationale
+
+  HANDOFF.md is the single artifact tomorrow's user reads. It's now
+  current with the indexer-build code at HEAD (commit bce33c0d).
+
+33/33 tests green. 43 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 17 — closing artifacts):
-  Phase 16-B (Fund) done. The meaningful module-port endgame is reached.
-  Indexer covers 10 contract types, 30 migrations, 25 GraphQL queries,
-  ~50 dispatched event types — every demo-critical surface for a v2
-  Company / Fund / cap-table flow.
+NEXT ACTION (Phase 17-B — final freeze pass OR genuine pivot):
+  Phase 17-A (HANDOFF refresh) done. All paths from prior locked
+  plans are now either shipped or deferred-with-rationale.
 
-  PATH A — HANDOFF micro-refresh: add Fund schema rows + 4 GraphQL
-    queries + per-tab Fund mapping. ~5 min.
+  PATH A — final HANDOFF freeze pass:
+    Read HANDOFF.md cold from top to bottom; tighten any rough edges,
+    fix any factual drift, ensure the "Live demo against real
+    aeqi-core" recipe still uses correct addresses + commands.
+    ~10 min review + cleanup. Non-negotiable artifact polish.
 
-  PATH B — final HANDOFF freeze + final commit summary:
-    Read HANDOFF cold; tighten any rough edges. Add an "Indexer is
-    complete for v2 demo scope" callout at the top with a cross-link
-    to the build log for the per-tick history.
+  PATH B — verify-everything smoke pass:
+    Run cargo test + cargo clippy one more time on a clean build.
+    Confirm 33/33 + zero warnings before tomorrow's user touches it.
+    ~3 min sanity.
 
-  PATH C — apps/ui glue: interactive session.
-  PATH D — production hardening: out of scope.
+  PATH C — write a one-page TLDR.md or update the worktree README:
+    Single-screen "what is this and where do I start?" pointer to
+    HANDOFF.md. ~5 min.
 
-  My read: PATH A next tick (5-min refresh — keeps doc parity tight),
-  PATH B after if cron remains. The autonomous session can wrap on a
-  clean note: indexer feature-complete, doc current, ready for the
-  user to pick up apps/ui glue interactively.
+  PATH D — apps/ui glue: interactive session (defer).
+  PATH E — production hardening: out of scope.
+
+  My read: PATH B next (3-min sanity, prevents the user opening it
+  and finding a fresh build break), PATH A after (10-min freeze pass),
+  PATH C optional polish.
+
+  After PATH B+A, the autonomous indexer session has a clean
+  termination point: every artifact is current, tests green, and
+  the next move is human-design-driven apps/ui integration that
+  benefits from the user's input.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
