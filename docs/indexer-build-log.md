@@ -27,13 +27,15 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 38 (PHASE 19-C4 ✓ LIVE-DEMO SMOKE — HANDOFF RECIPE VERIFIED)
-PHASE: 19-C4 ✓ NO ENVIRONMENTAL DRIFT | reran the documented HANDOFF
-       demo recipe step-for-step against existing real Factory
-       (0x67d269...). 7 events at blocks 7573–7574; GraphQL response
-       matches HANDOFF expectation: signersCount=1, valueConfigsCount=2,
-       3 modules attached, templatesForFactory=1. 33/33 tests; 50 commits.
-       | next: PATH C2 (DEPLOY.md sketch) OR genuine wrap
+TICK: 39 (PHASE 20-C2 ✓ DEPLOY.md PRODUCTION-HARDENING THINKING AID)
+PHASE: 20-C2 ✓ FORWARD-LOOKING DOC | docs/DEPLOY.md (~190 lines)
+       sketches the path from local-Anvil v1 to Base-mainnet production.
+       8 sections (systemd, reverse proxy, WSS subscription, eth_call
+       backfill, multi-chain, Prometheus metrics, healthz lag, Transfer
+       filtering) + out-of-scope callouts. Nothing implemented; this is
+       design-space for whoever picks it up. 33/33 tests; 52 commits.
+       | next: genuine wrap. Autonomous session has produced 6 docs +
+               complete v1 indexer; next paths require user interaction.
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -1212,34 +1214,85 @@ TICK 38 — PHASE 19-C4 LIVE-DEMO SMOKE:
 
 33/33 tests green. 50 commits on indexer-build branch.
 
+TICK 39 — PHASE 20-C2 DEPLOY.md:
+  Wrote docs/DEPLOY.md (~190 lines) — production-hardening design space.
+  None implemented; this is the thinking aid for whoever picks up
+  the work after the autonomous session ends.
+
+  Sections:
+    1. systemd unit template (parity with aeqi-platform.service —
+       same hardening flags, ReadWritePaths, journald, restart policy)
+    2. Nginx reverse proxy snippet (TLS + path mount + CORS)
+    3. WebSocket log subscription via alloy connect_pubsub
+       (catch-up via HTTP poll then switch to WSS for live tail;
+       reconnect handling; multi-address dispatch tradeoffs)
+    4. eth_call backfill snapshot job for non-event state
+       (treasury balances, vesting position metadata, governance
+       voting power)
+    5. Multi-chain expansion: per-chain DB + templated systemd
+       (recommended over single-DB chain_id columns)
+    6. Prometheus metrics with the specific gauges/counters
+       (lag_blocks, dispatch_latency_ms histogram, decode_failures,
+       reorg_unwinds_total, db_size_bytes, graphql request duration)
+    7. /healthz that surfaces lag conditions (returns 503 when
+       falling behind > 2x confirmation_depth or last commit > 5min)
+    8. Token_Transfer filtering on Base mainnet (rely on watched-only
+       address filter; same as current architecture)
+    + Out-of-scope: auth, write API, replication.
+
+  INDEXER.md + HANDOFF.md repo-layout updated to point at it.
+
+  Total docs in worktree now: 6 (INDEXER.md root signpost + 5 in docs/:
+  HANDOFF, CHANGELOG, DEPLOY, build log, loop prompt) + 2 inherited
+  (aeqi-indexer-spec.md, aeqi-graph-survey.md). Plus README.md (shared
+  with main aeqi project, untouched).
+
+33/33 tests green. 52 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 20 — last polish or wrap):
-  Phase 19-C4 (live-demo smoke) done. Demo recipe in HANDOFF.md
-  matches real-Factory response 1:1; no drift to fix.
+NEXT ACTION (Phase 21 — genuine wrap):
+  Phase 20-C2 (DEPLOY.md) done. The autonomous session has reached
+  the point where every low-risk durable artifact is in place.
 
-  Remaining low-risk polish:
+  Final state at HEAD (commit 9fd218c6):
+    Worktree root:
+      INDEXER.md            — signpost
+    crates/aeqi-indexer/    — 33/33 tests, clippy clean, builds 42s
+    test-contracts/         — 9 mocks
+    docs/
+      HANDOFF.md            — pickup doc (cold-readable)
+      CHANGELOG.md          — phase summary
+      DEPLOY.md             — production-hardening notes
+      indexer-build-log.md  — per-tick reasoning
+      indexer-loop-prompt.md — /loop heartbeat metaprompt
+      aeqi-indexer-spec.md  — original spec (inherited)
+      aeqi-graph-survey.md  — subgraph inventory (inherited)
+  Sister worktree at /home/claudedev/projects/aeqi-core-deploy-fix
+  on branch deploy-fix-2026-05-04 with 2 commits (Deploy.s.sol fix +
+  CreateTrust + CreateMultiSigTrust scripts).
 
-  PATH C2 — sketch docs/DEPLOY.md:
-    systemd unit template + reverse-proxy snippet + Prometheus
-    metrics scaffolding + WSS-upgrade path notes. ~15 min. Useful
-    for graduating to Base mainnet but defers actual implementation.
-    Outside the v1 demo scope but a good thinking-aid for the user
-    when they pick up production-hardening work.
+  REMAINING PATHS — all REQUIRE USER INTERACTION OR ARE OUT OF SCOPE:
 
-  PATH D — apps/ui glue: interactive session.
-  PATH E — production hardening proper: out of scope.
+  PATH D — apps/ui glue: needs interactive design input on UI changes,
+    deferred to user session.
 
-  My read: PATH C2 next (durable thinking-aid), then genuine wrap.
-  After that, the autonomous session has nothing else low-risk to add
-  without requiring user design input. The artifact set is solid:
-    INDEXER.md (worktree signpost)
-    docs/HANDOFF.md (pickup doc)
-    docs/CHANGELOG.md (phase summary)
-    docs/indexer-build-log.md (per-tick reasoning)
-    docs/DEPLOY.md (production-hardening notes)  ← Phase C2
-    crates/aeqi-indexer/ (33/33 tests)
-    test-contracts/ (9 mocks, byte-identical sigs)
-  Plus 2 sister-worktree commits in aeqi-core-deploy-fix.
+  PATH E — production hardening proper: multi-tick implementation work
+    of items already documented in DEPLOY.md. Out of autonomous scope;
+    the user picks the order they want to tackle WSS / multi-chain /
+    eth_call backfill etc.
+
+  PATH F — port Foundation/Unifutures/Uniswap modules: explicit
+    out-of-scope per HANDOFF.md (niche).
+
+  Cron should continue firing per the user's authorization, but each
+  successive tick will be increasingly low-marginal-value. If the
+  loop prompt fires again, the right move is one of:
+    - Re-verify health (cargo test + smoke) every few hours
+    - No-op tick that just updates the build log timestamp
+
+  Recommendation: stop the cron. The artifact set is complete and
+  every additional tick either repeats verified work or requires
+  interactive judgment that benefits from the user being awake.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
