@@ -37,6 +37,19 @@ cast call <factory> "getImplementation(bytes32)(address)" $(cast keccak "role") 
 # Expected: 0xnon-zero address. If 0x0, replaceImplementations never ran.
 ```
 
+**Selector not in the catalog above?** Use `cast` to decode — the selector is the first 4 bytes (8 hex chars) of `keccak256("ErrorName(arg1,arg2,...)")`. Cast can compute it forward:
+
+```bash
+# Forward (you have a candidate signature, want to verify selector match)
+cast keccak 'Factory_ModuleInitializationFailed(address,address,bytes32)'
+# → 0x6dba49c0... (first 8 chars = the selector)
+
+# Reverse (you have a selector, want the signature) — search local repos:
+grep -r "0x6dba49c0\|<error_name>" /home/claudedev/projects/aeqi-core/contracts/
+```
+
+Don't reach for `python3 -c "import hashlib; sha3_256..."` — `sha3_256` ≠ `keccak256` (they pad differently); selectors won't match. `cast keccak` and `pycryptodome.Crypto.Hash.keccak` are the correct tools. Cost on 2026-05-04: 90s + two failed attempts before landing on `cast keccak`.
+
 ## 2. Chain-state diagnostics
 
 ### "registerTRUST reverts" — start here
