@@ -73,6 +73,61 @@ impl From<store::TemplateRow> for Template {
     }
 }
 
+/// GraphQL projection of a budget on a Budget module.
+#[derive(SimpleObject, Clone)]
+pub struct Budget {
+    pub module_address: String,
+    pub budget_id: String,
+    /// 'created' | 'frozen' | 'active' (after unfreeze) | 'removed'
+    pub status: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+impl From<store::BudgetRow> for Budget {
+    fn from(r: store::BudgetRow) -> Self {
+        Budget {
+            module_address: r.module_address,
+            budget_id: r.budget_id,
+            status: r.status,
+            created_block: r.created_block,
+            created_tx: r.created_tx,
+        }
+    }
+}
+
+/// GraphQL projection of a budget money-movement audit row.
+#[derive(SimpleObject, Clone)]
+pub struct BudgetMovement {
+    pub module_address: String,
+    pub budget_id: String,
+    /// 'deposit' | 'consume'
+    pub kind: String,
+    pub counterparty_address: String,
+    pub asset_address: String,
+    /// uint256 hex
+    pub amount: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::BudgetMovementRow> for BudgetMovement {
+    fn from(r: store::BudgetMovementRow) -> Self {
+        BudgetMovement {
+            module_address: r.module_address,
+            budget_id: r.budget_id,
+            kind: r.kind,
+            counterparty_address: r.counterparty_address,
+            asset_address: r.asset_address,
+            amount: r.amount,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
 /// GraphQL projection of a fundraising round on a Funding module.
 #[derive(SimpleObject, Clone)]
 pub struct Funding {
@@ -569,6 +624,33 @@ impl Query {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
         let rows = store::get_templates_for_factory(&conn, &factory_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// All budgets on a Budget module, oldest first.
+    async fn budgets_for_module(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+    ) -> async_graphql::Result<Vec<Budget>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_budgets_for_module(&conn, &module_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Audit log of all movements (deposits + consumes) for a budget.
+    async fn budget_movements(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+        budget_id: String,
+    ) -> async_graphql::Result<Vec<BudgetMovement>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_budget_movements(&conn, &module_address, &budget_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

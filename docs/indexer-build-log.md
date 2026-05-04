@@ -27,13 +27,14 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 28 (PHASE 14-A ✓ FUNDING MODULE — ROUND LIFECYCLE + EXIT AUDIT)
-PHASE: 14-A ✓ FUNDRAISING SURFACE | Funding round lifecycle (Created →
-       Active → Finalized | Removed) + ExitExecuted audit log indexed.
-       Live-verified: full lifecycle in one tx (4 events) → fundingsForModule
-       returns round with status='finalized'; fundingExits returns the audit row.
-       30/30 tests green; 35 commits.
-       | next: Budget module OR apps/ui glue OR remaining minor Factory events
+TICK: 29 (PHASE 14-B ✓ BUDGET MODULE — LIFECYCLE + MOVEMENTS AUDIT)
+PHASE: 14-B ✓ TREASURY SURFACE | Budget lifecycle (Created/Frozen/Unfrozen/
+       Removed) + movements (Deposit/Consume) indexed.
+       Live-verified: emitBudgetLifecycle (5 events in 1 tx) →
+       budgetsForModule returns budget status='frozen'; budgetMovements
+       returns 1 deposit + 2 consumes with amounts + counterparties.
+       31/31 tests green; 36 commits.
+       | next: apps/ui glue OR Foundation/Fund modules OR more minor Factory events
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -902,39 +903,95 @@ TICK 28 — PHASE 14-A FUNDING MODULE:
 
 30/30 tests green. 35 commits on indexer-build branch.
 
+TICK 29 — PHASE 14-B BUDGET MODULE:
+  Subagent: Haiku Explore enumerated Budget.module ABI. 13 events; v1
+    cherry-picked the 6 demo-relevant ones:
+      Budget_BudgetCreated(budgetId)            → status='created'
+      Budget_BudgetFrozen(budgetId)             → status='frozen'
+      Budget_BudgetUnfrozen(budgetId)           → status='active'
+      Budget_BudgetRemoved(budgetId)            → status='removed'
+      Budget_BudgetDeposited(id, amount, from, asset)  → kind='deposit' movement
+      Budget_BudgetConsumed(id, amount, to, asset)     → kind='consume' movement
+    Skipped: Reset, SetBudgetConfig, BudgetTransferred (different shape,
+      role-level), BudgetReturned (similar to Consumed), SlotArrays_*,
+      InitializationStateChanged.
+  Schema:
+    - 024_budgets(module_address, budget_id, status, created_block, ...)
+      PK (module, budget_id). Status lifecycle UPSERTs.
+    - 025_budget_movements(id, module, budget_id, kind, counterparty,
+      asset, amount, log coord). Append-only, UNIQUE on coord.
+      counterparty is `from` for deposit, `to` for consume.
+  Decode: sol! Budget contract block (6 events).
+  Poll loop: 6 dispatch arms.
+  GraphQL: Budget + BudgetMovement SimpleObjects;
+    budgetsForModule(moduleAddress) +
+    budgetMovements(moduleAddress, budgetId).
+  MockBudget with emitBudgetLifecycle (5 events in 1 tx for full smoke):
+    Created + Deposit (1M) + 2× Consume (100k ea) + Frozen.
+
+  LIVE-TESTED end-to-end:
+    block 6058: TrustCreated
+    block 6076: TRUST_ModuleAdded(MockBudget) → budget module auto-watched
+    block 6094: emitBudgetLifecycle(funder, vendor, asset, 1M, 100k)
+      → all 5 events dispatched in one block
+    GraphQL budgetsForModule:
+      [{ budgetId 0xbeef, status: 'frozen', createdBlock: 6094 }]
+    GraphQL budgetMovements:
+      [{ kind: 'deposit', counterparty: founder, amount: 0xf4240 (1M) },
+       { kind: 'consume', counterparty: vendor,  amount: 0x186a0 (100k) },
+       { kind: 'consume', counterparty: vendor,  amount: 0x186a0 (100k) }]
+
+  Indexer surface now spans 9 contract types (Factory + TRUST + Role +
+  Governance + Token + Vesting + Funding + Budget + accounts), 25 schema
+  migrations, 20 GraphQL queries, ~41 dispatched event types.
+
+  Every demo-critical aeqi-core module is now indexed: cap-table,
+  governance, vesting, fundraising rounds, role-scoped budgets.
+  Foundation + Fund + Unifutures still pending — niche / specialized.
+
+31/31 tests green. 36 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 14-B — Budget module OR pivot):
-  Phase 14-A (Funding) done.
+NEXT ACTION (Phase 15 — module port endgame OR HANDOFF refresh):
+  Phase 14-B (Budget) done. Every demo-critical module is now indexed.
 
-  PATH A — Budget module port (cap-table extension):
-    Source: ~/projects/aeqi-graph/abis/Budget.module.json
-    Likely events: Budget_AllocationSet (per role/owner), Budget_Spent,
-    Budget_Reset. ~30 min mechanical. Adds spending visibility per role.
+  REMAINING WORK (in priority order):
 
-  PATH B — Foundation module port (governance variant):
-    ~/projects/aeqi-graph/abis/Foundation.module.json
-    May overlap with Governance — needs Haiku scout first.
+  PATH A — HANDOFF.md refresh: tomorrow's user opens the doc and sees
+    25 migrations + 20 queries + 9 contract types. Update the schema
+    table, GraphQL list, test contracts inventory, and "Open work"
+    (mark Funding/Budget shipped). ~10 min, durable artifact value.
 
-  PATH C — Fund module port (treasury vehicle):
+  PATH B — Foundation module scout + port:
+    Source: ~/projects/aeqi-graph/abis/Foundation.module.json
+    Probably governance/role-related; verify if it adds demo value
+    via Haiku Explore before committing to a port.
+
+  PATH C — Fund module scout + port:
     ~/projects/aeqi-graph/abis/Fund.module.json
-    Different from Funding (Fund = treasury wallet, Funding = round flow).
-    Needs scouting.
+    Treasury vehicle (different from Funding's rounds). Likely adds
+    pooled-asset visibility.
 
-  PATH D — wire remaining minor Factory events:
-    Factory_FactoryConfigSet, Factory_PartnerProfileSet.
-    5 min each, informational only.
+  PATH D — Unifutures port (most exotic, lowest demo priority):
+    ~/projects/aeqi-graph/abis/Unifutures.module.json (+ PositionManager).
+    Derivative-style positions; out-of-scope for v1 cap-table demo.
 
-  PATH E — apps/ui glue: defer to interactive session.
-  PATH F — production hardening: out of scope for autonomous.
+  PATH E — wire Factory_FactoryConfigSet + Factory_PartnerProfileSet
+    (last 2 missing Factory events). 10 min total, informational only.
+
+  PATH F — apps/ui glue: interactive session.
+  PATH G — production hardening: out of scope for autonomous.
 
   LEVERAGE PRIORITY:
-    PATH A (Budget) — most demo-relevant remaining module
-    PATH D (minor admin events) — quick completeness wins
-    PATH B/C — needs Haiku scout to know if worth the port effort
-    PATH E — interactive session
+    PATH A — biggest durable artifact value, smallest effort
+    PATH E — quick wins for Factory completeness
+    PATH B/C — depends on scout results
+    PATH D — defer indefinitely
+    PATH F/G — interactive
 
-  My read: PATH A next tick. Budget completes the role/treasury demo
-  surface; after that the indexer has covered every demo-critical module.
+  My read: PATH A next tick (HANDOFF refresh, 10 min), PATH E after
+  if cron remains. The indexer is feature-complete for the v2 demo;
+  remaining work is documentation + minor completeness.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

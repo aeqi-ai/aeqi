@@ -446,6 +446,13 @@ pub mod poll {
                         decode::Funding::Funding_FinalizedFunding::SIGNATURE_HASH,
                         decode::Funding::Funding_FundingRemoved::SIGNATURE_HASH,
                         decode::Funding::Funding_ExitExecuted::SIGNATURE_HASH,
+                        // Budget module events (per-module)
+                        decode::Budget::Budget_BudgetCreated::SIGNATURE_HASH,
+                        decode::Budget::Budget_BudgetFrozen::SIGNATURE_HASH,
+                        decode::Budget::Budget_BudgetUnfrozen::SIGNATURE_HASH,
+                        decode::Budget::Budget_BudgetRemoved::SIGNATURE_HASH,
+                        decode::Budget::Budget_BudgetDeposited::SIGNATURE_HASH,
+                        decode::Budget::Budget_BudgetConsumed::SIGNATURE_HASH,
                     ];
                     let filter = Filter::new()
                         .from_block(block_num)
@@ -1213,6 +1220,165 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Funding_ExitExecuted failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Budget::Budget_BudgetCreated::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Budget::Budget_BudgetCreated::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::insert_budget(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.budgetId),
+                                        block_num,
+                                        &tx_hash,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Budget_BudgetCreated: module={} budget={:#x} block={}",
+                                        module_address, ev.budgetId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Budget_BudgetCreated failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Budget::Budget_BudgetFrozen::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Budget::Budget_BudgetFrozen::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::update_budget_status(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.budgetId),
+                                        "frozen",
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Budget_BudgetFrozen: module={} budget={:#x} block={}",
+                                        module_address, ev.budgetId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Budget_BudgetFrozen failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Budget::Budget_BudgetUnfrozen::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Budget::Budget_BudgetUnfrozen::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::update_budget_status(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.budgetId),
+                                        "active",
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Budget_BudgetUnfrozen: module={} budget={:#x} block={}",
+                                        module_address, ev.budgetId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Budget_BudgetUnfrozen failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Budget::Budget_BudgetRemoved::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Budget::Budget_BudgetRemoved::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::update_budget_status(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.budgetId),
+                                        "removed",
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Budget_BudgetRemoved: module={} budget={:#x} block={}",
+                                        module_address, ev.budgetId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Budget_BudgetRemoved failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Budget::Budget_BudgetDeposited::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            let log_index = log.log_index.unwrap_or(0);
+                            match decode::Budget::Budget_BudgetDeposited::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let coord = store::LogCoord {
+                                        block_number: block_num,
+                                        tx_hash: &tx_hash,
+                                        log_index,
+                                    };
+                                    store::insert_budget_movement(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.budgetId),
+                                        "deposit",
+                                        &format!("{:#x}", ev.from),
+                                        &format!("{:#x}", ev.asset),
+                                        &format!("{:#x}", ev.amount),
+                                        coord,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Budget_BudgetDeposited: module={} budget={:#x} from={:#x} amount={:#x} block={}",
+                                        module_address, ev.budgetId, ev.from, ev.amount, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Budget_BudgetDeposited failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Budget::Budget_BudgetConsumed::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            let log_index = log.log_index.unwrap_or(0);
+                            match decode::Budget::Budget_BudgetConsumed::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let coord = store::LogCoord {
+                                        block_number: block_num,
+                                        tx_hash: &tx_hash,
+                                        log_index,
+                                    };
+                                    store::insert_budget_movement(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.budgetId),
+                                        "consume",
+                                        &format!("{:#x}", ev.to),
+                                        &format!("{:#x}", ev.asset),
+                                        &format!("{:#x}", ev.amount),
+                                        coord,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Budget_BudgetConsumed: module={} budget={:#x} to={:#x} amount={:#x} block={}",
+                                        module_address, ev.budgetId, ev.to, ev.amount, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Budget_BudgetConsumed failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

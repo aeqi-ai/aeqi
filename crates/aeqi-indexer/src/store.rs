@@ -549,6 +549,55 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON funding_exits(module_address, block_number);
         "#,
     ),
+    (
+        "024_budgets",
+        r#"
+        -- A budget on a Budget module. Lifecycle:
+        --   'created' → 'frozen' (Frozen) ↔ 'active' (Unfrozen) → 'removed'
+        -- Defaults to 'created' on Budget_BudgetCreated; Unfrozen sets to
+        -- 'active' so the UI can distinguish "never frozen" from "unfrozen".
+        --
+        -- Rich budget metadata (target role, target module, asset config,
+        -- limits) lives in contract storage; events only carry budgetId.
+        CREATE TABLE IF NOT EXISTS budgets (
+            module_address TEXT NOT NULL,
+            budget_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'created',
+            created_block INTEGER NOT NULL,
+            created_tx TEXT NOT NULL,
+            PRIMARY KEY (module_address, budget_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_budgets_status
+          ON budgets(module_address, status);
+        "#,
+    ),
+    (
+        "025_budget_movements",
+        r#"
+        -- Append-only audit log of budget money movements.
+        --   Budget_BudgetDeposited(budgetId, amount, from, asset)  → kind='deposit'
+        --   Budget_BudgetConsumed(budgetId, amount, to, asset)     → kind='consume'
+        -- counterparty is `from` for deposits, `to` for consumes — direction
+        -- is implicit in `kind`. amount stored as u256 hex.
+        CREATE TABLE IF NOT EXISTS budget_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_address TEXT NOT NULL,
+            budget_id TEXT NOT NULL,
+            kind TEXT NOT NULL,                 -- 'deposit' | 'consume'
+            counterparty_address TEXT NOT NULL,
+            asset_address TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            UNIQUE (module_address, block_number, tx_hash, log_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_budget_movements_budget
+          ON budget_movements(module_address, budget_id, block_number);
+        CREATE INDEX IF NOT EXISTS idx_budget_movements_counterparty
+          ON budget_movements(counterparty_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -1799,7 +1848,163 @@ pub fn get_templates_for_factory(
     Ok(rows)
 }
 
-/// Insert a funding round (Funding_FundingCreated). Idempotent on
+/// Insert a budget (Budget_BudgetCreated). Idempotent.
+pub fn insert_budget(
+    conn: &Connection,
+    module_address: &str,
+    budget_id: &str,
+    created_block: u64,
+    created_tx: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO budgets
+            (module_address, budget_id, status, created_block, created_tx)
+         VALUES (?1, ?2, 'created', ?3, ?4)",
+        params![module_address, budget_id, created_block as i64, created_tx],
+    )?;
+    Ok(())
+}
+
+/// Update budget status. Used by Frozen/Unfrozen/Removed handlers.
+pub fn update_budget_status(
+    conn: &Connection,
+    module_address: &str,
+    budget_id: &str,
+    status: &str,
+) -> Result<()> {
+    let n = conn.execute(
+        "UPDATE budgets SET status = ?1
+         WHERE module_address = ?2 AND budget_id = ?3",
+        params![status, module_address, budget_id],
+    )?;
+    if n == 0 {
+        tracing::warn!(
+            "budget status update for unknown budget: module={} budget_id={}",
+            module_address, budget_id
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct BudgetRow {
+    pub module_address: String,
+    pub budget_id: String,
+    pub status: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+/// All budgets on a module, oldest first.
+pub fn get_budgets_for_module(
+    conn: &Connection,
+    module_address: &str,
+) -> Result<Vec<BudgetRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, budget_id, status, created_block, created_tx
+         FROM budgets WHERE module_address = ?1
+         ORDER BY created_block ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address], |r| {
+            Ok(BudgetRow {
+                module_address: r.get(0)?,
+                budget_id: r.get(1)?,
+                status: r.get(2)?,
+                created_block: r.get::<_, i64>(3)? as u64,
+                created_tx: r.get(4)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Insert a budget movement audit row (deposit or consume).
+#[allow(clippy::too_many_arguments)]
+pub fn insert_budget_movement(
+    conn: &Connection,
+    module_address: &str,
+    budget_id: &str,
+    kind: &str,
+    counterparty_address: &str,
+    asset_address: &str,
+    amount: &str,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    for addr in [counterparty_address, asset_address] {
+        tx.execute(
+            "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+             VALUES (?1, ?2, ?3)",
+            params![addr, coord.block_number as i64, coord.tx_hash],
+        )?;
+    }
+    tx.execute(
+        "INSERT OR IGNORE INTO budget_movements
+            (module_address, budget_id, kind, counterparty_address, asset_address, amount,
+             block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            module_address,
+            budget_id,
+            kind,
+            counterparty_address,
+            asset_address,
+            amount,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct BudgetMovementRow {
+    pub module_address: String,
+    pub budget_id: String,
+    pub kind: String,
+    pub counterparty_address: String,
+    pub asset_address: String,
+    pub amount: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// Audit log of all movements (deposits + consumes) for a budget.
+pub fn get_budget_movements(
+    conn: &Connection,
+    module_address: &str,
+    budget_id: &str,
+) -> Result<Vec<BudgetMovementRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, budget_id, kind, counterparty_address,
+                asset_address, amount, block_number, tx_hash, log_index
+         FROM budget_movements
+         WHERE module_address = ?1 AND budget_id = ?2
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address, budget_id], |r| {
+            Ok(BudgetMovementRow {
+                module_address: r.get(0)?,
+                budget_id: r.get(1)?,
+                kind: r.get(2)?,
+                counterparty_address: r.get(3)?,
+                asset_address: r.get(4)?,
+                amount: r.get(5)?,
+                block_number: r.get::<_, i64>(6)? as u64,
+                tx_hash: r.get(7)?,
+                log_index: r.get::<_, i64>(8)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Insert a funding round (Funding_FundingCreated). Idempotent.
 /// (module_address, funding_id).
 pub fn insert_funding(
     conn: &Connection,
@@ -2669,6 +2874,54 @@ mod tests {
 
         // Unknown funding update is a no-op + warn
         update_funding_status(&conn, module, "0xnonexistent", "removed").unwrap();
+    }
+
+    #[test]
+    fn budget_lifecycle_and_movements() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let module = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let budget_id = "0x0000000000000000000000000000000000000000000000000000000000000aaa";
+        let asset = "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c";
+        let funder = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        let recipient = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
+
+        // Create → Frozen → Unfrozen (active) → Removed
+        insert_budget(&conn, module, budget_id, 100, "0xtx0").unwrap();
+        update_budget_status(&conn, module, budget_id, "frozen").unwrap();
+        update_budget_status(&conn, module, budget_id, "active").unwrap();
+
+        let budgets = get_budgets_for_module(&conn, module).unwrap();
+        assert_eq!(budgets[0].status, "active");
+
+        // Deposit + Consume audit entries
+        let c1 = LogCoord { block_number: 110, tx_hash: "0xtxD", log_index: 0 };
+        let c2 = LogCoord { block_number: 120, tx_hash: "0xtxC", log_index: 0 };
+        insert_budget_movement(&conn, module, budget_id, "deposit", funder, asset, "0x3e8", c1)
+            .unwrap();
+        insert_budget_movement(&conn, module, budget_id, "consume", recipient, asset, "0x12c", c2)
+            .unwrap();
+
+        let log = get_budget_movements(&conn, module, budget_id).unwrap();
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].kind, "deposit");
+        assert_eq!(log[0].counterparty_address, funder);
+        assert_eq!(log[0].amount, "0x3e8");
+        assert_eq!(log[1].kind, "consume");
+        assert_eq!(log[1].counterparty_address, recipient);
+        assert_eq!(log[1].amount, "0x12c");
+
+        // Idempotent on log coord
+        insert_budget_movement(&conn, module, budget_id, "deposit", funder, asset, "0x3e8", c1)
+            .unwrap();
+        let log = get_budget_movements(&conn, module, budget_id).unwrap();
+        assert_eq!(log.len(), 2);
+
+        // Final removal
+        update_budget_status(&conn, module, budget_id, "removed").unwrap();
+        let budgets = get_budgets_for_module(&conn, module).unwrap();
+        assert_eq!(budgets[0].status, "removed");
     }
 
     #[test]

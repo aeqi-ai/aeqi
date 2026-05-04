@@ -186,6 +186,35 @@ sol! {
     }
 }
 
+// Budget module events — emitted by Budget.module instances.
+// Source: /home/claudedev/projects/aeqi-graph/abis/Budget.module.json
+//
+// v1 covers lifecycle (Created/Frozen/Unfrozen/Removed) + money movements
+// (Deposited/Consumed). Skipped: Reset, SetBudgetConfig (admin),
+// BudgetTransferred (different shape, role-level), BudgetReturned
+// (similar to Consumed; can be added via the locked recipe later).
+sol! {
+    #[sol(rpc)]
+    contract Budget {
+        event Budget_BudgetCreated(bytes32 indexed budgetId);
+        event Budget_BudgetFrozen(bytes32 indexed budgetId);
+        event Budget_BudgetUnfrozen(bytes32 indexed budgetId);
+        event Budget_BudgetRemoved(bytes32 indexed budgetId);
+        event Budget_BudgetDeposited(
+            bytes32 indexed budgetId,
+            uint256 amount,
+            address indexed from,
+            address indexed asset
+        );
+        event Budget_BudgetConsumed(
+            bytes32 indexed budgetId,
+            uint256 amount,
+            address indexed to,
+            address indexed asset
+        );
+    }
+}
+
 /// A normalized indexer event — what we actually persist after decoding raw logs.
 ///
 /// Cross-event uniformity: every variant carries the block + tx context so
