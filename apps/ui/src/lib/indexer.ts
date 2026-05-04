@@ -5,13 +5,20 @@
  * tabs use this to pull on-chain state (TRUSTs, modules, role assignments,
  * token holders, proposals) for the entity's mirrored TRUST.
  *
- * URL is configured via `VITE_INDEXER_URL` env. When unset, the client
- * is disabled and `useIndexer*` hooks return null — the consuming pages
- * fall back to their EmptyState surfaces. This keeps the UI safe to ship
- * even when no chain is wired (production mainnet not yet up).
+ * Default URL is the relative path `/indexer/graphql`, served by aeqi-platform
+ * as a reverse-proxy to its local indexer instance. This keeps hosted
+ * (app.aeqi.ai) and OSS self-deploys on the same UI bundle without per-env
+ * VITE_INDEXER_URL config — the relative URL resolves against whatever
+ * platform the UI is hosted on, which proxies to its own local indexer.
+ *
+ * Power users can override via `VITE_INDEXER_URL` env at build time (e.g.
+ * to point at a remote indexer or a different route). Set to empty string
+ * to disable the bridge entirely (UI falls back to EmptyState surfaces).
  */
 
-const INDEXER_URL: string | undefined = import.meta.env.VITE_INDEXER_URL;
+const ENV_INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
+const INDEXER_URL: string | undefined =
+  ENV_INDEXER_URL === undefined ? "/indexer/graphql" : ENV_INDEXER_URL || undefined;
 
 /** True when the indexer URL is configured. Use to gate UI surfaces. */
 export const indexerEnabled = (): boolean => Boolean(INDEXER_URL);
