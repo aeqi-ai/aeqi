@@ -8,7 +8,7 @@ use axum::{
     middleware,
     response::{IntoResponse, Response},
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tower::ServiceExt;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -230,7 +230,7 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         "aeqi-web listening on {} (auth: {:?})",
         web.bind, web.auth.mode
     );
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
 
     Ok(())
 }
