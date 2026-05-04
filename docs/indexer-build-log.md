@@ -27,14 +27,12 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 29 (PHASE 14-B ✓ BUDGET MODULE — LIFECYCLE + MOVEMENTS AUDIT)
-PHASE: 14-B ✓ TREASURY SURFACE | Budget lifecycle (Created/Frozen/Unfrozen/
-       Removed) + movements (Deposit/Consume) indexed.
-       Live-verified: emitBudgetLifecycle (5 events in 1 tx) →
-       budgetsForModule returns budget status='frozen'; budgetMovements
-       returns 1 deposit + 2 consumes with amounts + counterparties.
-       31/31 tests green; 36 commits.
-       | next: apps/ui glue OR Foundation/Fund modules OR more minor Factory events
+TICK: 30 (PHASE 15-A ✓ HANDOFF.md REFRESHED — DOC PARITY WITH CODE)
+PHASE: 15-A ✓ DOC COMPLETE | HANDOFF.md updated with TICK-29 surface:
+       9 mocks, 25 migrations, 20 GraphQL queries, 31/31 tests, 37 commits.
+       Per-tab apps/ui integration mapping extended with Vesting,
+       Fundraising, Budgets, Admin tabs. Test contracts inventory full.
+       | next: minor Factory events (Path E) OR Foundation/Fund scout
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -951,47 +949,54 @@ TICK 29 — PHASE 14-B BUDGET MODULE:
 
 31/31 tests green. 36 commits on indexer-build branch.
 
+TICK 30 — PHASE 15-A HANDOFF REFRESH:
+  HANDOFF.md changes (~30 lines):
+    - Status line: "feature-complete for v2 demo. 9 mock contracts +
+      live-tested against real aeqi-core. 31/31 tests, 36 commits"
+    - Schema migration table extended: rows 022-025 (fundings,
+      funding_exits, budgets, budget_movements)
+    - GraphQL surface: 4 new query lines (fundingsForModule,
+      fundingExits, budgetsForModule, budgetMovements)
+    - Test contracts inventory: MockFunding + MockBudget rows
+    - Per-tab apps/ui mapping: Vesting, Fundraising, Budgets,
+      Admin/Templates rows added; Treasury extended with tokenHolders
+    - Open work: Token+Vesting+Funding+Budget marked SHIPPED;
+      only Foundation+Fund+Unifutures remain (niche)
+
+  Doc-code parity restored. Tomorrow's user reads HANDOFF and sees
+  every shipped GraphQL query, every test contract, every per-tab
+  recipe correctly.
+
+31/31 tests green. 37 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 15 — module port endgame OR HANDOFF refresh):
-  Phase 14-B (Budget) done. Every demo-critical module is now indexed.
+NEXT ACTION (Phase 15-B — minor Factory events OR Foundation scout):
+  Phase 15-A (HANDOFF refresh) done.
 
-  REMAINING WORK (in priority order):
+  PATH E — wire Factory_FactoryConfigSet + Factory_PartnerProfileSet:
+    Last 2 missing Factory events. ~5 min each, informational only.
+    Closes the Factory event-coverage table 100%.
 
-  PATH A — HANDOFF.md refresh: tomorrow's user opens the doc and sees
-    25 migrations + 20 queries + 9 contract types. Update the schema
-    table, GraphQL list, test contracts inventory, and "Open work"
-    (mark Funding/Budget shipped). ~10 min, durable artifact value.
+  PATH B — Foundation module scout (Haiku Explore first):
+    ~/projects/aeqi-graph/abis/Foundation.module.json
+    Read events; if reasonable demo value, do the ~30-min port via
+    locked recipe. Skip if redundant with Governance.
 
-  PATH B — Foundation module scout + port:
-    Source: ~/projects/aeqi-graph/abis/Foundation.module.json
-    Probably governance/role-related; verify if it adds demo value
-    via Haiku Explore before committing to a port.
-
-  PATH C — Fund module scout + port:
+  PATH C — Fund module scout (similar):
     ~/projects/aeqi-graph/abis/Fund.module.json
-    Treasury vehicle (different from Funding's rounds). Likely adds
-    pooled-asset visibility.
+    Pooled-asset treasury. Likely adds something distinct from Token
+    (ERC20) and Budget (role-scoped). Worth scouting.
 
-  PATH D — Unifutures port (most exotic, lowest demo priority):
-    ~/projects/aeqi-graph/abis/Unifutures.module.json (+ PositionManager).
-    Derivative-style positions; out-of-scope for v1 cap-table demo.
-
-  PATH E — wire Factory_FactoryConfigSet + Factory_PartnerProfileSet
-    (last 2 missing Factory events). 10 min total, informational only.
-
+  PATH D — Unifutures: defer (derivative positions, out of cap-table demo).
   PATH F — apps/ui glue: interactive session.
-  PATH G — production hardening: out of scope for autonomous.
+  PATH G — production hardening: out of scope.
 
   LEVERAGE PRIORITY:
-    PATH A — biggest durable artifact value, smallest effort
-    PATH E — quick wins for Factory completeness
-    PATH B/C — depends on scout results
-    PATH D — defer indefinitely
-    PATH F/G — interactive
+    PATH E — fastest wins (10 min)
+    PATH B + C scouts in parallel via Haiku, then port what's worth it
 
-  My read: PATH A next tick (HANDOFF refresh, 10 min), PATH E after
-  if cron remains. The indexer is feature-complete for the v2 demo;
-  remaining work is documentation + minor completeness.
+  My read: PATH E next tick (quick close-out of Factory coverage),
+  PATH B+C scout after if cron remains.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
