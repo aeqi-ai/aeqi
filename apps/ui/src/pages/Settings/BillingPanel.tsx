@@ -18,11 +18,9 @@ type Overview = {
 };
 
 type SpawnState = { kind: "idle" } | { kind: "running" } | { kind: "error"; message: string };
-type SpawnBlueprintResponse = Awaited<ReturnType<typeof api.spawnBlueprint>>;
 
-function entityIdFromSpawn(resp: SpawnBlueprintResponse): string {
-  return resp.entity_id ?? "";
-}
+const SPAWN_POLL_INTERVAL_MS = 1500;
+const SPAWN_POLL_TIMEOUT_MS = 60_000;
 
 /**
  * `/settings/billing` — user-level rollup of every Company subscription
@@ -62,38 +60,59 @@ export default function BillingPanel() {
   }, [reload]);
 
   // Stripe Checkout success handler: when the URL carries
-  // ?spawn=:slug&blueprint=:bp, finish the spawn here (Stripe can only
-  // redirect to one URL, and the per-Company billing surface is the
-  // natural landing). Fires once per mount, then strips the params so
-  // a refresh doesn't re-trigger.
+  // ?spawn=:slug, the platform's `customer.subscription.created` webhook
+  // is concurrently provisioning the personal Company. Poll for the
+  // matching entity to appear and redirect into it. The webhook's call
+  // to `provision_personal_company` is the source of truth — this
+  // panel does not spawn directly (it'd hit the runtime proxy which
+  // requires X-Entity, and the user has no entity scoped yet).
   useEffect(() => {
     if (spawnHandled.current) return;
     const slug = searchParams.get("spawn");
-    const blueprint = searchParams.get("blueprint");
-    if (!slug || !blueprint) return;
+    if (!slug) return;
     spawnHandled.current = true;
     setSpawn({ kind: "running" });
-    api
-      .spawnBlueprint({ blueprint, display_name: slug })
-      .then((resp) => {
-        const entityId = entityIdFromSpawn(resp);
-        if (!entityId) throw new Error("Launch returned no entity id.");
-        setActiveEntity(entityId);
-        return Promise.all([fetchAgents(), fetchEntities()]).then(() => {
-          // Clear params before navigating away so the user's history
-          // doesn't carry the success token across page changes.
+
+    const startedAt = Date.now();
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        await fetchEntities();
+        const entities = useDaemonStore.getState().entities;
+        const match = entities.find((e) => e.name === slug);
+        if (match) {
+          setActiveEntity(match.id);
+          await fetchAgents().catch(() => {});
           setSearchParams(new URLSearchParams(), { replace: true });
-          navigate(`/c/${encodeURIComponent(entityId)}`);
-        });
-      })
-      .catch(() => {
-        setSpawn({
-          kind: "error",
-          message: "Payment received but Company couldn't spawn. Email support@aeqi.ai for help.",
-        });
-        // Strip params so a refresh doesn't try to spawn again.
-        setSearchParams(new URLSearchParams(), { replace: true });
-      });
+          navigate(`/c/${encodeURIComponent(match.id)}/inbox`);
+          return;
+        }
+      } catch {
+        // Transient fetch failures are tolerated — keep polling until
+        // the deadline.
+      }
+      if (Date.now() - startedAt >= SPAWN_POLL_TIMEOUT_MS) {
+        if (!cancelled) {
+          setSpawn({
+            kind: "error",
+            message:
+              "Payment received and your Company is still provisioning. Refresh in a moment, or email support@aeqi.ai if it doesn't appear.",
+          });
+          setSearchParams(new URLSearchParams(), { replace: true });
+        }
+        return;
+      }
+      timer = window.setTimeout(poll, SPAWN_POLL_INTERVAL_MS);
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [searchParams, setSearchParams, navigate, fetchAgents, fetchEntities, setActiveEntity]);
 
   const totalLabel = useMemo(() => {
