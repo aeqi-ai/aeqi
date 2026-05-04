@@ -8,6 +8,7 @@ members = [
     "crates/aeqi-tools",
     "crates/aeqi-orchestrator",
     "crates/aeqi-ideas",
+    "crates/aeqi-inference",
     "crates/aeqi-gates",
     "crates/aeqi-web",
     "crates/aeqi-graph",
@@ -128,6 +129,7 @@ aeqi-providers = { version = "0.15.0", path = "crates/aeqi-providers" }
 aeqi-tools = { version = "0.15.0", path = "crates/aeqi-tools" }
 aeqi-orchestrator = { version = "0.15.0", path = "crates/aeqi-orchestrator" }
 aeqi-ideas = { version = "0.15.0", path = "crates/aeqi-ideas" }
+aeqi-inference = { version = "0.15.0", path = "crates/aeqi-inference" }
 aeqi-gates = { version = "0.15.0", path = "crates/aeqi-gates" }
 aeqi-web = { version = "0.15.0", path = "crates/aeqi-web" }
 aeqi-graph = { version = "0.15.0", path = "crates/aeqi-graph" }

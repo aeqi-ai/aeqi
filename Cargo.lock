@@ -186,6 +186,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "aeqi-inference"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
 name = "aeqi-ipfs"
 version = "0.15.0"
 dependencies = [
