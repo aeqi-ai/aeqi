@@ -1,6 +1,6 @@
 # aeqi-indexer — handoff
 
-Built autonomously on 2026-05-04 across ~17 ticks via /loop heartbeat. Replaces
+Built autonomously on 2026-05-04 across ~35 ticks via /loop heartbeat. Replaces
 the TheGraph subgraph at `~/projects/aeqi-graph` with a self-hosted Rust
 indexer: SQLite + alloy + axum + async-graphql.
 
@@ -226,7 +226,7 @@ Replays from reorg recovery don't double-insert.
 
 ---
 
-## Schema (12 migrations, all idempotent)
+## Schema (30 migrations, all idempotent)
 
 | Migration | Table | Purpose |
 |---|---|---|
@@ -263,7 +263,7 @@ Replays from reorg recovery don't double-insert.
 
 ---
 
-## GraphQL surface (12 queries)
+## GraphQL surface (25 queries)
 
 ```graphql
 type Query {
@@ -427,15 +427,22 @@ to camelCase automatically — so apps/ui sees `trustAddress`, `voteStart`,
   (we never violate them); disabling enforcement is the simplest fix.
   If migrating to Postgres later, the FK semantics will need re-evaluation.
 
-### Original blockers (still open)
+### Original blockers (RESOLVED in Phase 7-C, TICK 20)
 
-- **aeqi-core deploy script drift** (TICK 5 pivot): the real
-  `~/projects/aeqi-core/scripts/foundry/Deploy.s.sol` calls
-  `Beacon.setImplementation(bytes32, address)` but contracts now require
-  `(address source, bytes32 moduleId, address impl)` — 3 args. Until
-  fixed, the indexer runs against MockFactory/MockTRUST/MockRole/MockGovernance.
-  These mocks emit byte-identical event signatures so swapping in the real
-  contracts is purely a deploy concern, not an indexer concern.
+- **aeqi-core deploy script drift** — was the original blocker that
+  pinned the indexer to mocks. RESOLVED in a sister worktree at
+  `/home/claudedev/projects/aeqi-core-deploy-fix` on branch
+  `deploy-fix-2026-05-04`. Beacon constructor now takes
+  `defaultDelegatedSource`; Factory.initialize() is zero-arg; module
+  impls register via `Factory.replaceImplementations(...)` (gated by
+  `onlySourceOwner` on the Beacon side). Live-tested against real
+  aeqi-core in Phases 8 + 9 + 11. The 9 mock contracts emit
+  byte-identical signatures so they remain useful for fast smoke tests
+  without spinning up the full deploy chain. Two scripts in the
+  deploy-fix worktree exercise the real contracts end-to-end:
+  `scripts/foundry/Deploy.s.sol` (initial deploy) and
+  `scripts/foundry/CreateTrust.s.sol` (single-sig TRUST creation;
+  `CreateMultiSigTrust.s.sol` for the 2-of-2 approval flow).
 
 ### Production-readiness checklist (when graduating from Anvil to Base)
 
@@ -461,14 +468,19 @@ aeqi-indexer-build/
 │   │   ├── lib.rs                 # module declarations
 │   │   ├── main.rs                # binary entry: env parse + db open + spawn poll/serve
 │   │   ├── chain.rs               # alloy provider + reorg + poll loop + dispatch
-│   │   ├── decode.rs              # sol! contract blocks (Factory, TRUST, Role, Governance)
+│   │   ├── decode.rs              # sol! blocks: Factory, TRUST, Role, Governance, Token, Vesting, Funding, Budget, Fund
 │   │   ├── store.rs               # SQLite: migrations + insert/get fns + Row structs
 │   │   └── api.rs                 # async-graphql Schema + axum router
 ├── test-contracts/                # Mock* contracts for live-test smokes
 │   ├── MockFactory.sol
 │   ├── MockTRUST.sol
 │   ├── MockRole.sol
-│   └── MockGovernance.sol
+│   ├── MockGovernance.sol
+│   ├── MockToken.sol
+│   ├── MockVesting.sol
+│   ├── MockFunding.sol
+│   ├── MockBudget.sol
+│   └── MockFund.sol
 └── docs/
     ├── HANDOFF.md                 # this file
     ├── indexer-build-log.md       # full per-tick build log
