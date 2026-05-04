@@ -413,6 +413,8 @@ pub mod poll {
                         decode::Factory::Factory_TRUSTSignerAdded::SIGNATURE_HASH,
                         decode::Factory::Factory_TRUSTApprovedEvent::SIGNATURE_HASH,
                         decode::Factory::Factory_TemplateReplaced::SIGNATURE_HASH,
+                        decode::Factory::Factory_FactoryConfigSet::SIGNATURE_HASH,
+                        decode::Factory::Factory_PartnerProfileSet::SIGNATURE_HASH,
                         decode::Factory::AdminsAdded::SIGNATURE_HASH,
                         decode::Factory::AdminsRemoved::SIGNATURE_HASH,
                         // TRUST events (per-trust)
@@ -549,6 +551,55 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode TrustRegistered failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Factory::Factory_FactoryConfigSet::SIGNATURE_HASH)
+                        {
+                            let factory_address = format!("{:#x}", log.address());
+                            match decode::Factory::Factory_FactoryConfigSet::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::upsert_factory_beacon(
+                                        &conn,
+                                        &factory_address,
+                                        &format!("{:#x}", ev.beaconAddress),
+                                        block_num,
+                                        &tx_hash,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Factory_FactoryConfigSet: factory={} beacon={:#x} block={}",
+                                        factory_address, ev.beaconAddress, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Factory_FactoryConfigSet failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Factory::Factory_PartnerProfileSet::SIGNATURE_HASH)
+                        {
+                            let factory_address = format!("{:#x}", log.address());
+                            match decode::Factory::Factory_PartnerProfileSet::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let cid = String::from_utf8_lossy(&ev.ipfsCid).to_string();
+                                    store::upsert_factory_partner(
+                                        &conn,
+                                        &factory_address,
+                                        &cid,
+                                        block_num,
+                                        &tx_hash,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Factory_PartnerProfileSet: factory={} cid={} block={}",
+                                        factory_address, cid, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Factory_PartnerProfileSet failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

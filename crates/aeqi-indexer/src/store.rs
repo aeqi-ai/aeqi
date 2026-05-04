@@ -598,6 +598,27 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON budget_movements(counterparty_address);
         "#,
     ),
+    (
+        "026_factory_config",
+        r#"
+        -- Single-row-per-factory current configuration. Two UPSERTs feed
+        -- different columns:
+        --   Factory_FactoryConfigSet(beaconAddress) → beacon_address
+        --   Factory_PartnerProfileSet(ipfsCid)      → partner_ipfs_cid
+        -- last_updated_* track whichever event fired most recently.
+        --
+        -- This is the "snapshot" pattern (vs audit log) because both events
+        -- represent current state — there's no value in seeing every prior
+        -- beacon address swap. Frontend reads the current value directly.
+        CREATE TABLE IF NOT EXISTS factory_config (
+            factory_address TEXT PRIMARY KEY,
+            beacon_address TEXT,
+            partner_ipfs_cid TEXT,
+            last_updated_block INTEGER NOT NULL,
+            last_updated_tx TEXT NOT NULL
+        );
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -2132,6 +2153,84 @@ pub fn get_funding_exits(
     Ok(rows)
 }
 
+/// UPSERT the beacon address for a factory (Factory_FactoryConfigSet).
+/// Other fields preserve their existing values.
+pub fn upsert_factory_beacon(
+    conn: &Connection,
+    factory_address: &str,
+    beacon_address: &str,
+    block_number: u64,
+    tx_hash: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO factory_config
+            (factory_address, beacon_address, last_updated_block, last_updated_tx)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(factory_address) DO UPDATE SET
+            beacon_address = excluded.beacon_address,
+            last_updated_block = excluded.last_updated_block,
+            last_updated_tx = excluded.last_updated_tx",
+        params![factory_address, beacon_address, block_number as i64, tx_hash],
+    )?;
+    Ok(())
+}
+
+/// UPSERT the partner ipfs CID for a factory (Factory_PartnerProfileSet).
+/// Other fields preserve their existing values.
+pub fn upsert_factory_partner(
+    conn: &Connection,
+    factory_address: &str,
+    partner_ipfs_cid: &str,
+    block_number: u64,
+    tx_hash: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO factory_config
+            (factory_address, partner_ipfs_cid, last_updated_block, last_updated_tx)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(factory_address) DO UPDATE SET
+            partner_ipfs_cid = excluded.partner_ipfs_cid,
+            last_updated_block = excluded.last_updated_block,
+            last_updated_tx = excluded.last_updated_tx",
+        params![factory_address, partner_ipfs_cid, block_number as i64, tx_hash],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct FactoryConfigRow {
+    pub factory_address: String,
+    pub beacon_address: Option<String>,
+    pub partner_ipfs_cid: Option<String>,
+    pub last_updated_block: u64,
+    pub last_updated_tx: String,
+}
+
+/// Look up the current config for a Factory.
+pub fn get_factory_config(
+    conn: &Connection,
+    factory_address: &str,
+) -> Result<Option<FactoryConfigRow>> {
+    let row = conn
+        .query_row(
+            "SELECT factory_address, beacon_address, partner_ipfs_cid,
+                    last_updated_block, last_updated_tx
+             FROM factory_config WHERE factory_address = ?1",
+            params![factory_address],
+            |r| {
+                Ok(FactoryConfigRow {
+                    factory_address: r.get(0)?,
+                    beacon_address: r.get(1)?,
+                    partner_ipfs_cid: r.get(2)?,
+                    last_updated_block: r.get::<_, i64>(3)? as u64,
+                    last_updated_tx: r.get(4)?,
+                })
+            },
+        )
+        .ok();
+    Ok(row)
+}
+
 /// Insert one factory admin event row. Caller invokes this once per address
 /// in the AdminsAdded/AdminsRemoved arrays. UNIQUE on (factory, log coord,
 /// admin) is replay-safe.
@@ -2922,6 +3021,36 @@ mod tests {
         update_budget_status(&conn, module, budget_id, "removed").unwrap();
         let budgets = get_budgets_for_module(&conn, module).unwrap();
         assert_eq!(budgets[0].status, "removed");
+    }
+
+    #[test]
+    fn factory_config_upsert_preserves_other_columns() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let factory = "0x67d269191c92Caf3cD7723F116c85e6E9bf55933";
+        let beacon = "0x09635F643e140090A9A8Dcd712eD6285858ceBef";
+
+        // Phase 1: only beacon known
+        upsert_factory_beacon(&conn, factory, beacon, 100, "0xtx1").unwrap();
+        let row = get_factory_config(&conn, factory).unwrap().expect("row");
+        assert_eq!(row.beacon_address.as_deref(), Some(beacon));
+        assert!(row.partner_ipfs_cid.is_none());
+
+        // Phase 2: partner profile set later — beacon must survive
+        upsert_factory_partner(&conn, factory, "QmPartnerCID", 200, "0xtx2").unwrap();
+        let row = get_factory_config(&conn, factory).unwrap().expect("row");
+        assert_eq!(row.beacon_address.as_deref(), Some(beacon), "beacon preserved");
+        assert_eq!(row.partner_ipfs_cid.as_deref(), Some("QmPartnerCID"));
+        assert_eq!(row.last_updated_block, 200);
+
+        // Phase 3: beacon swapped — partner must survive
+        let new_beacon = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        upsert_factory_beacon(&conn, factory, new_beacon, 300, "0xtx3").unwrap();
+        let row = get_factory_config(&conn, factory).unwrap().expect("row");
+        assert_eq!(row.beacon_address.as_deref(), Some(new_beacon));
+        assert_eq!(row.partner_ipfs_cid.as_deref(), Some("QmPartnerCID"), "partner preserved");
+        assert_eq!(row.last_updated_block, 300);
     }
 
     #[test]

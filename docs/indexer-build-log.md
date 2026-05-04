@@ -27,12 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 30 (PHASE 15-A ✓ HANDOFF.md REFRESHED — DOC PARITY WITH CODE)
-PHASE: 15-A ✓ DOC COMPLETE | HANDOFF.md updated with TICK-29 surface:
-       9 mocks, 25 migrations, 20 GraphQL queries, 31/31 tests, 37 commits.
-       Per-tab apps/ui integration mapping extended with Vesting,
-       Fundraising, Budgets, Admin tabs. Test contracts inventory full.
-       | next: minor Factory events (Path E) OR Foundation/Fund scout
+TICK: 31 (PHASE 15-E ✓ FACTORY EVENT COVERAGE 100% — CONFIG + PARTNER)
+PHASE: 15-E ✓ FACTORY COMPLETE | Factory_FactoryConfigSet +
+       Factory_PartnerProfileSet wired via factory_config snapshot table
+       (UPSERT pattern preserves the unset column).
+       Live-verified: deploy's setFactoryConfig at block 3548 returns
+       beaconAddress via factoryConfig query. 32/32 tests green; 39 commits.
+       | next: Foundation/Fund scout OR apps/ui glue (interactive)
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -969,34 +970,65 @@ TICK 30 — PHASE 15-A HANDOFF REFRESH:
 
 31/31 tests green. 37 commits on indexer-build branch.
 
+TICK 31 — PHASE 15-E FACTORY EVENT COVERAGE 100%:
+  Schema: 026_factory_config(factory_address PK, beacon_address,
+    partner_ipfs_cid, last_updated_block, last_updated_tx)
+    Single-row-per-factory snapshot (vs audit log) — both events
+    represent CURRENT state, not historical lifecycle.
+  Store:
+    - upsert_factory_beacon — UPSERT setting only beacon_address; partner
+      preserved via SQLite ON CONFLICT pattern that excludes other columns
+    - upsert_factory_partner — UPSERT setting only partner_ipfs_cid; beacon
+      preserved
+    - get_factory_config — single Option<FactoryConfigRow>
+  Decode: sol! decls already vendored.
+  Poll loop: 2 new dispatch arms.
+  GraphQL: FactoryConfig SimpleObject + factoryConfig(factoryAddress) query.
+
+  LIVE-VERIFIED on real Factory:
+    Indexer (start_block 3540) caught block 3548:
+      "indexed Factory_FactoryConfigSet: factory=0x67d269... beacon=0x09635f... block=3548"
+    GraphQL factoryConfig returns:
+      { beaconAddress: 0x09635f..., partnerIpfsCid: null, lastUpdatedBlock: 3548 }
+
+  Factory event coverage now 100% (8/8 events wired):
+    Factory_TRUSTCreatedEvent + Factory_TRUSTRegisteredEvent +
+    Factory_TRUSTSignerAdded + Factory_TRUSTApprovedEvent +
+    Factory_TemplateReplaced + Factory_FactoryConfigSet +
+    Factory_PartnerProfileSet + AdminsAdded + AdminsRemoved
+    (Skipped: InitializationStateChanged — internal lifecycle marker)
+
+  Indexer surface: 26 schema migrations, 21 GraphQL queries, ~43
+  dispatched event types. 9 contract types covered, every Factory
+  event handled.
+
+32/32 tests green. 39 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 15-B — minor Factory events OR Foundation scout):
-  Phase 15-A (HANDOFF refresh) done.
+NEXT ACTION (Phase 16 — Foundation/Fund scout OR HANDOFF re-refresh):
+  Phase 15-E (factory events 100%) done.
 
-  PATH E — wire Factory_FactoryConfigSet + Factory_PartnerProfileSet:
-    Last 2 missing Factory events. ~5 min each, informational only.
-    Closes the Factory event-coverage table 100%.
+  PATH B — Foundation + Fund scout in parallel (single Haiku call):
+    Read both ABIs, distill events into one compact table. Decide
+    per-module if the port is worth ~30 min or if events are too
+    niche / overlapping with already-shipped modules. If port worth it,
+    follow the locked recipe.
 
-  PATH B — Foundation module scout (Haiku Explore first):
-    ~/projects/aeqi-graph/abis/Foundation.module.json
-    Read events; if reasonable demo value, do the ~30-min port via
-    locked recipe. Skip if redundant with Governance.
+  PATH A — HANDOFF re-refresh:
+    Add factory_config table + factoryConfig query to schema/GraphQL
+    sections. ~5 min mechanical update.
 
-  PATH C — Fund module scout (similar):
-    ~/projects/aeqi-graph/abis/Fund.module.json
-    Pooled-asset treasury. Likely adds something distinct from Token
-    (ERC20) and Budget (role-scoped). Worth scouting.
-
-  PATH D — Unifutures: defer (derivative positions, out of cap-table demo).
+  PATH D — Unifutures: defer indefinitely (derivative positions).
   PATH F — apps/ui glue: interactive session.
   PATH G — production hardening: out of scope.
 
   LEVERAGE PRIORITY:
-    PATH E — fastest wins (10 min)
-    PATH B + C scouts in parallel via Haiku, then port what's worth it
+    PATH A — quick (5 min), preserves doc-code parity
+    PATH B — discovers next leverage; may end "no port worth it"
+    PATH F/G — interactive
 
-  My read: PATH E next tick (quick close-out of Factory coverage),
-  PATH B+C scout after if cron remains.
+  My read: PATH A next tick (quick refresh after each addition is the
+  cheap habit), PATH B scout after.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

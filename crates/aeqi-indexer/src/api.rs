@@ -24,6 +24,28 @@ pub type SharedDb = Arc<Mutex<Connection>>;
 /// Top-level GraphQL Query type.
 pub struct Query;
 
+/// GraphQL projection of a Factory's current config snapshot.
+#[derive(SimpleObject, Clone)]
+pub struct FactoryConfig {
+    pub factory_address: String,
+    pub beacon_address: Option<String>,
+    pub partner_ipfs_cid: Option<String>,
+    pub last_updated_block: u64,
+    pub last_updated_tx: String,
+}
+
+impl From<store::FactoryConfigRow> for FactoryConfig {
+    fn from(r: store::FactoryConfigRow) -> Self {
+        FactoryConfig {
+            factory_address: r.factory_address,
+            beacon_address: r.beacon_address,
+            partner_ipfs_cid: r.partner_ipfs_cid,
+            last_updated_block: r.last_updated_block,
+            last_updated_tx: r.last_updated_tx,
+        }
+    }
+}
+
 /// GraphQL projection of a Factory admin grant/revocation audit row.
 #[derive(SimpleObject, Clone)]
 pub struct FactoryAdminEvent {
@@ -599,6 +621,20 @@ impl Query {
         let rows = store::get_modules_for_trust(&conn, &trust_address)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Current config snapshot for a Factory: beacon address + partner IPFS CID.
+    /// Returns None if neither has ever been set.
+    async fn factory_config(
+        &self,
+        ctx: &Context<'_>,
+        factory_address: String,
+    ) -> async_graphql::Result<Option<FactoryConfig>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let row = store::get_factory_config(&conn, &factory_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(row.map(Into::into))
     }
 
     /// Audit log of admin grants/revocations on a Factory, oldest first.
