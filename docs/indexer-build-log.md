@@ -27,13 +27,13 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 26 (PHASE 12-C ✓ FACTORY ADMIN EVENTS WIRED)
-PHASE: 12-C ✓ ADMIN AUDIT LOG | AdminsAdded + AdminsRemoved indexed
-       per-address (array expanded into one audit row per admin).
-       Live-verified: deployer admin grant from factory.initialize()
-       at block 3547 visible via factoryAdminEvents query.
-       29/29 tests green; 32 commits.
-       | next: Funding module (Path A) OR apps/ui glue OR HANDOFF expansion
+TICK: 27 (PHASE 13-C ✓ HANDOFF.md EXPANDED FOR MULTI-SIG + ORDERING)
+PHASE: 13-C ✓ DOCS COMPLETE | HANDOFF.md gains the multi-sig demo
+       recipe, the 4-fix cross-block ordering table, schema v2 design
+       rationale, factoryAdminEvents + trustById queries, and updated
+       test-contracts + open-work tables. Tomorrow's user can read it
+       cold and reproduce both demo flows. 29/29 tests green; 33 commits.
+       | next: Funding module port OR apps/ui glue (interactive)
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -838,44 +838,61 @@ TICK 26 — PHASE 12-C FACTORY ADMIN EVENTS:
 
 29/29 tests green. 32 commits on indexer-build branch.
 
+TICK 27 — PHASE 13-C HANDOFF EXPANSION:
+  HANDOFF.md additions (~80 lines):
+    - GraphQL surface gains factoryAdminEvents + trustById queries
+    - Schema migration table extended with rows 019/020/021 + notes
+      about 'schema v2' status
+    - 'Multi-sig variant (cross-block flow)' recipe alongside the
+      existing single-sig 5-step demo. Uses CreateMultiSigTrust.s.sol
+      with two anvil keys; documents Phase A registration + Phase B
+      approval split
+    - 'Cross-block ordering semantics' table — the four ordering
+      fixes (TICKs 21, 22, 24, 25) mapped to problem + solution
+    - Schema v2 design rationale paragraph
+    - Test-contracts table updated with MockToken + MockVesting
+    - Open-work table: Token + Vesting marked SHIPPED;
+      PRAGMA foreign_keys=OFF rationale documented as a v1
+      limitation needing re-evaluation if migrating to Postgres
+
+  Why this matters: every new contributor (human or future Claude
+  session) gets the full mental model from one doc, not by piecing
+  together 33 commit messages or 27 tick log entries.
+
+29/29 tests green. 33 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 13 — Funding/Budget breadth or HANDOFF expand):
-  Phase 12-C done (admin events). All Factory event types now wired
-  except Factory_FactoryConfigSet (single-event, informational) and
-  Factory_PartnerProfileSet (marketing, low value).
+NEXT ACTION (Phase 14 — Funding module OR Budget OR pivot):
+  Phase 13-C (HANDOFF expansion) done. The artifact is fully self-contained
+  for tomorrow's pickup.
 
   PATH A — Funding module port (most demo-relevant remaining):
     Source: ~/projects/aeqi-graph/abis/Funding.module.json
     Probably: Funding_RoundCreated, Funding_ContributionMade,
               Funding_RoundClosed, Funding_RefundIssued.
     Same Haiku-Explore + sol!/migration/store/dispatch/GraphQL recipe.
-    ~30 min. Adds the "fundraising rounds" surface to the demo.
+    ~30 min. Adds the "fundraising rounds" surface.
 
   PATH B — Budget module port (cap-table extension):
     Source: ~/projects/aeqi-graph/abis/Budget.module.json
     Probably: Budget_AllocationSet, Budget_Spent, Budget_Reset.
     ~30 min. Adds spending-cap visibility per role.
 
-  PATH C — HANDOFF.md expansion:
-    - Multi-sig demo recipe (extends the existing 5-step demo with
-      CreateMultiSigTrust.s.sol)
-    - Cross-block ordering semantics (the four ordering fixes
-      compose: TICKs 21+22+24+25)
-    - Schema v2 design rationale (trust_id vs address as identity)
-    - Updated query list (factoryAdminEvents, trustById)
-    ~10 min.
+  PATH C — wire remaining Factory minor events:
+    Factory_FactoryConfigSet (1 event per factory) +
+    Factory_PartnerProfileSet (marketing). Each ~5 min, low value.
 
   PATH D — apps/ui glue: defer to interactive session.
-
-  PATH E — production hardening: out of scope for autonomous session.
+  PATH E — production hardening (WSS, multi-chain, eth_call backfill,
+    Prometheus, systemd): out of scope for autonomous session.
 
   LEVERAGE PRIORITY:
-    PATH C (HANDOFF update — durable artifact for tomorrow's user) →
-    PATH A (Funding module — demo breadth) →
-    PATH B (Budget — incremental).
+    PATH A — Funding adds the fundraising story to the demo
+    PATH B — Budget rounds out the role/treasury surface
+    PATH C — quick wins for completeness
 
-  My read: PATH C next tick (10-min update with high handoff value),
-  PATH A after if cron remains.
+  My read: PATH A next tick (~30 min), then evaluate cron. Funding is
+  the last high-demo-value module not yet in the indexer.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
