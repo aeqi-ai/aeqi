@@ -27,14 +27,14 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 35 (PHASE 17-B ✓ SANITY + FREEZE PASS — DOC GENUINELY CURRENT)
-PHASE: 17-B ✓ TERMINATION-READY | clean cargo build (clean → 42s) +
-       33/33 tests + zero clippy warnings on a fresh slate. HANDOFF.md
-       cold-read fixed 6 stale spots (tick count, migration count,
-       query count, decode.rs comment, repo layout, deploy-blocker
-       status). 33/33 tests green; 45 commits.
-       | next: clean termination point reached. Optional Path C TLDR
-               OR pivot to interactive apps/ui glue
+TICK: 36 (PHASE 18-C ✓ INDEXER.md WORKTREE SIGNPOST)
+PHASE: 18-C ✓ POLISH | INDEXER.md added at worktree root — anyone
+       landing in aeqi-indexer-build and reading README sees the
+       canonical aeqi project README. INDEXER.md is the 40-line
+       signpost: pointer to docs/HANDOFF.md, contents map, sister
+       worktree reference, quick build commands. README.md untouched
+       (clean merge). 33/33 tests green; 47 commits.
+       | next: continue polish OR genuinely wrap autonomous session
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -1142,36 +1142,59 @@ TICK 35 — PHASE 17-B SANITY + FREEZE PASS:
 
 33/33 tests green. 45 commits on indexer-build branch.
 
+TICK 36 — PHASE 18-C INDEXER.md WORKTREE SIGNPOST:
+  Discovered: README.md at worktree root is the canonical aeqi project
+  README (BSL license, 4 primitives, daemon, etc.). Anyone landing in
+  the aeqi-indexer-build worktree and reading README has no obvious
+  pointer to "this worktree is the indexer subproject; see docs/".
+
+  Considered: edit README.md to add a worktree note. Rejected — would
+  diff against main, creating a merge conflict on eventual ship.
+
+  Decision: write INDEXER.md (40 lines) at worktree root.
+    - Pointer to docs/HANDOFF.md for full details
+    - Contents map (crates/, test-contracts/, docs/)
+    - Sister-worktree reference (aeqi-core-deploy-fix)
+    - Quick build/sanity commands (cargo build/test/clippy)
+    - Status line (10 contract types, 33/33 tests, branch)
+
+  Net: README.md untouched (clean ship), INDEXER.md is the
+  worktree-specific signpost.
+
+33/33 tests green. 47 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 18 — clean termination OR final polish):
-  Phase 17-B (sanity + freeze pass) done. The autonomous indexer
-  session has reached a clean termination point.
+NEXT ACTION (Phase 19 — wind-down candidates):
+  Phase 18-C (INDEXER.md signpost) done. Four artifacts current:
+    INDEXER.md (worktree root signpost) +
+    crates/aeqi-indexer/ + test-contracts/ + docs/HANDOFF.md.
+  Plus 2 sister-worktree commits in aeqi-core-deploy-fix.
 
-  Three durable artifacts are current at HEAD:
-    1. crates/aeqi-indexer/ — 33/33 tests, clippy clean, builds in 42s
-       on a clean cache, 30 migrations, 25 GraphQL queries, 9 contract
-       sol! blocks, 4 levels of dynamic dispatch
-    2. test-contracts/ — 9 mocks emitting byte-identical signatures
-       to real aeqi-core
-    3. docs/HANDOFF.md — fully self-contained pickup doc, freeze-passed,
-       lists every shipped query mapped to UI tabs + every open-work
-       item with rationale
+  Remaining low-risk polish options if cron continues:
 
-  Plus 2 commits in the sister aeqi-core-deploy-fix worktree:
-    Deploy.s.sol fix + CreateTrust.s.sol + CreateMultiSigTrust.s.sol
+  PATH C2 — sketch a production-deployment notes doc:
+    docs/DEPLOY.md outlining systemd unit + reverse-proxy snippet +
+    Prometheus metrics scaffolding ideas + WSS-upgrade path. ~15 min.
+    Useful for graduating to Base mainnet later but defers actual
+    implementation.
 
-  REMAINING PATHS (none required for v1):
+  PATH C3 — write a small indexer changelog at docs/CHANGELOG.md:
+    Per-phase summary (Phase 0→18) extracted from the build log,
+    formatted as conventional changelog entries. ~10 min. Helps the
+    user navigate "what got built when" without scrolling 1500 lines
+    of build log.
 
-  PATH C — TLDR.md or worktree README pointer to HANDOFF.md (~5 min).
-    Optional polish. Can be skipped — anyone landing in the worktree
-    will see docs/HANDOFF.md and it's self-introducing.
+  PATH C4 — verify the live demo recipe by RUNNING it end-to-end one
+    more time (anvil up if needed, deploy fresh, create TRUST, query).
+    ~5 min. Catches any environmental drift since the last run.
 
   PATH D — apps/ui glue: interactive session.
-  PATH E — production hardening: out of scope.
+  PATH E — production hardening proper: out of scope (multi-tick).
 
-  My read: this autonomous session can wrap. If cron continues and
-  the user is still asleep, do PATH C. Otherwise the indexer is
-  ready for the user to pick up apps/ui glue interactively.
+  My read: PATH C3 next (changelog is a durable artifact compressing
+  the 1500-line build log into ~150 lines of phase summary), then
+  PATH C4 to confirm everything still runs end-to-end before genuine
+  termination. PATH C2 last if cron persists.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:
