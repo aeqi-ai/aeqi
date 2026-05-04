@@ -351,6 +351,12 @@ pub mod poll {
                         decode::Governance::Governance_VoteCast::SIGNATURE_HASH,
                         // Token module events (per-module / ERC20)
                         decode::Token::Transfer::SIGNATURE_HASH,
+                        // Vesting module events (per-module)
+                        decode::Vesting::Vesting_VestingPositionCreated::SIGNATURE_HASH,
+                        decode::Vesting::Vesting_VestingPositionActivated::SIGNATURE_HASH,
+                        decode::Vesting::Vesting_VestingPositionContributed::SIGNATURE_HASH,
+                        decode::Vesting::Vesting_VestingClaimed::SIGNATURE_HASH,
+                        decode::Vesting::Vesting_PositionRemoved::SIGNATURE_HASH,
                     ];
                     let filter = Filter::new()
                         .from_block(block_num)
@@ -783,6 +789,139 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Token Transfer failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Vesting::Vesting_VestingPositionCreated::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Vesting::Vesting_VestingPositionCreated::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::insert_vesting_position(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.vestingPositionId),
+                                        block_num,
+                                        &tx_hash,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Vesting_VestingPositionCreated: module={} position={:#x} block={}",
+                                        module_address, ev.vestingPositionId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Vesting_VestingPositionCreated failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Vesting::Vesting_VestingPositionActivated::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Vesting::Vesting_VestingPositionActivated::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::update_vesting_position_status(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.vestingPositionId),
+                                        "active",
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Vesting_VestingPositionActivated: module={} position={:#x} block={}",
+                                        module_address, ev.vestingPositionId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Vesting_VestingPositionActivated failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Vesting::Vesting_VestingPositionContributed::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            let log_index = log.log_index.unwrap_or(0);
+                            match decode::Vesting::Vesting_VestingPositionContributed::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let coord = store::LogCoord {
+                                        block_number: block_num,
+                                        tx_hash: &tx_hash,
+                                        log_index,
+                                    };
+                                    store::insert_vesting_contribution(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.vestingPositionId),
+                                        &format!("{:#x}", ev.from),
+                                        &format!("{:#x}", ev.amount),
+                                        coord,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Vesting_VestingPositionContributed: module={} position={:#x} from={:#x} amount={:#x} block={}",
+                                        module_address, ev.vestingPositionId, ev.from, ev.amount, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Vesting_VestingPositionContributed failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Vesting::Vesting_VestingClaimed::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            let log_index = log.log_index.unwrap_or(0);
+                            match decode::Vesting::Vesting_VestingClaimed::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    let coord = store::LogCoord {
+                                        block_number: block_num,
+                                        tx_hash: &tx_hash,
+                                        log_index,
+                                    };
+                                    store::insert_vesting_claim(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.vestingPositionId),
+                                        &format!("{:#x}", ev.asset),
+                                        &format!("{:#x}", ev.to),
+                                        &format!("{:#x}", ev.amount),
+                                        coord,
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Vesting_VestingClaimed: module={} position={:#x} to={:#x} amount={:#x} block={}",
+                                        module_address, ev.vestingPositionId, ev.to, ev.amount, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Vesting_VestingClaimed failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Vesting::Vesting_PositionRemoved::SIGNATURE_HASH)
+                        {
+                            let module_address = format!("{:#x}", log.address());
+                            match decode::Vesting::Vesting_PositionRemoved::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::update_vesting_position_status(
+                                        &conn,
+                                        &module_address,
+                                        &format!("{:#x}", ev.vestingPositionId),
+                                        "removed",
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Vesting_PositionRemoved: module={} position={:#x} block={}",
+                                        module_address, ev.vestingPositionId, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Vesting_PositionRemoved failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

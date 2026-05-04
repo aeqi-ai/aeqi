@@ -314,6 +314,71 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON token_transfers(to_address);
         "#,
     ),
+    (
+        "015_vesting_positions",
+        r#"
+        -- A vesting position on a Vesting module. Created via
+        -- Vesting_VestingPositionCreated; status transitions:
+        --   'created' → 'active' (Activated) → 'removed' (Removed)
+        -- The event payload only carries the positionId; richer metadata
+        -- (beneficiary role, asset, amount, cliff, duration) lives in
+        -- contract storage and would need eth_call backfill — out of v1.
+        CREATE TABLE IF NOT EXISTS vesting_positions (
+            module_address TEXT NOT NULL,
+            position_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'created',
+            created_block INTEGER NOT NULL,
+            created_tx TEXT NOT NULL,
+            PRIMARY KEY (module_address, position_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_vesting_positions_status
+          ON vesting_positions(module_address, status);
+        "#,
+    ),
+    (
+        "016_vesting_contributions",
+        r#"
+        -- Append-only audit log of contributions into a vesting position
+        -- (Vesting_VestingPositionContributed). Funders deposit tokens that
+        -- become claimable by the beneficiary over time.
+        CREATE TABLE IF NOT EXISTS vesting_contributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_address TEXT NOT NULL,
+            position_id TEXT NOT NULL,
+            from_address TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            UNIQUE (module_address, block_number, tx_hash, log_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_vesting_contrib_position
+          ON vesting_contributions(module_address, position_id);
+        "#,
+    ),
+    (
+        "017_vesting_claims",
+        r#"
+        -- Append-only audit log of claims from a vesting position
+        -- (Vesting_VestingClaimed). Beneficiary withdraws vested tokens.
+        CREATE TABLE IF NOT EXISTS vesting_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_address TEXT NOT NULL,
+            position_id TEXT NOT NULL,
+            asset_address TEXT NOT NULL,
+            to_address TEXT NOT NULL,
+            amount TEXT NOT NULL,
+            block_number INTEGER NOT NULL,
+            tx_hash TEXT NOT NULL,
+            log_index INTEGER NOT NULL,
+            UNIQUE (module_address, block_number, tx_hash, log_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_vesting_claims_position
+          ON vesting_claims(module_address, position_id);
+        CREATE INDEX IF NOT EXISTS idx_vesting_claims_to
+          ON vesting_claims(to_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -1214,6 +1279,232 @@ pub fn get_token_transfers(
     Ok(rows)
 }
 
+/// Insert a vesting position (Vesting_VestingPositionCreated).
+/// Idempotent on (module, position_id).
+pub fn insert_vesting_position(
+    conn: &Connection,
+    module_address: &str,
+    position_id: &str,
+    created_block: u64,
+    created_tx: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO vesting_positions
+            (module_address, position_id, status, created_block, created_tx)
+         VALUES (?1, ?2, 'created', ?3, ?4)",
+        params![module_address, position_id, created_block as i64, created_tx],
+    )?;
+    Ok(())
+}
+
+/// Update vesting position status. Used by Activated / Removed handlers.
+/// No-op + warn if position not yet indexed.
+pub fn update_vesting_position_status(
+    conn: &Connection,
+    module_address: &str,
+    position_id: &str,
+    status: &str,
+) -> Result<()> {
+    let n = conn.execute(
+        "UPDATE vesting_positions SET status = ?1
+         WHERE module_address = ?2 AND position_id = ?3",
+        params![status, module_address, position_id],
+    )?;
+    if n == 0 {
+        tracing::warn!(
+            "vesting position status update for unknown position: module={} position_id={}",
+            module_address, position_id
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct VestingPositionRow {
+    pub module_address: String,
+    pub position_id: String,
+    pub status: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+/// All vesting positions on a module, oldest first.
+pub fn get_vesting_positions(
+    conn: &Connection,
+    module_address: &str,
+) -> Result<Vec<VestingPositionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, position_id, status, created_block, created_tx
+         FROM vesting_positions WHERE module_address = ?1
+         ORDER BY created_block ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address], |r| {
+            Ok(VestingPositionRow {
+                module_address: r.get(0)?,
+                position_id: r.get(1)?,
+                status: r.get(2)?,
+                created_block: r.get::<_, i64>(3)? as u64,
+                created_tx: r.get(4)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Insert a vesting contribution audit row.
+pub fn insert_vesting_contribution(
+    conn: &Connection,
+    module_address: &str,
+    position_id: &str,
+    from_address: &str,
+    amount: &str,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![from_address, coord.block_number as i64, coord.tx_hash],
+    )?;
+    tx.execute(
+        "INSERT OR IGNORE INTO vesting_contributions
+            (module_address, position_id, from_address, amount,
+             block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            module_address,
+            position_id,
+            from_address,
+            amount,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct VestingContributionRow {
+    pub module_address: String,
+    pub position_id: String,
+    pub from_address: String,
+    pub amount: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// All contributions to a vesting position, oldest first.
+pub fn get_vesting_contributions(
+    conn: &Connection,
+    module_address: &str,
+    position_id: &str,
+) -> Result<Vec<VestingContributionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, position_id, from_address, amount,
+                block_number, tx_hash, log_index
+         FROM vesting_contributions
+         WHERE module_address = ?1 AND position_id = ?2
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address, position_id], |r| {
+            Ok(VestingContributionRow {
+                module_address: r.get(0)?,
+                position_id: r.get(1)?,
+                from_address: r.get(2)?,
+                amount: r.get(3)?,
+                block_number: r.get::<_, i64>(4)? as u64,
+                tx_hash: r.get(5)?,
+                log_index: r.get::<_, i64>(6)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Insert a vesting claim audit row.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_vesting_claim(
+    conn: &Connection,
+    module_address: &str,
+    position_id: &str,
+    asset_address: &str,
+    to_address: &str,
+    amount: &str,
+    coord: LogCoord<'_>,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![to_address, coord.block_number as i64, coord.tx_hash],
+    )?;
+    tx.execute(
+        "INSERT OR IGNORE INTO vesting_claims
+            (module_address, position_id, asset_address, to_address, amount,
+             block_number, tx_hash, log_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            module_address,
+            position_id,
+            asset_address,
+            to_address,
+            amount,
+            coord.block_number as i64,
+            coord.tx_hash,
+            coord.log_index as i64
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct VestingClaimRow {
+    pub module_address: String,
+    pub position_id: String,
+    pub asset_address: String,
+    pub to_address: String,
+    pub amount: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+/// All claims from a vesting position, oldest first.
+pub fn get_vesting_claims(
+    conn: &Connection,
+    module_address: &str,
+    position_id: &str,
+) -> Result<Vec<VestingClaimRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT module_address, position_id, asset_address, to_address, amount,
+                block_number, tx_hash, log_index
+         FROM vesting_claims
+         WHERE module_address = ?1 AND position_id = ?2
+         ORDER BY block_number ASC, log_index ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![module_address, position_id], |r| {
+            Ok(VestingClaimRow {
+                module_address: r.get(0)?,
+                position_id: r.get(1)?,
+                asset_address: r.get(2)?,
+                to_address: r.get(3)?,
+                amount: r.get(4)?,
+                block_number: r.get::<_, i64>(5)? as u64,
+                tx_hash: r.get(6)?,
+                log_index: r.get::<_, i64>(7)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Look up a TRUST by its on-chain address.
 pub fn get_trust(conn: &Connection, address: &str) -> Result<Option<TrustRow>> {
     let row = conn
@@ -1642,6 +1933,50 @@ mod tests {
         let alice_row = get_token_holders(&conn, token).unwrap()
             .into_iter().find(|r| r.holder_address == alice).unwrap();
         assert_eq!(alice_row.balance, "0x2bc"); // still 700
+    }
+
+    #[test]
+    fn vesting_position_lifecycle_round_trip() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let module = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+        let pos = "0x0000000000000000000000000000000000000000000000000000000000000aaa";
+        let funder = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        let beneficiary = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
+        let asset = "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c";
+
+        // Create → Activate → Contribute → Claim → Remove
+        insert_vesting_position(&conn, module, pos, 100, "0xtx1").unwrap();
+        let positions = get_vesting_positions(&conn, module).unwrap();
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].status, "created");
+
+        update_vesting_position_status(&conn, module, pos, "active").unwrap();
+        let positions = get_vesting_positions(&conn, module).unwrap();
+        assert_eq!(positions[0].status, "active");
+
+        let c1 = LogCoord { block_number: 110, tx_hash: "0xtx2", log_index: 0 };
+        insert_vesting_contribution(&conn, module, pos, funder, "0x3e8", c1).unwrap();
+        let contribs = get_vesting_contributions(&conn, module, pos).unwrap();
+        assert_eq!(contribs.len(), 1);
+        assert_eq!(contribs[0].from_address, funder);
+        assert_eq!(contribs[0].amount, "0x3e8");
+
+        let c2 = LogCoord { block_number: 200, tx_hash: "0xtx3", log_index: 0 };
+        insert_vesting_claim(&conn, module, pos, asset, beneficiary, "0x12c", c2).unwrap();
+        let claims = get_vesting_claims(&conn, module, pos).unwrap();
+        assert_eq!(claims.len(), 1);
+        assert_eq!(claims[0].to_address, beneficiary);
+        assert_eq!(claims[0].asset_address, asset);
+        assert_eq!(claims[0].amount, "0x12c");
+
+        update_vesting_position_status(&conn, module, pos, "removed").unwrap();
+        let positions = get_vesting_positions(&conn, module).unwrap();
+        assert_eq!(positions[0].status, "removed");
+
+        // Updating an unknown position is a no-op
+        update_vesting_position_status(&conn, module, "0xnonexistent", "removed").unwrap();
     }
 
     #[test]

@@ -24,6 +24,85 @@ pub type SharedDb = Arc<Mutex<Connection>>;
 /// Top-level GraphQL Query type.
 pub struct Query;
 
+/// GraphQL projection of a vesting position.
+#[derive(SimpleObject, Clone)]
+pub struct VestingPosition {
+    pub module_address: String,
+    pub position_id: String,
+    /// 'created' | 'active' | 'removed'
+    pub status: String,
+    pub created_block: u64,
+    pub created_tx: String,
+}
+
+impl From<store::VestingPositionRow> for VestingPosition {
+    fn from(r: store::VestingPositionRow) -> Self {
+        VestingPosition {
+            module_address: r.module_address,
+            position_id: r.position_id,
+            status: r.status,
+            created_block: r.created_block,
+            created_tx: r.created_tx,
+        }
+    }
+}
+
+/// GraphQL projection of a vesting contribution audit row.
+#[derive(SimpleObject, Clone)]
+pub struct VestingContribution {
+    pub module_address: String,
+    pub position_id: String,
+    pub from_address: String,
+    /// uint256 hex
+    pub amount: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::VestingContributionRow> for VestingContribution {
+    fn from(r: store::VestingContributionRow) -> Self {
+        VestingContribution {
+            module_address: r.module_address,
+            position_id: r.position_id,
+            from_address: r.from_address,
+            amount: r.amount,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
+/// GraphQL projection of a vesting claim audit row.
+#[derive(SimpleObject, Clone)]
+pub struct VestingClaim {
+    pub module_address: String,
+    pub position_id: String,
+    pub asset_address: String,
+    pub to_address: String,
+    /// uint256 hex
+    pub amount: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
+impl From<store::VestingClaimRow> for VestingClaim {
+    fn from(r: store::VestingClaimRow) -> Self {
+        VestingClaim {
+            module_address: r.module_address,
+            position_id: r.position_id,
+            asset_address: r.asset_address,
+            to_address: r.to_address,
+            amount: r.amount,
+            block_number: r.block_number,
+            tx_hash: r.tx_hash,
+            log_index: r.log_index,
+        }
+    }
+}
+
 /// GraphQL projection of a token holder's balance.
 #[derive(SimpleObject, Clone)]
 pub struct TokenBalance {
@@ -348,6 +427,47 @@ impl Query {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
         let rows = store::get_modules_for_trust(&conn, &trust_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// All vesting positions on a Vesting module, oldest first.
+    async fn vesting_positions(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+    ) -> async_graphql::Result<Vec<VestingPosition>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_vesting_positions(&conn, &module_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Audit log of contributions to a vesting position, oldest first.
+    async fn vesting_contributions(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+        position_id: String,
+    ) -> async_graphql::Result<Vec<VestingContribution>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_vesting_contributions(&conn, &module_address, &position_id)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Audit log of claims from a vesting position, oldest first.
+    async fn vesting_claims(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+        position_id: String,
+    ) -> async_graphql::Result<Vec<VestingClaim>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_vesting_claims(&conn, &module_address, &position_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

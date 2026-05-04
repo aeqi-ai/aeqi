@@ -27,13 +27,12 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 18 (PHASE 6-A ✓ TOKEN MODULE — CAP TABLE WITH U256 ARITHMETIC)
-PHASE: 6-A ✓ ERC20 + CAP TABLE | mint/transfer/burn with atomic balance
-       updates inside SQLite tx. U256 round-trips through TEXT hex.
-       Holders view sorted by balance, excludes zero address + zero balances.
-       24/24 tests green; 23 commits.
-       | next: aeqi-core deploy script fix (Path C) OR Vesting/Funding
-               module ports OR apps/ui glue (Path B) — handoff doc covers it
+TICK: 19 (PHASE 6-B ✓ VESTING MODULE — POSITION LIFECYCLE + AUDIT LOGS)
+PHASE: 6-B ✓ FOUNDER VESTING | position created→active→contributed→claimed→removed
+       all 5 events flowed through dispatch in 1 tx. Status updates correctly applied.
+       25/25 tests green; 25 commits.
+       | next: aeqi-core deploy script fix (Path C — original blocker)
+               OR more modules (Funding, Budget) OR apps/ui glue (Path B)
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -443,40 +442,98 @@ TICK 18 — PHASE 6-A TOKEN MODULE (ERC20 + CAP TABLE):
 
 24/24 tests green. 23 commits on indexer-build branch.
 
+TICK 19 — PHASE 6-B VESTING MODULE (FOUNDER VESTING):
+  Subagent: Haiku Explore enumerated Vesting.module ABI. 8 events; v1
+    cherry-picked the 5-event lifecycle:
+      Vesting_VestingPositionCreated(positionId)         → status='created'
+      Vesting_VestingPositionActivated(positionId)       → status='active'
+      Vesting_VestingPositionContributed(pos, from, amt) → contribution audit
+      Vesting_VestingClaimed(pos, asset, to, amt)        → claim audit
+      Vesting_PositionRemoved(positionId)                → status='removed'
+    Skipped: Reset, SetVestingConfig (admin), VestingPositionsTransferred
+    (role-level, multi-position; defer to v2)
+  Schema:
+    - 015_vesting_positions(module, position_id, status, ...) PK (module, pos)
+    - 016_vesting_contributions(id, module, position_id, from, amount, log coord)
+    - 017_vesting_claims(id, module, position_id, asset, to, amount, log coord)
+  Decode: sol! Vesting contract block (5 events).
+  Poll loop: 5 dispatch arms.
+    Note: position events only carry positionId in their payload — richer
+    metadata (beneficiary role, vested amount, cliff, duration) lives in
+    contract storage and would need eth_call backfill (out of v1 scope).
+  GraphQL: VestingPosition + VestingContribution + VestingClaim SimpleObjects
+    + 3 queries: vestingPositions, vestingContributions, vestingClaims.
+  MockVesting with emitFounderVestingLifecycle — 5 events in one tx
+    (Created + Activated + Contributed + Claimed + Removed).
+
+  LIVE-TESTED FULL VESTING LIFECYCLE:
+    block 3222: TrustCreated → trust auto-watched
+    block 3240: TRUST_ModuleAdded(module_id 0xbabe, MockVesting) → vesting watched
+    block 3264: emitFounderVestingLifecycle(funder, beneficiary, asset,
+                                            contribute=500k, claim=100k)
+                → 5 events all dispatched correctly
+    GraphQL vestingPositions:
+      [{ positionId 0x...0a01, status: "removed", createdBlock 3264 }]
+    GraphQL vestingContributions:
+      [{ from: founder, amount: 0x7a120 (500k), block 3264 }]
+    GraphQL vestingClaims:
+      [{ to: beneficiary, asset: token_addr, amount: 0x186a0 (100k), block 3264 }]
+
+  STATUS TRANSITIONS CONFIRMED: Created→Active→Removed sequence persisted
+  through three UPDATE calls; final status correctly 'removed'.
+
+  Indexer surface now spans 7 contract types:
+    Factory (creation) | TRUST (modules + permissions) | Role | Governance |
+    Token (cap-table) | Vesting (founder schedules) | + accounts fan-in
+  17 entity tables, ~17 dispatched event types, 3-level dynamic subscription.
+
+25/25 tests green. 25 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 6-B — Vesting module OR Path C aeqi-core deploy fix):
-  Phase 6-A (Token + cap-table) is DONE. Remaining options unchanged
-  except Path A is now Vesting (next module after Token):
+NEXT ACTION (Phase 7 — close the original loop OR keep porting):
+  Phase 6-B (Vesting) is DONE. The cap-table story is now complete:
+    Token = current ownership snapshot
+    Vesting = scheduled ownership / future grants
+  Together with Role/Governance, this is the full demo surface.
 
-  PATH A' — Vesting module:
-    Source: ~/projects/aeqi-graph/abis/Vesting.module.json
-    Probably: Vesting_PositionCreated, Vesting_VestingClaimed,
-              Vesting_PositionTransferred, Vesting_PositionRevoked.
-    Pattern is locked — Haiku Explore the ABI, then 30-min mechanical port:
-      sol! decl + migrations(015_vesting_positions, 016_vesting_claims) +
-      store fns + dispatch arms + GraphQL fields + MockVesting + live test.
+  PATH C — aeqi-core deploy script drift (HIGHEST LEVERAGE):
+    THIS IS THE ORIGINAL BLOCKER. Fix
+    /home/claudedev/projects/aeqi-core/scripts/foundry/Deploy.s.sol
+    so we can deploy the REAL Factory + TRUST + module contracts to Anvil
+    and re-run the same indexer end-to-end against actual aeqi-core code
+    instead of Mock* contracts.
 
-  PATH B — apps/ui glue (real user-visible win):
-    Pick ONE tab (Ownership simplest — rolesForModule + roleAssignments)
-    and rewrite its data layer to query our indexer. Requires editing
-    aeqi/apps/ui in a SEPARATE worktree off ~/aeqi (not ~/aeqi-indexer-build).
+    The indexer's mocks emit byte-identical event signatures (verified by
+    Haiku Explore against each ABI), so swapping in real contracts is
+    a deploy-side fix, not an indexer-side fix. Once real Factory deploys,
+    the existing indexer just works against it.
 
-  PATH C — aeqi-core deploy script drift (the original blocker):
-    Fix /home/claudedev/projects/aeqi-core/scripts/foundry/Deploy.s.sol
-    Beacon.setImplementation signature mismatch. This unblocks
-    real-contract testing — the indexer's mocks emit byte-identical
-    signatures, so the indexer code needs no changes; only deploy works.
+    Specific drift (TICK 5 finding): Beacon.setImplementation signature
+    changed from (bytes32, address) to (address source, bytes32 moduleId,
+    address impl) — 3 args. Deploy script still calls 2-arg version.
+    Fix is mechanical; ~30 min of script editing + verification.
+
+    NB: This requires editing /home/claudedev/projects/aeqi-core/ NOT
+    this worktree. Cut a separate worktree off aeqi-core to do it.
+
+  PATH B — apps/ui glue (Ownership tab → live indexer):
+    Cut worktree off ~/aeqi. Add VITE_INDEXER_URL env. Rewrite Ownership
+    tab data layer to query rolesForModule + roleAssignments. Replace
+    the existing TheGraph hook. Defer for human design review.
+
+  PATH A'' — Funding/Budget modules (more breadth):
+    /home/claudedev/projects/aeqi-graph/abis/Funding.module.json
+    /home/claudedev/projects/aeqi-graph/abis/Budget.module.json
+    Mechanical ports per the locked recipe.
 
   LEVERAGE PRIORITY:
-    PATH A' = breadth (Vesting completes the cap-table financial story:
-              Token = current ownership, Vesting = scheduled ownership)
-    PATH B  = depth (one real apps/ui tab swapped to live indexer data)
-    PATH C  = original-loop close (proves it against real contracts)
+    PATH C is now first. It's the original loop close — converts the
+    indexer from "mock-tested complete" to "real-contract-tested complete"
+    which is a much stronger artifact. Estimate: 1 tick to fix Deploy.s.sol,
+    1 tick to verify indexer against real contracts. Then PATH B integration
+    is the natural follow-up.
 
-    My read: PATH A' first if cron is still running (~30 min), then
-    pivot to PATH C since real-contract validation is more durable
-    than another mock-tested module. PATH B benefits from human design
-    input — defer to tomorrow's session.
+    Funding/Budget can be deferred indefinitely without losing the demo.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

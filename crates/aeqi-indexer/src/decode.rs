@@ -141,6 +141,33 @@ sol! {
     }
 }
 
+// Vesting module events — emitted by Vesting.module instances.
+// Source: /home/claudedev/projects/aeqi-graph/abis/Vesting.module.json
+//
+// v1 covers the lifecycle: position created → activated → contributed →
+// claimed → removed. Position metadata (beneficiary role, amount, cliff,
+// duration) lives in contract storage and would need eth_call backfill —
+// out of scope for v1 indexer (Phase 6+ work).
+sol! {
+    #[sol(rpc)]
+    contract Vesting {
+        event Vesting_VestingPositionCreated(bytes32 indexed vestingPositionId);
+        event Vesting_VestingPositionActivated(bytes32 indexed vestingPositionId);
+        event Vesting_VestingPositionContributed(
+            bytes32 indexed vestingPositionId,
+            address indexed from,
+            uint256 amount
+        );
+        event Vesting_VestingClaimed(
+            bytes32 indexed vestingPositionId,
+            address indexed asset,
+            address indexed to,
+            uint256 amount
+        );
+        event Vesting_PositionRemoved(bytes32 indexed vestingPositionId);
+    }
+}
+
 /// A normalized indexer event — what we actually persist after decoding raw logs.
 ///
 /// Cross-event uniformity: every variant carries the block + tx context so
