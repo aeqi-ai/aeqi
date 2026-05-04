@@ -27,14 +27,14 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 36 (PHASE 18-C ✓ INDEXER.md WORKTREE SIGNPOST)
-PHASE: 18-C ✓ POLISH | INDEXER.md added at worktree root — anyone
-       landing in aeqi-indexer-build and reading README sees the
-       canonical aeqi project README. INDEXER.md is the 40-line
-       signpost: pointer to docs/HANDOFF.md, contents map, sister
-       worktree reference, quick build commands. README.md untouched
-       (clean merge). 33/33 tests green; 47 commits.
-       | next: continue polish OR genuinely wrap autonomous session
+TICK: 37 (PHASE 19-C3 ✓ CHANGELOG.md DISTILLED FROM BUILD LOG)
+PHASE: 19-C3 ✓ NAVIGATION AID | docs/CHANGELOG.md (~225 lines) extracts
+       per-phase Added/Refactored/Verified entries from the 1500-line
+       build log, latest-first with TICK cross-refs. Plus architectural-
+       milestones timeline table + explicit Out-of-Scope callout.
+       INDEXER.md + HANDOFF.md repo-layout updated to point at it.
+       33/33 tests green; 49 commits.
+       | next: PATH C4 (rerun live demo end-to-end smoke) OR wrap
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -1163,38 +1163,52 @@ TICK 36 — PHASE 18-C INDEXER.md WORKTREE SIGNPOST:
 
 33/33 tests green. 47 commits on indexer-build branch.
 
+TICK 37 — PHASE 19-C3 CHANGELOG:
+  Wrote docs/CHANGELOG.md (~225 lines) — Keep a Changelog lite format.
+  Per-phase entries with Added/Refactored/Verified bullets and TICK
+  cross-refs. Latest first (TICK 37) back through Phase 0 (TICK 1).
+
+  Sections:
+    - Latest tick first (Phase 18-C signpost)
+    - Each shipped phase with one or two paragraphs of bullets
+    - Architectural-milestones timeline table (date | phase | milestone)
+    - Out-of-scope callout (Foundation, Unifutures, Uniswap,
+      production-hardening, apps/ui glue) with rationale
+
+  INDEXER.md + HANDOFF.md repo-layout sections updated to list
+  CHANGELOG.md alongside HANDOFF, build log, etc.
+
+  Why: the build log is 1500 lines of per-tick reasoning. Tomorrow's
+  user wants 'what got built and when' compressed to a screen.
+  Build log remains source of truth for the reasoning chain.
+
+33/33 tests green. 49 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
 NEXT ACTION (Phase 19 — wind-down candidates):
-  Phase 18-C (INDEXER.md signpost) done. Four artifacts current:
-    INDEXER.md (worktree root signpost) +
-    crates/aeqi-indexer/ + test-contracts/ + docs/HANDOFF.md.
+  Phase 19-C3 (CHANGELOG) done. Five artifacts current at HEAD:
+    INDEXER.md + docs/HANDOFF.md + docs/CHANGELOG.md +
+    crates/aeqi-indexer/ + test-contracts/.
   Plus 2 sister-worktree commits in aeqi-core-deploy-fix.
 
   Remaining low-risk polish options if cron continues:
 
-  PATH C2 — sketch a production-deployment notes doc:
-    docs/DEPLOY.md outlining systemd unit + reverse-proxy snippet +
-    Prometheus metrics scaffolding ideas + WSS-upgrade path. ~15 min.
-    Useful for graduating to Base mainnet later but defers actual
-    implementation.
-
-  PATH C3 — write a small indexer changelog at docs/CHANGELOG.md:
-    Per-phase summary (Phase 0→18) extracted from the build log,
-    formatted as conventional changelog entries. ~10 min. Helps the
-    user navigate "what got built when" without scrolling 1500 lines
-    of build log.
-
-  PATH C4 — verify the live demo recipe by RUNNING it end-to-end one
-    more time (anvil up if needed, deploy fresh, create TRUST, query).
+  PATH C4 — rerun the live demo end-to-end one more time:
+    anvil up (if not already), deploy real aeqi-core via Deploy.s.sol,
+    boot indexer, create TRUST via CreateTrust.s.sol, query GraphQL.
     ~5 min. Catches any environmental drift since the last run.
+    Genuine smoke test of the HANDOFF "Live demo" recipe.
+
+  PATH C2 — sketch docs/DEPLOY.md:
+    systemd unit template + reverse-proxy snippet + Prometheus
+    metrics scaffolding + WSS-upgrade path notes. ~15 min. Useful
+    for graduating to Base mainnet but defers actual implementation.
 
   PATH D — apps/ui glue: interactive session.
   PATH E — production hardening proper: out of scope (multi-tick).
 
-  My read: PATH C3 next (changelog is a durable artifact compressing
-  the 1500-line build log into ~150 lines of phase summary), then
-  PATH C4 to confirm everything still runs end-to-end before genuine
-  termination. PATH C2 last if cron persists.
+  My read: PATH C4 next (smoke test surfaces drift before user wakes),
+  PATH C2 last if cron persists.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

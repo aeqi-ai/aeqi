@@ -19,7 +19,8 @@ test-contracts/         — 9 mock contracts emitting byte-identical signatures
                           to real aeqi-core for fast smoke tests
 docs/
   HANDOFF.md            — read this first
-  indexer-build-log.md  — full per-tick autonomous build log (~35 ticks)
+  CHANGELOG.md          — per-phase summary (Keep a Changelog lite)
+  indexer-build-log.md  — full per-tick autonomous build log (~37 ticks)
   indexer-loop-prompt.md — /loop heartbeat metaprompt
   aeqi-indexer-spec.md  — original architectural spec
   aeqi-graph-survey.md  — subgraph entity inventory (135 events catalogued)

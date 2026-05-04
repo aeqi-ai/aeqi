@@ -482,7 +482,8 @@ aeqi-indexer-build/
 │   ├── MockBudget.sol
 │   └── MockFund.sol
 └── docs/
-    ├── HANDOFF.md                 # this file
+    ├── HANDOFF.md                 # this file — pickup doc
+    ├── CHANGELOG.md               # phase summary (Keep a Changelog lite)
     ├── indexer-build-log.md       # full per-tick build log
     ├── indexer-loop-prompt.md     # /loop heartbeat metaprompt
     ├── aeqi-indexer-spec.md       # original architectural spec
