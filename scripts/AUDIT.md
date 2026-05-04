@@ -39,12 +39,12 @@ running production server.
 ### 1. Mint a JWT
 
 ```bash
-# Reads AEQI_WEB_SECRET from /etc/aeqi-platform/aeqi.env, mints a 24h
-# JWT for the named user, registers the jti in user_sessions so the
-# token survives a re-load. Edit USER_ID to the canonical UUID for the
-# user you're auditing as.
-USER_ID=bbbd909d-02ab-4ea6-9da2-98d10d4aeba8 \
-  node scripts/_mint-jwt.mjs > /tmp/aeqi-token
+# _mint-jwt.mjs requires two positional args: <user_id> <email>.
+# AEQI_WEB_SECRET comes from /etc/aeqi/secrets.env (not aeqi-platform/aeqi.env).
+USER_ID=bbbd909d-02ab-4ea6-9da2-98d10d4aeba8
+EMAIL=eqaq131@gmail.com
+SECRET=$(sudo -n cat /etc/aeqi/secrets.env | grep AEQI_WEB_SECRET | cut -d= -f2-)
+AEQI_WEB_SECRET="$SECRET" node scripts/_mint-jwt.mjs "$USER_ID" "$EMAIL" 7200 > /tmp/aeqi-token
 ```
 
 If you don't have `_mint-jwt.mjs`, the equivalent shell incantation:
@@ -153,3 +153,38 @@ The audit is a manual smoke. `/ship` does not run it — it would block
 deploys on flaky infra (rate limits, Cloudflare blips). Run the audit
 yourself when you've shipped something the audit specifically catches:
 contract changes at the network/socket boundary.
+
+## Writing new headless scripts (ux-rating, one-off crawls)
+
+`import { chromium } from "playwright"` fails in scripts outside the
+monorepo's node_modules resolution tree. Node resolves `playwright`
+from the directory the `.mjs` lives in, not from repo root. Two working
+approaches:
+
+**Option A — absolute import (simpler for one-off scripts):**
+```js
+// Global playwright install at version 1.59.1 as of 2026-05-04
+import { chromium } from "/home/claudedev/.npm/_npx/420ff84f11983ee5/node_modules/playwright/index.mjs";
+```
+
+**Option B — run from apps/ui where node_modules has playwright:**
+```bash
+cd /home/claudedev/aeqi/apps/ui && node ../../scripts/your-script.mjs
+```
+
+Check which version of playwright has a matching installed browser:
+```bash
+npx playwright --version                                  # global version
+ls ~/.cache/ms-playwright/                                # installed browser dirs
+```
+The browser dir suffix (e.g. `chromium_headless_shell-1217`) must match
+the playwright package's expected revision. Mismatches give
+`Executable doesn't exist at .../headless_shell`. The global npx cache
+at `~/.npm/_npx/420ff84f11983ee5/node_modules/playwright` (v1.59.1)
+matches `chromium_headless_shell-1217` as of 2026-05-04.
+
+**Auth pattern for new crawl scripts** — pass `AEQI_TOKEN` as env var
+(pre-minted with `scripts/_mint-jwt.mjs`) rather than minting inside
+the script. Minting inside requires `AEQI_WEB_SECRET` and a call to
+`_mint-jwt.mjs` via `execSync` — that works but adds a dependency.
+Simpler: `AEQI_TOKEN=$(cat /tmp/aeqi-token) node scripts/your-crawl.mjs`.
