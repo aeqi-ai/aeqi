@@ -40,9 +40,6 @@ import "@/styles/wizard.css";
  * collapsed showing the auto-filled summary; "Configure" header toggle
  * expands all at once. Panels only render when the blueprint has the
  * relevant module (Token / Vesting / Governance hidden for personal-os).
- *
- * Submit logic is deferred — the Create company CTA in Review stays
- * disabled until WS-1 (role encoder) + WS-9 (IPFS upload) land.
  */
 
 /** True when the blueprint is "personal-os" — stripped wizard variant. */
@@ -159,6 +156,8 @@ export default function CompanySetupPage() {
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // ── Wizard state ─────────────────────────────────────────────────
   const [identity, setIdentity] = useState<IdentityState>({
@@ -197,6 +196,9 @@ export default function CompanySetupPage() {
   }
 
   const allExpanded = expandedPanels.size >= (blueprint && hasOnchainModules(blueprint) ? 6 : 3);
+
+  /** Wizard is valid when company name is set. */
+  const isValid = identity.name.trim().length > 0;
 
   useEffect(() => {
     document.title = blueprint?.name ? `Set up ${blueprint.name} · aeqi` : "Set up · aeqi";
@@ -246,6 +248,22 @@ export default function CompanySetupPage() {
     };
   }, [slug, userId]);
 
+  async function handleCreate() {
+    if (!blueprint || !isValid) return;
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const resp = await api.startLaunch({
+        template: blueprint.slug,
+        display_name: identity.name.trim(),
+      });
+      navigate(`/${resp.entity_id}/overview`);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "Create failed. Try again.");
+      setSubmitting(false);
+    }
+  }
+
   if (loading && !blueprint) {
     return (
       <div className="wizard-page">
@@ -284,6 +302,8 @@ export default function CompanySetupPage() {
     governance: onchain ? governance : null,
   };
 
+  const ctaLabel = skipsStripe ? "Create company" : `Create company — $${FOUNDER_FEE} today`;
+
   return (
     <div className="wizard-page">
       {/* ── Page header ─────────────────────────────── */}
@@ -295,13 +315,17 @@ export default function CompanySetupPage() {
 
       {/* ── Top CTA row ─────────────────────────────── */}
       <div className="wizard-cta-row">
-        <Button
-          variant="primary"
-          disabled
-          title="WS-1 (role encoder) + WS-9 (IPFS) must land first"
-        >
-          {skipsStripe ? "Create company" : `Create company — $${FOUNDER_FEE} today`}
+        <Button variant="primary" disabled={!isValid || submitting} onClick={handleCreate}>
+          {submitting ? (
+            <>
+              <Spinner size="sm" />
+              Creating…
+            </>
+          ) : (
+            ctaLabel
+          )}
         </Button>
+        {submitError && <span className="wizard-submit-error">{submitError}</span>}
         <button
           type="button"
           className="wizard-configure-toggle"
@@ -362,8 +386,13 @@ export default function CompanySetupPage() {
 
         <WizardReviewPanel
           state={wizardState}
+          isValid={isValid}
+          blueprintSlug={blueprint.slug}
+          skipsStripe={skipsStripe}
+          founderFee={FOUNDER_FEE}
           expanded={expandedPanels.has("review")}
           onToggle={() => togglePanel("review")}
+          onSubmit={handleCreate}
         />
       </div>
 

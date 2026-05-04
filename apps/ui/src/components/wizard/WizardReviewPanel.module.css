@@ -43,7 +43,7 @@
 .calldataSection {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .calldataLabel {
@@ -55,26 +55,56 @@
   margin: 0;
 }
 
-.calldataNote {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin: 0 0 6px;
-  font-style: italic;
-}
-
-.calldataPre {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+.calldataTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   background: var(--color-card-muted);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
-  overflow-x: auto;
-  white-space: pre;
+  overflow: hidden;
+}
+
+.calldataHeadRow {
+  padding: 8px 12px 6px;
+}
+
+.calldataRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 12px;
+}
+
+.calldataRow:last-child {
+  padding-bottom: 8px;
+}
+
+.calldataField {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.calldataHeadRow .calldataField {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.calldataValue {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  text-align: right;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.calldataSize {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
   margin: 0;
-  max-height: 240px;
-  overflow-y: auto;
-  line-height: 1.5;
 }
 
 /* CTA */
@@ -89,5 +119,11 @@
 .ctaNote {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
+  margin: 0;
+}
+
+.submitError {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger, #c0392b);
   margin: 0;
 }

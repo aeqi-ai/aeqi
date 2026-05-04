@@ -63,6 +63,13 @@
   flex-wrap: wrap;
 }
 
+/* ── Submit error (inline in header CTA row) ─────── */
+
+.wizard-submit-error {
+  font-size: 13px;
+  color: var(--color-danger, #c0392b);
+}
+
 /* ── Configure toggle ────────────────────────────── */
 
 .wizard-configure-toggle {

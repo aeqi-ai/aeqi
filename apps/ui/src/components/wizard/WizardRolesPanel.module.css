@@ -86,6 +86,16 @@
   min-width: 0;
 }
 
+.inviteSentLabel {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .removeInvite {
   display: flex;
   align-items: center;

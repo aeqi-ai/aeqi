@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Blueprint } from "@/lib/types";
-import { Input, Select } from "@/components/ui";
+import { Button, Input, Select } from "@/components/ui";
 import { WizardPanel } from "./WizardPanel";
 import styles from "./WizardRolesPanel.module.css";
 
@@ -16,7 +16,9 @@ export interface RoleSeat {
 
 export interface InviteRow {
   email: string;
-  roleType: "director" | "advisor";
+  roleType: "director" | "advisor" | "worker";
+  /** True once the row has been submitted (sent invite stub). */
+  sent?: boolean;
 }
 
 interface WizardRolesPanelProps {
@@ -36,6 +38,7 @@ interface WizardRolesPanelProps {
 const ROLE_TYPE_OPTIONS = [
   { value: "director", label: "Director" },
   { value: "advisor", label: "Advisor" },
+  { value: "worker", label: "Worker" },
 ];
 
 /**
@@ -58,7 +61,10 @@ export function WizardRolesPanel({
 }: WizardRolesPanelProps) {
   const [hoveringAdd, setHoveringAdd] = useState(false);
 
-  const summary = `${seats.length} seat${seats.length !== 1 ? "s" : ""}`;
+  const sentCount = invites.filter((r) => r.sent).length;
+  const summary =
+    `${seats.length} seat${seats.length !== 1 ? "s" : ""}` +
+    (sentCount > 0 ? ` · ${sentCount} invite${sentCount !== 1 ? "s" : ""} queued` : "");
 
   function addInviteRow() {
     onInvitesChange([...invites, { email: "", roleType: "director" }]);
@@ -67,6 +73,12 @@ export function WizardRolesPanel({
   function updateInvite(idx: number, partial: Partial<InviteRow>) {
     const next = invites.map((row, i) => (i === idx ? { ...row, ...partial } : row));
     onInvitesChange(next);
+  }
+
+  function sendInvite(idx: number) {
+    const row = invites[idx];
+    if (!row || !row.email.trim()) return;
+    updateInvite(idx, { sent: true });
   }
 
   function removeInvite(idx: number) {
@@ -92,6 +104,7 @@ export function WizardRolesPanel({
               key={idx}
               invite={inv}
               onChange={(partial) => updateInvite(idx, partial)}
+              onSend={() => sendInvite(idx)}
               onRemove={() => removeInvite(idx)}
             />
           ))}
@@ -151,10 +164,36 @@ function SeatRow({ seat, userId: _userId, userName }: SeatRowProps) {
 interface InviteRowItemProps {
   invite: InviteRow;
   onChange: (partial: Partial<InviteRow>) => void;
+  onSend: () => void;
   onRemove: () => void;
 }
 
-function InviteRowItem({ invite, onChange, onRemove }: InviteRowItemProps) {
+function InviteRowItem({ invite, onChange, onSend, onRemove }: InviteRowItemProps) {
+  if (invite.sent) {
+    return (
+      <div className={styles.inviteRow}>
+        <div className={styles.inviteSentLabel}>
+          {invite.email} · {invite.roleType} — queued
+        </div>
+        <button
+          type="button"
+          className={styles.removeInvite}
+          onClick={onRemove}
+          aria-label="Remove invite"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path
+              d="M2 2L10 10M10 2L2 10"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.inviteRow}>
       <div className={styles.inviteFields}>
@@ -167,9 +206,12 @@ function InviteRowItem({ invite, onChange, onRemove }: InviteRowItemProps) {
         <Select
           options={ROLE_TYPE_OPTIONS}
           value={invite.roleType}
-          onChange={(v) => onChange({ roleType: v as "director" | "advisor" })}
+          onChange={(v) => onChange({ roleType: v as "director" | "advisor" | "worker" })}
           size="sm"
         />
+        <Button variant="secondary" size="sm" onClick={onSend} disabled={!invite.email.trim()}>
+          Add
+        </Button>
       </div>
       <button
         type="button"
