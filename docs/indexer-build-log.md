@@ -27,12 +27,16 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 23 (PHASE 10-A ✓ FACTORY TEMPLATEREPLACED + DEMO RUNBOOK)
-PHASE: 10-A ✓ ADMIN SURFACE | Factory_TemplateReplaced indexed via
-       templates table with replace_count semantics. HANDOFF.md gains
-       a 5-min reproducible end-to-end demo recipe. 26/26 tests green;
-       28 commits.
-       | next: more Factory admin events OR apps/ui glue OR more modules
+TICK: 24 (PHASE 10-B ✓ MULTI-SIG APPROVAL FLOW + trust_signers SCHEMA V2)
+PHASE: 10-B ✓ MULTI-SIG END-TO-END | Factory_TRUSTApprovedEvent dispatched;
+       trust_signers refactored to PK(trust_id, signer_address) with
+       trust_address as backfilled helper. SignerAdded events that fire
+       BEFORE TrustCreated (the multi-sig registration→approval flow)
+       now land correctly. CreateMultiSigTrust.s.sol exercises
+       2-of-2 deployer+cosigner flow against real Factory.
+       27/27 tests green; 30 commits.
+       | next: trusts schema v2 (same fix for cross-block Registered metadata)
+               OR apps/ui glue OR more modules
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -690,44 +694,116 @@ TICK 23 — PHASE 10-A FACTORY TEMPLATEREPLACED + DEMO RUNBOOK:
 
 26/26 tests green. 28 commits on indexer-build branch.
 
+TICK 24 — PHASE 10-B MULTI-SIG APPROVAL + SCHEMA V2:
+  Step 1: wired Factory_TRUSTApprovedEvent dispatch.
+    - mark_trust_signer_signed(trust_id, signer_address) UPDATEs
+      trust_signers.has_signed=true.
+    - SIGNATURE_HASH added to filter; dispatch arm decodes + dispatches.
+
+  Step 2: live-tested with new CreateMultiSigTrust.s.sol forge script.
+    Phase A (deployer broadcast): replaceTemplate + registerTRUST with
+      declaredSigners=[deployer, cosigner] → status=REGISTERED, no auto-create.
+    Phase B (cosigner broadcast, anvil account #1):
+      approveTRUST(trustId) → status=APPROVED + auto-create.
+    Real Anvil block sequence:
+      block 4464 (registration tx):
+        Factory_TRUSTRegisteredEvent
+        Factory_TRUSTSignerAdded × 2 (both signers)
+      block 4465 (approval tx):
+        Factory_TRUSTCreatedEvent
+        Factory_TRUSTApprovedEvent
+
+  BUG SURFACED: cross-block ordering — SignerAdded fires in block N
+    BEFORE TrustCreated in block N+1. v1 trust_signers schema PK was
+    (trust_address, signer_address); insert needed trust_address known,
+    so SignerAdded in block N was DROPPED with "unknown trust_id" warning.
+
+  FIX: migration 019_trust_signers_v2 — destructive-recreate
+    DROP TABLE trust_signers + recreate with:
+      PRIMARY KEY (trust_id, signer_address)  -- now keyed on trust_id
+      trust_address TEXT (NULLable)            -- backfilled later
+    insert_trust_signer no longer drops; inserts with NULL address if
+    trust isn't yet indexed. insert_trust_created backfills via:
+      UPDATE trust_signers SET trust_address = ?
+       WHERE trust_id = ? AND trust_address IS NULL
+    mark_trust_signer_signed UPDATEs by (trust_id, signer_address) —
+    no trust_address lookup needed.
+    get_trust_signers(trust_address) resolves trust_id via trusts table
+    then queries by trust_id.
+
+  RE-VERIFIED with v2 schema (fresh DB, same chain history):
+    Block 4464 + 4465 caught with ZERO warnings.
+    GraphQL trustSigners(trustAddress) returns BOTH signers:
+      [{ deployer,  hasSigned: true, addedBlock: 4464,
+         trustAddress: '0x8b5c44...' (backfilled) },
+       { cosigner,  hasSigned: true, addedBlock: 4464,
+         trustAddress: '0x8b5c44...' (backfilled) }]
+    cosigner.hasSigned correctly flipped by TRUSTApprovedEvent.
+
+  REMAINING LIMITATION (deferred — same root pattern):
+    Factory_TRUSTRegisteredEvent fires in block 4464 BEFORE TrustCreated
+    in 4465. update_trust_registered does an UPDATE keyed on trust_id;
+    if no row exists, it's a no-op. So template_id, ipfs_cid, signers_count,
+    value_configs_count remain NULL on the multi-sig TRUST.
+    Fix needs the same pattern: trusts schema v2 with trust_id as the
+    primary identity (not address), allowing INSERT-with-NULL-address
+    pre-Created. Requires more careful refactor since modules.trust_address
+    has FK on trusts.address — but that FK is already advisory (no enforced
+    cascade). ~30-min next-tick work.
+
+  Single-tx flows (single-signer Phase 8) STILL WORK PERFECTLY — both
+  the priority sort and the schema-v2 backfill are extra-safe layers
+  that don't regress the same-tx case.
+
+27/27 tests green. 30 commits on indexer-build branch.
++1 commit in aeqi-core-deploy-fix worktree (CreateMultiSigTrust.s.sol).
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 11 — wider Factory/admin coverage OR Vesting in template):
-  Phase 10-A done (Templates indexed; demo runbook in HANDOFF.md).
+NEXT ACTION (Phase 11 — trusts schema v2 OR pivot):
+  Phase 10-B (multi-sig signer attribution + TRUSTApprovedEvent) done.
 
-  PATH A' — finish Factory admin events (extends current tick's work):
-    Still un-wired in dispatch (sol! decls already present):
-      Factory_TRUSTApprovedEvent — per-signer approval audit; populates
-        trust_signers.has_signed for non-creator co-signers
-      Factory_FactoryConfigSet(beaconAddress) — informational; could
-        feed a system-config GraphQL query
-      Factory_PartnerProfileSet(ipfsCid) — partner-specific
-      AdminsAdded / AdminsRemoved — admin lifecycle
-    Most useful: TRUSTApprovedEvent (it's the multi-sig flow). Others
-    are informational. ~10-15 min for TRUSTApprovedEvent alone.
+  PATH A — trusts schema v2 (same fix as 10-B applied to trusts metadata):
+    Migration 020_trusts_v2 — destructive-recreate trusts:
+      PRIMARY KEY (trust_id)             -- trust_id is the identity
+      address TEXT (NULLable)            -- populated by TrustCreated
+      creator_address TEXT (NULLable)    -- populated by TrustCreated
+      template_id TEXT, ipfs_cid TEXT, signers_count INTEGER,
+        value_configs_count INTEGER     -- populated by Registered
+      created_block INTEGER (NULLable), created_tx TEXT (NULLable)
+    Refactor in store.rs:
+      insert_trust_created → UPSERT(trust_id) DO UPDATE SET address, creator,
+        created_block, created_tx
+      update_trust_registered → UPSERT(trust_id) DO UPDATE SET template, etc.
+        Either ordering works.
+    Refactor get_trust(address) → resolve address → trust_id → return row.
+    Refactor backfill in insert_trust_created: UPDATE trust_signers
+      SET trust_address = ? WHERE trust_id = ? (already in place from 10-B).
+    Modules table FK on trusts.address — advisory; safe to keep nullable.
+    ~30 min next tick.
 
-  PATH D — Vesting in demo template (real cap-table loop):
-    Update CreateTrust.s.sol to add vesting to the template's
-    moduleConfigs. Add getVestingConfig + getVestingTrustConfig to the
-    valueConfigs. After registerTRUST, the new TRUST will spawn a
-    real vesting module proxy that emits Vesting events (PositionCreated,
-    Activated, etc.) when exercised. The indexer already handles those.
-    But — CreateTrust would need to actually CALL the vesting module to
-    emit lifecycle events, which means understanding the vesting module's
-    public API. Non-trivial.
+    After this, multi-sig flows have FULL parity with single-sig: signers,
+    registration metadata, and modules all attribute correctly across
+    arbitrary block ranges.
 
-  PATH B — Funding/Budget/Foundation/Fund module ports (breadth):
-    ~30 min each with the locked Haiku-Explore + sol! + migration +
-    handlers + GraphQL pattern.
+  PATH B — apps/ui glue (real integration):
+    Cut worktree off ~/aeqi. Add VITE_INDEXER_URL. Pick Ownership tab.
+    Defer to interactive session for design preferences.
 
-  PATH C — apps/ui glue: defer to interactive session.
+  PATH C — Funding/Budget/Fund/Foundation modules (breadth):
+    Mechanical ports per the locked Haiku-Explore + sol!/migration/store/
+    dispatch/GraphQL recipe. ~30 min per module.
+
+  PATH D — wire remaining Factory admin events (informational):
+    Factory_FactoryConfigSet, AdminsAdded/Removed,
+    Factory_PartnerProfileSet. 10 min total. Low marginal value.
 
   LEVERAGE PRIORITY:
-    PATH A' (TRUSTApprovedEvent) — completes the multi-sig flow surface.
-    PATH B (one more module like Funding) — incremental breadth.
-    PATH D (vesting in template) — high value but research-heavy.
-    PATH C — interactive session.
+    PATH A — closes the v1 architecture cleanly; matches the 10-B schema fix.
+    PATH C — adds breadth.
+    PATH D — quick wins.
+    PATH B — interactive session.
 
-  My read: PATH A' next tick (~10 min), then evaluate remaining cron.
+  My read: PATH A next tick (~30 min), close the multi-sig story fully.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

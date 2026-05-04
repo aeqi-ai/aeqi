@@ -355,6 +355,7 @@ pub mod poll {
                         decode::Factory::Factory_TRUSTCreatedEvent::SIGNATURE_HASH,
                         decode::Factory::Factory_TRUSTRegisteredEvent::SIGNATURE_HASH,
                         decode::Factory::Factory_TRUSTSignerAdded::SIGNATURE_HASH,
+                        decode::Factory::Factory_TRUSTApprovedEvent::SIGNATURE_HASH,
                         decode::Factory::Factory_TemplateReplaced::SIGNATURE_HASH,
                         // TRUST events (per-trust)
                         decode::TRUST::TRUST_ModuleAdded::SIGNATURE_HASH,
@@ -502,6 +503,27 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Factory_TemplateReplaced failed at block {} tx {}: {}",
+                                    block_num, tx_hash, e
+                                ),
+                            }
+                        } else if topic0
+                            == Some(decode::Factory::Factory_TRUSTApprovedEvent::SIGNATURE_HASH)
+                        {
+                            match decode::Factory::Factory_TRUSTApprovedEvent::decode_log(&log.inner) {
+                                Ok(ev) => {
+                                    let conn = db.lock().await;
+                                    store::mark_trust_signer_signed(
+                                        &conn,
+                                        &format!("{:#x}", ev.trustId),
+                                        &format!("{:#x}", ev.signerAddress),
+                                    )?;
+                                    tracing::info!(
+                                        "indexed Factory_TRUSTApprovedEvent: trust_id={:#x} signer={:#x} approvedFlag={} block={}",
+                                        ev.trustId, ev.signerAddress, ev.isTRUSTApproved, block_num
+                                    );
+                                }
+                                Err(e) => tracing::warn!(
+                                    "decode Factory_TRUSTApprovedEvent failed at block {} tx {}: {}",
                                     block_num, tx_hash, e
                                 ),
                             }

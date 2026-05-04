@@ -342,9 +342,12 @@ impl From<store::ModuleRow> for Module {
 }
 
 /// GraphQL projection of a signer authorization row.
+/// trust_address is Option because schema v2 allows signer rows to land
+/// before the corresponding TrustCreated event (multi-sig registration flow).
 #[derive(SimpleObject, Clone)]
 pub struct Signer {
-    pub trust_address: String,
+    pub trust_id: String,
+    pub trust_address: Option<String>,
     pub signer_address: String,
     pub address_key: String,
     pub has_signed: bool,
@@ -355,6 +358,7 @@ pub struct Signer {
 impl From<store::SignerRow> for Signer {
     fn from(r: store::SignerRow) -> Self {
         Signer {
+            trust_id: r.trust_id,
             trust_address: r.trust_address,
             signer_address: r.signer_address,
             address_key: r.address_key,

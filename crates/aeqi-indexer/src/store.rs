@@ -401,6 +401,43 @@ const MIGRATIONS: &[(&str, &str)] = &[
         );
         "#,
     ),
+    (
+        "019_trust_signers_v2",
+        r#"
+        -- Multi-sig flow surfaces a cross-block ordering bug: registerTRUST
+        -- emits SignerAdded events in tx N; the auto-create only runs in tx
+        -- N+M after the last signer calls approveTRUST. So SignerAdded fires
+        -- BEFORE TrustCreated by an arbitrary number of blocks.
+        --
+        -- v1 trust_signers PK was (trust_address, signer_address) — required
+        -- trust_address known at signer-insert time, which dropped pre-create
+        -- signer events.
+        --
+        -- v2 keys on (trust_id, signer_address). trust_address is a denormalized
+        -- helper column populated when TrustCreated lands (insert_trust_created
+        -- backfills WHERE trust_id = …). Allows signer events to land before
+        -- the trust exists.
+        --
+        -- This migration is destructive — drops the v1 table. Acceptable for
+        -- v1 indexer DBs (always rebuilt against fresh chain); production
+        -- migrations would need a backfill SELECT.
+        DROP TABLE IF EXISTS trust_signers;
+        CREATE TABLE trust_signers (
+            trust_id TEXT NOT NULL,
+            signer_address TEXT NOT NULL,
+            trust_address TEXT,
+            address_key TEXT NOT NULL,
+            has_signed INTEGER NOT NULL DEFAULT 0,
+            added_block INTEGER NOT NULL,
+            added_tx TEXT NOT NULL,
+            PRIMARY KEY (trust_id, signer_address)
+        );
+        CREATE INDEX IF NOT EXISTS idx_trust_signers_trust_address
+          ON trust_signers(trust_address);
+        CREATE INDEX IF NOT EXISTS idx_trust_signers_signer
+          ON trust_signers(signer_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -481,6 +518,16 @@ pub fn insert_trust_created(
         params![trust_address, block_number as i64],
     )?;
 
+    // Backfill any signer rows that landed before this Created event
+    // (the multi-sig flow case — signers register in tx N, trust auto-creates
+    // in tx N+M after final approveTRUST). Schema v2 has trust_signers keyed
+    // by trust_id with trust_address NULLable; backfill resolves the address.
+    tx.execute(
+        "UPDATE trust_signers SET trust_address = ?1
+         WHERE trust_id = ?2 AND trust_address IS NULL",
+        params![trust_address, trust_id],
+    )?;
+
     tx.commit()?;
     Ok(())
 }
@@ -513,9 +560,10 @@ pub fn update_trust_registered(
     Ok(())
 }
 
-/// Insert a signer authorization for a TRUST.
-/// Resolves trust_address from trust_id; no-op if the trust isn't yet known
-/// (the corresponding TrustCreated event must already be indexed).
+/// Insert a signer authorization for a TRUST. Schema v2 keys on trust_id;
+/// trust_address is opportunistically backfilled if the TRUST is already
+/// indexed, otherwise NULL (resolved later by insert_trust_created).
+/// Idempotent on (trust_id, signer_address).
 pub fn insert_trust_signer(
     conn: &Connection,
     trust_id: &str,
@@ -532,13 +580,6 @@ pub fn insert_trust_signer(
             |r| r.get(0),
         )
         .ok();
-    let Some(trust_address) = trust_address else {
-        tracing::warn!(
-            "TRUSTSignerAdded for unknown trust_id {} — skipping (TrustCreated not yet indexed)",
-            trust_id
-        );
-        return Ok(());
-    };
 
     let tx = conn.unchecked_transaction()?;
     tx.execute(
@@ -547,11 +588,12 @@ pub fn insert_trust_signer(
     )?;
     tx.execute(
         "INSERT OR REPLACE INTO trust_signers
-            (trust_address, signer_address, address_key, has_signed, added_block, added_tx)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (trust_id, signer_address, trust_address, address_key, has_signed, added_block, added_tx)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
-            trust_address,
+            trust_id,
             signer_address,
+            trust_address,
             address_key,
             has_signed as i64,
             block_number as i64,
@@ -562,9 +604,35 @@ pub fn insert_trust_signer(
     Ok(())
 }
 
+/// Mark a signer as having signed (approved) a TRUST. Schema v2: keys on
+/// (trust_id, signer_address) so this works even when the TRUST hasn't
+/// auto-created yet. Driven by Factory_TRUSTApprovedEvent.
+pub fn mark_trust_signer_signed(
+    conn: &Connection,
+    trust_id: &str,
+    signer_address: &str,
+) -> Result<()> {
+    let n = conn.execute(
+        "UPDATE trust_signers SET has_signed = 1
+         WHERE trust_id = ?1 AND signer_address = ?2",
+        params![trust_id, signer_address],
+    )?;
+    if n == 0 {
+        tracing::warn!(
+            "TRUSTApproved for unknown signer pair: trust_id={} signer={} (SignerAdded not yet indexed?)",
+            trust_id, signer_address
+        );
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct SignerRow {
-    pub trust_address: String,
+    pub trust_id: String,
+    /// NULL until TrustCreated lands and backfills the address. Caller can
+    /// treat empty string as "not yet known" or use a separate Option type
+    /// in the GraphQL projection.
+    pub trust_address: Option<String>,
     pub signer_address: String,
     pub address_key: String,
     pub has_signed: bool,
@@ -572,22 +640,35 @@ pub struct SignerRow {
     pub added_tx: String,
 }
 
-/// Fetch all signers authorized on a TRUST.
+/// Fetch all signers for a given TRUST address. Resolves trust_address →
+/// trust_id via the trusts table, then returns matching signers. Empty if
+/// the trust isn't yet indexed OR has no signers.
 pub fn get_trust_signers(conn: &Connection, trust_address: &str) -> Result<Vec<SignerRow>> {
+    let trust_id: Option<String> = conn
+        .query_row(
+            "SELECT trust_id FROM trusts WHERE address = ?1",
+            params![trust_address],
+            |r| r.get(0),
+        )
+        .ok();
+    let Some(trust_id) = trust_id else {
+        return Ok(Vec::new());
+    };
     let mut stmt = conn.prepare(
-        "SELECT trust_address, signer_address, address_key, has_signed, added_block, added_tx
-         FROM trust_signers WHERE trust_address = ?1
+        "SELECT trust_id, trust_address, signer_address, address_key, has_signed, added_block, added_tx
+         FROM trust_signers WHERE trust_id = ?1
          ORDER BY added_block ASC",
     )?;
     let rows = stmt
-        .query_map(params![trust_address], |r| {
+        .query_map(params![trust_id], |r| {
             Ok(SignerRow {
-                trust_address: r.get(0)?,
-                signer_address: r.get(1)?,
-                address_key: r.get(2)?,
-                has_signed: r.get::<_, i64>(3)? != 0,
-                added_block: r.get::<_, i64>(4)? as u64,
-                added_tx: r.get(5)?,
+                trust_id: r.get(0)?,
+                trust_address: r.get(1)?,
+                signer_address: r.get(2)?,
+                address_key: r.get(3)?,
+                has_signed: r.get::<_, i64>(4)? != 0,
+                added_block: r.get::<_, i64>(5)? as u64,
+                added_tx: r.get(6)?,
             })
         })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1704,21 +1785,66 @@ mod tests {
     }
 
     #[test]
-    fn insert_trust_signer_for_unknown_trust_skips_silently() {
+    fn mark_trust_signer_signed_flips_has_signed() {
         let dir = tempdir().unwrap();
         let conn = open(dir.path().join("test.db")).expect("open");
 
-        let unknown_trust_id =
-            "0x0000000000000000000000000000000000000000000000000000000000000099";
+        let trust_addr = "0x9131b1DEC7d1fE791C599E9D0b94D6414cae0747";
+        let trust_id = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        let creator = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        let cosigner = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
+        let address_key = "0x000000000000000000000000a0ee7a142d267c1f36714e4a8f75612f20a79720";
+
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xtx0").unwrap();
+        // Co-signer added with has_signed=false initially
+        insert_trust_signer(&conn, trust_id, address_key, cosigner, false, 43, "0xtx1").unwrap();
+
+        let signers = get_trust_signers(&conn, trust_addr).unwrap();
+        assert!(!signers[0].has_signed);
+
+        mark_trust_signer_signed(&conn, trust_id, cosigner).unwrap();
+        let signers = get_trust_signers(&conn, trust_addr).unwrap();
+        assert!(signers[0].has_signed, "approval should flip has_signed to true");
+
+        // Idempotent re-mark is a no-op (UPDATE matches but value already true)
+        mark_trust_signer_signed(&conn, trust_id, cosigner).unwrap();
+    }
+
+    #[test]
+    fn insert_trust_signer_before_create_then_backfill() {
+        // Multi-sig flow: SignerAdded fires before TrustCreated.
+        // Schema v2: signer rows insert with trust_address=NULL, then
+        // insert_trust_created backfills the address.
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let trust_addr = "0x9131b1DEC7d1fE791C599E9D0b94D6414cae0747";
+        let trust_id = "0x0000000000000000000000000000000000000000000000000000000000000099";
         let signer = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
 
-        insert_trust_signer(&conn, unknown_trust_id, "0xkey", signer, true, 43, "0xtx")
-            .expect("should not error");
-
-        let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM trust_signers", [], |r| r.get(0))
+        // Phase 1: SignerAdded arrives before any TrustCreated.
+        insert_trust_signer(&conn, trust_id, "0xkey", signer, true, 43, "0xtx").unwrap();
+        let stored_addr: Option<String> = conn
+            .query_row(
+                "SELECT trust_address FROM trust_signers WHERE trust_id = ?1",
+                params![trust_id],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(n, 0);
+        assert!(stored_addr.is_none(), "trust_address should be NULL pre-create");
+
+        // get_trust_signers(addr) returns nothing because the trust isn't indexed yet
+        let signers = get_trust_signers(&conn, trust_addr).unwrap();
+        assert!(signers.is_empty());
+
+        // Phase 2: TrustCreated lands later — backfill kicks in.
+        insert_trust_created(&conn, trust_addr, trust_id, signer, 50, "0xtx2").unwrap();
+
+        let signers = get_trust_signers(&conn, trust_addr).unwrap();
+        assert_eq!(signers.len(), 1, "signer should now be visible");
+        assert_eq!(signers[0].signer_address, signer);
+        assert_eq!(signers[0].trust_address.as_deref(), Some(trust_addr));
+        assert!(signers[0].has_signed);
     }
 
     #[test]
