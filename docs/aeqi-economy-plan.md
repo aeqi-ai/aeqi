@@ -6,6 +6,10 @@
 - [`wallet-architecture.md`](./wallet-architecture.md) — the underlying smart-account primitive
 - [`wallet-architecture-faq.md`](./wallet-architecture-faq.md) — Q&A on the wallet stack
 - [`app-information-architecture.md`](./app-information-architecture.md) — URL structure and IA
+- [`aeqi-inference-design.md`](./aeqi-inference-design.md) — OpenAI-compatible API endpoint (WS-5)
+- [`x402-rails-design.md`](./x402-rails-design.md) — per-call payment rail for agents (WS-7)
+- [`monorepo-consolidation-procedure.md`](./monorepo-consolidation-procedure.md) — aeqi-core → aeqi/contracts/ merge (WS-8)
+- [`aeqi-entity-aa-design.md`](./aeqi-entity-aa-design.md) — AA stack (WS-4)
 
 This doc consolidates the click→DAO milestone, the inference business, the payment rails (Stripe / USDC / x402), and the unit economics into one plan. It supersedes the scattered notes across `server.rs` comments and earlier session memos.
 
@@ -116,31 +120,49 @@ The recursive case is the wedge: an agent inside Company A earns USDC, decides t
 | **WS-1** | dao_provisioner.rs | Port `encodeRoleDaoConfig` from old aeqi-app TS to alloy `sol!` types. Update `provision_dao` to accept populated `RoleRequest[]` + `RoleTypeConfig[]`. | ~1 day | — |
 | **WS-2** | apps/ui /start/<slug> | Pre-creation wizard (Identity → Roles → Token → Vesting → Governance → Review). Co-director invite seat-reserve flow. Personal-OS stripped variant. | ~3-4 days | WS-3 mock data |
 | **WS-3** | aeqi-platform env + aeqi-core scripts | Anvil-fork-of-Base + Deploy.s.sol + RegisterBlueprints.s.sol + indexer pointed at it + AEQI_CHAIN_*_FACTORY + VITE_INDEXER_URL set. | ~1 day | — |
-| **WS-4** | Entity contract evolution | IAccount + P-256 passkey verifier + EOA verifier + session-key module + recovery module + paymaster contract + bundler (silius) + paymaster signing service. Audit Wk 4. | ~6 weeks | wallet brief |
+| **WS-4a** | Entity contract — stubs + tests | IAccount + P-256 passkey verifier + EOA verifier + session-key module + recovery module + paymaster contract stubs. | ~1 week | — |
+| **WS-4b** | Silius bundler ops | Deploy + configure self-hosted silius instance on platform host. Integration with aeqi-platform as a tower layer. | ~1 week | — |
+| **WS-4c** | Paymaster signing service | Rust microservice for ERC-4337 paymaster transaction signing. Integrates with Entity contract's paymaster module. | ~1 week | — |
+| **WS-4d** | Contract → Passkey migration | Scripts to migrate existing custodial signers to passkey-based. Integration testing across contracts + bundler + paymaster. | ~1 week | WS-4a+4b+4c in progress |
+| **WS-4** (parallel) | **Audit** | Wk 3 of parallel build (not Wk 4). All four arms feed into audit prep. | Wk 3 audit, Wk 4-5 review. | WS-4a+4b+4c done |
 | **WS-5** | aeqi-inference | **Phase 1** (~3-4 weeks): subscription lane + x402 external lane. OpenAI-compat router. Stripe top-ups. **Phase 2** (after WS-4): treasury lane with on-chain settlement. **Phase 3** (optional, +6-8 weeks): self-hosted GPU pool. | Phase 1 standalone | — for Phase 1 |
 | **WS-6** | USDC subscription rail | **Phase A** (~3-5 days): SIWE users only; ERC-20 approve + monthly cron pull from external EOA. **Phase B** (after WS-4): all users via passkey-Entity; default rail for new signups. $45 USDC vs $49 card. | Phase A 3-5 days | — for Phase A |
 | **WS-7** | x402 rails | `/v1/*` (inference) + `POST /api/companies/create`. x402 middleware as Tower layer. Coinbase facilitator integration (Phase 1) + self-hosted facilitator option (Phase 2). | ~1-2 weeks for the company-creation endpoint; inference x402 alongside WS-5 Phase 1 | — |
+| **WS-8** | Monorepo consolidation | aeqi-core → aeqi/contracts/ via `git subtree add --squash`. ABI generation gate. Path updates in dao_provisioner + indexer. Gated on bridge verification end-to-end. | ~3-5 days execution | WS-1+WS-2+WS-3 verified |
+| **WS-9** | IPFS + dao_provisioner integration | Self-hosted kubo daemon (`aeqi-ipfs.service`). Rust crate (`aeqi-ipfs`) with pin/fetch/health. Integration: `dao_provisioner` calls `IpfsClient::pin()` for operating agreements + role descriptions; CID into `TRUSTConfigRequest`. Real CIDs at company creation. | ~1 day (daemon + crate live 2026-05-04; integration in-flight) | kubo + aeqi-ipfs crate shipped |
 
 ---
 
 ## Sequencing
 
-**Tonight:** WS-3 (Anvil bring-up + deploy + register + indexer).
+**Tonight (2026-05-04 20:45–23:45Z) — Wave 1-3:**
+- WS-3 shipped ✓ (Anvil fork-of-Base live, deploy + register + indexer wired, bridge enabled)
+- WS-1 shipped ✓ (dao_provisioner encoder port, commit 7fdeb3c, deploy in progress)
+- WS-2 scaffolding shipped ✓ (wizard Identity → Roles → Token → Vesting → Governance → Review, personal-OS variant, deployed)
+- WS-5 & WS-7 docs shipped ✓ (aeqi-inference-design.md, x402-rails-design.md)
+- WS-9 daemon live ✓ (kubo v0.32.1 on 127.0.0.1:5001 + 127.0.0.1:8085, aeqi-ipfs Rust crate shipped 648c5d0e, integration in-flight Wave 2F)
+- WS-8 procedure shipped ✓ (monorepo-consolidation-procedure.md, scheduled post-bridge-verification)
+- aeqi-landing pricing.ts mirror shipped ✓ (0e5c795, FAQ updated)
 
-**This week (parallel tracks):**
-- WS-1 (Rust encoder port)
-- WS-2 (UI wizard)
-- WS-7 Phase 1 lead surface (`POST /api/companies/create` x402 endpoint — fastest demonstrable wedge, ships before everything else)
+**Tomorrow & next week (parallel tracks):**
+- WS-2 follow-ups (wizard submission logic, role-row hover-+ for invites, Review panel calldata preview)
+- WS-1 call-site wiring (already landed in 7fdeb3c; ready for production)
+- WS-9 integration (Wave 2F: dao_provisioner + aeqi-ipfs + dao_provisioner call-site wiring)
+- WS-4a contracts (Week 1: IAccount + verifiers + modules stubs, failing tests)
+- WS-6 Phase A (SIWE users + ERC-20 approve + monthly cron pull)
+- WS-7 Phase 1 lead surface (`POST /api/companies/create` x402 endpoint — fastest wedge, ships before inference)
 
-**Next 2-3 weeks:**
+**2-3 weeks:**
 - WS-7 Phase 1 ships ("pay $19 in USDC, get a company" demo public)
 - WS-5 Phase 1 ships (inference API live, subscription + x402 lanes)
-- WS-6 Phase A ships (SIWE users can subscribe in USDC)
+- WS-6 Phase A deploys (SIWE users can subscribe in USDC)
+- WS-8 executes (monorepo consolidation, gated on bridge end-to-end verification)
 
-**6 weeks:**
-- WS-4 wallet build complete (audit Wk 4 in flight, contract live Wk 6)
-- WS-5 Phase 2 unlocks (treasury inference billing)
-- WS-6 Phase B unlocks (all users on USDC subscription as default; Stripe falls back to fallback rail)
+**3.5–6 weeks:**
+- WS-4a+4b+4c run in parallel (Week 1-2 parallel build, Wk 3 audit, Wk 4-5 audit review)
+- WS-4d contracts ship (passkey migration, integration testing)
+- WS-5 Phase 2 unlocks (treasury inference billing via on-chain settlement)
+- WS-6 Phase B unlocks (all users on USDC subscription as default; Stripe fallback)
 
 **Defer:**
 - WS-5 Phase 3 (self-hosted GPU pool) — only do once volume warrants, likely Q4.
@@ -206,27 +228,68 @@ Healthy at average; positive even at heavy. Idle Companies subsidize heavy ones 
 
 **In repo today:**
 - aeqi-core: Factory + Beacon + 8 modules + Deploy.s.sol + RegisterBlueprints.s.sol (5 templates) + CreateTrust scripts. Compiles, 291/292 tests pass.
-- aeqi-platform: `dao_provisioner.rs` with empty role arrays; chain bridge gated on `AEQI_CHAIN_ANVIL_FACTORY` (currently unset).
-- aeqi (apps/ui): `lib/indexer.ts` GraphQL client gated on `VITE_INDEXER_URL` (currently unset). Treasury / Ownership / Governance tabs render "bridge not configured" today.
-- aeqi-indexer: feature-complete, 33/33 tests pass, 10 contract types covered, not yet deployed as a service.
-- pricing.ts: $19 → $49 / mo with `tokens: "16M"` (to be replaced with `inferenceUsd: "$25"` in this PR).
+- aeqi-platform: `dao_provisioner.rs` with encoder port ✓ (WS-1, commit 7fdeb3c); chain bridge enabled on `AEQI_CHAIN_ANVIL_FACTORY` + `AEQI_CHAIN_ANVIL_RPC` + `AEQI_CHAIN_ANVIL_INDEXER_URL` (all set as of 2026-05-04 21:00Z).
+- aeqi (apps/ui): `/start/<slug>` wizard scaffolding ✓ (WS-2, commit c6225eca); `lib/indexer.ts` wired to `VITE_INDEXER_URL` (live); Treasury / Ownership / Governance tabs render bridge data.
+- aeqi-indexer: feature-complete, 33/33 tests pass, 10 contract types covered, service deployed at 127.0.0.1:8500/graphql.
+- aeqi-ipfs crate ✓ (WS-9, commit 648c5d0e). Kubo daemon live as `aeqi-ipfs.service` on 127.0.0.1:5001 (API) + 127.0.0.1:8085 (gateway). Smoke test green.
+- pricing.ts: $19 → $49 / mo with `inferenceUsd: "$25"` ✓ (commit 0e5c795, aeqi-landing mirror synced).
 
 **This plan adds:**
-- WS-1..7 as listed above.
-- `aeqi-inference` crate (new).
-- x402 middleware as Tower layer in aeqi-platform.
-- USDC subscription module on the platform Entity contract.
-- `pricing.ts` switch from token-denominated to dollar-denominated; new `COMPANY_MONTHLY_USDC = 45` constant.
+- WS-1..9 as listed above (WS-1, 2, 3, 5, 7, 8, 9 docs + architecture shipped; WS-4a–d workstream specs added tonight; WS-6 Phase A queued).
+- `aeqi-inference` crate Phase 1 (subscription + x402 lanes, OpenAI-compat router, Stripe top-ups).
+- x402 middleware as Tower layer in aeqi-platform (`/v1/*` + `POST /api/companies/create`).
+- USDC subscription module on the platform Entity contract (Phase B, after WS-4).
 - Marketing surfaces: "Pay $19 in USDC, get a company"; "Inference API for the agent economy"; aeqi-landing pages for the inference + company-creation endpoints.
+- WS-8 monorepo consolidation (aeqi-core → aeqi/contracts/, gated on bridge verification).
 
 ---
 
 ## Open questions deferred
 
+- **IPFS Phase 2 replication** — self-hosted kubo is v1. Phase 2 (after bridge stabilizes) may replicate to Pinata / Filebase / w3.storage as belt-and-suspenders redundancy. Not required for v1; defer.
 - **Recurring treasury auto-funding** — UX nicety where a user sets up a Stripe-recurring → USDC-into-treasury auto-top-up. Phase 2 of WS-5 alongside treasury-lane inference. Not blocking.
-- **Self-hosted facilitator vs Coinbase's** for x402 — start with Coinbase's; self-host if/when their policy or pricing becomes a constraint. Trivial swap (open spec).
+- **Self-hosted x402 facilitator** — start with Coinbase's `api.x402.org`; self-host if/when their policy or pricing becomes a constraint. Trivial swap (open spec). Spec lives at x402.org.
 - **Solana port** — pending Colosseum hackathon date. EVM-Base remains canonical. Cross-chain agent-spawning unlocks once port lands.
 - **Per-tenant inference VPS vs shared inference fleet** — Phase 1 routes through shared upstream APIs from a shared aeqi-platform instance. If Phase 3 self-hosted GPU pool lands, may want per-tenant isolation for high-compliance customers; defer.
+
+---
+
+## Decisions locked tonight (2026-05-04)
+
+**IPFS foundation:**
+- Keep IPFS as foundational infrastructure (reversed earlier proposal to drop it).
+- Self-hosted kubo daemon (`aeqi-ipfs.service`) on platform host, no SaaS dependencies (Pinata/Web3.Storage).
+- Real CIDs at company creation: operating agreements + role descriptions pinned to kubo, CID into `registerTRUST`.
+- Kubo daemon live as of 21:00Z UTC 2026-05-04. aeqi-ipfs Rust crate shipped (648c5d0e). Integration in-flight (Wave 2F).
+
+**Inference pricing:**
+- $25 dollar-denominated credit per month (not token-denominated). Users see exact model + token count → exact dollars.
+- Subscription included: -10% margin (loss-leader, funded by subscription revenue).
+- Top-ups beyond included: cost + 5% (card) or cost + 10% (treasury).
+- External x402 lane: cost + 20%.
+
+**Subscription pricing (locked):**
+- First month per Company: $19 (card) or $19 (USDC).
+- Steady-state: $49/mo (card) or $45/mo (USDC).
+- USDC discount is Stripe fee pass-through (~8%), drives crypto-rail adoption.
+- Card on file is the survival floor; treasury debit is Phase 3 niche only.
+
+**Entity contract stack (AA-first):**
+- TRUST = AEQI Entity = Safe alternative (one smart contract, three configurations: Personal Company, Joint Company, Agent).
+- Architecture: Pattern 3 (passkey-native ERC-4337) primary, Pattern 4 (SIWE) secondary. No third-party SaaS wallets.
+- Passkey verifier + EOA verifier + session-key module (agent delegation) + recovery module (7-day timelock, no custody) + paymaster (self-hosted silius + ERC-4337).
+- Accelerated timeline: WS-4a/4b/4c run in parallel (Weeks 1-2), audit in Week 3 (not Week 4). Contract live Wk 5-6.
+
+**x402 programmatic company genesis:**
+- `POST /api/companies/create` returns 402 for $19 USDC payment.
+- Caller (agent or human) provides blueprint slug + name + owner address + EIP-3009 signature.
+- Server settles via x402 facilitator (Coinbase's public API in Phase 1), fires `registerTRUST` atomically, provisions runtime.
+- Returns Company address + URL. Recursive case: agent inside Company A earns, spawns Company B as subsidiary, one HTTP call.
+- Branded as "pay $19 in USDC, get a company" — the wedge nobody else can offer.
+
+**Hermes lesson internalized:**
+- Never build models. Ride free model commoditization forever. Monetize the API endpoint + routing layer + billing layer.
+- Inference API is the business, not fine-tuned models.
 
 ---
 
