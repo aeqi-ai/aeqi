@@ -27,14 +27,14 @@ Every tick I move ONE link forward. I don't try to ship the whole chain at once.
 ## Current state (UPDATED EVERY TICK)
 
 ```
-TICK: 21 (PHASE 8 ✓ REAL CONTRACTS LOOP CLOSED — INDEXER ↔ AEQI-CORE END-TO-END)
-PHASE: 8 ✓ FULL VALIDATION | CreateTrust.s.sol → real Factory →
-       indexer catches Created+Registered+SignerAdded → GraphQL returns
-       enriched TRUST (template, ipfsCid, signers, configs, signer addr).
-       Discovered + fixed intra-block ordering bug (Created must run before
-       Registered/SignerAdded). 25/25 tests green; 26 commits.
-       | next: intra-block subscription lag (TRUST_ModuleAdded from same
-               tx as TrustCreated) OR apps/ui glue OR Funding/Budget modules
+TICK: 22 (PHASE 9 ✓ INTRA-BLOCK SUBSCRIPTION LAG CLOSED — CASCADE WORKS)
+PHASE: 9 ✓ ARCHITECTURE COMPLETE | Real registerTRUST tx now indexed
+       fully in one block: TrustCreated + Registered + SignerAdded
+       + 3 TRUST_ModuleAdded events all caught. Per-block dispatch loops
+       with delta-fetch on newly-watched addresses.
+       25/25 tests green; 27 commits.
+       | next: apps/ui glue OR Funding/Budget modules OR Vesting wired
+               into the demo template
 LAST ACTION (TICK 7+8):
   TICK 7 — wrote crates/aeqi-indexer/src/api.rs (async-graphql Schema + axum router):
     - Trust GraphQL type with all fields from store::TrustRow
@@ -622,51 +622,94 @@ TICK 21 — PHASE 8 REAL-CONTRACTS LOOP CLOSED:
 25/25 tests green. 26 commits on indexer-build branch.
 1 commit in aeqi-core-deploy-fix worktree (CreateTrust.s.sol added).
 
+TICK 22 — PHASE 9 INTRA-BLOCK SUBSCRIPTION LAG CLOSED:
+  Refactor in chain::poll::run: per-block dispatch is now a loop, not a
+  single fetch. Each iteration:
+    1. Snapshot watched_addresses (re-read from DB)
+    2. Compute delta = current_watched - already_fetched_for_block
+    3. If delta empty: break (the block is done)
+    4. Otherwise: fetch logs filtered to delta addresses + topic0 set,
+       priority-sort, dispatch
+  fetched_for_block: HashSet<Address> resets each block.
+
+  This means handlers that REGISTER NEW WATCHED ADDRESSES (insert_trust_created
+  → trust, insert_module → module) are seen by the next iteration of the
+  same block. Loop terminates when no new addresses pop up. Bounded by
+  gas (a tx can only spawn finitely many contracts).
+
+  LIVE-VERIFIED end-to-end:
+    block 4061: 2nd CreateTrust.s.sol run
+    Indexer log shows ALL events from one tx, in one block:
+      Factory_TRUSTCreatedEvent (trust=0x9776413b...)
+      Factory_TRUSTRegisteredEvent
+      Factory_TRUSTSignerAdded
+      TRUST_ModuleAdded (factory module @ keccak256('trust.factory'))
+      TRUST_ModuleAdded (role module proxy @ keccak256('role'))
+      TRUST_ModuleAdded (token module proxy @ keccak256('token'))
+    GraphQL trust(address) returns the TRUST + 3 modules attached,
+    all with attachedBlock=4061.
+
+  THIS WAS THE LAST ARCHITECTURAL GAP. The indexer is now correct
+  against arbitrary multi-level contract creation cascades within one
+  tx. Tested against actual aeqi-core flow (registerTRUST auto-creates
+  TRUST proxy which initializes 2-3 module proxies — all 4-5 contracts
+  appear in one block).
+
+  Implementation note: the priority-sort within a single fetch's logs
+  (TICK 21) is still in place for ordering Created → Registered → other
+  within a single dispatch. The new outer loop handles delta-discovery
+  ACROSS dispatches. The two work together: each iteration pulls a
+  delta, sorts within it, dispatches, then the loop checks for new
+  addresses to fetch.
+
+25/25 tests green. 27 commits on indexer-build branch.
+
 PIVOT (locked TICK 5): Build indexer against ABIs first; live deploy is separate problem.
-NEXT ACTION (Phase 9 — fix intra-block subscription lag OR pivot):
-  Phase 8 (real-contracts loop) is DONE. The indexer is validated end-to-end
-  against actual aeqi-core. One remaining limitation surfaced in real flows:
+NEXT ACTION (Phase 10 — quick-wins or pivot to UI integration):
+  Phase 9 (intra-block dispatch) is DONE. The indexer is now
+  ARCHITECTURALLY COMPLETE — no known correctness gaps. Same-tx
+  multi-level cascades are caught. Real contracts validated.
 
-  PATH A — fix intra-block subscription lag (the multi-level cascade):
-    Problem: When real registerTRUST auto-creates a TRUST AND the TRUST
-    constructor in the SAME tx initializes its modules (which emit
-    TRUST_ModuleAdded), my dispatch loop misses those module events.
-    Reason: watched_addresses is read once at the top of each block-fetch
-    iteration. The newly-created TRUST address isn't watched until the
-    next block.
+  PATH A — wire missing Factory event handlers (quick wins):
+    sol! decls already present, just need dispatch arms + tables:
+      Factory_FactoryConfigSet(beaconAddress) — track factory→beacon link
+      Factory_TRUSTApprovedEvent — multi-signer approval flow events
+      Factory_TemplateReplaced(templateId) — admin template ops
+      Factory_PartnerProfileSet(ipfsCid)
+      AdminsAdded(address[]) / AdminsRemoved(address[])
+    Maybe 1 tick, mechanical.
 
-    Two fixes possible:
-      (a) Re-read watched_addresses + re-query get_logs(filter) AFTER any
-          handler that adds an address. Loop until no new addresses added.
-          Pro: precise filter, no false-positive logs.
-          Con: extra RPC round-trips per block.
-      (b) Drop the address filter entirely; rely only on topic0 filter.
-          Pro: catches all events with our signatures regardless of source.
-          Con: noisy on mainnet (any random ERC20 emits Transfer with our
-               signature_hash). Fine on Anvil; needs filter on Base.
+  PATH B — Funding/Budget/Foundation module ports:
+    Same Haiku-Explore-then-port pattern. Each module = 30-min port:
+      ~/projects/aeqi-graph/abis/Funding.module.json
+      ~/projects/aeqi-graph/abis/Budget.module.json
+      ~/projects/aeqi-graph/abis/Foundation.module.json
+      ~/projects/aeqi-graph/abis/Fund.module.json
+    Adding all 4 = ~2 ticks. Demos benefit by having more data on /c/{slug}.
 
-    Recommendation: (a) for v1 — minimal change, no false-positive risk.
-    The extra round-trip happens only when a TrustCreated handler fires,
-    which is rare. ~30-min implementation.
+  PATH C — apps/ui glue (real integration):
+    Now extremely valuable: the indexer has real Factory + TRUST + Module
+    data from actual aeqi-core deployments. Cut worktree off ~/aeqi.
+    Add VITE_INDEXER_URL env. Pick Ownership tab — replace its
+    TheGraph hook with rolesForModule/roleAssignments queries against
+    http://localhost:8500/graphql.
+    Caveat: needs human-design input on UI changes; defer if uncertain.
 
-  PATH B — apps/ui glue: Ownership tab via VITE_INDEXER_URL.
-    Now genuinely valuable since the indexer catches real Factory data.
-    Cut worktree off ~/aeqi. Add VITE_INDEXER_URL env. Pick Ownership tab.
-
-  PATH C — Funding/Budget module ports:
-    Mechanical per the locked recipe; deferrable.
-
-  PATH D — wire missing Factory event handlers:
-    Factory_FactoryConfigSet, AdminsAdded, Factory_TemplateReplaced —
-    sol! decls already present, just need dispatch arms + tables.
-    These would let the indexer track admin actions on the Factory itself
-    (template management, beacon reconfig). 5-min adds per event.
+  PATH D — Vesting module wired into demo template:
+    The current CreateTrust template only has role + token. Add vesting
+    so a created TRUST also activates a Vesting module. Then exercise
+    emitFounderVestingLifecycle against the real vesting module instance.
+    Closes the cap-table demo loop on real contracts.
 
   LEVERAGE PRIORITY:
-    PATH A (intra-block fix) — closes the LAST architectural gap.
-    PATH D (factory admin events) — quick wins, more surface for free.
-    PATH B (apps/ui) — biggest user-visible win but human design helpful.
-    PATH C — least urgent.
+    PATH A — fastest wins; covers admin lifecycle.
+    PATH D — closes vesting on real contracts; high demo value.
+    PATH B — breadth but no critical-path value yet.
+    PATH C — depends on user design preferences; defer to interactive session.
+
+  My read: PATH A first (5-15 min for fast wins), PATH D second
+  (close cap-table loop on real contracts), PATH B + C in tomorrow's
+  session.
     Stand up /home/claudedev/aeqi-indexer-build/docs/HANDOFF.md with:
       1. What this is + why it exists (replaces TheGraph subgraph)
       2. Boot recipe:

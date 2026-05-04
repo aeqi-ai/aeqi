@@ -316,17 +316,40 @@ pub mod poll {
                 // Fetch logs from EVERY watched address. Factory + TRUSTs +
                 // modules all flow through one filter. Topic0 dispatches to
                 // the right handler — handlers may register more addresses
-                // (TrustCreated → trust, ModuleAdded → module) and the next
-                // round picks them up.
-                let watched: Vec<Address> = {
-                    let conn = db.lock().await;
-                    store::list_watched_addresses(&conn)?
+                // (TrustCreated → trust, ModuleAdded → module).
+                //
+                // CRITICAL: handlers may add new watched addresses MID-BLOCK.
+                // E.g. a real registerTRUST tx auto-creates the TRUST proxy,
+                // which initializes its modules in the SAME tx — TRUST_ModuleAdded
+                // fires from the new trust address, but that address wasn't in
+                // watched_addresses when we built this block's filter.
+                //
+                // Solution: fetch + dispatch in a loop. Each iteration pulls
+                // logs only from the NEW addresses (delta vs already-fetched
+                // for this block). Loop terminates when no new addresses were
+                // registered. Bounded by gas (a tx can only create finitely
+                // many contracts).
+                let mut fetched_for_block: std::collections::HashSet<Address> =
+                    std::collections::HashSet::new();
+                loop {
+                    let current_watched: Vec<Address> = {
+                        let conn = db.lock().await;
+                        store::list_watched_addresses(&conn)?
+                            .into_iter()
+                            .filter_map(|w| w.address.parse().ok())
+                            .collect()
+                    };
+                    let new_addresses: Vec<Address> = current_watched
                         .into_iter()
-                        .filter_map(|w| w.address.parse().ok())
-                        .collect()
-                };
+                        .filter(|a| !fetched_for_block.contains(a))
+                        .collect();
+                    if new_addresses.is_empty() {
+                        break;
+                    }
+                    for a in &new_addresses {
+                        fetched_for_block.insert(*a);
+                    }
 
-                if !watched.is_empty() {
                     let sigs = vec![
                         // Factory events
                         decode::Factory::Factory_TRUSTCreatedEvent::SIGNATURE_HASH,
@@ -361,7 +384,7 @@ pub mod poll {
                     let filter = Filter::new()
                         .from_block(block_num)
                         .to_block(block_num)
-                        .address(watched)
+                        .address(new_addresses)
                         .event_signature(sigs);
 
                     let mut logs = provider
