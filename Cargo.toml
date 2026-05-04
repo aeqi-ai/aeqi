@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
 license = "BUSL-1.1"
 authors = ["AEQI Contributors"]
@@ -121,24 +121,24 @@ async-graphql = { version = "7", features = ["chrono", "uuid"] }
 async-graphql-axum = "7"
 
 # Internal crates
-aeqi-quests = { version = "0.14.0", path = "crates/aeqi-quests" }
-aeqi-core = { version = "0.14.0", path = "crates/aeqi-core" }
-aeqi-providers = { version = "0.14.0", path = "crates/aeqi-providers" }
-aeqi-tools = { version = "0.14.0", path = "crates/aeqi-tools" }
-aeqi-orchestrator = { version = "0.14.0", path = "crates/aeqi-orchestrator" }
-aeqi-ideas = { version = "0.14.0", path = "crates/aeqi-ideas" }
-aeqi-gates = { version = "0.14.0", path = "crates/aeqi-gates" }
-aeqi-web = { version = "0.14.0", path = "crates/aeqi-web" }
-aeqi-graph = { version = "0.14.0", path = "crates/aeqi-graph" }
-aeqi-hosting = { version = "0.14.0", path = "crates/aeqi-hosting" }
-aeqi-wallets = { version = "0.14.0", path = "crates/aeqi-wallets" }
-aeqi-mcp = { version = "0.14.0", path = "crates/aeqi-mcp" }
-aeqi-test-support = { version = "0.14.0", path = "crates/aeqi-test-support" }
-aeqi-pack-google-workspace = { version = "0.14.0", path = "crates/aeqi-pack-google-workspace" }
-aeqi-pack-github = { version = "0.14.0", path = "crates/aeqi-pack-github" }
-aeqi-pack-notion = { version = "0.14.0", path = "crates/aeqi-pack-notion" }
-aeqi-pack-slack = { version = "0.14.0", path = "crates/aeqi-pack-slack" }
-aeqi-indexer = { version = "0.14.0", path = "crates/aeqi-indexer" }
+aeqi-quests = { version = "0.15.0", path = "crates/aeqi-quests" }
+aeqi-core = { version = "0.15.0", path = "crates/aeqi-core" }
+aeqi-providers = { version = "0.15.0", path = "crates/aeqi-providers" }
+aeqi-tools = { version = "0.15.0", path = "crates/aeqi-tools" }
+aeqi-orchestrator = { version = "0.15.0", path = "crates/aeqi-orchestrator" }
+aeqi-ideas = { version = "0.15.0", path = "crates/aeqi-ideas" }
+aeqi-gates = { version = "0.15.0", path = "crates/aeqi-gates" }
+aeqi-web = { version = "0.15.0", path = "crates/aeqi-web" }
+aeqi-graph = { version = "0.15.0", path = "crates/aeqi-graph" }
+aeqi-hosting = { version = "0.15.0", path = "crates/aeqi-hosting" }
+aeqi-wallets = { version = "0.15.0", path = "crates/aeqi-wallets" }
+aeqi-mcp = { version = "0.15.0", path = "crates/aeqi-mcp" }
+aeqi-test-support = { version = "0.15.0", path = "crates/aeqi-test-support" }
+aeqi-pack-google-workspace = { version = "0.15.0", path = "crates/aeqi-pack-google-workspace" }
+aeqi-pack-github = { version = "0.15.0", path = "crates/aeqi-pack-github" }
+aeqi-pack-notion = { version = "0.15.0", path = "crates/aeqi-pack-notion" }
+aeqi-pack-slack = { version = "0.15.0", path = "crates/aeqi-pack-slack" }
+aeqi-indexer = { version = "0.15.0", path = "crates/aeqi-indexer" }
 
 
 [profile.release]

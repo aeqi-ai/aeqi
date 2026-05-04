@@ -7,6 +7,119 @@ All notable changes to aeqi are documented here. The format is loosely based on
 Per-release detail (full commit list, contributors, artifacts) lives at
 [github.com/aeqiai/aeqi/releases](https://github.com/aeqiai/aeqi/releases).
 
+## [0.15.0] — 2026-05-04
+
+The pre-launch hardening release. v0.14.0 is unsuitable for charging strangers;
+v0.15.0 is. Anyone running `curl -fsSL …/releases/latest/download/aeqi-linux-amd64`
+should pull this build before provisioning new tenants.
+
+### Critical fixes
+
+- **fix(boot): credential migration tolerates fresh tenant DBs.** The runtime's
+  `channel_credential_migration` walker queried `channels` before
+  `AgentRegistry::open` had created the table on a fresh DB, putting new
+  containers / VPS into a permanent crashloop (counter hit 45,000+ in the
+  2026-04-29 sandbox-launch incident). The walker now probes `sqlite_master`
+  and returns `(0, 0)` when the table doesn't exist yet. **This single fix is
+  why v0.14.0 cannot be safely deployed to new tenants.**
+
+### Role primitive — shipped
+
+- New WHO primitive: `Role` with `role_type` (director / operational / advisor)
+  + `founder` flag + grants set. Org chart = roles + role_edges DAG; authority
+  is transitive closure.
+- Six-grant catalog: `roles.manage`, `agents.spawn`, `agents.configure`,
+  `treasury.read`, `governance.read`, `settings.modify`.
+- Role invitation flow end-to-end: invite by email or company-slug → email +
+  in-app accept page → signup-with-invitation → role occupant set.
+- Auto-Director on Company spawn: every Blueprint creates the founding
+  Director role with the creator as occupant + all six grants + `founder=1`.
+
+### Stripe restructure
+
+- Single Product (`Company`) at $19 first-month → $49/mo, runs as one $49 Price
+  + auto-applied first-month coupon (`AEQI_FIRST_MONTH`, -$30, duration:once).
+  Replaces the dual-product founder-fee + monthly setup. One cart line, clean
+  MRR, clean cancellation.
+- USDC rail (Phase A): SIWE users only, $19 first-month → $45/mo (Stripe fee
+  passed through), monthly platform-side cron pull from external EOA.
+- Inference credit denominated in dollars ($25/mo any model) instead of token
+  budget. Top up via card or USDC. External callers pay per-call via x402
+  (cost + 20%).
+
+### Reliability — webhook + signup
+
+- Stripe webhook event-id deduplication (`stripe_processed_events` PK on
+  `event_id`). Closes the gap where Stripe's redelivery semantics caused
+  every state change to re-fire on retry — most consequentially re-spawning
+  VPS provisioning on `checkout.session.completed` replay.
+- Webhook signature verification + idempotency covered by 8 unit tests
+  (HMAC-SHA256 round-trip, wrong secret, tampered payload, stale timestamp,
+  missing signature components, idempotency reject-replay, independent ids).
+- `customer.subscription.created` auto-spawns the user's personal Company on
+  first paid activation if no placement exists yet — closes the
+  paid-but-never-returned-to-/start hole. Idempotent: gated on
+  `get_user_agents().is_empty()`.
+- BillingPanel post-Stripe handler stops calling `/blueprints/spawn` (which
+  required X-Entity it didn't have); polls for the entity to appear via
+  `useEntities()` then redirects to `/c/{id}/inbox`.
+
+### Company shell — Phase 1
+
+- `Overview · Roles · Ownership · Treasury · Governance · Settings` rail
+  locked.
+- **Ownership** Phase 1: founder → director → operational → advisor pivot
+  with grant counts. On-chain TRUST mirror appears as supplementary section
+  when the Solana bridge is enabled.
+- **Treasury** Phase 1: per-Company Stripe state (plan, status, next charge,
+  card last4) + resource pack + Manage-billing CTA. On-chain cap table
+  appears as supplementary section.
+- **Governance** Phase 1: grant-catalog view showing which roles hold each
+  grant. Click-through to role detail.
+- Portfolio page retired; Treasury is the canonical financial surface (both
+  per-Company at `/c/{id}/treasury` and personal at `/me/treasury`).
+- Sidebar `CompanySwitcher` ships: personal-scope Inbox + every owned
+  Company + "Start a new company" CTA, click-to-pivot.
+
+### Onboarding
+
+- Blueprints now declare `seed_inbox_message`: every Company spawn populates
+  the inbox with a tailored greeting from the root agent, awaiting reply.
+  No more empty-inbox first-impression on signup.
+- Five surviving Blueprints: `aeqi`, `solo-founder`, `studio`, `tech-studio`,
+  `personal-os`. All on deepseek-v4-flash by default.
+- Default model switched from anthropic/{haiku,sonnet,opus} → DeepSeek V4
+  Flash (`deepseek/deepseek-v4-flash`) for cost.
+
+### Admin / ops
+
+- `/api/admin/vps/spawn-test` (x-admin-key gated) — provision a Hetzner VPS
+  for a chosen entity_id without going through Stripe. Mirrors the production
+  webhook code path so the operator can exercise provisioning before flipping
+  a real charge.
+- `/api/admin/users`, `/api/admin/placements`, `/api/admin/invite-codes`,
+  `/api/admin/waitlist` — fleet inspection for the operator.
+- Hetzner server type bump: `cx22 → cx23`, `cx32 → cx33` after Hetzner
+  deprecated the older line. Same shape, current SKUs.
+- Smoke-prod cron + Resend alerting (every 15 min): probes `/api/health`,
+  landing HTML, public `invite-check`, authed `/me`, admin overview.
+  Pages on first failure with 30-min dedup.
+- `_mint-jwt.mjs` headless JWT minter for ops smokes.
+
+### Personal Company (architecture)
+
+- Every user has a personal 1-owner Company Entity. Decided 2026-05-03;
+  auto-spawn implementation shipped via `customer.subscription.created`
+  webhook (NOT in `signup_handler` — there's no free tier, the Company can
+  only exist after payment).
+
+### Upgrade path
+
+- Workspace version bumped 0.14.0 → 0.15.0.
+- No DB migrations break v0.14.0 callers; `stripe_processed_events`,
+  per-Company billing columns, role_grants table all idempotent on existing
+  databases.
+
 ## [0.14.0] — 2026-04-28
 
 - **Entity** is now a first-class primitive in the runtime (Phase A) — distinct
