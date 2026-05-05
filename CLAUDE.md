@@ -248,6 +248,10 @@ The fix is one word: `app` → `app.into_make_service_with_connect_info::<Socket
 
 **EntryPoint v0.7 on dev anvil requires `anvil_setCode`, not CREATE2.** The canonical EP v0.7 address `0x0000000071727De22E5E9d8BAf0edAc6f37da032` is deployed via a specific eth-infinitism deterministic deployer — not the standard Arachnid CREATE2 factory (`0x4e59b...`). On a fresh anvil the address is empty. The EIP-2470 singleton factory approach also fails (raw tx is ganache-specific). Correct approach: deploy EP from `@account-abstraction/contracts@0.7.0` bytecode via `cast send --create` to get the runtime bytecode, then seed the canonical address with `anvil_setCode`. This is handled automatically by `/usr/local/bin/aeqi-bundler-preflight` on every `aeqi-bundler.service` start. **`anvil_setCode` does not persist across anvil restarts** — the preflight re-seeds on service start. If anvil is wiped, re-deploy the reference EP first (see `docs/aa-bundler-deployment.md` troubleshooting section).
 
+**ERC-7677 paymaster JSON-RPC always returns HTTP 200 — errors are in the body.** Unlike REST, JSON-RPC 2.0 uses HTTP 200 for both success and error responses. Error shape: `{"jsonrpc":"2.0","id":N,"error":{"code":-32NNN,"message":"..."}}`. Canonical error codes for `pm_sponsorUserOperation`: `-32500` = sponsorship denied (AA-rejected per ERC-4337); `-32601` = method not found; `-32602` = invalid params; `-32603` = internal error. The bundler / wallet client distinguishes success from failure via presence of `result` vs `error` key, NOT via HTTP status. Service at `127.0.0.1:3001`. Docs: `docs/aa-paymaster-deployment.md`.
+
+**`cargo fmt -p <crate>` must run before `git commit`, not at `/ship` verify time.** The verify gauntlet catches fmt drift at ship time, but that requires a rebase-then-force-push loop. Run `cargo fmt -p aeqi-paymaster` (or whichever crate) as the last step before committing Rust changes. Cost (2026-05-05): one fmt pass + force-push loop during paymaster ship cycle.
+
 ## Platform-level friction (out of our hands)
 
 Tracked separately in `platform-friction.md`. These are paper cuts in the
