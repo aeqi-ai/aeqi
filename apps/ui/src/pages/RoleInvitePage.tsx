@@ -78,7 +78,7 @@ export default function RoleInvitePage() {
   // Show open-link result
   if (openToken && openUrl) {
     return (
-      <div className="asv-main" style={{ padding: "28px 32px", maxWidth: 560 }}>
+      <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 560 }}>
         <div className="page-header">
           <div className="page-header-breadcrumbs">
             <Link to={`/c/${encodeURIComponent(entityId)}/roles`}>Roles</Link>
@@ -91,7 +91,7 @@ export default function RoleInvitePage() {
 
         <div
           style={{
-            padding: "20px 24px",
+            padding: "var(--space-5) var(--space-6)",
             background: "var(--color-card-elevated, #fff)",
             borderRadius: "var(--radius-md)",
             display: "flex",
@@ -108,7 +108,7 @@ export default function RoleInvitePage() {
               display: "flex",
               alignItems: "center",
               gap: "var(--space-2)",
-              padding: "10px 12px",
+              padding: "var(--space-2) var(--space-3)",
               background: "var(--color-card)",
               borderRadius: "var(--radius-sm)",
               fontFamily: "var(--font-mono)",
@@ -137,7 +137,7 @@ export default function RoleInvitePage() {
   }
 
   return (
-    <div className="asv-main" style={{ padding: "28px 32px", maxWidth: 560 }}>
+    <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 560 }}>
       <div className="page-header">
         <div className="page-header-breadcrumbs">
           <Link to={`/c/${encodeURIComponent(entityId)}/roles`}>Roles</Link>
@@ -176,7 +176,7 @@ export default function RoleInvitePage() {
                   display: "flex",
                   alignItems: "center",
                   gap: "var(--space-2)",
-                  padding: "8px 14px",
+                  padding: "var(--space-2) var(--space-4)",
                   borderRadius: "var(--radius-md)",
                   background:
                     targetKind === opt.value
@@ -229,7 +229,7 @@ export default function RoleInvitePage() {
         {targetKind === "open" && (
           <div
             style={{
-              padding: "12px 14px",
+              padding: "var(--space-3) var(--space-4)",
               background: "var(--color-card)",
               borderRadius: "var(--radius-md)",
               fontSize: 13,

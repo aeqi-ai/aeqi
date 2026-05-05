@@ -123,7 +123,7 @@ export default function InvitationAcceptPage() {
         alignItems: "center",
         justifyContent: "center",
         background: "var(--color-bg-base, #f5f5f5)",
-        padding: "24px 16px",
+        padding: "var(--space-6) var(--space-4)",
       }}
     >
       <div
@@ -147,7 +147,7 @@ export default function InvitationAcceptPage() {
           style={{
             background: "var(--color-card-elevated, #fff)",
             borderRadius: "var(--radius-lg)",
-            padding: "28px 32px",
+            padding: "var(--space-6) var(--space-8)",
             display: "flex",
             flexDirection: "column",
             gap: "var(--space-5)",
@@ -162,7 +162,7 @@ export default function InvitationAcceptPage() {
                 gap: 8,
                 color: "var(--text-muted)",
                 fontSize: 13,
-                padding: "16px 0",
+                padding: "var(--space-4) 0",
               }}
             >
               <Spinner size="sm" /> Loading invitation…
@@ -223,7 +223,7 @@ export default function InvitationAcceptPage() {
                 <blockquote
                   style={{
                     margin: 0,
-                    padding: "12px 16px",
+                    padding: "var(--space-3) var(--space-4)",
                     background: "var(--color-card)",
                     borderRadius: "var(--radius-md)",
                     fontSize: 13,
@@ -269,7 +269,7 @@ export default function InvitationAcceptPage() {
                   ) : (
                     <div
                       style={{
-                        padding: "12px 14px",
+                        padding: "var(--space-3) var(--space-4)",
                         background: "var(--color-card)",
                         borderRadius: "var(--radius-md)",
                         fontSize: 13,

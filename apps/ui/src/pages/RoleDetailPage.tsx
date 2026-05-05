@@ -70,7 +70,7 @@ export default function RoleDetailPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "28px 32px",
+          padding: "var(--space-6) var(--space-8)",
           color: "var(--text-muted)",
           fontSize: 13,
         }}
@@ -82,7 +82,7 @@ export default function RoleDetailPage() {
 
   if (error || !role) {
     return (
-      <div className="asv-main" style={{ padding: "28px 32px" }}>
+      <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)" }}>
         <div style={{ color: "var(--color-error)", fontSize: 13 }}>
           {error || "Role not found."}
         </div>
@@ -98,7 +98,7 @@ export default function RoleDetailPage() {
   );
 
   return (
-    <div className="asv-main" style={{ padding: "28px 32px", maxWidth: 680 }}>
+    <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 680 }}>
       <div className="page-header">
         <div className="page-header-breadcrumbs">
           <Link to={backHref}>Roles</Link>
@@ -152,7 +152,7 @@ export default function RoleDetailPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "16px 18px",
+              padding: "var(--space-4) var(--space-5)",
               background: "var(--color-card)",
               borderRadius: "var(--radius-md)",
             }}
@@ -170,7 +170,7 @@ export default function RoleDetailPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "14px 18px",
+              padding: "var(--space-4) var(--space-5)",
               background: "var(--color-card-elevated, #fff)",
               borderRadius: "var(--radius-md)",
             }}
@@ -234,7 +234,7 @@ export default function RoleDetailPage() {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  padding: "3px 10px",
+                  padding: "var(--space-0) var(--space-2)",
                   borderRadius: 999,
                   background: "var(--color-card)",
                   fontSize: 12,
@@ -328,7 +328,7 @@ function InvitationRow({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "10px 14px",
+        padding: "var(--space-2) var(--space-4)",
         background: "var(--color-card)",
         borderRadius: "var(--radius-md)",
         gap: "var(--space-3)",

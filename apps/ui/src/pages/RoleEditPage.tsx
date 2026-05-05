@@ -80,7 +80,7 @@ export default function RoleEditPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "28px 32px",
+          padding: "var(--space-6) var(--space-8)",
           color: "var(--text-muted)",
           fontSize: 13,
         }}
@@ -92,7 +92,7 @@ export default function RoleEditPage() {
 
   if (loadError || !role) {
     return (
-      <div className="asv-main" style={{ padding: "28px 32px" }}>
+      <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)" }}>
         <div style={{ color: "var(--color-error)", fontSize: 13 }}>
           {loadError || "Role not found."}
         </div>
@@ -104,7 +104,7 @@ export default function RoleEditPage() {
   }
 
   return (
-    <div className="asv-main" style={{ padding: "28px 32px", maxWidth: 680 }}>
+    <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 680 }}>
       <div className="page-header">
         <div className="page-header-breadcrumbs">
           <Link to={`/c/${encodeURIComponent(entityId)}/roles`}>Roles</Link>
@@ -165,7 +165,7 @@ export default function RoleEditPage() {
                   display: "flex",
                   alignItems: "flex-start",
                   gap: "var(--space-3)",
-                  padding: "10px 12px",
+                  padding: "var(--space-2) var(--space-3)",
                   borderRadius: "var(--radius-md)",
                   background:
                     roleType === opt.value
@@ -218,7 +218,7 @@ export default function RoleEditPage() {
                     display: "flex",
                     alignItems: "flex-start",
                     gap: "var(--space-3)",
-                    padding: "8px 0",
+                    padding: "var(--space-2) 0",
                     cursor: "pointer",
                   }}
                 >

@@ -112,7 +112,7 @@ export default function RoleNewPage() {
   const backHref = `/c/${encodeURIComponent(entityId)}/roles`;
 
   return (
-    <div className="asv-main" style={{ padding: "28px 32px", maxWidth: 680 }}>
+    <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 680 }}>
       <div className="page-header">
         <div className="page-header-breadcrumbs">
           <Link to={backHref}>Roles</Link>
@@ -172,7 +172,7 @@ export default function RoleNewPage() {
                   display: "flex",
                   alignItems: "flex-start",
                   gap: "var(--space-3)",
-                  padding: "10px 12px",
+                  padding: "var(--space-2) var(--space-3)",
                   borderRadius: "var(--radius-md)",
                   background:
                     roleType === opt.value
@@ -322,7 +322,7 @@ export default function RoleNewPage() {
                     display: "flex",
                     alignItems: "flex-start",
                     gap: "var(--space-3)",
-                    padding: "8px 0",
+                    padding: "var(--space-2) 0",
                     cursor: "pointer",
                   }}
                 >

@@ -158,7 +158,7 @@ export default function DrivePage() {
       {error && (
         <div
           style={{
-            padding: "10px 12px",
+            padding: "var(--space-2) var(--space-3)",
             marginBottom: 16,
             borderRadius: "var(--radius-md)",
             background: "var(--bg-surface)",
@@ -195,7 +195,7 @@ export default function DrivePage() {
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                padding: "10px 14px",
+                padding: "var(--space-2) var(--space-4)",
                 borderBottom:
                   idx === files.length - 1 ? "none" : "1px solid var(--color-border-faint)",
                 fontSize: 13,
