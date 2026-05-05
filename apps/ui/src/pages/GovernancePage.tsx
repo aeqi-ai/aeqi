@@ -349,9 +349,11 @@ function ProposalRow({ proposal: p }: { proposal: IndexedProposal }) {
         </Badge>
       </div>
 
-      {/* TODO: unhide when indexer schema extends to include forVotes/againstVotes */}
-      {false && (p.forVotes != null || p.againstVotes != null) && (
-        <VoteBar forVotes={p.forVotes ?? "0"} againstVotes={p.againstVotes ?? "0"} />
+      {/* TODO: Show vote tally bar once indexer schema adds forVotes/againstVotes fields.
+           Currently unavailable; this conditional safely guards against rendering
+           undefined vote counts. See fetchProposalsForModule comment in indexer.ts. */}
+      {p.forVotes != null && p.againstVotes != null && (
+        <VoteBar forVotes={p.forVotes} againstVotes={p.againstVotes} />
       )}
     </li>
   );
