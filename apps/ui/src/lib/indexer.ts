@@ -147,6 +147,77 @@ export async function fetchRolesForModule(moduleAddress: string): Promise<Indexe
   return data?.rolesForModule ?? [];
 }
 
+// ── rolesForTrust ──────────────────────────────────────────────────────────
+//
+// Direct TRUST-scoped query: account assignments keyed by trust_id (bytes32).
+// This is the v2 Ownership mirror — the indexer field is in-flight; the hook
+// below degrades gracefully on "field not found" GraphQL errors.
+
+export interface TrustRole {
+  account: string;
+  roleTypeId: string;
+  slotIndex: number;
+  ipfsCid: string | null;
+}
+
+export interface TrustRoleRequest {
+  proposer: string;
+  account: string;
+  roleTypeId: string;
+  ipfsCid: string | null;
+  accepted: boolean;
+}
+
+/**
+ * Query rolesForTrust(trustId) from the indexer.
+ *
+ * Returns `[]` when:
+ * - The indexer is not configured.
+ * - The indexer doesn't yet have the `rolesForTrust` field (graceful
+ *   degradation — logs a console.warn instead of throwing).
+ */
+export async function fetchRolesForTrust(trustId: string): Promise<TrustRole[]> {
+  if (!INDEXER_URL) return [];
+  try {
+    const data = await indexerQuery<{ rolesForTrust: TrustRole[] }>(
+      `query($id: String!) { rolesForTrust(trustId: $id) { account roleTypeId slotIndex ipfsCid } }`,
+      { id: trustId.toLowerCase() },
+    );
+    return data?.rolesForTrust ?? [];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/field not found|unknown field|Cannot query field/i.test(msg)) {
+      console.warn("[useOwnership] indexer rolesForTrust not yet shipped");
+      return [];
+    }
+    throw err;
+  }
+}
+
+/**
+ * Query roleRequestsForTrust(trustId) from the indexer — pending / accepted.
+ *
+ * Same graceful degradation as fetchRolesForTrust: returns `[]` + warns
+ * when the field is not yet present on the indexer schema.
+ */
+export async function fetchRoleRequestsForTrust(trustId: string): Promise<TrustRoleRequest[]> {
+  if (!INDEXER_URL) return [];
+  try {
+    const data = await indexerQuery<{ roleRequestsForTrust: TrustRoleRequest[] }>(
+      `query($id: String!) { roleRequestsForTrust(trustId: $id) { proposer account roleTypeId ipfsCid accepted } }`,
+      { id: trustId.toLowerCase() },
+    );
+    return data?.roleRequestsForTrust ?? [];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/field not found|unknown field|Cannot query field/i.test(msg)) {
+      console.warn("[useOwnership] indexer roleRequestsForTrust not yet shipped");
+      return [];
+    }
+    throw err;
+  }
+}
+
 /** Audit log of role assignments (assigned/resigned/removed/transferred_*). */
 export async function fetchRoleAssignments(
   moduleAddress: string,

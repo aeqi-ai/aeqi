@@ -1,0 +1,207 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`OwnershipPage — snapshot > matches snapshot with off-chain roles only (indexer disabled) 1`] = `
+<div
+  class="asv-main"
+  style="padding: var(--space-lg);"
+>
+  <header
+    style="margin-bottom: var(--space-lg);"
+  >
+    <h2
+      style="margin: 0px;"
+    >
+      Ownership
+    </h2>
+    <p
+      style="color: var(--color-text-muted); margin: var(--space-xs) 0 0 0;"
+    >
+      Who owns and runs this Company. Authority flows through roles.
+    </p>
+  </header>
+  <section
+    style="margin-bottom: var(--space-lg);"
+  >
+    <h3
+      style="margin: 0 0 var(--space-sm) 0; font-size: var(--text-sm); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;"
+    >
+      Founders
+      <span
+        style="margin-left: var(--space-xs);"
+      >
+        · 
+        1
+      </span>
+    </h3>
+    <ul
+      style="list-style: none; margin: 0px; padding: 0px;"
+    >
+      <li
+        style="padding: var(--space-sm) var(--space-md); background: var(--color-card); border-radius: var(--radius-md); margin-bottom: var(--space-xs); cursor: pointer; display: flex; align-items: center; gap: var(--space-md);"
+      >
+        <div
+          style="flex: 1 1 0%; min-width: 0;"
+        >
+          <div
+            style="font-weight: 500;"
+          >
+            CEO
+          </div>
+          <div
+            style="font-size: var(--text-sm); color: var(--color-text-muted); margin-top: 2px;"
+          >
+            Human
+          </div>
+        </div>
+        <div
+          style="display: flex; gap: var(--space-xs); flex-wrap: wrap;"
+        >
+          <span
+            class="_badge_fa5bc6 _accent_fa5bc6 _sm_fa5bc6"
+          >
+            Founder
+          </span>
+          <span
+            class="_badge_fa5bc6 _muted_fa5bc6 _sm_fa5bc6"
+          >
+            0
+             
+            grants
+          </span>
+        </div>
+      </li>
+    </ul>
+  </section>
+</div>
+`;
+
+exports[`OwnershipPage — snapshot > matches snapshot with on-chain roles loaded 1`] = `
+<div
+  class="asv-main"
+  style="padding: var(--space-lg);"
+>
+  <header
+    style="margin-bottom: var(--space-lg);"
+  >
+    <h2
+      style="margin: 0px;"
+    >
+      Ownership
+    </h2>
+    <p
+      style="color: var(--color-text-muted); margin: var(--space-xs) 0 0 0;"
+    >
+      Who owns and runs this Company. Authority flows through roles.
+    </p>
+  </header>
+  <section
+    style="margin-bottom: var(--space-lg);"
+  >
+    <h3
+      style="margin: 0 0 var(--space-sm) 0; font-size: var(--text-sm); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;"
+    >
+      Founders
+      <span
+        style="margin-left: var(--space-xs);"
+      >
+        · 
+        1
+      </span>
+    </h3>
+    <ul
+      style="list-style: none; margin: 0px; padding: 0px;"
+    >
+      <li
+        style="padding: var(--space-sm) var(--space-md); background: var(--color-card); border-radius: var(--radius-md); margin-bottom: var(--space-xs); cursor: pointer; display: flex; align-items: center; gap: var(--space-md);"
+      >
+        <div
+          style="flex: 1 1 0%; min-width: 0;"
+        >
+          <div
+            style="font-weight: 500;"
+          >
+            CEO
+          </div>
+          <div
+            style="font-size: var(--text-sm); color: var(--color-text-muted); margin-top: 2px;"
+          >
+            Human
+          </div>
+        </div>
+        <div
+          style="display: flex; gap: var(--space-xs); flex-wrap: wrap;"
+        >
+          <span
+            class="_badge_fa5bc6 _accent_fa5bc6 _sm_fa5bc6"
+          >
+            Founder
+          </span>
+          <span
+            class="_badge_fa5bc6 _muted_fa5bc6 _sm_fa5bc6"
+          >
+            0
+             
+            grants
+          </span>
+        </div>
+      </li>
+    </ul>
+  </section>
+  <section
+    style="margin-top: var(--space-xl);"
+  >
+    <h3
+      style="margin: 0 0 var(--space-sm) 0; font-size: var(--text-sm); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;"
+    >
+      On-chain roles
+      <span
+        style="margin-left: var(--space-xs);"
+      >
+        · 
+        1
+      </span>
+    </h3>
+    <ul
+      style="list-style: none; margin: 0px; padding: 0px;"
+    >
+      <li
+        style="padding: var(--space-sm) var(--space-md); background: var(--color-card); border-radius: var(--radius-md); margin-bottom: var(--space-xs); cursor: pointer; display: flex; align-items: center; gap: var(--space-md);"
+      >
+        <div
+          style="flex: 1 1 0%; min-width: 0;"
+        >
+          <div
+            style="font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 500;"
+          >
+            0xdead…beef
+          </div>
+          <div
+            style="font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px;"
+          >
+            slot 
+            0
+          </div>
+        </div>
+        <div
+          style="display: flex; gap: var(--space-xs); align-items: center;"
+        >
+          <span
+            class="_badge_fa5bc6 _muted_fa5bc6 _sm_fa5bc6"
+          >
+            0x000000
+            …
+          </span>
+          <a
+            href="https://ipfs.io/ipfs/bafyreiabc123"
+            rel="noreferrer"
+            style="font-size: var(--text-xs); color: var(--color-text-muted); font-family: var(--font-mono);"
+            target="_blank"
+          >
+            ipfs
+          </a>
+        </div>
+      </li>
+    </ul>
+  </section>
+</div>
+`;
