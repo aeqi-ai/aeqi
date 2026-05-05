@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { Blueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { Button, Spinner } from "@/components/ui";
@@ -259,6 +259,22 @@ export default function CompanySetupPage() {
       });
       navigate(`/${resp.entity_id}/overview`);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 402) {
+        // No active subscription — redirect to Stripe checkout.
+        // Pass blueprint + display_name so the success redirect lands back
+        // on /start/:slug with the right context.
+        try {
+          const { url } = await api.createCheckoutSession({
+            blueprint: blueprint.slug,
+            display_name: identity.name.trim(),
+          });
+          window.location.href = url;
+        } catch {
+          setSubmitError("Subscribe to create your first company. Go to Settings → Billing.");
+          setSubmitting(false);
+        }
+        return;
+      }
       setSubmitError(e instanceof Error ? e.message : "Create failed. Try again.");
       setSubmitting(false);
     }
