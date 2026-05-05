@@ -5,16 +5,14 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
 import { api } from "@/lib/api";
-import {
-  fetchTokenHolders,
-  fetchTrustModules,
-  findModuleByType,
-  indexerEnabled,
-  type IndexedModule,
-  type IndexedTokenBalance,
-} from "@/lib/indexer";
+import { indexerEnabled } from "@/lib/indexer";
 import { COMPANY_MONTHLY, formatCents, RESOURCE_PACK } from "@/lib/pricing";
+import { useTreasury, type TreasuryTransfer, type TokenBalance } from "@/hooks/useTreasury";
 import { useDaemonStore } from "@/store/daemon";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const BASE_SEPOLIA_EXPLORER = "https://sepolia.basescan.org/address";
 
 interface TreasuryPageProps {
   entityId: string;
@@ -47,11 +45,14 @@ const STATUS_LABEL: Record<CompanyBillingRow["status"], string> = {
 };
 
 /**
- * Phase 1 treasury view: subscription state for this Company surfaced
- * from Stripe via the platform's `/billing/overview` endpoint, plus the
- * resource pack the plan includes. The on-chain cap table — present
- * once the Solana bridge has indexed the entity — appears as a
- * supplementary section underneath.
+ * Treasury tab for a Company entity.
+ *
+ * Sections (top → bottom):
+ *   1. Contract info row — trust address linking to block explorer.
+ *   2. Holdings — token balances from the indexed TRUST.
+ *   3. Recent transfers — last 20 transfers (graceful-degrade until indexer extends).
+ *   4. Subscription card — Stripe billing state.
+ *   5. Resource pack — plan limits.
  */
 export default function TreasuryPage({ entityId }: TreasuryPageProps) {
   const entity = useDaemonStore((s) => s.entities.find((e) => e.id === entityId));
@@ -121,6 +122,10 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
         </p>
       </header>
 
+      {trustAddress && indexerEnabled() && <ContractInfoRow trustAddress={trustAddress} />}
+
+      {indexerEnabled() && trustAddress && <OnChainHoldings trustAddress={trustAddress} />}
+
       {billingError && (
         <div
           style={{
@@ -153,11 +158,377 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
       )}
 
       <ResourcePack />
-
-      {indexerEnabled() && trustAddress && <OnChainTreasury trustAddress={trustAddress} />}
     </div>
   );
 }
+
+// ── Contract info row ─────────────────────────────────────────────────────────
+
+function ContractInfoRow({ trustAddress }: { trustAddress: string }) {
+  const short = `${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`;
+  const explorerUrl = `${BASE_SEPOLIA_EXPLORER}/${trustAddress}`;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-sm)",
+        padding: "var(--space-xs) var(--space-md)",
+        background: "var(--color-card)",
+        borderRadius: "var(--radius-md)",
+        marginBottom: "var(--space-md)",
+        fontSize: "var(--text-sm)",
+        color: "var(--color-text-muted)",
+      }}
+    >
+      <span>Treasury contract</span>
+      <code
+        style={{
+          fontFamily: "var(--font-mono)",
+          color: "var(--color-text)",
+          fontSize: "var(--text-xs)",
+        }}
+      >
+        {short}
+      </code>
+      <a
+        href={explorerUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: "var(--color-text-muted)",
+          fontSize: "var(--text-xs)",
+          textDecoration: "underline",
+          textUnderlineOffset: "2px",
+        }}
+      >
+        Base Sepolia
+      </a>
+    </div>
+  );
+}
+
+// ── On-chain holdings + transfers ─────────────────────────────────────────────
+
+function OnChainHoldings({ trustAddress }: { trustAddress: string }) {
+  const { balances, transfers, loading } = useTreasury(trustAddress);
+
+  return (
+    <>
+      <HoldingsSection balances={balances} loading={loading} />
+      <TransfersSection transfers={transfers} loading={loading} />
+    </>
+  );
+}
+
+// ── Section label ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3
+      style={{
+        margin: "0 0 var(--space-sm) 0",
+        fontSize: "var(--text-sm)",
+        color: "var(--color-text-muted)",
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+      }}
+    >
+      {children}
+    </h3>
+  );
+}
+
+// ── Skeleton row ──────────────────────────────────────────────────────────────
+
+function SkeletonRow({ widths }: { widths: string[] }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "var(--space-md)",
+        padding: "var(--space-sm) var(--space-md)",
+        alignItems: "center",
+      }}
+    >
+      {widths.map((w, i) => (
+        <div
+          key={i}
+          style={{
+            height: "var(--space-md)",
+            width: w,
+            background: "var(--color-card)",
+            borderRadius: "var(--radius-sm)",
+            opacity: 0.6,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Holdings section ──────────────────────────────────────────────────────────
+
+function HoldingsSection({
+  balances,
+  loading,
+}: {
+  balances: TokenBalance[] | null;
+  loading: boolean;
+}) {
+  return (
+    <section style={{ marginBottom: "var(--space-lg)" }}>
+      <SectionLabel>Holdings</SectionLabel>
+
+      <div
+        style={{
+          background: "var(--color-card)",
+          borderRadius: "var(--radius-md)",
+          overflow: "hidden",
+        }}
+      >
+        {loading ? (
+          <>
+            <SkeletonRow widths={["60px", "120px", "80px"]} />
+            <SkeletonRow widths={["60px", "120px", "80px"]} />
+          </>
+        ) : !balances || balances.length === 0 ? (
+          <div
+            style={{
+              padding: "var(--space-lg) var(--space-md)",
+              color: "var(--color-text-muted)",
+              fontSize: "var(--text-sm)",
+              textAlign: "center",
+            }}
+          >
+            No treasury activity yet.{" "}
+            <span style={{ display: "block", marginTop: "var(--space-xs)" }}>
+              Token balances appear here once the TRUST holds assets.
+            </span>
+          </div>
+        ) : (
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "var(--text-sm)",
+            }}
+          >
+            <thead>
+              <tr style={{ color: "var(--color-text-muted)" }}>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Token
+                </th>
+                <th
+                  style={{
+                    textAlign: "right",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Amount
+                </th>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Holder
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {balances.map((b, i) => (
+                <tr
+                  key={i}
+                  style={{
+                    background: i % 2 === 1 ? "var(--bg-subtle)" : undefined,
+                  }}
+                >
+                  <td style={{ padding: "var(--space-xs) var(--space-md)", fontWeight: 500 }}>
+                    {b.symbol}
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      textAlign: "right",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                    }}
+                  >
+                    {b.amount}
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      color: "var(--color-text-muted)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                    }}
+                  >
+                    {truncateAddress(b.holderAddress)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Transfers section ─────────────────────────────────────────────────────────
+
+function TransfersSection({
+  transfers,
+  loading,
+}: {
+  transfers: TreasuryTransfer[] | null;
+  loading: boolean;
+}) {
+  return (
+    <section style={{ marginBottom: "var(--space-lg)" }}>
+      <SectionLabel>Recent transfers</SectionLabel>
+
+      <div
+        style={{
+          background: "var(--color-card)",
+          borderRadius: "var(--radius-md)",
+          overflow: "hidden",
+        }}
+      >
+        {loading ? (
+          <>
+            <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
+            <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
+            <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
+          </>
+        ) : !transfers || transfers.length === 0 ? (
+          <div
+            style={{
+              padding: "var(--space-lg) var(--space-md)",
+              color: "var(--color-text-muted)",
+              fontSize: "var(--text-sm)",
+              textAlign: "center",
+            }}
+          >
+            No treasury activity yet.{" "}
+            <span style={{ display: "block", marginTop: "var(--space-xs)" }}>
+              Transfers in and out of this TRUST will appear here.
+            </span>
+          </div>
+        ) : (
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "var(--text-sm)",
+            }}
+          >
+            <thead>
+              <tr style={{ color: "var(--color-text-muted)" }}>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Direction
+                </th>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Counterparty
+                </th>
+                <th
+                  style={{
+                    textAlign: "right",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Amount
+                </th>
+                <th
+                  style={{
+                    textAlign: "right",
+                    padding: "var(--space-xs) var(--space-md)",
+                    fontWeight: 500,
+                  }}
+                >
+                  Block
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {transfers.map((t, i) => (
+                <tr
+                  key={i}
+                  style={{
+                    background: i % 2 === 1 ? "var(--bg-subtle)" : undefined,
+                  }}
+                >
+                  <td style={{ padding: "var(--space-xs) var(--space-md)" }}>
+                    <Badge variant={t.direction === "in" ? "success" : "muted"} size="sm">
+                      {t.direction === "in" ? "In" : "Out"}
+                    </Badge>
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    {truncateAddress(t.counterparty)}
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      textAlign: "right",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                    }}
+                  >
+                    {t.amount}
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      textAlign: "right",
+                      color: "var(--color-text-muted)",
+                      fontSize: "var(--text-xs)",
+                    }}
+                  >
+                    {t.block.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Billing card ──────────────────────────────────────────────────────────────
 
 interface BillingCardProps {
   billing: CompanyBillingRow;
@@ -222,6 +593,8 @@ function BillingCard({ billing, paymentLast4, onManage, portalBusy }: BillingCar
   );
 }
 
+// ── Resource pack ─────────────────────────────────────────────────────────────
+
 function ResourcePack() {
   const items = [
     { label: "Inference / month", value: RESOURCE_PACK.inferenceUsd },
@@ -232,17 +605,7 @@ function ResourcePack() {
 
   return (
     <section style={{ marginBottom: "var(--space-lg)" }}>
-      <h3
-        style={{
-          margin: "0 0 var(--space-sm) 0",
-          fontSize: "var(--text-sm)",
-          color: "var(--color-text-muted)",
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-        }}
-      >
-        Resource pack
-      </h3>
+      <SectionLabel>Resource pack</SectionLabel>
       <div
         style={{
           display: "grid",
@@ -259,15 +622,10 @@ function ResourcePack() {
               padding: "var(--space-md)",
             }}
           >
-            <div
-              style={{
-                color: "var(--color-text-muted)",
-                fontSize: "var(--text-sm)",
-              }}
-            >
+            <div style={{ color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
               {it.label}
             </div>
-            <div style={{ fontWeight: 500, marginTop: 2 }}>{it.value}</div>
+            <div style={{ fontWeight: 500, marginTop: "var(--space-xs)" }}>{it.value}</div>
           </div>
         ))}
       </div>
@@ -275,56 +633,9 @@ function ResourcePack() {
   );
 }
 
-function OnChainTreasury({ trustAddress }: { trustAddress: string }) {
-  const [modules, setModules] = useState<IndexedModule[] | null>(null);
-  const [holders, setHolders] = useState<IndexedTokenBalance[]>([]);
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const mods = await fetchTrustModules(trustAddress);
-        if (cancelled) return;
-        setModules(mods);
-        const tokenModule = findModuleByType(mods, "token");
-        if (tokenModule) {
-          const balances = await fetchTokenHolders(tokenModule.moduleAddress);
-          if (!cancelled) setHolders(balances);
-        }
-      } catch {
-        if (!cancelled) setModules([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [trustAddress]);
-
-  if (!modules || modules.length === 0) return null;
-
-  return (
-    <section style={{ marginTop: "var(--space-xl)" }}>
-      <h3
-        style={{
-          margin: "0 0 var(--space-sm) 0",
-          fontSize: "var(--text-sm)",
-          color: "var(--color-text-muted)",
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-        }}
-      >
-        On-chain mirror
-      </h3>
-      <p
-        style={{
-          color: "var(--color-text-muted)",
-          fontSize: "var(--text-sm)",
-          margin: "0 0 var(--space-sm) 0",
-        }}
-      >
-        TRUST <code style={{ fontFamily: "var(--font-mono)" }}>{trustAddress.slice(0, 14)}…</code> ·{" "}
-        {modules.length} modules · {holders.length} token holders
-      </p>
-    </section>
-  );
+function truncateAddress(addr: string): string {
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
