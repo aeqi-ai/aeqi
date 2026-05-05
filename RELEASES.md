@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.31.0 — 2026-05-05
+
+**Headline:** Stack wizard UI shipped. Multi-Company orchestration now has a frontend.
+
+- StackBlueprint TypeScript discriminator type
+- StackWizard component: rename → review → spawn → progress → success
+- BlueprintsPage 4th section for stack templates
+- BlueprintDetailPage handles stack vs single
+
 ## v0.30.0 — 2026-05-05
 
 **Headline:** Blueprint taxonomy reformed (3 categories) + workspace billing pivot + stack blueprint foundation.
