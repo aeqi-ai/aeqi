@@ -283,6 +283,8 @@ The fix is one word: `app` → `app.into_make_service_with_connect_info::<Socket
 
 **`cargo fmt -p <crate>` must run before `git commit`, not at `/ship` verify time.** The verify gauntlet catches fmt drift at ship time, but that requires a rebase-then-force-push loop. Run `cargo fmt -p aeqi-paymaster` (or whichever crate) as the last step before committing Rust changes. Cost (2026-05-05): one fmt pass + force-push loop during paymaster ship cycle.
 
+**Operator CLI binaries in `src/bin/` are not deployed as services.** `migrate-to-passkey` and similar one-shot operator tools live in `crates/<crate>/src/bin/`. They are built on demand (`cargo build -p <crate> --bin <name> --release`) and run by an operator. No systemd unit, no rsync, no binary swap in deploy.sh. `deploy.sh` exit-1 after a pure `src/bin/` addition is a buffering false-positive if `/api/health` returns 200 — the runtime binary is unaffected.
+
 ## Platform-level friction (out of our hands)
 
 Tracked separately in `platform-friction.md`. These are paper cuts in the
