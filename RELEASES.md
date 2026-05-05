@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.25.0 — 2026-05-05
+
+**Headline:** Bridge fully proven end-to-end through wizard. trustsCount 5 → 8+.
+
+- aeqi-platform: abi_encode_params() for role trust config (was abi_encode wrapping in extra outer tuple, breaking Role module decode)
+- aeqi-platform: stub configs for Uniswap + UniFutures modules on plain anvil (no fork required)
+- deploy.sh: UI skip optimization on pure-Rust deploys (FORCE_UI=1 to override)
+- Bridge verify confirmed: human-in-loop wizard flow creates on-chain TRUSTs successfully
+
 ## v0.24.0 — 2026-05-05
 
 **Headline:** P0 wizard fix — Uniswap module impl registered on factory; on-chain Company spawn now works end-to-end via UI wizard.
