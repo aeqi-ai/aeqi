@@ -263,7 +263,12 @@ ln -sfn /home/claudedev/aeqi/apps/ui/node_modules \
         /home/claudedev/aeqi-<topic>/apps/ui/node_modules
 ```
 
-**Critical:** The symlink MUST exist before running `npm run verify`. The worktree's node_modules points to the parent's to share the `node_modules/.bin/` cache and avoid redundant installs across branches. If the symlink is missing, verify fails with `tsc: not found` or similar, even if the parent's node_modules is healthy. Always create it immediately after `git worktree add`.
+**CRITICAL: The symlink MUST exist before any npm command.** The worktree's node_modules points to the parent's to share the `node_modules/.bin/` cache and avoid redundant installs across branches. Without it:
+- `npm run verify` fails with `tsc: not found`, `prettier: not found`, etc. even if the parent's node_modules is healthy
+- `npm install` in the worktree creates a fresh `node_modules` tree instead of using the parent's, doubling build time and contending with parallel sibling worktrees (ENOTEMPTY errors during deploy)
+- Any npm command that expects dev tools will fail
+
+**Always create the symlink immediately after `git worktree add`.** If you skip this step and accidentally run npm, manually create the symlink afterward — it doesn't undo the partial tree, but at least subsequent commands will use the parent's cache going forward.
 
 **Inside the worktree, always use `git -C` for git ops.** The shell cwd
 does NOT persist reliably between separate Bash tool calls — relying
