@@ -579,6 +579,43 @@ impl From<store::RoleAssignmentRow> for RoleAssignment {
     }
 }
 
+/// Cap-table view of a single filled role on a TRUST.
+/// Matches the shape the UI Ownership tab queries:
+/// `{ account roleTypeId slotIndex ipfsCid }`.
+///
+/// `role_type_id` is the on-chain `roleId` (bytes32 hex). `slot_index` is
+/// always 0 — the on-chain events don't emit it; the field is included for
+/// UI compatibility. `ipfs_cid` is populated when the indexer has seen
+/// `Role_RoleAssignmentStatusUpdated`; null otherwise.
+#[derive(SimpleObject, Clone)]
+pub struct TrustRoleAssignment {
+    /// Address currently holding this role.
+    pub account: String,
+    /// The role's bytes32 identifier — used as roleTypeId by the UI.
+    pub role_type_id: String,
+    /// Always 0 — on-chain events don't carry slot index.
+    pub slot_index: i32,
+    /// IPFS CID of the role metadata (null if not yet indexed).
+    pub ipfs_cid: Option<String>,
+    /// Block where the current assignment was made.
+    pub assigned_block: u64,
+    /// Tx hash of the current assignment.
+    pub assigned_tx: String,
+}
+
+impl From<store::TrustRoleAssignmentRow> for TrustRoleAssignment {
+    fn from(r: store::TrustRoleAssignmentRow) -> Self {
+        TrustRoleAssignment {
+            account: r.account_address,
+            role_type_id: r.role_id,
+            slot_index: 0,
+            ipfs_cid: r.ipfs_cid,
+            assigned_block: r.assigned_block,
+            assigned_tx: r.assigned_tx,
+        }
+    }
+}
+
 /// GraphQL projection of a permissions audit-log row.
 #[derive(SimpleObject, Clone)]
 pub struct PermissionsEvent {
@@ -1051,17 +1088,18 @@ impl Query {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    /// All roles across every Role module attached to a TRUST, identified by
-    /// its on-chain trust_id (bytes32 hex). Oldest first.
-    /// Returns an empty list if the trust has no role modules indexed yet.
+    /// Cap-table view: all currently-filled roles across every Role module
+    /// attached to a TRUST, identified by its on-chain trust_id (bytes32 hex).
+    /// Returns `{ account, roleTypeId, slotIndex, ipfsCid, assignedBlock, assignedTx }`.
+    /// Returns an empty list if the trust has no role modules or no filled roles.
     async fn roles_for_trust(
         &self,
         ctx: &Context<'_>,
         trust_id: String,
-    ) -> async_graphql::Result<Vec<Role>> {
+    ) -> async_graphql::Result<Vec<TrustRoleAssignment>> {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
-        let rows = store::get_roles_for_trust(&conn, &trust_id)
+        let rows = store::get_trust_role_assignments(&conn, &trust_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
     }

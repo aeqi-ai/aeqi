@@ -716,6 +716,35 @@ const MIGRATIONS: &[(&str, &str)] = &[
           ON fund_position_interactions(module_address, position_id, block_number);
         "#,
     ),
+    (
+        "031_trust_role_assignments",
+        r#"
+        -- Current-state cap-table for roles. One row per (module, role_id)
+        -- representing who currently holds that role. This is a snapshot, not an
+        -- audit log — upserted on Role_RoleAssigned / Role_RoleTransferred and
+        -- deleted on Role_RoleResigned / Role_RoleRemoved.
+        --
+        -- role_id is the on-chain bytes32 identifier (keccak256-derived). The
+        -- UI treats it as roleTypeId — a stable identity for the role type.
+        -- ipfs_cid is populated from Role_RoleAssignmentStatusUpdated when
+        -- that event fires; may be NULL if only the simple Assigned event was
+        -- seen (the simpler event doesn't carry metadata).
+        -- slot_index is not emitted in any on-chain event — stored as 0.
+        CREATE TABLE IF NOT EXISTS trust_role_assignments (
+            module_address TEXT NOT NULL,
+            role_id TEXT NOT NULL,
+            account_address TEXT NOT NULL,
+            ipfs_cid TEXT,
+            assigned_block INTEGER NOT NULL,
+            assigned_tx TEXT NOT NULL,
+            PRIMARY KEY (module_address, role_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_trust_role_assignments_module
+          ON trust_role_assignments(module_address);
+        CREATE INDEX IF NOT EXISTS idx_trust_role_assignments_account
+          ON trust_role_assignments(account_address);
+        "#,
+    ),
 ];
 
 /// Open the SQLite database, applying any pending migrations.
@@ -1298,6 +1327,134 @@ pub fn get_role_assignments(
                 log_index: r.get::<_, i64>(6)? as u64,
             })
         })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Upsert the current occupant of a role (cap-table snapshot).
+/// Called on Role_RoleAssigned and the `transferred_to` arm of Role_RoleTransferred.
+pub fn upsert_trust_role_assignment(
+    conn: &Connection,
+    module_address: &str,
+    role_id: &str,
+    account_address: &str,
+    ipfs_cid: Option<&str>,
+    block_number: u64,
+    tx_hash: &str,
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO accounts (address, first_seen_block, first_seen_tx)
+         VALUES (?1, ?2, ?3)",
+        params![account_address, block_number as i64, tx_hash],
+    )?;
+    tx.execute(
+        "INSERT INTO trust_role_assignments
+             (module_address, role_id, account_address, ipfs_cid, assigned_block, assigned_tx)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT (module_address, role_id) DO UPDATE SET
+             account_address = excluded.account_address,
+             ipfs_cid        = COALESCE(excluded.ipfs_cid, ipfs_cid),
+             assigned_block  = excluded.assigned_block,
+             assigned_tx     = excluded.assigned_tx",
+        params![
+            module_address,
+            role_id,
+            account_address,
+            ipfs_cid,
+            block_number as i64,
+            tx_hash
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Remove the current occupant of a role (Role_RoleResigned / Role_RoleRemoved).
+/// No-op if the role had no occupant row.
+pub fn delete_trust_role_assignment(
+    conn: &Connection,
+    module_address: &str,
+    role_id: &str,
+) -> Result<()> {
+    conn.execute(
+        "DELETE FROM trust_role_assignments WHERE module_address = ?1 AND role_id = ?2",
+        params![module_address, role_id],
+    )?;
+    Ok(())
+}
+
+/// Cap-table view: all roles currently assigned across every Role module
+/// attached to the given TRUST (identified by trust_id, the on-chain bytes32).
+/// Returns an empty Vec if the trust has no role module or no filled roles.
+#[derive(Debug, Clone)]
+pub struct TrustRoleAssignmentRow {
+    pub module_address: String,
+    pub role_id: String,
+    pub account_address: String,
+    pub ipfs_cid: Option<String>,
+    pub assigned_block: u64,
+    pub assigned_tx: String,
+}
+
+pub fn get_trust_role_assignments(
+    conn: &Connection,
+    trust_id: &str,
+) -> Result<Vec<TrustRoleAssignmentRow>> {
+    // Resolve trust_id → address.
+    let trust_address: Option<String> = conn
+        .query_row(
+            "SELECT address FROM trusts WHERE trust_id = ?1",
+            params![trust_id],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten();
+    let Some(trust_address) = trust_address else {
+        return Ok(Vec::new());
+    };
+
+    // Find all module addresses attached to this trust.
+    let mut module_stmt =
+        conn.prepare("SELECT module_address FROM modules WHERE trust_address = ?1")?;
+    let module_addresses: Vec<String> = module_stmt
+        .query_map(params![trust_address], |r| r.get(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if module_addresses.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build IN clause dynamically (module count is small, always < 20).
+    let placeholders = module_addresses
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT module_address, role_id, account_address, ipfs_cid,
+                assigned_block, assigned_tx
+         FROM trust_role_assignments
+         WHERE module_address IN ({})
+         ORDER BY assigned_block ASC",
+        placeholders
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(
+            rusqlite::params_from_iter(module_addresses.iter()),
+            |r| {
+                Ok(TrustRoleAssignmentRow {
+                    module_address: r.get(0)?,
+                    role_id: r.get(1)?,
+                    account_address: r.get(2)?,
+                    ipfs_cid: r.get(3)?,
+                    assigned_block: r.get::<_, i64>(4)? as u64,
+                    assigned_tx: r.get(5)?,
+                })
+            },
+        )?
         .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(rows)
 }
@@ -3730,5 +3887,61 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM trusts", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn trust_role_assignments_cap_table_snapshot() {
+        let dir = tempdir().unwrap();
+        let conn = open(dir.path().join("test.db")).expect("open");
+
+        let trust_addr = "0x9131b1dec7d1fe791c599e9d0b94d6414cae0747";
+        let trust_id = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        let creator = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+        let module_addr = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
+        let module_id = "0x000000000000000000000000000000000000000000000000000000000000cafe";
+        let role_id = "0x000000000000000000000000000000000000000000000000000000000000aaaa";
+        let alice = "0xa0ee7a142d267c1f36714e4a8f75612f20a79720";
+        let bob = "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65";
+
+        // Set up trust + module so get_trust_role_assignments can resolve.
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 10, "0xtx0").unwrap();
+        insert_module(&conn, trust_addr, module_id, module_addr, "0x1", 11, "0xtx1").unwrap();
+
+        // No assignments yet.
+        let rows = get_trust_role_assignments(&conn, trust_id).unwrap();
+        assert_eq!(rows.len(), 0);
+
+        // Assign alice.
+        upsert_trust_role_assignment(&conn, module_addr, role_id, alice, None, 20, "0xtx2")
+            .unwrap();
+        let rows = get_trust_role_assignments(&conn, trust_id).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].account_address, alice);
+        assert_eq!(rows[0].role_id, role_id);
+        assert!(rows[0].ipfs_cid.is_none());
+
+        // Transfer to bob — upsert replaces alice.
+        upsert_trust_role_assignment(
+            &conn,
+            module_addr,
+            role_id,
+            bob,
+            Some("QmBobCID"),
+            30,
+            "0xtx3",
+        )
+        .unwrap();
+        let rows = get_trust_role_assignments(&conn, trust_id).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].account_address, bob);
+        assert_eq!(rows[0].ipfs_cid.as_deref(), Some("QmBobCID"));
+
+        // Resign — row removed.
+        delete_trust_role_assignment(&conn, module_addr, role_id).unwrap();
+        let rows = get_trust_role_assignments(&conn, trust_id).unwrap();
+        assert_eq!(rows.len(), 0);
+
+        // Delete on non-existent is a no-op.
+        delete_trust_role_assignment(&conn, module_addr, role_id).unwrap();
     }
 }

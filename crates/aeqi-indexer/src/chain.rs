@@ -178,6 +178,10 @@ pub mod poll {
     /// account-event variants (Assigned, Resigned, Removed, Transferred).
     /// `kind` discriminates the variant; for Role_RoleTransferred the
     /// caller invokes this helper twice (transferred_from + transferred_to).
+    ///
+    /// Also maintains the cap-table snapshot in `trust_role_assignments`:
+    /// - `assigned` / `transferred_to` → upsert current occupant
+    /// - `resigned` / `removed` / `transferred_from` → delete occupant
     async fn persist_role_assignment(
         db: &Arc<Mutex<Connection>>,
         log: &alloy::rpc::types::Log,
@@ -203,6 +207,24 @@ pub mod poll {
             kind,
             coord,
         )?;
+        // Update cap-table snapshot.
+        match kind {
+            "assigned" | "transferred_to" => {
+                store::upsert_trust_role_assignment(
+                    &conn,
+                    &module_address,
+                    role_id_hex,
+                    account_hex,
+                    None,
+                    block_num,
+                    tx_hash,
+                )?;
+            }
+            "resigned" | "removed" | "transferred_from" => {
+                store::delete_trust_role_assignment(&conn, &module_address, role_id_hex)?;
+            }
+            _ => {}
+        }
         tracing::info!(
             "indexed Role_{}: module={} role={} account={} block={}",
             kind,
