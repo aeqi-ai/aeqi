@@ -930,8 +930,7 @@
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
-  background: var(--bg-base);
-  box-shadow: inset 0 0 0 1px var(--border-faint);
+  background: var(--bg-row);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -1194,37 +1193,33 @@
   text-transform: uppercase;
   padding: 2px 7px;
   border-radius: 2px;
-  box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-secondary);
-  background: transparent;
+  background: var(--bg-row);
   white-space: nowrap;
 }
 
 .mp-tier-pill[data-tier="free"] {
   color: var(--color-success);
-  border-color: var(--color-success-border, var(--color-success));
   background: var(--color-success-bg);
 }
 
 .mp-tier-pill[data-tier="cheap"] {
   color: var(--text-secondary);
-  border-color: var(--border);
 }
 
 .mp-tier-pill[data-tier="balanced"] {
   color: var(--text-primary);
-  border-color: var(--border-hover);
+  background: var(--bg-surface);
 }
 
 .mp-tier-pill[data-tier="premium"] {
   color: var(--text-primary);
-  border-color: var(--text-primary);
+  background: var(--bg-surface);
 }
 
 .mp-tier-pill--custom {
   color: var(--text-primary);
-  border-color: var(--border-hover);
-  border-style: dashed;
+  background: var(--bg-surface);
 }
 
 /* -------- Popover panel (overrides Popover primitive defaults) -------- */
@@ -1290,7 +1285,6 @@
   background: var(--bg-row);
   border-radius: 3px;
   color: var(--text-secondary);
-  box-shadow: inset 0 0 0 1px var(--border-faint);
 }
 
 /* -------- List -------- */
@@ -1485,7 +1479,6 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 1px 5px;
-  box-shadow: inset 0 0 0 1px var(--border-faint);
   border-radius: 2px;
   color: var(--text-muted);
   background: var(--bg-row);
@@ -2019,7 +2012,7 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-row);
 }
 
 .account-invite-item--available {
@@ -2317,7 +2310,6 @@
   padding: 1px 6px;
   border-radius: var(--key-pill-radius, 4px);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   color: var(--text-muted);
 }
 
@@ -2557,7 +2549,6 @@
   height: 100%;
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
-  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .graph-legend {
@@ -2942,10 +2933,9 @@
 .key-new-value {
   font-family: var(--font-sans);
   font-size: 0.82rem;
-  background: var(--bg-primary);
+  background: var(--bg-row);
   padding: 4px 8px;
   border-radius: 4px;
-  box-shadow: inset 0 0 0 1px var(--border);
   user-select: all;
   word-break: break-all;
 }
@@ -2963,10 +2953,9 @@
 .key-new-code {
   font-family: var(--font-sans);
   font-size: 0.78rem;
-  background: var(--bg-primary);
+  background: var(--bg-row);
   padding: 8px 12px;
   border-radius: 4px;
-  box-shadow: inset 0 0 0 1px var(--border);
   white-space: pre;
   flex: 1;
 }
@@ -3277,16 +3266,14 @@
     box-shadow 0.15s;
 }
 .quest-col[data-status="in_progress"] {
-  /* Quiet ring rather than a bordered look — keeps the in-progress
-     column anchored visually without re-introducing the boxy chrome. */
-  box-shadow: inset 0 0 0 1px var(--accent-dim);
+  background: color-mix(in oklch, var(--accent) 4%, var(--bg-row));
 }
 /* Active drop target — subtle accent frame + lifted background; children
    keep their own hover so the drop still feels precise. */
 .quest-col[data-drop-target] {
-  border-color: var(--color-accent);
   background: var(--color-accent-bg);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 .quest-col[data-drop-target] .quest-col-header {
   background: transparent;
@@ -3558,9 +3545,8 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-base);
+  background: var(--bg-row);
   color: var(--text-secondary);
-  box-shadow: inset 0 0 0 1px var(--border);
   white-space: nowrap;
 }
 .quest-detail-section {
@@ -3613,8 +3599,7 @@
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-secondary);
-  background: var(--bg-canvas);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-row);
   padding: 3px 8px;
   border-radius: 3px;
   word-break: break-all;

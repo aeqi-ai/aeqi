@@ -122,9 +122,8 @@
 }
 
 .cam-hero {
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-4);
-  box-shadow: inset 0 -1px 0 0 var(--border-subtle, var(--border));
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-5);
 }
 
 .cam-hero-eyebrow {

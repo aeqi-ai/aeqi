@@ -497,9 +497,6 @@
   padding: 14px 16px 12px calc(16px + 2px);
   background: var(--color-card-muted);
   border-radius: var(--radius-md);
-  /* Hairline frame keeps it from looking like a callout — this is still
-     the agent's voice, just a more formal mode. */
-  box-shadow: inset 0 0 0 1px var(--border-faint);
 }
 .asv-msg-ask .asv-msg-body::before {
   /* Left ink rail mirrors the inbox row's `.inbox-row::before` so the
@@ -681,7 +678,7 @@
 /* Code blocks — with header */
 .asv-codeblock {
   margin: 10px 0;
-  box-shadow: inset 0 0 0 1px var(--texture-glass-border);
+  border: 1px solid var(--texture-glass-border);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -733,7 +730,7 @@
 /* Fallback for code blocks without language class */
 .asv-msg-assistant .asv-msg-content pre {
   background: var(--elevation-2);
-  box-shadow: inset 0 0 0 1px var(--texture-glass-border);
+  border: 1px solid var(--texture-glass-border);
   padding: 14px 16px;
   border-radius: var(--radius-md);
   overflow-x: auto;
@@ -767,7 +764,7 @@
 }
 .asv-msg-assistant .asv-msg-content th,
 .asv-msg-assistant .asv-msg-content td {
-  box-shadow: inset 0 0 0 1px var(--border);
+  border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
 }
@@ -1019,7 +1016,6 @@
 .asv-trail {
   margin: 4px 0 2px;
   background: var(--bg-row);
-  box-shadow: inset 0 0 0 1px var(--border-faint);
   border-left: 2px solid var(--color-border-hover);
   border-radius: var(--radius-md);
   transition: var(--transition-normal);
@@ -1265,7 +1261,6 @@
   padding: 2px 6px;
   border-radius: var(--radius-xs);
   background: var(--bg-subtle);
-  box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
@@ -1716,8 +1711,7 @@
   bottom: calc(100% + 6px);
 }
 .asv-send-stack .asv-send.busy {
-  background: var(--bg-surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-row);
   color: var(--text-primary);
 }
 .asv-send-stack .asv-send.busy:hover {
@@ -1764,8 +1758,7 @@
   align-items: flex-start;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
-  background: var(--stat-card-bg, var(--bg-base));
-  box-shadow: inset 0 0 0 1px var(--stat-card-border, var(--border));
+  background: var(--stat-card-bg, var(--bg-row));
   border-top: 2px solid var(--border-hover);
   border-radius: var(--radius-md);
   color: inherit;
@@ -1976,7 +1969,7 @@
 .dash-quest-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 1px;
 }
 
 .dash-quest-row {
@@ -1987,7 +1980,6 @@
   padding: 7px 8px;
   background: transparent;
   border: none;
-  box-shadow: inset 0 1px 0 0 var(--border-faint, rgba(0, 0, 0, 0.04));
   color: inherit;
   font: inherit;
   font-size: var(--font-size-xs);
@@ -2030,7 +2022,6 @@
   font-size: var(--font-size-2xs);
   color: var(--text-muted);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   border-radius: var(--key-pill-radius, 4px);
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2054,7 +2045,6 @@
   font-size: var(--font-size-2xs);
   color: var(--text-muted);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   border-radius: var(--key-pill-radius, 4px);
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2146,7 +2136,6 @@
   font-size: var(--font-size-2xs);
   color: var(--text-muted);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   border-radius: var(--key-pill-radius, 4px);
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2180,7 +2169,6 @@
   gap: 5px;
   padding: 2px 8px 2px 6px;
   background: var(--color-ink-card, #0a0a0b);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: var(--font-size-2xs);
@@ -2189,9 +2177,7 @@
   vertical-align: middle;
   line-height: 1.5;
   max-width: 280px;
-  transition:
-    background 0.1s ease,
-    border-color 0.1s ease;
+  transition: background 0.1s ease;
   user-select: none;
   white-space: nowrap;
 }
@@ -2265,9 +2251,8 @@
   padding: 0 5px;
   border-radius: var(--radius-full);
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.55);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .aeqi-ref-pill--done {
@@ -2293,9 +2278,8 @@
   font-size: var(--font-size-3xs);
   padding: 0 5px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 /* Loading skeleton — matches card shape, pulses softly */

@@ -248,8 +248,7 @@
   font-family: var(--font-sans);
   font-size: 11px;
   padding: 1px 6px;
-  background: var(--bg-canvas);
-  box-shadow: inset 0 0 0 1px var(--border-faint);
+  background: var(--bg-row);
   border-radius: 4px;
   color: var(--text-secondary);
 }
