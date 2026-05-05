@@ -901,7 +901,7 @@
 .integration-card-soon {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-row);
   border: 1px solid var(--border-faint);
   color: var(--text-muted);

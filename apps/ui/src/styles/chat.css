@@ -86,7 +86,7 @@
   min-width: 22px;
   padding: 0 4px;
   background: var(--bg-row);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: var(--font-size-2xs);
   font-weight: 500;
@@ -147,7 +147,7 @@
   height: 30px;
   padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -266,7 +266,7 @@
   height: 30px;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
   font-family: var(--font-sans);

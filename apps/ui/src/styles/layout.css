@@ -3717,7 +3717,7 @@
   color: var(--text-primary);
   background: var(--input-bg, var(--bg-base));
   border: 1px solid var(--input-border, var(--border));
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   flex-shrink: 0;
   transition:
@@ -3963,7 +3963,7 @@
   color: var(--text-muted);
   background: transparent;
   border: 1px dashed var(--border-hover);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     color 0.15s,
@@ -4323,7 +4323,7 @@
   height: 12px;
   background: var(--bg-row);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
@@ -4370,7 +4370,7 @@
   color: var(--text-primary);
   background: var(--bg-row);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     color 0.12s ease,
@@ -4505,7 +4505,7 @@
   color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .ideas-list-search-clear:hover {
@@ -4785,7 +4785,7 @@
   color: var(--accent);
   background: var(--accent-bg, color-mix(in oklch, var(--accent) 6%, transparent));
   border: 1px solid var(--accent-dim);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 1px 7px;
   flex-shrink: 0;
   opacity: 0.82;
@@ -5330,7 +5330,7 @@
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   transition:
     border-color 0.15s,
     color 0.15s,
@@ -5360,7 +5360,7 @@
   color: var(--text-muted);
   background: transparent;
   border: 1px dashed var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     color 0.15s,
@@ -5384,7 +5384,7 @@
   color: var(--text-primary);
   background: var(--bg-base);
   border: 1px solid var(--accent-dim);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   outline: none;
 }
 .ideas-ref-picker-list {
@@ -5628,7 +5628,7 @@
 .mention {
   display: inline;
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font: inherit;
@@ -5812,7 +5812,7 @@
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -5846,7 +5846,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   color: var(--text-muted);
   background: transparent;
   border: 1px dashed var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     color 0.15s,
@@ -5870,7 +5870,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   color: var(--text-primary);
   background: var(--bg-base);
   border: 1px solid var(--accent-dim);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   outline: none;
 }
 .ideas-tag-suggest {
@@ -6670,7 +6670,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   letter-spacing: 0;
   color: var(--text-secondary);
   background: var(--color-card-muted, var(--bg-elevated));
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-variant-numeric: tabular-nums;
   text-transform: none;
 }
@@ -6693,7 +6693,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   font-size: 12px;
   color: var(--text-primary);
   background: var(--color-card-elevated, var(--bg-elevated));
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
   white-space: nowrap;
   z-index: 10;
