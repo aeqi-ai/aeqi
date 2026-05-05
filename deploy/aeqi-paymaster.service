@@ -1,0 +1,33 @@
+[Unit]
+Description=aeqi paymaster signing service (ERC-4337 gas sponsorship)
+Documentation=https://aeqi.ai/docs/aa-paymaster-deployment
+After=network.target aeqi-bundler.service
+Wants=aeqi-bundler.service
+
+[Service]
+Type=simple
+User=aeqi-paymaster
+Group=aeqi-paymaster
+WorkingDirectory=/var/lib/aeqi-paymaster
+
+# Env file holds the signing key — mode 600, owned by aeqi-paymaster.
+# Never put the key in this unit file.
+EnvironmentFile=/etc/aeqi-paymaster/env
+
+ExecStart=/usr/local/bin/aeqi-paymaster
+Restart=on-failure
+RestartSec=5s
+
+# Tighten the blast radius: no new privileges, private tmp, read-only root.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aeqi-paymaster
+
+# Log to journal.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aeqi-paymaster
+
+[Install]
+WantedBy=multi-user.target

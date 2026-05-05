@@ -17,7 +17,11 @@ const EP_V07: &str = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 const CHAIN_ID_ANVIL: &str = "0x7a69"; // 31337
 
 /// Perform a raw JSON-RPC call and return the parsed response body.
-async fn rpc(client: &reqwest::Client, method: &str, params: serde_json::Value) -> serde_json::Value {
+async fn rpc(
+    client: &reqwest::Client,
+    method: &str,
+    params: serde_json::Value,
+) -> serde_json::Value {
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "method": method,
