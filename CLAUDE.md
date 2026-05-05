@@ -128,6 +128,15 @@ verify they parse — `node -e "console.log(/\/roles\/[0-9a-f]/.test('/roles/ab'
 Cost (2026-05-05): v11 walk failed on first run due to `\\/roles\\/` in v11-H
 director-card check; required a second edit pass to un-escape. ~2 min.
 
+**UX walk — `ACTION_PILL_BUTTONS` fires on cookie consent banner (landing false positive).**
+The pill-button detector (`r >= h * 0.4 && !isIconLike`) catches aeqi-landing's
+`CookieConsent.tsx` "Essential only" / "Accept all" buttons — these render as
+`borderRadius: 999px` pill buttons by GDPR UX convention. They are NOT product UI.
+The detector correctly fires P1 on all three landing routes every walk, creating noise.
+Fix in the next walk script version: exclude elements inside `[class*=cookie],[class*=consent]`
+from the pill-button scan, or accept the P1 as a known-false on landing routes only.
+Cost (2026-05-05): v12 walk showed 3x P1 on landing pages; traced to CookieConsent.tsx.
+
 **UX walk — indexer GraphQL field shapes differ by query type.**
 Pre-walk probes and walk-script GraphQL queries must use the exact argument names the
 indexer schema exposes. Confirmed shapes as of v11 (2026-05-05):
