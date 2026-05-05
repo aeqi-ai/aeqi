@@ -35,7 +35,7 @@ export default function RoundAvatar({
 
   const hue = Math.abs(hash) % 360;
   const bg = `hsl(${hue}, 35%, 78%)`;
-  const fg = `hsl(${hue}, 40%, 30%)`;
+  const fg = `var(--color-ink)`;
 
   const initials = name
     .split(/[\s-]+/)
