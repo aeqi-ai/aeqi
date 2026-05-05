@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.23.0 — 2026-05-05
+
+**Headline:** UX 9.3 (from 9.1) — Director list-view name, treasury URL detection, landing nav lowercase.
+
+- Director list/cards view: UUID → display name (was only fixed in detail view in v0.22)
+- /me/treasury copy: URL-based personal detection (entity.type wasn't reliable)
+- aeqi-landing: hardcoded React nav title "AEQI Entity & AA" → "aeqi Entity & AA"
+- Walk-detector improvements: body-text scan pattern documented
+
 ## v0.22.0 — 2026-05-05
 
 **Headline:** UX score 9.0 — Director name resolution, hairline cleanup, personal treasury vocab.
