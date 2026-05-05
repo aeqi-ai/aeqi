@@ -73,6 +73,7 @@ export const InBadge: Story = {
   name: "Inside Badge",
   render: (args) => (
     <div
+      className="pill-badge-example"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -80,7 +81,6 @@ export const InBadge: Story = {
         padding: "2px 6px",
         backgroundColor: "var(--color-accent-bg)",
         color: "var(--color-accent)",
-        borderRadius: "999px",
         fontSize: 12,
         fontWeight: 600,
       }}

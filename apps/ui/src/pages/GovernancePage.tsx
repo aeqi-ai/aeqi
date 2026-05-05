@@ -179,12 +179,7 @@ function GrantRow({ grantLabel, grantDesc, holders, onOpenRole }: GrantRowProps)
           }}
         >
           {holders.map((r) => (
-            <Button
-              key={r.id}
-              variant="secondary"
-              size="sm"
-              onClick={() => onOpenRole(r.id)}
-            >
+            <Button key={r.id} variant="secondary" size="sm" onClick={() => onOpenRole(r.id)}>
               {r.title}
               {r.founder ? " · founder" : ""}
             </Button>
@@ -296,12 +291,12 @@ function VotingPowerChip({ votingPower }: { votingPower: IndexedVotingPower }) {
   const formatted = formatVotes(votingPower.votingPower);
   return (
     <div
+      className="voting-power-chip"
       style={{
         display: "flex",
         alignItems: "center",
         gap: "var(--space-xs)",
         background: "var(--color-card)",
-        borderRadius: "999px",
         padding: "2px var(--space-sm)",
       }}
     >
@@ -383,6 +378,7 @@ function VoteBar({ forVotes, againstVotes }: { forVotes: string; againstVotes: s
         <span>Against {formatVotes(againstVotes)}</span>
       </div>
       <div
+        className="vote-bar-container"
         role="meter"
         aria-label="Vote distribution"
         aria-valuenow={Math.round(forPct)}
@@ -390,17 +386,16 @@ function VoteBar({ forVotes, againstVotes }: { forVotes: string; againstVotes: s
         aria-valuemax={100}
         style={{
           height: 4,
-          borderRadius: "999px",
           background: "var(--color-bg-base)",
           overflow: "hidden",
         }}
       >
         <div
+          className="vote-bar-fill"
           style={{
             height: "100%",
             width: `${forPct}%`,
             background: "var(--color-text-primary)",
-            borderRadius: "999px",
           }}
         />
       </div>

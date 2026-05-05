@@ -4160,3 +4160,23 @@
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
+
+/* ── Pill-radius reset for buttons and chips ───── */
+
+button:not([data-pill-allowed]) {
+  border-radius: var(--radius-sm);
+}
+
+/* Voting power chip — pill-shaped indicator */
+.voting-power-chip {
+  border-radius: 999px;
+}
+
+/* Vote bar — pill-shaped meter container and fill */
+.vote-bar-container {
+  border-radius: 999px;
+}
+
+.vote-bar-fill {
+  border-radius: 999px;
+}
