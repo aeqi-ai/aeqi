@@ -500,6 +500,23 @@ NOT work in this project — npm spawns a fresh shell that resets PATH,
 so the binary injections never reach the subprocess. The `node` form
 is the only reliable approach when `.bin/` is contested.
 
+**`npm run verify` exit code 216 = binary not found, not a code error.**
+Exit 216 is Node.js's "could not find the executable" signal — it means
+the first binary in the verify chain (`tsc`, `prettier`, etc.) was missing,
+not that your TypeScript or lint had errors. When you see exit 216 from
+`npm run verify`, check `ls node_modules/typescript/bin/tsc` before
+chasing phantom type errors. Fix is always `npm install --ignore-scripts`,
+not editing code. Cost (2026-05-05): ~30s confusion before diagnosing.
+
+**P0 triage: run prettier on only the changed file, not `src/**/*`.**
+When main has pre-existing prettier drift in unrelated files (e.g.
+`RolesList.tsx` failing format checks from a prior session's merge), a
+blanket `prettier --check "src/**/*.{ts,tsx,css}"` creates false-alarm
+noise during a P0 fix and can look like your change is dirty. Narrow to
+the changed file for the surgical signal: `prettier --check
+"src/pages/YourChangedFile.tsx"`. If it's clean, the P0 fix is clean —
+the other file's drift is pre-existing and not your regression.
+
 **eslint must be invoked via the worktree symlink path, not the parent path.** When the parent's `node_modules/eslint/` exists on disk but is partially extracted (stat shows the directory, `ls` shows files, but `node /home/claudedev/aeqi/apps/ui/node_modules/eslint/bin/eslint.js` throws `MODULE_NOT_FOUND`), the worktree symlink path resolves correctly: `node /home/claudedev/aeqi-<topic>/apps/ui/node_modules/eslint/bin/eslint.js`. The symlink traversal uses a different inode than the direct path when concurrent writes are in progress. Always use the worktree symlink form for eslint specifically. Cost (2026-05-05): one MODULE_NOT_FOUND failure that recovered by switching to the symlink path.
 
 **vite is the exception: use `./node_modules/.bin/vite`, NOT the absolute
