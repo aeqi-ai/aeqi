@@ -288,6 +288,22 @@ subsequent edit at `/home/claudedev/aeqi-<topic>/apps/ui/src/foo.tsx`
 — it errors with "File has not been read yet." Always Read at the
 exact path you intend to Edit.
 
+**Confirm symlink exists immediately after worktree creation.** Before
+running any npm command, verify the symlink was created:
+
+```bash
+ls -la /home/claudedev/aeqi-<topic>/apps/ui/node_modules
+# Output should be: lrwxrwxrwx ... -> /home/claudedev/aeqi/apps/ui/node_modules
+```
+
+If the symlink doesn't exist, the worktree's node_modules is either a partial
+real tree (created by an errant npm command) or genuinely missing. Recreate it:
+
+```bash
+rm /home/claudedev/aeqi-<topic>/apps/ui/node_modules 2>/dev/null
+ln -s /home/claudedev/aeqi/apps/ui/node_modules /home/claudedev/aeqi-<topic>/apps/ui/node_modules
+```
+
 **Pre-verify: ensure parent node_modules/.bin/ is healthy.** Before running
 verify in the worktree, check that the parent's `.bin/` has all required
 binaries (tsc, prettier, eslint, vite). If parallel sibling worktrees or a
