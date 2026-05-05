@@ -1,6 +1,11 @@
 /** Mirrored from aeqi-landing/src/pricing.ts. Single source of truth for pricing.
  *  Update both files when prices change.
  *
+ *  Atomic unit: workspace (the user account). One subscription unlocks the
+ *  workspace. Companies are created inside the workspace — up to
+ *  WORKSPACE_COMPANY_CAP by default (fair-use cap, not a hard enforcement
+ *  boundary for agents paying via x402).
+ *
  *  One offer, two payment rails.
  *
  *  Card (default): $19 first month → $49 / month after. Stripe runs this as a
@@ -12,17 +17,25 @@
  *  platform-side cron pull from external EOA. Phase B (after wallet build):
  *  default rail; passkey-Entity USDC pull, paymaster-sponsored gas.
  *
- *  Subscription includes $25 / month of inference credit, denominated in
- *  dollars (any model). Top up anytime via card or USDC. External callers
- *  pay per-call via x402 (cost + 20%) — see aeqi-economy-plan.md.
+ *  Subscription includes $25 / month of inference credit, pooled across all
+ *  Companies in the workspace. Top up anytime via card or USDC. External
+ *  callers pay per-call via x402 (cost + 20%) — see aeqi-economy-plan.md.
  *
  *  No tier picker, no trial, no annual. `FOUNDER_FEE` is the effective
  *  first-month price on both rails.
  */
 
 export const FOUNDER_FEE = 19;
-export const COMPANY_MONTHLY = 49;
+/** $49/mo per workspace — unlimited Companies up to WORKSPACE_COMPANY_CAP. */
+export const WORKSPACE_MONTHLY = 49;
+/** USDC equivalent ($4 discount = Stripe fee passthrough). */
 export const COMPANY_MONTHLY_USDC = 45;
+
+/** Default fair-use cap: number of Companies per workspace. */
+export const WORKSPACE_COMPANY_CAP = 10;
+
+/** Kept for backward compatibility — equals WORKSPACE_MONTHLY. */
+export const COMPANY_MONTHLY = WORKSPACE_MONTHLY;
 
 export const INFERENCE_CREDIT_USD = 25;
 
@@ -40,12 +53,12 @@ export interface Feature {
 }
 
 export const FEATURES: Feature[] = [
-  { text: "Run your own autonomous company" },
+  { text: `Run up to ${WORKSPACE_COMPANY_CAP} autonomous companies` },
   { text: "Unlimited agents" },
   { text: "Managed hosting + custom domain" },
   { text: "Built-in ownership & governance" },
   {
-    text: `${RESOURCE_PACK.inferenceUsd} / month inference credit (any model)`,
+    text: `${RESOURCE_PACK.inferenceUsd} / month inference credit, pooled across all companies`,
     highlight: true,
   },
   { text: "Top up anytime — card or USDC" },
@@ -58,7 +71,7 @@ export const FEATURES: Feature[] = [
 ];
 
 /** Single plan identifier used everywhere — DB, Stripe metadata, API. */
-export const PLAN_ID = "company" as const;
+export const PLAN_ID = "workspace" as const;
 export type PlanId = typeof PLAN_ID;
 
 /** Format integer cents as a localized currency string. */
