@@ -530,6 +530,28 @@ impl From<store::RoleRow> for Role {
     }
 }
 
+/// Treasury token balance for a TRUST contract. `token_address` is the
+/// ERC20/Token-module contract; `balance` is a uint256 hex string.
+#[derive(SimpleObject, Clone)]
+pub struct TreasuryBalance {
+    pub token_address: String,
+    pub balance: String,
+    pub last_updated_block: u64,
+}
+
+/// A Transfer event that touched the TRUST treasury (sent or received).
+#[derive(SimpleObject, Clone)]
+pub struct TreasuryTransfer {
+    pub token_address: String,
+    pub from_address: String,
+    pub to_address: String,
+    /// uint256 hex
+    pub value: String,
+    pub block_number: u64,
+    pub tx_hash: String,
+    pub log_index: u64,
+}
+
 /// GraphQL projection of a role assignment audit row.
 #[derive(SimpleObject, Clone)]
 pub struct RoleAssignment {
@@ -1027,6 +1049,71 @@ impl Query {
         let rows = store::get_permissions_events(&conn, &trust_address, &entity_id)
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// All roles across every Role module attached to a TRUST, identified by
+    /// its on-chain trust_id (bytes32 hex). Oldest first.
+    /// Returns an empty list if the trust has no role modules indexed yet.
+    async fn roles_for_trust(
+        &self,
+        ctx: &Context<'_>,
+        trust_id: String,
+    ) -> async_graphql::Result<Vec<Role>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_roles_for_trust(&conn, &trust_id)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Token balances held by the TRUST contract (treasury view). All non-zero
+    /// balances, newest-updated first. `trust_id` is the bytes32 on-chain ID.
+    async fn treasury_balances(
+        &self,
+        ctx: &Context<'_>,
+        trust_id: String,
+    ) -> async_graphql::Result<Vec<TreasuryBalance>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_treasury_balances(&conn, &trust_id)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        let out = rows
+            .into_iter()
+            .map(|r| TreasuryBalance {
+                token_address: r.token_address,
+                balance: r.balance,
+                last_updated_block: r.last_updated_block,
+            })
+            .collect();
+        Ok(out)
+    }
+
+    /// Token Transfer events that touched the TRUST address (inbound or
+    /// outbound), newest first. `limit` defaults to 50; max 200.
+    async fn treasury_transfers(
+        &self,
+        ctx: &Context<'_>,
+        trust_id: String,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<TreasuryTransfer>> {
+        let cap = limit.unwrap_or(50).clamp(1, 200) as u32;
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_treasury_transfers(&conn, &trust_id, cap)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        let out = rows
+            .into_iter()
+            .map(|r| TreasuryTransfer {
+                token_address: r.token_address,
+                from_address: r.from_address,
+                to_address: r.to_address,
+                value: r.value,
+                block_number: r.block_number,
+                tx_hash: r.tx_hash,
+                log_index: r.log_index,
+            })
+            .collect();
+        Ok(out)
     }
 }
 

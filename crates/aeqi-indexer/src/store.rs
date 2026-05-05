@@ -2757,6 +2757,152 @@ pub fn get_trust(conn: &Connection, address: &str) -> Result<Option<TrustRow>> {
     Ok(row)
 }
 
+/// All roles across every Role module attached to a TRUST, oldest first.
+///
+/// Resolves trust_id → trust.address → modules WHERE trust_address = address
+/// → roles WHERE module_address IN (those module addresses).
+/// Returns an empty Vec if the trust doesn't exist or has no role modules yet.
+pub fn get_roles_for_trust(conn: &Connection, trust_id: &str) -> Result<Vec<RoleRow>> {
+    // Resolve trust_id → address.
+    let trust_address: Option<String> = conn
+        .query_row(
+            "SELECT address FROM trusts WHERE trust_id = ?1",
+            params![trust_id],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten();
+    let Some(trust_address) = trust_address else {
+        return Ok(Vec::new());
+    };
+
+    // Find all module addresses attached to this trust.
+    let mut module_stmt = conn.prepare(
+        "SELECT module_address FROM modules WHERE trust_address = ?1",
+    )?;
+    let module_addresses: Vec<String> = module_stmt
+        .query_map(params![trust_address], |r| r.get(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if module_addresses.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build a parameterized IN clause. SQLite has no array binding so we
+    // construct the placeholders dynamically. The module count is bounded by
+    // contract configuration (typically < 20), so this is safe.
+    let placeholders = module_addresses
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT module_address, role_id, creator_address, created_block, created_tx
+         FROM roles WHERE module_address IN ({})
+         ORDER BY created_block ASC",
+        placeholders
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(
+            rusqlite::params_from_iter(module_addresses.iter()),
+            |r| {
+                Ok(RoleRow {
+                    module_address: r.get(0)?,
+                    role_id: r.get(1)?,
+                    creator_address: r.get(2)?,
+                    created_block: r.get::<_, i64>(3)? as u64,
+                    created_tx: r.get(4)?,
+                })
+            },
+        )?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Treasury balance view for a TRUST: all non-zero token balances where the
+/// TRUST contract is the holder. Returns an empty Vec if the trust has no
+/// indexed balance rows (address NULL or no Transfer events yet).
+pub fn get_treasury_balances(conn: &Connection, trust_id: &str) -> Result<Vec<TokenBalanceRow>> {
+    let trust_address: Option<String> = conn
+        .query_row(
+            "SELECT address FROM trusts WHERE trust_id = ?1",
+            params![trust_id],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten();
+    let Some(trust_address) = trust_address else {
+        return Ok(Vec::new());
+    };
+
+    let mut stmt = conn.prepare(
+        "SELECT token_address, holder_address, balance, last_updated_block
+         FROM token_balances
+         WHERE holder_address = ?1
+           AND balance != '0x0'
+         ORDER BY last_updated_block DESC",
+    )?;
+    let rows = stmt
+        .query_map(params![trust_address], |r| {
+            Ok(TokenBalanceRow {
+                token_address: r.get(0)?,
+                holder_address: r.get(1)?,
+                balance: r.get(2)?,
+                last_updated_block: r.get::<_, i64>(3)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Treasury transfer history for a TRUST: all token Transfer events where the
+/// TRUST address appears as sender or receiver, newest first. `limit` caps the
+/// result (0 = no limit for backward compat — callers should always pass a sane
+/// bound; default in GraphQL is 50).
+pub fn get_treasury_transfers(
+    conn: &Connection,
+    trust_id: &str,
+    limit: u32,
+) -> Result<Vec<TokenTransferRow>> {
+    let trust_address: Option<String> = conn
+        .query_row(
+            "SELECT address FROM trusts WHERE trust_id = ?1",
+            params![trust_id],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten();
+    let Some(trust_address) = trust_address else {
+        return Ok(Vec::new());
+    };
+
+    let cap = if limit == 0 { 200 } else { limit };
+    let mut stmt = conn.prepare(
+        "SELECT token_address, from_address, to_address, value,
+                block_number, tx_hash, log_index
+         FROM token_transfers
+         WHERE from_address = ?1 OR to_address = ?1
+         ORDER BY block_number DESC, log_index DESC
+         LIMIT ?2",
+    )?;
+    let rows = stmt
+        .query_map(params![trust_address, cap as i64], |r| {
+            Ok(TokenTransferRow {
+                token_address: r.get(0)?,
+                from_address: r.get(1)?,
+                to_address: r.get(2)?,
+                value: r.get(3)?,
+                block_number: r.get::<_, i64>(4)? as u64,
+                tx_hash: r.get(5)?,
+                log_index: r.get::<_, i64>(6)? as u64,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Look up a TRUST by trust_id. Useful for multi-sig flows where the
 /// address isn't known until TrustCreated lands.
 pub fn get_trust_by_id(conn: &Connection, trust_id: &str) -> Result<Option<TrustRow>> {
