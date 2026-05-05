@@ -256,6 +256,18 @@ Cost (2026-05-05): ~5 min across three recovery loops.
 
 **`npm install ENOTEMPTY` when sibling worktrees are active.** When running `ui-deploy.sh` while parallel subagents have active worktrees with `apps/ui/node_modules` symlinked to the parent's tree, `npm install` or `npm ci` hits `ENOTEMPTY: directory not empty, rename` on packages like viem, jsdom, walletconnect that keep file handles open. The `ui-deploy.sh` script tries `rm -rf` recovery, but that also fails with ENOTEMPTY when the handles are held by a sibling. Fallback is in-place `npm install` (no rm), which repairs `.bin/` gradually without atomicity — slower but safe. If deploy hangs on npm install and the log shows `ENOTEMPTY` repeatedly: this is expected when >1 worktree is running. Either wait for sibling worktrees to complete, or manually run `cd /home/claudedev/aeqi/apps/ui && npm install --silent` and then retry `ui-deploy.sh`. Cost (2026-05-05): deploy script hung mid-recovery due to parallel cargo build contention holding file handles.
 
+**When parent's `.bin/` is missing/broken mid-ship (rebase context).** The `/ship`
+skill's Step 0 pre-flight checks for `~/.bin/tsc` and runs `npm install` if missing.
+However, a rebase on main (Step 4) can happen AFTER Step 0 runs, and if main's
+node_modules diverged (e.g., a sibling ship ran `npm install` and left the tree
+partially corrupted), the worktree's symlink points to a broken parent. Symptom:
+post-rebase `tsc --noEmit` fails with "tsc: not found" even though `.bin/tsc` exists.
+Cause: `.bin/` has symlinks but underlying packages are partial (interrupted install).
+Fix: `cd /home/claudedev/aeqi/apps/ui && npm install --silent` — run it immediately
+when `.bin/` symlinks exist but tsc fails to execute. This recovers incomplete
+installations in-place without requiring `rm -rf`. Cost (2026-05-05): ~10 min when
+this happened mid-rebase; the recovery pattern is now canonical to prevent repeat.
+
 ## Workflow — locked
 
 **Never work on main directly.** Every non-trivial change goes through a worktree.
