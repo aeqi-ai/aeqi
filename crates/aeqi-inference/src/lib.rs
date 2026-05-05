@@ -10,7 +10,7 @@
 //! billing middleware (Tower layer, lane selected by auth header shape)
 //!   ├── SubscriptionLayer  — JWT + dollar-balance debit
 //!   ├── TreasuryLayer      — API-key + deposit-and-meter USDC (Phase 2)
-//!   └── X402Layer          — EIP-3009 per-call USDC (Phase 1)
+//!   └── X402Layer          — EIP-3009 per-call USDC (Phase 2)
 //!   ▼
 //! axum router  (src/api.rs)
 //!   ├── POST /v1/chat/completions
@@ -21,32 +21,34 @@
 //!   │  dispatches by model prefix → UpstreamProvider
 //!   ▼
 //! upstream adapters  (src/upstream/)
-//!   ├── OpenAiProvider      (gpt-*)
-//!   ├── AnthropicProvider   (claude-*)
-//!   └── DeepSeekProvider    (deepseek-*)
+//!   ├── DeepInfraProvider   (meta-llama/*, mistralai/*, Qwen/*, deepinfra/*) ← Phase 1 LIVE
+//!   ├── OpenAiProvider      (gpt-*)      ← stub
+//!   ├── AnthropicProvider   (claude-*)   ← stub
+//!   └── DeepSeekProvider    (deepseek-*) ← stub
 //! ```
 //!
 //! ## Phase status
 //!
-//! **Skeleton (current):** all upstream adapters are `unimplemented!()` stubs.
-//! Billing middleware checks auth header presence and stub balance, but does not
-//! call any real provider or charge any real money.
+//! **Phase 1 (2026-05-05):** DeepInfra provider live with streaming + cost accounting.
+//! Subscription lane gating by Bearer JWT + in-memory balance store.
+//! aeqi-platform mounts `/v1/*` with subscription layer applied.
 //!
-//! **Phase 1 (~3-4 weeks):** wire Anthropic → OpenAI → DeepSeek adapters;
-//! implement subscription lane JWT validation + SQLite balance debit; implement
-//! x402 lane EIP-3009 settlement via Coinbase Facilitator.
+//! **Phase 2:** Anthropic + OpenAI + DeepSeek adapters; SQLite balance debit;
+//! x402 lane EIP-3009 settlement; treasury lane.
 //!
-//! **Phase 2 (~2 weeks after WS-4 wallet build):** treasury lane live.
-//!
-//! ## Integration with aeqi-platform (Wave 4)
+//! ## Integration with aeqi-platform
 //!
 //! ```rust,ignore
-//! use aeqi_inference::{api::{AppState, create_router}, router::Router as InferenceRouter};
+//! use aeqi_inference::{AppState, DeepInfraProvider, InferenceRouter, create_router};
+//! use aeqi_inference::billing::subscription::{BalanceStore, SubscriptionLayer};
+//! use std::sync::Arc;
 //!
-//! let inference_state = AppState::new(InferenceRouter::new(), Default::default());
-//! let app = axum_app
-//!     .nest("/v1", create_router(inference_state.clone()))
-//!     .nest("/api/v1", create_router(inference_state));
+//! let mut router = InferenceRouter::new();
+//! router.register("deepinfra", Arc::new(DeepInfraProvider::from_env()));
+//! let state = AppState::new(router, BalanceStore::new());
+//! let inference_routes = create_router(state)
+//!     .layer(SubscriptionLayer::new(BalanceStore::new()));
+//! let app = axum_app.nest("/v1", inference_routes);
 //! ```
 
 pub mod api;
@@ -63,3 +65,4 @@ pub use types::{
     ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, ChatMessage,
     EmbeddingRequest, EmbeddingResponse, ModelInfo, ModelList,
 };
+pub use upstream::deepinfra::DeepInfraProvider;

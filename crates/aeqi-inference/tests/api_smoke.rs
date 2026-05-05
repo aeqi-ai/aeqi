@@ -53,20 +53,21 @@ async fn get_models_returns_200() {
     let data = json["data"].as_array().unwrap();
     assert!(!data.is_empty(), "model list should be non-empty");
 
-    // Verify expected model IDs are present
+    // Verify expected model IDs are present.
+    // Phase 1: DeepInfra models are live; Anthropic/OpenAI/DeepSeek are stubs.
     let ids: Vec<&str> = data.iter().map(|m| m["id"].as_str().unwrap()).collect();
-    assert!(ids.contains(&"gpt-5"), "gpt-5 should be in model list");
+    assert!(ids.contains(&"gpt-5"), "gpt-5 stub should be in model list");
     assert!(
         ids.contains(&"claude-sonnet-4-6"),
-        "claude-sonnet-4-6 should be in model list"
+        "claude-sonnet-4-6 stub should be in model list"
     );
     assert!(
         ids.contains(&"deepseek-v4"),
-        "deepseek-v4 should be in model list"
+        "deepseek-v4 stub should be in model list"
     );
     assert!(
-        ids.contains(&"llama-4-large"),
-        "llama-4-large should be in model list"
+        ids.contains(&"meta-llama/Meta-Llama-3.1-70B-Instruct"),
+        "primary DeepInfra model should be in model list"
     );
 }
 
