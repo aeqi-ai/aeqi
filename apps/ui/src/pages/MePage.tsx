@@ -87,7 +87,13 @@ function MePersonalRail({ tab }: { tab: string }) {
   if (tab === "treasury") {
     if (!personalEntityId)
       return (
-        <div style={{ padding: "var(--space-6)", color: "var(--text-muted)", fontSize: 14 }}>
+        <div
+          style={{
+            padding: "var(--space-6)",
+            color: "var(--text-muted)",
+            fontSize: "var(--font-size-base)",
+          }}
+        >
           No personal entity found.
         </div>
       );
@@ -98,7 +104,13 @@ function MePersonalRail({ tab }: { tab: string }) {
   if (tab === "agents" || tab === "events" || tab === "quests" || tab === "ideas") {
     if (!personalRootAgent?.id)
       return (
-        <div style={{ padding: "var(--space-6)", color: "var(--text-muted)", fontSize: 14 }}>
+        <div
+          style={{
+            padding: "var(--space-6)",
+            color: "var(--text-muted)",
+            fontSize: "var(--font-size-base)",
+          }}
+        >
           No personal entity found.
         </div>
       );

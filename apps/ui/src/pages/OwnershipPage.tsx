@@ -203,7 +203,7 @@ function RoleSection({ title, roles, occupantLabel, onOpenRole }: RoleSectionPro
                 style={{
                   fontSize: "var(--text-sm)",
                   color: "var(--color-text-muted)",
-                  marginTop: 2,
+                  marginTop: "var(--space-0)",
                 }}
               >
                 {occupantLabel(r)}

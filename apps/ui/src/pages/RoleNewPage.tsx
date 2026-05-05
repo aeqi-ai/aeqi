@@ -187,7 +187,7 @@ export default function RoleNewPage() {
                   value={opt.value}
                   checked={roleType === opt.value}
                   onChange={() => handleRoleTypeChange(opt.value)}
-                  style={{ marginTop: 2, accentColor: "var(--accent)" }}
+                  style={{ marginTop: "var(--space-0)", accentColor: "var(--accent)" }}
                 />
                 <span>
                   <span
@@ -330,7 +330,7 @@ export default function RoleNewPage() {
                     type="checkbox"
                     checked={checked}
                     onChange={(e) => toggleGrant(g.id, e.target.checked)}
-                    style={{ marginTop: 2, accentColor: "var(--accent)" }}
+                    style={{ marginTop: "var(--space-0)", accentColor: "var(--accent)" }}
                   />
                   <span>
                     <span

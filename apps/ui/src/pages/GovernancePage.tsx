@@ -151,7 +151,7 @@ function GrantRow({ grantLabel, grantDesc, holders, onOpenRole }: GrantRowProps)
             style={{
               color: "var(--color-text-muted)",
               fontSize: "var(--text-sm)",
-              marginTop: 2,
+              marginTop: "var(--space-0)",
             }}
           >
             {grantDesc}
