@@ -346,6 +346,8 @@ The fix is one word: `app` → `app.into_make_service_with_connect_info::<Socket
 
 **Operator CLI binaries in `src/bin/` are not deployed as services.** `migrate-to-passkey` and similar one-shot operator tools live in `crates/<crate>/src/bin/`. They are built on demand (`cargo build -p <crate> --bin <name> --release`) and run by an operator. No systemd unit, no rsync, no binary swap in deploy.sh. `deploy.sh` exit-1 after a pure `src/bin/` addition is a buffering false-positive if `/api/health` returns 200 — the runtime binary is unaffected.
 
+**Planned stub routes MUST return explicit 501, not be left unregistered.** When a frontend feature is built against a route that isn't implemented yet (e.g. `POST /api/wallet/upgrade-to-passkey`), leaving the route unregistered causes axum's authed catch-all to return 401 "missing authorization header" — which is indistinguishable from a real auth failure. Frontend graceful-degradation logic that checks `if (msg.includes("501") || msg.toLowerCase().includes("not implemented"))` never fires; the user sees a red error banner instead of the intended "processing in background" success state. **Fix**: always register a one-liner 501 stub in aeqi-platform before shipping the frontend that calls it: `post(|| async { (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "not yet implemented"}))) })`. Cost (2026-05-05): dogfood v3 — passkey upgrade modal showed error banner for every user instead of the graceful success state.
+
 ## Platform-level friction (out of our hands)
 
 Tracked separately in `platform-friction.md`. These are paper cuts in the
