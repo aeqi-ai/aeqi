@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.27.0 — 2026-05-05
+
+**Headline:** Trust routing complete (server + client + direct paths). Stale copy stripped.
+
+- aeqi: client-side trust redirect (useEffect on /c/<id> when trust_address arrives)
+- aeqi: removed "10% off" stale waitlist copy from signup page
+- aeqi: UX-V12 walk script + observations (score 9.6 held)
+- aeqi-landing: removed "free to start" stale phrase from SEO meta
+- trustsCount=14 (real wizard flow)
+
 ## v0.26.0 — 2026-05-05
 
 **Headline:** TRUST is the canonical primitive. /trust/<address> routing live. Config drift from pre-refactor port corrected.
