@@ -71,10 +71,12 @@ function OccupantInline({ role, agentName }: { role: Role; agentName?: string })
       </span>
     );
   }
+  // Human occupant: show truncated UUID format (first 4 + "..." + last 4)
+  const displayId = role.occupant_id ? `0x...${role.occupant_id.slice(-4)}` : "";
   return (
     <span>
       <span className="roles-list-cell-kind">human</span>{" "}
-      <strong>{role.occupant_id?.slice(0, 12) ?? ""}</strong>
+      <strong>{displayId}</strong>
     </span>
   );
 }

@@ -71,7 +71,11 @@ function describeOccupant(role: Role, agentName?: string): { label: string } {
   if (role.occupant_kind === "agent") {
     return { label: agentName ?? role.occupant_id?.slice(0, 8) ?? "agent" };
   }
-  return { label: role.occupant_id ?? "human" };
+  // Human occupant: show truncated UUID format (first 4 + "..." + last 4)
+  if (role.occupant_id) {
+    return { label: `0x...${role.occupant_id.slice(-4)}` };
+  }
+  return { label: "human" };
 }
 
 function initialsFor(name: string): string {
