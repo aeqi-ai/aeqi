@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.24.0 — 2026-05-05
+
+**Headline:** P0 wizard fix — Uniswap module impl registered on factory; on-chain Company spawn now works end-to-end via UI wizard.
+
+- aeqi: wizard post-create redirect now uses /c/<id>/overview + refetches entities
+- UX rating v10: 9.5/10 (up from 9.3)
+- Bridge wizard verify: UI/API layer confirmed end-to-end via Playwright smoke test
+- Walk-detector improvements: P0 triage traps documented, wallet probe 400-state handling, cp-to-main footgun prevention
+
 ## v0.23.0 — 2026-05-05
 
 **Headline:** UX 9.3 (from 9.1) — Director list-view name, treasury URL detection, landing nav lowercase.
