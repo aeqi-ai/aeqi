@@ -198,6 +198,11 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
   const navHref = (id: string) => `${base}/${id}`;
 
+  // Personal entity routes (/me/*) hide the ORGANIZATION section.
+  // Treasury stays visible per the personal rail lock. Only Ownership,
+  // Governance, and Roles are hidden.
+  const isPersonal = path.startsWith("/me");
+
   // The Company cockpit row stays lit ONLY at the bare `/c/<entity>`
   // overview URL — Phase 1 promotes Treasury / Ownership / Governance /
   // Roles to top-level rows, so they own their own "active" state and
@@ -382,13 +387,15 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               {navItem("inbox", "Inbox", <InboxIcon />)}
             </nav>
 
-            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Organization">
-              <div className="sidebar-section-label">Organization</div>
-              {navItem("treasury", "Treasury", <TreasuryIcon />)}
-              {navItem("ownership", "Ownership", <OwnershipIcon />)}
-              {navItem("governance", "Governance", <GovernanceIcon />)}
-              {navItem("roles", "Roles", <RolesIcon />)}
-            </nav>
+            {!isPersonal && (
+              <nav className="sidebar-surface-nav sidebar-zone" aria-label="Organization">
+                <div className="sidebar-section-label">Organization</div>
+                {navItem("treasury", "Treasury", <TreasuryIcon />)}
+                {navItem("ownership", "Ownership", <OwnershipIcon />)}
+                {navItem("governance", "Governance", <GovernanceIcon />)}
+                {navItem("roles", "Roles", <RolesIcon />)}
+              </nav>
+            )}
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">
               <div className="sidebar-section-label">Workspace</div>
@@ -404,6 +411,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
                   navigate(`${base}/ideas?compose=1`);
                 }),
               })}
+              {isPersonal && navItem("treasury", "Treasury", <TreasuryIcon />)}
             </nav>
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company settings">
