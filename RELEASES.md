@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.22.0 — 2026-05-05
+
+**Headline:** UX score 9.0 — Director name resolution, hairline cleanup, personal treasury vocab.
+
+- Director role occupant: UUID → display name resolved
+- Hairlines second pass on 5 surfaces (economy, blueprints-store, components)
+- Personal /me/treasury copy: "account" replaces "Company"
+- aeqi-docs nav: lowercase entity name
+- Playwright UX rating v7 — 9.0/10 (up from 8.8)
+
 ## v0.21.0 — 2026-05-05
 
 **Headline:** AA stack proven end-to-end + wallet Phase 2 UI ready + design hygiene Wave 20.
