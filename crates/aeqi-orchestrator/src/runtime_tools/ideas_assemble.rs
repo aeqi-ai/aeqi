@@ -203,7 +203,7 @@ mod tests {
     #[tokio::test]
     async fn assembles_ideas_by_name() {
         let store = StubStore::with(vec![
-            idea("session:primer", "You are an AEQI agent."),
+            idea("session:primer", "You are an aeqi agent."),
             idea("extra-context", "Extra context here."),
         ]);
         let tool = IdeasAssembleTool::new(Some(store));
@@ -212,7 +212,7 @@ mod tests {
             .await
             .unwrap();
         assert!(!result.is_error);
-        assert!(result.output.contains("You are an AEQI agent."));
+        assert!(result.output.contains("You are an aeqi agent."));
         assert!(result.output.contains("Extra context here."));
     }
 

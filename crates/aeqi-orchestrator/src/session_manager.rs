@@ -525,13 +525,13 @@ impl SessionManager {
                             idea.content
                         } else {
                             format!(
-                                "You are an AEQI agent running as a {kind} session.",
+                                "You are an aeqi agent running as a {kind} session.",
                                 kind = req.kind
                             )
                         }
                     } else {
                         format!(
-                            "You are an AEQI agent running as a {kind} session.",
+                            "You are an aeqi agent running as a {kind} session.",
                             kind = req.kind
                         )
                     };
