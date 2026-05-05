@@ -693,3 +693,32 @@ await apiRequest("/api/account/enroll-passkey", {
 build on. Use it when you need a one-off POST/PUT/DELETE that doesn't
 warrant a named method on the `api` object. Cost (2026-05-04): one
 tsc edit pass when writing `AAEnrollmentPage`.
+
+## Modal accepts no `size` prop
+
+`ModalProps` is `{ open, onClose, title?, children, className? }`. There
+is no `size` variant. Passing `<Modal size="md">` silently compiles in
+some TypeScript modes but fails strict tsc with "Property 'size' does not
+exist on type 'ModalProps'". Don't add a size workaround inline — if you
+need a wider modal, add a `size` prop to `Modal.tsx` + `Modal.module.css`
+officially, or use `className` to override width on the call site.
+Cost (2026-05-05): one tsc error caught during Wave 33 StackWizard work.
+
+## `import type` cannot import runtime values
+
+`import type { Foo }` is erased at compile time — it works for interfaces
+and type aliases but silently drops function or class imports. If you write
+`import type { isSingleBlueprint }` where `isSingleBlueprint` is an
+`export function`, TypeScript (in `isolatedModules` mode) either errors or
+treats the identifier as `undefined` at runtime. The correct split:
+
+```ts
+import type { SingleBlueprint } from "@/lib/types";  // type only
+import { isSingleBlueprint } from "@/lib/types";      // runtime function
+```
+
+Rule: scan every new `import type { ... }` for function or const exports
+mixed in with interfaces. Move those to a plain `import { ... }` line.
+Cost (2026-05-05): `BlueprintLaunchPicker.tsx` had `isSingleBlueprint`
+stuck in a type import from the prior session; caught at session start
+before tsc ran.
