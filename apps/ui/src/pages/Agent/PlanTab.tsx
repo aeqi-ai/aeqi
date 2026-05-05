@@ -47,7 +47,13 @@ function findRoot(agents: Agent[], id: string): Agent | null {
  */
 export default function PlanTab({ agentId }: PlanTabProps) {
   const agents = useDaemonStore((s) => s.agents);
+  const entities = useDaemonStore((s) => s.entities);
   const root = useMemo(() => findRoot(agents, agentId), [agents, agentId]);
+
+  const entityName = useMemo(() => {
+    if (!root?.entity_id) return null;
+    return entities.find((e) => e.id === root.entity_id)?.name || root.name;
+  }, [root, entities]);
 
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,7 +155,7 @@ export default function PlanTab({ agentId }: PlanTabProps) {
         <Card padding="lg" className="billing-summary">
           <div className="billing-summary-main">
             <p className="billing-eyebrow">Plan</p>
-            <h2 className="billing-summary-name">{root.name}</h2>
+            <h2 className="billing-summary-name">{entityName || root?.name}</h2>
             <p className="billing-summary-sub">
               No subscription on file for this Company yet — the first plan stamps when it launches.
             </p>
@@ -169,7 +175,7 @@ export default function PlanTab({ agentId }: PlanTabProps) {
       <Card padding="lg" className="billing-summary">
         <div className="billing-summary-main">
           <p className="billing-eyebrow">Plan</p>
-          <h2 className="billing-summary-name">{company.name}</h2>
+          <h2 className="billing-summary-name">{entityName || company.name}</h2>
           <p className="billing-summary-sub">
             Per-Company subscription. Every agent in this tree shares this plan. See all your
             Companies + payment methods in the{" "}
