@@ -43,6 +43,17 @@ subagents need to write to the state file, use the absolute path
 `/home/claudedev/aeqi/.observations/autonomous-push-state.md` — not a
 relative path from the worktree root.
 
+**Don't `cp` worktree files to main before the branch merges.** If a script
+or file is created inside a worktree and copied to the main checkout's
+working tree (e.g. `cp worktree/scripts/foo.mjs aeqi/scripts/foo.mjs`), it
+becomes an untracked file on main. When the worktree's branch later merges
+via `git merge --ff-only`, Git aborts with `"The following untracked working
+tree files would be overwritten by merge"`. Fix: `rm` the collision file on
+main before merging. Prevention: only place new files inside the worktree —
+the merge brings them to main. Copying to main is always a redundant step
+that creates an untracked-collision footgun. Cost (2026-05-05): one manual
+`rm` + retry on the v10 walk script ship.
+
 **UX rerun scripts — keyword checks must be verified against screenshots.** When
 writing P0 verification scripts (`scripts/ux-p0-rerun.mjs` pattern), content
 keyword lists produce misleading FAIL verdicts if the keywords don't match what
@@ -82,6 +93,19 @@ Canonical fix (v9): skip DOM traversal entirely for presence checks; instead sca
 of the role name. This is immune to shadow-DOM, text-node splitting, and React
 rendering order. See `scripts/ux-v9-walk.mjs` check `v9-B` for the reference
 implementation.
+
+**UX walk — wallet/stub probe returns 400 (X-Entity) when route not deployed.**
+Out-of-band API probes in the walk script expect HTTP 501 (stub deployed) or
+401 (route unregistered, falls to authed catch-all). A third state exists: when the
+route IS registered in source but the live binary predates the commit, the route
+falls through to the catch-all proxy — which calls `extract_entity_id()` and returns
+400 `{"error":"X-Entity header required"}` when no `X-Entity` header is sent. 401 =
+route was never registered at all. 400 = route was registered but binary predates
+the commit. Walk probe logic must handle all three cases explicitly. Cost
+(2026-05-05): v10 `WALLET_UPGRADE_UNEXPECTED` fired on 400 instead of the cleaner
+`WALLET_UPGRADE_STILL_401` path; required binary stat + service-start-time comparison
+to diagnose. Pattern: `stat <binary> | grep Modify` vs `git log -1 --format=%ci
+<commit>` tells you unambiguously whether a given commit is deployed.
 
 **UI fix scoping — list view vs detail view are different components.**
 When fixing a data-display bug (e.g. "UUID shown instead of display name"), always
