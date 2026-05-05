@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.26.0 — 2026-05-05
+
+**Headline:** TRUST is the canonical primitive. /trust/<address> routing live. Config drift from pre-refactor port corrected.
+
+- aeqi-platform: 301 redirect from /c/:entityId/* to /trust/:trustAddress/* when on-chain
+- aeqi-platform: venture module stub correctness (abi_encode_params + slot keys + uint16 unifutures)
+- aeqi-platform: registerTRUST gas limit 20M→28M for venture template
+- aeqi (UI): /trust/:trustAddress route group, useCurrentCompany hook, wizard polls trust_address
+- aeqi-core: 4 P1 drift bugs corrected — entity/fund token names "aeqi Entity"/"aeqi Fund", venture executionDelay 3600, fund governance director-only restored
+- RefreshTemplates.s.sol re-registers venture+fund on live anvil
+- trustsCount=13 from real wizard flow (5 → 13)
+
 ## v0.25.0 — 2026-05-05
 
 **Headline:** Bridge fully proven end-to-end through wizard. trustsCount 5 → 8+.
