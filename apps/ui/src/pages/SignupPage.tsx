@@ -307,7 +307,6 @@ export default function SignupPage() {
               Join waitlist
             </Button>
           </form>
-          <p className="waitlist-hint">Early supporters get 10% off their first month.</p>
           <p className="auth-switch">
             Have an invite code?{" "}
             <a
