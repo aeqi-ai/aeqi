@@ -27,6 +27,7 @@
 pub mod api;
 pub mod db;
 pub mod error;
+pub mod migrate;
 pub mod policy;
 pub mod signer;
 pub mod types;

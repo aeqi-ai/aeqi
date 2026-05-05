@@ -370,6 +370,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "clap",
  "hex",
  "reqwest",
  "rusqlite",

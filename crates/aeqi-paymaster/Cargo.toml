@@ -9,6 +9,10 @@ description = "ERC-4337 paymaster signing service — approves and signs UserOp 
 name = "aeqi-paymaster"
 path = "src/main.rs"
 
+[[bin]]
+name = "migrate-to-passkey"
+path = "src/bin/migrate_to_passkey.rs"
+
 [dependencies]
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -25,6 +29,7 @@ tracing-subscriber = { workspace = true }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
+clap = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
