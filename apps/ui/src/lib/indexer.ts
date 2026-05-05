@@ -99,19 +99,25 @@ export interface IndexedRoleAssignment {
 }
 
 export interface IndexedProposal {
+  // Canonical schema fields from indexer Proposal type
   moduleAddress: string;
   proposalId: string;
+  governanceConfigId: string;
   proposerAddress: string;
   voteStart: number;
   voteEnd: number;
   ipfsCid: string;
   status: string;
   createdBlock: number;
+  createdTx: string;
+
+  // Derived fields for UI convenience (not from indexer yet)
+  // TODO: extend indexer schema to include vote tallies (forVotes, againstVotes)
   /** Human-readable title decoded from ipfsCid metadata or calldata. May be absent. */
   title?: string;
-  /** Votes cast in favour (raw token units as string). */
+  /** Votes cast in favour (raw token units as string). NOT YET IN SCHEMA. */
   forVotes?: string;
-  /** Votes cast against (raw token units as string). */
+  /** Votes cast against (raw token units as string). NOT YET IN SCHEMA. */
   againstVotes?: string;
 }
 
@@ -243,10 +249,16 @@ export async function fetchRoleAssignments(
   return data?.roleAssignments ?? [];
 }
 
-/** Governance proposals on a module. */
+/** Governance proposals on a module.
+ *
+ * Queries the canonical schema fields from the indexer.
+ * forVotes/againstVotes are NOT YET available in the indexer schema
+ * (TODO: extend indexer Proposal type with vote tallies in next pass).
+ * The UI hides vote-tally sections with a TODO note until then.
+ */
 export async function fetchProposalsForModule(moduleAddress: string): Promise<IndexedProposal[]> {
   const data = await indexerQuery<{ proposalsForModule: IndexedProposal[] }>(
-    `query($a: String!) { proposalsForModule(moduleAddress: $a) { moduleAddress proposalId proposerAddress voteStart voteEnd ipfsCid status createdBlock title forVotes againstVotes } }`,
+    `query($a: String!) { proposalsForModule(moduleAddress: $a) { moduleAddress proposalId governanceConfigId proposerAddress voteStart voteEnd ipfsCid status createdBlock createdTx } }`,
     { a: moduleAddress.toLowerCase() },
   );
   return data?.proposalsForModule ?? [];

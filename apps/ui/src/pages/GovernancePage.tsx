@@ -349,7 +349,8 @@ function ProposalRow({ proposal: p }: { proposal: IndexedProposal }) {
         </Badge>
       </div>
 
-      {(p.forVotes != null || p.againstVotes != null) && (
+      {/* TODO: unhide when indexer schema extends to include forVotes/againstVotes */}
+      {false && (p.forVotes != null || p.againstVotes != null) && (
         <VoteBar forVotes={p.forVotes ?? "0"} againstVotes={p.againstVotes ?? "0"} />
       )}
     </li>
