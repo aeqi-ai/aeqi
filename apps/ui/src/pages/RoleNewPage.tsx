@@ -191,11 +191,18 @@ export default function RoleNewPage() {
                 />
                 <span>
                   <span
-                    style={{ display: "block", fontSize: "var(--font-size-sm)", fontWeight: 500, lineHeight: 1.4 }}
+                    style={{
+                      display: "block",
+                      fontSize: "var(--font-size-sm)",
+                      fontWeight: 500,
+                      lineHeight: 1.4,
+                    }}
                   >
                     {opt.label}
                   </span>
-                  <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{opt.desc}</span>
+                  <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                    {opt.desc}
+                  </span>
                 </span>
               </label>
             ))}
@@ -334,11 +341,18 @@ export default function RoleNewPage() {
                   />
                   <span>
                     <span
-                      style={{ display: "block", fontSize: "var(--font-size-sm)", fontWeight: 500, lineHeight: 1.4 }}
+                      style={{
+                        display: "block",
+                        fontSize: "var(--font-size-sm)",
+                        fontWeight: 500,
+                        lineHeight: 1.4,
+                      }}
                     >
                       {g.label}
                     </span>
-                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{g.desc}</span>
+                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                      {g.desc}
+                    </span>
                   </span>
                 </label>
               );
@@ -347,7 +361,10 @@ export default function RoleNewPage() {
         </div>
 
         {error && (
-          <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-error)" }} role="alert">
+          <div
+            style={{ fontSize: "var(--font-size-sm)", color: "var(--color-error)" }}
+            role="alert"
+          >
             {error}
           </div>
         )}

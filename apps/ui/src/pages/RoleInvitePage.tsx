@@ -99,7 +99,9 @@ export default function RoleInvitePage() {
             gap: "var(--space-4)",
           }}
         >
-          <p style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, margin: 0 }}>Open invitation link created</p>
+          <p style={{ fontSize: "var(--font-size-sm)", fontWeight: 500, margin: 0 }}>
+            Open invitation link created
+          </p>
           <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-secondary)", margin: 0 }}>
             Anyone with this link can claim the role. It expires in 1 hour.
           </p>
@@ -268,7 +270,10 @@ export default function RoleInvitePage() {
         </div>
 
         {error && (
-          <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-error)" }} role="alert">
+          <div
+            style={{ fontSize: "var(--font-size-sm)", color: "var(--color-error)" }}
+            role="alert"
+          >
             {error}
           </div>
         )}

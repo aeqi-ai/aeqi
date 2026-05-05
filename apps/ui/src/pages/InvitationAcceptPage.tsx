@@ -172,8 +172,19 @@ export default function InvitationAcceptPage() {
           {!loading && loadError && (
             <>
               <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Invitation not found</h1>
-              <p style={{ fontSize: "var(--font-size-base)", color: "var(--text-secondary)", margin: 0 }}>{loadError}</p>
-              <Link to="/" style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
+              <p
+                style={{
+                  fontSize: "var(--font-size-base)",
+                  color: "var(--text-secondary)",
+                  margin: 0,
+                }}
+              >
+                {loadError}
+              </p>
+              <Link
+                to="/"
+                style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}
+              >
                 Return home
               </Link>
             </>
@@ -184,7 +195,13 @@ export default function InvitationAcceptPage() {
               <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
                 Invitation no longer valid
               </h1>
-              <p style={{ fontSize: "var(--font-size-base)", color: "var(--text-secondary)", margin: 0 }}>
+              <p
+                style={{
+                  fontSize: "var(--font-size-base)",
+                  color: "var(--text-secondary)",
+                  margin: 0,
+                }}
+              >
                 This invitation has been{" "}
                 {invitation.status === "redeemed"
                   ? "already accepted"
@@ -193,7 +210,10 @@ export default function InvitationAcceptPage() {
                     : "expired"}
                 .
               </p>
-              <Link to="/" style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
+              <Link
+                to="/"
+                style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}
+              >
                 Return home
               </Link>
             </>
@@ -203,7 +223,13 @@ export default function InvitationAcceptPage() {
             <>
               {/* Header */}
               <div>
-                <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", margin: "0 0 4px" }}>
+                <p
+                  style={{
+                    fontSize: "var(--font-size-sm)",
+                    color: "var(--text-muted)",
+                    margin: "0 0 4px",
+                  }}
+                >
                   {invitation.inviter_name} invited you
                 </p>
                 <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, lineHeight: 1.3 }}>
@@ -261,7 +287,13 @@ export default function InvitationAcceptPage() {
                         onChange={setAsEntityId}
                         fullWidth
                       />
-                      <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", margin: 0 }}>
+                      <p
+                        style={{
+                          fontSize: "var(--font-size-xs)",
+                          color: "var(--text-muted)",
+                          margin: 0,
+                        }}
+                      >
                         The selected company will hold this role in {invitation.entity_display_name}
                         .
                       </p>
@@ -285,7 +317,10 @@ export default function InvitationAcceptPage() {
                   )}
 
                   {actionError && (
-                    <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-error)" }} role="alert">
+                    <div
+                      style={{ fontSize: "var(--font-size-sm)", color: "var(--color-error)" }}
+                      role="alert"
+                    >
                       {actionError}
                     </div>
                   )}
@@ -315,12 +350,24 @@ export default function InvitationAcceptPage() {
               {!isLoggedIn && (
                 <>
                   {invitation.target_email && (
-                    <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", margin: 0 }}>
+                    <p
+                      style={{
+                        fontSize: "var(--font-size-sm)",
+                        color: "var(--text-secondary)",
+                        margin: 0,
+                      }}
+                    >
                       This invitation is addressed to <strong>{invitation.target_email}</strong>.
                     </p>
                   )}
 
-                  <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", margin: 0 }}>
+                  <p
+                    style={{
+                      fontSize: "var(--font-size-sm)",
+                      color: "var(--text-secondary)",
+                      margin: 0,
+                    }}
+                  >
                     Sign in or create an account to claim this role.
                   </p>
 

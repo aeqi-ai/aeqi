@@ -86,7 +86,10 @@ export default function RoleDetailPage() {
         <div style={{ color: "var(--color-error)", fontSize: "var(--font-size-sm)" }}>
           {error || "Role not found."}
         </div>
-        <Link to={backHref} style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
+        <Link
+          to={backHref}
+          style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}
+        >
           Back to Roles
         </Link>
       </div>
@@ -195,7 +198,14 @@ export default function RoleDetailPage() {
                 {(role.occupant_id ?? "?").slice(0, 1).toUpperCase()}
               </div>
               <span>
-                <span style={{ display: "block", fontSize: "var(--font-size-sm)", fontWeight: 500, lineHeight: 1.4 }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                  }}
+                >
                   {role.occupant_id ?? "(unknown)"}
                 </span>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -225,7 +235,9 @@ export default function RoleDetailPage() {
           Authority
         </h2>
         {role.grants.length === 0 ? (
-          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>No grants assigned.</span>
+          <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+            No grants assigned.
+          </span>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
             {role.grants.map((g) => (
