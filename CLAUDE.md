@@ -228,6 +228,14 @@ implementation → verify → ship.
 
 The fix is one word: `app` → `app.into_make_service_with_connect_info::<SocketAddr>()` in `crates/aeqi-web/src/server.rs`. Add `use std::net::SocketAddr;` if not already imported. Cost (2026-05-05): VPS dogfood run — health check passed at 54s, all /api/* calls 500'd, entire VPS provision marked failed.
 
+## AA bundler — known traps (2026-05-05)
+
+**Use rundler, not silius.** silius has no pre-built Linux binaries — every release is source-only alpha tarballs. Building from source takes ~10 min and is fragile. rundler (Alchemy, `alchemyplatform/rundler`) ships signed x86_64-linux tarballs on every release. It is production-grade, ERC-4337 v0.6+v0.7 capable, and actively maintained. Binary at `/usr/local/bin/rundler`. Service: `aeqi-bundler.service`. Docs: `docs/aa-bundler-deployment.md`.
+
+**`--network dev` hardcodes chain ID 1337 — always use `--chain_spec` for local anvil.** rundler's built-in `dev` network derives from ganache heritage and sets `chainId = 1337`. foundry anvil defaults to `31337`. If you run `--network dev` against a 31337 anvil, the bundler reports the wrong chain ID via `eth_chainId` and will compute incorrect UserOp hashes (chain ID is committed in the hash). There is no error — just silent hash mismatches downstream. Fix: always use `--chain_spec /etc/aeqi-bundler/chain-spec.toml` (field name is `id`, not `chain_id`). The chain spec file is at `/etc/aeqi-bundler/chain-spec.toml`. Smoke-verify after start: `curl -s http://127.0.0.1:3000 -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'` must return `"0x7a69"` (31337).
+
+**EntryPoint v0.7 on dev anvil requires `anvil_setCode`, not CREATE2.** The canonical EP v0.7 address `0x0000000071727De22E5E9d8BAf0edAc6f37da032` is deployed via a specific eth-infinitism deterministic deployer — not the standard Arachnid CREATE2 factory (`0x4e59b...`). On a fresh anvil the address is empty. The EIP-2470 singleton factory approach also fails (raw tx is ganache-specific). Correct approach: deploy EP from `@account-abstraction/contracts@0.7.0` bytecode via `cast send --create` to get the runtime bytecode, then seed the canonical address with `anvil_setCode`. This is handled automatically by `/usr/local/bin/aeqi-bundler-preflight` on every `aeqi-bundler.service` start. **`anvil_setCode` does not persist across anvil restarts** — the preflight re-seeds on service start. If anvil is wiped, re-deploy the reference EP first (see `docs/aa-bundler-deployment.md` troubleshooting section).
+
 ## Platform-level friction (out of our hands)
 
 Tracked separately in `platform-friction.md`. These are paper cuts in the
