@@ -57,6 +57,8 @@ const STATUS_LABEL: Record<CompanyBillingRow["status"], string> = {
 export default function TreasuryPage({ entityId }: TreasuryPageProps) {
   const entity = useDaemonStore((s) => s.entities.find((e) => e.id === entityId));
   const trustAddress = entity?.trust_address;
+  const isPersonal = entity?.kind === "personal";
+  const entityTerm = isPersonal ? "account" : "Company";
 
   const [billing, setBilling] = useState<CompanyBillingRow | null | undefined>(undefined);
   const [paymentLast4, setPaymentLast4] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
       <header style={{ marginBottom: "var(--space-lg)" }}>
         <h2 style={{ margin: 0 }}>Treasury</h2>
         <p style={{ color: "var(--color-text-muted)", margin: "var(--space-xs) 0 0 0" }}>
-          Subscription, resources, and on-chain balances for this Company.
+          Subscription, resources, and on-chain balances for this {entityTerm}.
         </p>
       </header>
 
@@ -143,8 +145,12 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
 
       {!billing && !billingError && (
         <EmptyState
-          title="No subscription on this Company"
-          description="This Company isn't billed through Stripe yet. Personal Companies on the founder account are exempt; joint Companies bill the creator."
+          title={`No subscription on this ${entityTerm}`}
+          description={
+            isPersonal
+              ? "This account isn't billed through Stripe yet. Personal accounts are exempt."
+              : "This Company isn't billed through Stripe yet. Personal Companies on the founder account are exempt; joint Companies bill the creator."
+          }
         />
       )}
 

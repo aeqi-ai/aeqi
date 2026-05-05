@@ -30,7 +30,7 @@
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   background: var(--bg-canvas);
-  border: 1px solid var(--border-faint);
+  border: none;
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 500;
@@ -70,7 +70,7 @@
   gap: 16px;
   padding: 20px;
   background: var(--bg-canvas);
-  border: 1px solid var(--border-faint);
+  border: none;
   border-radius: var(--radius-lg);
   min-height: 220px;
 }
