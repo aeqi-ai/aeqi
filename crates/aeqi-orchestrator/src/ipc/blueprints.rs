@@ -191,6 +191,10 @@ pub struct Blueprint {
     pub tagline: String,
     #[serde(default)]
     pub description: String,
+    /// On-chain template category. One of `foundation | fund | venture | entity`.
+    /// Defaults to empty string on older Blueprints that predate the field.
+    #[serde(default)]
+    pub category: String,
     pub root: RootAgentSpec,
     #[serde(default)]
     pub seed_agents: Vec<SeedAgentSpec>,
@@ -1105,6 +1109,7 @@ mod tests {
             name: "Test Studio".to_string(),
             tagline: "fixture".to_string(),
             description: "fixture blueprint".to_string(),
+            category: String::new(),
             root: RootAgentSpec {
                 name: "Director".to_string(),
                 model: Some("anthropic/claude-sonnet-4.6".to_string()),
@@ -1431,6 +1436,7 @@ mod tests {
             name: "Imported BP".to_string(),
             tagline: String::new(),
             description: String::new(),
+            category: String::new(),
             root: RootAgentSpec {
                 name: "Imported Root".to_string(),
                 model: None,

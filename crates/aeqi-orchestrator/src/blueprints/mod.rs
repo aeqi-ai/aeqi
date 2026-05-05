@@ -17,6 +17,7 @@ use crate::ipc::blueprints::Blueprint;
 pub const DEFAULT_BLUEPRINT_SLUG: &str = "aeqi";
 
 const AEQI_DEFAULT_JSON: &str = include_str!("../../../../presets/blueprints/aeqi.json");
+const INDEX_FUND_JSON: &str = include_str!("../../../../presets/blueprints/index-fund.json");
 const SOLO_FOUNDER_JSON: &str = include_str!("../../../../presets/blueprints/solo-founder.json");
 const STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/studio.json");
 const TECH_STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/tech-studio.json");
@@ -24,6 +25,7 @@ const PERSONAL_OS_JSON: &str = include_str!("../../../../presets/blueprints/pers
 
 const COMPANY_BLUEPRINT_JSON: &[&str] = &[
     AEQI_DEFAULT_JSON,
+    INDEX_FUND_JSON,
     SOLO_FOUNDER_JSON,
     STUDIO_JSON,
     TECH_STUDIO_JSON,
@@ -59,6 +61,7 @@ mod tests {
         let slugs: Vec<String> = company_blueprints().into_iter().map(|t| t.slug).collect();
         for expected in [
             DEFAULT_BLUEPRINT_SLUG,
+            "index-fund",
             "solo-founder",
             "studio",
             "tech-studio",
@@ -84,5 +87,25 @@ mod tests {
         let studio = company_blueprint("studio").expect("studio template present");
         assert_eq!(studio.name, "Content Studio");
         assert_eq!(studio.seed_agents.len(), 2);
+    }
+
+    #[test]
+    fn blueprints_have_categories() {
+        let expected = [
+            ("aeqi", "venture"),
+            ("index-fund", "fund"),
+            ("personal-os", "foundation"),
+            ("solo-founder", "entity"),
+            ("studio", "entity"),
+            ("tech-studio", "venture"),
+        ];
+        for (slug, category) in expected {
+            let bp = company_blueprint(slug)
+                .unwrap_or_else(|| panic!("blueprint '{slug}' missing"));
+            assert_eq!(
+                bp.category, category,
+                "blueprint '{slug}' has wrong category"
+            );
+        }
     }
 }
