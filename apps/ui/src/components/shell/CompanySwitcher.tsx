@@ -4,6 +4,7 @@ import { Popover, SelectOption } from "@/components/ui";
 import BlockAvatar from "@/components/BlockAvatar";
 import { useEntities, useActiveEntity } from "@/queries/entities";
 import { useUIStore } from "@/store/ui";
+import { entityPath } from "@/lib/entityPath";
 import type { Entity } from "@/lib/types";
 
 const iconProps = {
@@ -51,18 +52,16 @@ export default function CompanySwitcher() {
   const activeEntity = useActiveEntity(activeEntityId);
   const [open, setOpen] = useState(false);
 
-  // Entity scope = `/c/<entity_id>/...`. Everything else (`/`, `/me/...`,
-  // `/economy/...`, `/start`, `/sessions/<id>`) is user scope.
-  const isEntityScope = pathname.startsWith("/c/");
+  // Entity scope = `/c/<entity_id>/...` or `/trust/<addr>/...`.
+  const isEntityScope = pathname.startsWith("/c/") || pathname.startsWith("/trust/");
 
   const select = useCallback(
     (entity: Entity) => {
       setActiveEntity(entity.id);
-      // Selecting a company lands on its Overview — the canonical
-      // company dashboard. The bare `/c/<id>` URL redirects there
-      // anyway, but going straight is faster + avoids a redirect
-      // round-trip.
-      navigate(`/c/${encodeURIComponent(entity.id)}/overview`);
+      // Navigate to the canonical URL for the entity — /trust/<addr> for
+      // on-chain companies, /c/<id> for pending ones. Going straight
+      // avoids a server 301 round-trip.
+      navigate(entityPath(entity, "overview"));
       setOpen(false);
     },
     [navigate, setActiveEntity],

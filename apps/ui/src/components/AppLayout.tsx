@@ -18,6 +18,7 @@ import { useShellSurface } from "@/hooks/useShellSurface";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { isRateLimited } from "@/lib/rateLimit";
 import RateLimitBanner from "./shell/RateLimitBanner";
+import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 
 const DrivePage = lazy(() => import("@/pages/DrivePage"));
 const MePage = lazy(() => import("@/pages/MePage"));
@@ -63,11 +64,13 @@ export default function AppLayout() {
 
   const {
     entityId: routeEntityId = "",
+    trustAddress: routeTrustAddress = "",
     agentId: routeAgentId = "",
     tab,
     itemId,
   } = useParams<{
     entityId?: string;
+    trustAddress?: string;
     agentId?: string;
     tab?: string;
     itemId?: string;
@@ -80,13 +83,23 @@ export default function AppLayout() {
 
   const surface = useShellSurface(path, tab);
 
+  // Resolve entity from either /trust/:trustAddress or /c/:entityId.
+  // useCurrentCompany handles both route shapes and returns a stable id.
+  const { entityId: resolvedEntityId } = useCurrentCompany();
+  // The effective route entity id — prefer the resolved id (covers trust
+  // route) and fall back to the raw route token (covers /c/:entityId).
+  const effectiveRouteEntityId = resolvedEntityId || routeEntityId;
+
   // The entity's root-agent record is the placeholder we synthesize from
   // `/api/entities` — its `entity_id` matches the route token. Every
   // company surface (`/c/<entity>/quests`, `/c/<entity>/events`, …)
   // resolves through this record.
   const rootAgent = useMemo(
-    () => (routeEntityId ? (agents.find((a) => a.entity_id === routeEntityId) ?? null) : null),
-    [agents, routeEntityId],
+    () =>
+      effectiveRouteEntityId
+        ? (agents.find((a) => a.entity_id === effectiveRouteEntityId) ?? null)
+        : null,
+    [agents, effectiveRouteEntityId],
   );
 
   // When `/c/<entity>/agents/<agent>/...` is open, the inner agentId
@@ -104,7 +117,7 @@ export default function AppLayout() {
     () => (activeEntity && entities.some((e) => e.id === activeEntity) ? activeEntity : null),
     [entities, activeEntity],
   );
-  const entityId = routeEntityId || activeEntityValid || firstRoot || "";
+  const entityId = effectiveRouteEntityId || activeEntityValid || firstRoot || "";
 
   // Only commit a verified-real entity — otherwise the pre-load render
   // can persist a bogus value into localStorage.
@@ -196,8 +209,8 @@ export default function AppLayout() {
 
   // Stale entity ref after a data reset would point at a non-existent
   // entity. Bounce home; the user picks (or creates) a fresh entity from
-  // there.
-  if (routeEntityId && !rootAgent) {
+  // there. Applies to both /c/:entityId and /trust/:trustAddress shapes.
+  if ((routeEntityId || routeTrustAddress) && !rootAgent) {
     localStorage.removeItem("aeqi_entity");
     return <Navigate to="/" replace />;
   }
@@ -209,13 +222,21 @@ export default function AppLayout() {
   const activeAgent = drilledAgent ?? rootAgent;
   const activeAgentId = activeAgent?.id ?? "";
 
-  const base = encodedEntityId ? `/c/${encodedEntityId}` : "/";
+  // base: use /trust/ for on-chain entities, /c/ for pending ones.
+  // This keeps internal navigation (ComposerRow, agentRailBase) on the
+  // canonical URL shape once an entity is on-chain.
+  const base = (() => {
+    if (!encodedEntityId) return "/";
+    if (routeTrustAddress) return `/trust/${routeTrustAddress}`;
+    return `/c/${encodedEntityId}`;
+  })();
   // No-tab default at entity scope = "overview" (the company
   // dashboard is the canonical landing). `/` is served outside this
   // shell as the public Discover page, so it never reaches AppLayout.
   // Drilled agents default to "sessions" so the bare drilled URL opens
   // chat.
-  const effectiveTab = tab || (routeEntityId && !drilledAgent ? "overview" : "sessions");
+  const isEntityRoute = !!(routeEntityId || routeTrustAddress);
+  const effectiveTab = tab || (isEntityRoute && !drilledAgent ? "overview" : "sessions");
 
   // Runtime mode has no account-level identity surface.
   if (isSettings && appMode && appMode !== "platform") {
@@ -230,7 +251,7 @@ export default function AppLayout() {
   // Defensive: route should be unreachable if `agents/<agent>` resolves
   // to nothing — bounce up to the company shell.
   if (routeAgentId && !drilledAgent && encodedEntityId) {
-    return <Navigate to={`/c/${encodedEntityId}${search}`} replace />;
+    return <Navigate to={`${base}${search}`} replace />;
   }
 
   const mainContent = (() => {
@@ -261,11 +282,11 @@ export default function AppLayout() {
       const isDetail = !!second && !BLUEPRINT_KINDS.has(second);
       return isDetail ? <BlueprintDetailPage /> : <BlueprintsPage />;
     }
-    if (routeEntityId && !drilledAgent && COMPANY_PAGE_TABS.has(effectiveTab)) {
+    if (isEntityRoute && !drilledAgent && COMPANY_PAGE_TABS.has(effectiveTab)) {
       return (
         <CompanyPage
           agentId={activeAgentId}
-          entityId={routeEntityId}
+          entityId={effectiveRouteEntityId}
           tab={effectiveTab}
           itemId={itemId}
         />
@@ -289,7 +310,7 @@ export default function AppLayout() {
     !isBlueprints &&
     effectiveTab === "sessions";
   const showComposer = sessionsMounted;
-  const showSessionsRail = sessionsMounted && !!routeEntityId && !!drilledAgent;
+  const showSessionsRail = sessionsMounted && !!isEntityRoute && !!drilledAgent;
 
   // Drilled-agent PageRail. Mounted at the body-row level so it sits
   // as a sibling of the SessionsRail and the chat content column —
@@ -299,9 +320,7 @@ export default function AppLayout() {
   const showAgentRail = !!drilledAgent;
   const agentRailCurrent = effectiveTab;
   const agentRailBase =
-    drilledAgent && encodedEntityId
-      ? `/c/${encodedEntityId}/agents/${encodeURIComponent(drilledAgent.id)}`
-      : "";
+    drilledAgent && encodedEntityId ? `${base}/agents/${encodeURIComponent(drilledAgent.id)}` : "";
 
   return (
     <>

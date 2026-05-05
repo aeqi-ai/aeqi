@@ -182,7 +182,29 @@ export default function App() {
                         path === "/start". */}
                     <Route path="start" element={null} />
                     <Route path="start/:slug" element={null} />
-                    {/* Canonical company route group. */}
+                    {/* Canonical on-chain company route group.
+                        `/trust/:trustAddress/...` is the primary URL for
+                        entities whose registerTRUST tx has landed. Same
+                        child shape as /c/:entityId — AppLayout resolves
+                        the entity via useCurrentCompany(). */}
+                    <Route path="trust/:trustAddress" element={null}>
+                      <Route index element={null} />
+                      <Route path="agents/:agentId" element={null}>
+                        <Route index element={null} />
+                        <Route path=":tab" element={null} />
+                        <Route path=":tab/:itemId" element={null} />
+                      </Route>
+                      <Route path="roles/new" element={null} />
+                      <Route path="roles/:roleId" element={null} />
+                      <Route path="roles/:roleId/edit" element={null} />
+                      <Route path="roles/:roleId/invite" element={null} />
+                      <Route path=":tab" element={null} />
+                      <Route path=":tab/:itemId" element={null} />
+                    </Route>
+                    {/* Legacy / pending company route group. Used while the
+                        entity has no trust_address yet (pre-registerTRUST).
+                        Server returns 301 → /trust/:trustAddress once the
+                        address is known. */}
                     <Route path="c/:entityId" element={null}>
                       <Route index element={null} />
                       <Route path="agents/:agentId" element={null}>

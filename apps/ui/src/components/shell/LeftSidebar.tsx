@@ -6,6 +6,8 @@ import Wordmark from "@/components/Wordmark";
 import { Tooltip } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 import { useAuthStore } from "@/store/auth";
+import { useDaemonStore } from "@/store/daemon";
+import { entityBasePath } from "@/lib/entityPath";
 
 interface LeftSidebarProps {
   /** Canonical entity (company) id. Sidebar tabs are company-scoped, not child-agent scoped. */
@@ -190,10 +192,11 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
     </Tooltip>
   );
 
-  // The URL token is canonically the entity_id; sidebar tabs route to
-  // `/c/<entity_id>/<tab>`. Per-agent drilldowns
-  // (`/c/<entity>/agents/<agent>`) inherit the same sidebar.
-  const base = entityId ? `/c/${encodeURIComponent(entityId)}` : "";
+  // Derive canonical base path for sidebar tabs.
+  // On-chain entities: /trust/<trustAddress>. Pending: /c/<entityId>.
+  const entities = useDaemonStore((s) => s.entities);
+  const activeEntityObj = entityId ? (entities.find((e) => e.id === entityId) ?? null) : null;
+  const base = activeEntityObj ? entityBasePath(activeEntityObj) : "";
   const hasCompany = !!entityId;
 
   const navHref = (id: string) => `${base}/${id}`;

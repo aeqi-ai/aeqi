@@ -52,8 +52,8 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isStart = path === "/start" || path.startsWith("/start/");
     const isDrive = tab === "drive";
 
-    // In-shell role sub-pages. Pattern: /c/:entityId/roles/(new | :roleId | :roleId/edit | :roleId/invite)
-    const rolePathMatch = path.match(/^\/c\/[^/]+\/roles\/(.+)$/);
+    // In-shell role sub-pages. Matches both /c/:entityId and /trust/:addr shapes.
+    const rolePathMatch = path.match(/^\/(?:c\/[^/]+|trust\/[^/]+)\/roles\/(.+)$/);
     const roleSuffix = rolePathMatch ? rolePathMatch[1] : null;
     const isRolesNew = roleSuffix === "new";
     const isRoleInvite = !isRolesNew && !!roleSuffix && roleSuffix.endsWith("/invite");
@@ -66,7 +66,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // segments (`/foo`) that would otherwise fall through to a stale
     // active-entity render. `/` IS in this set: it's the Economy front
     // door (isEconomy === true at `/`).
-    const isCompanyRoute = /^\/c\/[^/]+(\/|$)/.test(path);
+    const isCompanyRoute = /^\/c\/[^/]+(\/|$)/.test(path) || /^\/trust\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute =
       isCompanyRoute || isSettings || isEconomy || isBlueprints || isStart || isAdmin;
     const isNotFound = !isKnownShellRoute;

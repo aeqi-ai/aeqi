@@ -7,6 +7,7 @@ import { useDaemonStore } from "@/store/daemon";
 import { Button, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FOUNDER_FEE } from "@/lib/pricing";
+import { entityPath } from "@/lib/entityPath";
 import {
   WizardIdentityPanel,
   WizardRolesPanel,
@@ -261,7 +262,31 @@ export default function CompanySetupPage() {
       });
       // Refresh the entity list so the company switcher shows the new company.
       await fetchEntities();
-      navigate(`/c/${resp.entity_id}/overview`);
+
+      // Poll for trust_address for up to 30 s (registerTRUST lands async).
+      // Once confirmed on-chain, navigate to the canonical /trust/ URL.
+      // Timeout falls back to the /c/<id> URL (entity visible but not yet on-chain).
+      const entityId = resp.entity_id;
+      const POLL_INTERVAL = 2000;
+      const POLL_TIMEOUT = 30000;
+      const deadline = Date.now() + POLL_TIMEOUT;
+      let trustAddr: string | null = null;
+      while (Date.now() < deadline) {
+        await fetchEntities();
+        const entities = useDaemonStore.getState().entities;
+        const entity = entities.find((e) => e.id === entityId);
+        if (entity?.trust_address) {
+          trustAddr = entity.trust_address;
+          break;
+        }
+        await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL));
+      }
+
+      if (trustAddr) {
+        navigate(entityPath({ id: entityId, trust_address: trustAddr }, "overview"));
+      } else {
+        navigate(`/c/${encodeURIComponent(entityId)}/overview`);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         // No active subscription — redirect to Stripe checkout.
