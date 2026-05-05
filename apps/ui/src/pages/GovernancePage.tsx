@@ -158,7 +158,7 @@ function GrantRow({ grantLabel, grantDesc, holders, onOpenRole }: GrantRowProps)
             {grantDesc}
           </div>
         </div>
-        <Badge variant={holders.length > 0 ? "success" : "muted"} size="sm">
+        <Badge variant="neutral" size="sm">
           {holders.length} {holders.length === 1 ? "role" : "roles"}
         </Badge>
       </div>
