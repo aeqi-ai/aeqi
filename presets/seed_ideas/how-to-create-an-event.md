@@ -6,7 +6,7 @@ description: How to configure pattern-triggered automation — the "when" primit
 
 # Skill: create an event
 
-Events are AEQI's automation layer. An event has a pattern (when) and, when fired, either surfaces attached ideas or runs pre-configured tool calls. Patterns cover the session lifecycle, cron schedules, middleware signals, and custom webhooks.
+Events are aeqi's automation layer. An event has a pattern (when) and, when fired, either surfaces attached ideas or runs pre-configured tool calls. Patterns cover the session lifecycle, cron schedules, middleware signals, and custom webhooks.
 
 ## Tool
 

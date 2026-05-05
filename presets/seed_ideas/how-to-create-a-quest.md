@@ -1,12 +1,12 @@
 ---
 name: create-quest
 tags: [skill, meta, quest]
-description: How to convert actionable work into an AEQI quest with its own worktree.
+description: How to convert actionable work into an aeqi quest with its own worktree.
 ---
 
 # Skill: create a quest
 
-Quests are AEQI's unit of work. Each quest owns a git worktree, runs in a sandbox, and closes with a result. If a task needs code changes, multiple steps, or more than one turn — make it a quest.
+Quests are aeqi's unit of work. Each quest owns a git worktree, runs in a sandbox, and closes with a result. If a task needs code changes, multiple steps, or more than one turn — make it a quest.
 
 ## Tool
 

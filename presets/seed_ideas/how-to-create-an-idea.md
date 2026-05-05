@@ -6,7 +6,7 @@ description: How to capture knowledge, skills, and context as a persistent tagge
 
 # Skill: create an idea
 
-Ideas are AEQI's long-term memory. Facts, conventions, skills, user preferences, project context, reusable workflows — anything worth remembering across sessions — goes here.
+Ideas are aeqi's long-term memory. Facts, conventions, skills, user preferences, project context, reusable workflows — anything worth remembering across sessions — goes here.
 
 ## Tool
 
@@ -20,7 +20,7 @@ ideas(action='store',
 
 - `name` — stable slug, snake- or hyphen-case. Used for exact-match lookup, so be specific (`aeqi-deploy-script` not `deploy`).
 - `content` — free-form markdown. Write for future-you.
-- `tags` — classification. Conventions: `skill` (reusable how-tos), `identity` (agent self-definition), `meta` (skills about operating AEQI), `promoted` (approved skills that surface on quest start), `evergreen` (stable library content).
+- `tags` — classification. Conventions: `skill` (reusable how-tos), `identity` (agent self-definition), `meta` (skills about operating aeqi), `promoted` (approved skills that surface on quest start), `evergreen` (stable library content).
 
 ## Other actions
 
