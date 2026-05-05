@@ -309,6 +309,46 @@ If the parent's node_modules is missing large package directories entirely
 symlink), skip npm rebuild and go straight to `npm install`. This is rare but
 surfaces after an aggressive `rm -rf node_modules` cleanup in a prior session.
 
+**`keccak` / native-addon `spawn ELOOP` during `npm install`.** When the
+parent's node_modules is absent and you run `npm install` while a worktree
+symlink points at the same target, `npm` hits `spawn ELOOP` on native
+addon install scripts (`keccak@3.0.4`, `bufferutil`, `utf-8-validate`).
+The error is cosmetic: TypeScript and Vite binaries still land in `.bin/`
+despite the error. After the error exits:
+
+```bash
+ls /home/claudedev/aeqi/apps/ui/node_modules/.bin/tsc   # should exist
+ls /home/claudedev/aeqi/apps/ui/node_modules/.bin/vite  # should exist
+```
+
+If those are present, the install succeeded enough to verify. The ELOOP is
+from keccak/bufferutil native build scripts tracing through the symlink —
+it does NOT affect TypeScript/Vite/Prettier. If `.bin/tsc` is missing even
+after the ELOOP, remove the worktree symlink first, then run `npm install`
+from the parent directly, then restore the symlink.
+
+**TypeScript `Cannot find module '../lib/tsc.js'` after partial install.**
+If `tsc --noEmit` throws `Cannot find module '../lib/tsc.js'`, the
+TypeScript package itself is present in `.bin/` but its lib files are
+missing (interrupted install). Run `npm install` once more from the parent
+— a second pass fills in the missing files. Do NOT delete the binary and
+reinstall from scratch; that triggers the ELOOP loop again.
+
+Recovery sequence (fastest path):
+```bash
+# 1. Remove worktree symlink to break ELOOP
+rm /home/claudedev/aeqi-<topic>/apps/ui/node_modules
+# 2. Install from parent (ELOOP may fire on keccak — that's fine)
+cd /home/claudedev/aeqi/apps/ui && npm install
+# 3. Check key binaries
+ls node_modules/.bin/tsc node_modules/.bin/vite
+# 4. If tsc still missing: run install a second time (fills incomplete TS pkg)
+npm install
+# 5. Restore worktree symlink
+ln -s /home/claudedev/aeqi/apps/ui/node_modules \
+      /home/claudedev/aeqi-<topic>/apps/ui/node_modules
+```
+
 **Verify before merging:**
 
 ```bash
