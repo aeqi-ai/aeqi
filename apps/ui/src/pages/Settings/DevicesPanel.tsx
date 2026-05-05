@@ -195,7 +195,7 @@ function DeviceIcon({ kind }: { kind: DeviceKind }) {
             x="24"
             y="29"
             textAnchor="middle"
-            fontSize="14"
+            fontSize="var(--font-size-base)"
             fontWeight="500"
             fill="currentColor"
           >

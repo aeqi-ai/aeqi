@@ -393,7 +393,7 @@ export default function SignupPage() {
           {invitationDetail && (
             <div
               style={{
-                padding: "10px 14px",
+                padding: "var(--space-2) var(--space-3)",
                 background: "var(--color-card)",
                 borderRadius: "var(--radius-md)",
                 fontSize: "var(--font-size-sm)",

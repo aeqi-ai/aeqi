@@ -171,7 +171,9 @@ export default function InvitationAcceptPage() {
 
           {!loading && loadError && (
             <>
-              <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Invitation not found</h1>
+              <h1 style={{ fontSize: "var(--font-size-lg)", fontWeight: 600, margin: 0 }}>
+                Invitation not found
+              </h1>
               <p
                 style={{
                   fontSize: "var(--font-size-base)",
@@ -192,7 +194,7 @@ export default function InvitationAcceptPage() {
 
           {!loading && invitation && invitation.status !== "pending" && (
             <>
-              <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
+              <h1 style={{ fontSize: "var(--font-size-lg)", fontWeight: 600, margin: 0 }}>
                 Invitation no longer valid
               </h1>
               <p
@@ -232,7 +234,14 @@ export default function InvitationAcceptPage() {
                 >
                   {invitation.inviter_name} invited you
                 </p>
-                <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, lineHeight: 1.3 }}>
+                <h1
+                  style={{
+                    fontSize: "var(--font-size-xl)",
+                    fontWeight: 600,
+                    margin: 0,
+                    lineHeight: 1.3,
+                  }}
+                >
                   Join{" "}
                   <span style={{ color: "var(--accent)" }}>{invitation.entity_display_name}</span>
                   {invitation.role_title ? (

@@ -223,7 +223,7 @@ export default function DrivePage() {
                 style={{
                   color: "var(--text-muted)",
                   fontFamily: "var(--font-sans)",
-                  fontSize: 11,
+                  fontSize: "var(--font-size-xs)",
                   fontVariantNumeric: "tabular-nums",
                   flexShrink: 0,
                 }}
@@ -233,7 +233,7 @@ export default function DrivePage() {
               <span
                 style={{
                   color: "var(--text-muted)",
-                  fontSize: 11,
+                  fontSize: "var(--font-size-xs)",
                   flexShrink: 0,
                   minWidth: 90,
                   textAlign: "right",

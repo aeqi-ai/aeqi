@@ -147,7 +147,7 @@ export default function RoleDetailPage() {
       <section style={{ marginBottom: "var(--space-8)" }}>
         <h2
           style={{
-            fontSize: 11,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 600,
             color: "var(--text-muted)",
             textTransform: "uppercase",
@@ -216,7 +216,7 @@ export default function RoleDetailPage() {
                 >
                   {getOccupantDisplay(role.occupant_id, agentNames)}
                 </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
                   {role.occupant_kind}
                 </span>
               </span>
@@ -232,7 +232,7 @@ export default function RoleDetailPage() {
       <section style={{ marginBottom: "var(--space-8)" }}>
         <h2
           style={{
-            fontSize: 11,
+            fontSize: "var(--font-size-xs)",
             fontWeight: 600,
             color: "var(--text-muted)",
             textTransform: "uppercase",
@@ -275,7 +275,7 @@ export default function RoleDetailPage() {
         <section style={{ marginBottom: "var(--space-8)" }}>
           <h2
             style={{
-              fontSize: 11,
+              fontSize: "var(--font-size-xs)",
               fontWeight: 600,
               color: "var(--text-muted)",
               textTransform: "uppercase",
@@ -359,7 +359,7 @@ function InvitationRow({
         <span
           style={{
             display: "block",
-            fontSize: 11,
+            fontSize: "var(--font-size-xs)",
             color: "var(--text-muted)",
             fontFamily: "var(--font-mono)",
           }}
