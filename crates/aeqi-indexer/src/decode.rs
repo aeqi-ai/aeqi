@@ -291,7 +291,7 @@ pub enum DecodedEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::primitives::{address, b256, B256};
+    use alloy::primitives::{B256, address, b256};
     use alloy::sol_types::SolEvent;
 
     /// Synthesize a TRUST_Created event log payload and decode it.
@@ -326,8 +326,7 @@ mod tests {
     fn trust_created_event_signature_matches() {
         // keccak256("Factory_TRUSTCreatedEvent(address,bytes32,address)")
         // Pre-computed offline from the existing Factory.json ABI.
-        let expected =
-            b256!("47fc9fa1ef72ad59b6dee52d6d8e4cad8c814e23a48f33b3e95a8ddc9a0aa4ba");
+        let expected = b256!("47fc9fa1ef72ad59b6dee52d6d8e4cad8c814e23a48f33b3e95a8ddc9a0aa4ba");
         // alloy sol_types exposes SIGNATURE_HASH on each event type.
         let actual = Factory::Factory_TRUSTCreatedEvent::SIGNATURE_HASH;
         // If this fails, our sol! event signature does not match the deployed

@@ -2,13 +2,13 @@
 
 use anyhow::Result;
 use async_graphql::{
-    http::GraphiQLSource, Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject,
+    Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject, http::GraphiQLSource,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
+    Extension, Router,
     response::{Html, IntoResponse},
     routing::get,
-    Extension, Router,
 };
 use rusqlite::Connection;
 use std::sync::Arc;
@@ -552,6 +552,16 @@ pub struct TreasuryTransfer {
     pub log_index: u64,
 }
 
+/// Voting power for an account on a governance module. `voting_power` is the
+/// raw token balance (u256 hex) in the Token module that backs the governance.
+#[derive(SimpleObject, Clone)]
+pub struct VotingPower {
+    pub module_address: String,
+    pub account_address: String,
+    /// Raw token balance as u256 hex (18 decimals).
+    pub voting_power: String,
+}
+
 /// GraphQL projection of a role assignment audit row.
 #[derive(SimpleObject, Clone)]
 pub struct RoleAssignment {
@@ -741,10 +751,15 @@ impl From<store::TrustRow> for Trust {
 impl Query {
     /// Look up a single TRUST by its on-chain address. Returns None if the
     /// TRUST hasn't been Created yet (multi-sig: Registered without Created).
-    async fn trust(&self, ctx: &Context<'_>, address: String) -> async_graphql::Result<Option<Trust>> {
+    async fn trust(
+        &self,
+        ctx: &Context<'_>,
+        address: String,
+    ) -> async_graphql::Result<Option<Trust>> {
         let db = ctx.data::<SharedDb>()?;
         let conn = db.lock().await;
-        let row = store::get_trust(&conn, &address).map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        let row = store::get_trust(&conn, &address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(row.map(Into::into))
     }
 
@@ -1153,6 +1168,44 @@ impl Query {
             .collect();
         Ok(out)
     }
+
+    /// All proposals across every Governance module attached to a TRUST,
+    /// identified by its on-chain trust_id (bytes32 hex). Newest first.
+    /// `limit` defaults to 50; max 200.
+    async fn proposals_for_trust(
+        &self,
+        ctx: &Context<'_>,
+        trust_id: String,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<Proposal>> {
+        let cap = limit.unwrap_or(50).clamp(1, 200) as u32;
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let rows = store::get_proposals_for_trust(&conn, &trust_id, cap)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    /// Voting power for an account on a governance module. Returns the
+    /// account's token balance (raw u256 hex) in the Token module that backs
+    /// the given governance module. Returns `null` when the account has no
+    /// indexed balance (no Transfer events yet, or balance is zero).
+    async fn voting_power(
+        &self,
+        ctx: &Context<'_>,
+        module_address: String,
+        account_address: String,
+    ) -> async_graphql::Result<Option<VotingPower>> {
+        let db = ctx.data::<SharedDb>()?;
+        let conn = db.lock().await;
+        let balance = store::get_voting_power(&conn, &module_address, &account_address)
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(balance.map(|b| VotingPower {
+            module_address: module_address.clone(),
+            account_address: account_address.clone(),
+            voting_power: b,
+        }))
+    }
 }
 
 pub type IndexerSchema = Schema<Query, EmptyMutation, EmptySubscription>;
@@ -1190,7 +1243,10 @@ pub async fn serve(port: u16, db: SharedDb) -> Result<()> {
     let schema = build_schema(db);
     let router = build_router(schema);
     let addr = format!("0.0.0.0:{}", port);
-    tracing::info!("aeqi-indexer GraphQL serving on http://{} (POST /graphql, GET /graphql for GraphiQL, GET /healthz)", addr);
+    tracing::info!(
+        "aeqi-indexer GraphQL serving on http://{} (POST /graphql, GET /graphql for GraphiQL, GET /healthz)",
+        addr
+    );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, router).await?;
     Ok(())
@@ -1230,7 +1286,11 @@ mod tests {
         let schema = build_schema(db);
         let q = r#"{ trust(address: "0x9131b1DEC7d1fE791C599E9D0b94D6414cae0747") { address creator_address: creatorAddress trustId createdBlock } trustsCount version }"#;
         let response = schema.execute(q).await;
-        assert!(response.errors.is_empty(), "graphql errors: {:?}", response.errors);
+        assert!(
+            response.errors.is_empty(),
+            "graphql errors: {:?}",
+            response.errors
+        );
         // Response data exists
         assert!(response.data != async_graphql::Value::Null);
     }

@@ -19,7 +19,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,13 +28,14 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    let db_path = std::env::var("AEQI_INDEXER_DB").unwrap_or_else(|_| "./aeqi-indexer.db".to_string());
+    let db_path =
+        std::env::var("AEQI_INDEXER_DB").unwrap_or_else(|_| "./aeqi-indexer.db".to_string());
     let port: u16 = std::env::var("AEQI_INDEXER_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(8500);
-    let rpc_url = std::env::var("AEQI_INDEXER_RPC")
-        .unwrap_or_else(|_| "http://127.0.0.1:8545".to_string());
+    let rpc_url =
+        std::env::var("AEQI_INDEXER_RPC").unwrap_or_else(|_| "http://127.0.0.1:8545".to_string());
     let factory_address: Option<Address> = std::env::var("AEQI_INDEXER_FACTORY")
         .ok()
         .and_then(|s| s.parse().ok());
@@ -53,7 +54,10 @@ async fn main() -> Result<()> {
     if let Some(factory) = factory_address {
         let addr_hex = format!("{:#x}", factory);
         store::register_watched_address(&conn, &addr_hex, "factory", start_block)?;
-        info!("seeded factory address into watched_addresses: {}", addr_hex);
+        info!(
+            "seeded factory address into watched_addresses: {}",
+            addr_hex
+        );
     }
 
     let db = Arc::new(Mutex::new(conn));

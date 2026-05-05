@@ -4,7 +4,7 @@
 //! blocks, decoding Factory events into the SQLite store.
 
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 /// Record a freshly committed block in `committed_blocks` and verify its
 /// `parent_hash` matches the previously-committed block. Returns `Ok(true)`
@@ -65,11 +65,9 @@ pub fn unwind_above(conn: &Connection, safe_block: u64) -> Result<usize> {
 /// Look up the highest committed block_number, used as the resume point.
 pub fn highest_committed(conn: &Connection) -> Result<Option<u64>> {
     let n: Option<i64> = conn
-        .query_row(
-            "SELECT MAX(block_number) FROM committed_blocks",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("SELECT MAX(block_number) FROM committed_blocks", [], |r| {
+            r.get(0)
+        })
         .unwrap_or(None);
     Ok(n.map(|x| x as u64))
 }
@@ -254,7 +252,9 @@ pub mod poll {
                 Err(e) => {
                     tracing::warn!(
                         "decode AdminsAdded failed at block {} tx {}: {}",
-                        block_num, tx_hash, e
+                        block_num,
+                        tx_hash,
+                        e
                     );
                     return Ok(());
                 }
@@ -264,7 +264,9 @@ pub mod poll {
                 Err(e) => {
                     tracing::warn!(
                         "decode AdminsRemoved failed at block {} tx {}: {}",
-                        block_num, tx_hash, e
+                        block_num,
+                        tx_hash,
+                        e
                     );
                     return Ok(());
                 }
@@ -304,9 +306,7 @@ pub mod poll {
         tx_hash: &str,
     ) -> Result<()>
     where
-        F: FnOnce(
-            &alloy::primitives::Log,
-        ) -> std::result::Result<String, alloy::sol_types::Error>,
+        F: FnOnce(&alloy::primitives::Log) -> std::result::Result<String, alloy::sol_types::Error>,
     {
         let module_address = format!("{:#x}", log.address());
         match decode_proposal_id(&log.inner) {
@@ -343,8 +343,7 @@ pub mod poll {
     /// Spawn the poll loop. Runs until the provided cancellation signal fires
     /// or an unrecoverable error is hit.
     pub async fn run(cfg: PollConfig, db: Arc<Mutex<Connection>>) -> Result<()> {
-        let provider = chain::provider::http_provider(&cfg.rpc_url)
-            .context("connect provider")?;
+        let provider = chain::provider::http_provider(&cfg.rpc_url).context("connect provider")?;
         let initial_watched = {
             let conn = db.lock().await;
             store::list_watched_addresses(&conn)?
@@ -538,7 +537,8 @@ pub mod poll {
                         if topic0
                             == Some(decode::Factory::Factory_TRUSTCreatedEvent::SIGNATURE_HASH)
                         {
-                            match decode::Factory::Factory_TRUSTCreatedEvent::decode_log(&log.inner) {
+                            match decode::Factory::Factory_TRUSTCreatedEvent::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::insert_trust_created(
@@ -551,18 +551,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_TRUSTCreatedEvent: trust={:#x} creator={:#x} block={}",
-                                        ev.trustAddress, ev.creatorAddress, block_num
+                                        ev.trustAddress,
+                                        ev.creatorAddress,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode TrustCreated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Factory::Factory_TRUSTRegisteredEvent::SIGNATURE_HASH)
                         {
-                            match decode::Factory::Factory_TRUSTRegisteredEvent::decode_log(&log.inner) {
+                            match decode::Factory::Factory_TRUSTRegisteredEvent::decode_log(
+                                &log.inner,
+                            ) {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     let cid = String::from_utf8_lossy(&ev.ipfsCid).to_string();
@@ -576,19 +582,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_TRUSTRegisteredEvent: trust_id={:#x} template={:#x} block={}",
-                                        ev.trustId, ev.templateId, block_num
+                                        ev.trustId,
+                                        ev.templateId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode TrustRegistered failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Factory::Factory_FactoryConfigSet::SIGNATURE_HASH)
                         {
                             let factory_address = format!("{:#x}", log.address());
-                            match decode::Factory::Factory_FactoryConfigSet::decode_log(&log.inner) {
+                            match decode::Factory::Factory_FactoryConfigSet::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::upsert_factory_beacon(
@@ -600,19 +611,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_FactoryConfigSet: factory={} beacon={:#x} block={}",
-                                        factory_address, ev.beaconAddress, block_num
+                                        factory_address,
+                                        ev.beaconAddress,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Factory_FactoryConfigSet failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Factory::Factory_PartnerProfileSet::SIGNATURE_HASH)
                         {
                             let factory_address = format!("{:#x}", log.address());
-                            match decode::Factory::Factory_PartnerProfileSet::decode_log(&log.inner) {
+                            match decode::Factory::Factory_PartnerProfileSet::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     let cid = String::from_utf8_lossy(&ev.ipfsCid).to_string();
@@ -625,26 +641,29 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_PartnerProfileSet: factory={} cid={} block={}",
-                                        factory_address, cid, block_num
+                                        factory_address,
+                                        cid,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Factory_PartnerProfileSet failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0 == Some(decode::Factory::AdminsAdded::SIGNATURE_HASH) {
                             persist_admin_event(&db, &log, "added", block_num, &tx_hash).await?;
-                        } else if topic0
-                            == Some(decode::Factory::AdminsRemoved::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Factory::AdminsRemoved::SIGNATURE_HASH) {
                             persist_admin_event(&db, &log, "removed", block_num, &tx_hash).await?;
                         } else if topic0
                             == Some(decode::Factory::Factory_TemplateReplaced::SIGNATURE_HASH)
                         {
                             // Template events come from the Factory address itself.
                             let factory_address = format!("{:#x}", log.address());
-                            match decode::Factory::Factory_TemplateReplaced::decode_log(&log.inner) {
+                            match decode::Factory::Factory_TemplateReplaced::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::upsert_template(
@@ -656,18 +675,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_TemplateReplaced: factory={} template={:#x} block={}",
-                                        factory_address, ev.templateId, block_num
+                                        factory_address,
+                                        ev.templateId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Factory_TemplateReplaced failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Factory::Factory_TRUSTApprovedEvent::SIGNATURE_HASH)
                         {
-                            match decode::Factory::Factory_TRUSTApprovedEvent::decode_log(&log.inner) {
+                            match decode::Factory::Factory_TRUSTApprovedEvent::decode_log(
+                                &log.inner,
+                            ) {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::mark_trust_signer_signed(
@@ -677,18 +702,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_TRUSTApprovedEvent: trust_id={:#x} signer={:#x} approvedFlag={} block={}",
-                                        ev.trustId, ev.signerAddress, ev.isTRUSTApproved, block_num
+                                        ev.trustId,
+                                        ev.signerAddress,
+                                        ev.isTRUSTApproved,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Factory_TRUSTApprovedEvent failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Factory::Factory_TRUSTSignerAdded::SIGNATURE_HASH)
                         {
-                            match decode::Factory::Factory_TRUSTSignerAdded::decode_log(&log.inner) {
+                            match decode::Factory::Factory_TRUSTSignerAdded::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::insert_trust_signer(
@@ -702,17 +733,19 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Factory_TRUSTSignerAdded: trust_id={:#x} signer={:#x} block={}",
-                                        ev.trustId, ev.signerAddress, block_num
+                                        ev.trustId,
+                                        ev.signerAddress,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode TrustSignerAdded failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::TRUST::TRUST_ModuleAdded::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::TRUST::TRUST_ModuleAdded::SIGNATURE_HASH) {
                             // TRUST events come from the TRUST contract address
                             // itself — log.address() is the trust_address.
                             let trust_address = format!("{:#x}", log.address());
@@ -730,16 +763,20 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed TRUST_ModuleAdded: trust={} module={:#x} module_id={:#x} block={}",
-                                        trust_address, ev.moduleAddress, ev.moduleId, block_num
+                                        trust_address,
+                                        ev.moduleAddress,
+                                        ev.moduleId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode TRUST_ModuleAdded failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::TRUST::PermissionsGranted::SIGNATURE_HASH)
+                        } else if topic0 == Some(decode::TRUST::PermissionsGranted::SIGNATURE_HASH)
                         {
                             match decode::TRUST::PermissionsGranted::decode_log(&log.inner) {
                                 Ok(ev) => {
@@ -756,11 +793,12 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode PermissionsGranted failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::TRUST::PermissionsRevoked::SIGNATURE_HASH)
+                        } else if topic0 == Some(decode::TRUST::PermissionsRevoked::SIGNATURE_HASH)
                         {
                             match decode::TRUST::PermissionsRevoked::decode_log(&log.inner) {
                                 Ok(ev) => {
@@ -777,12 +815,12 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode PermissionsRevoked failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::TRUST::PermissionsSet::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::TRUST::PermissionsSet::SIGNATURE_HASH) {
                             match decode::TRUST::PermissionsSet::decode_log(&log.inner) {
                                 Ok(ev) => {
                                     persist_permissions_event(
@@ -798,12 +836,12 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode PermissionsSet failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Role::Role_RoleCreated::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Role::Role_RoleCreated::SIGNATURE_HASH) {
                             // Role events come from the module address.
                             let module_address = format!("{:#x}", log.address());
                             match decode::Role::Role_RoleCreated::decode_log(&log.inner) {
@@ -819,17 +857,20 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Role_RoleCreated: module={} role={:#x} creator={:#x} block={}",
-                                        module_address, ev.roleId, ev.creator, block_num
+                                        module_address,
+                                        ev.roleId,
+                                        ev.creator,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Role_RoleCreated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Role::Role_RoleAssigned::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Role::Role_RoleAssigned::SIGNATURE_HASH) {
                             match decode::Role::Role_RoleAssigned::decode_log(&log.inner) {
                                 Ok(ev) => {
                                     persist_role_assignment(
@@ -845,12 +886,12 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Role_RoleAssigned failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Role::Role_RoleResigned::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Role::Role_RoleResigned::SIGNATURE_HASH) {
                             match decode::Role::Role_RoleResigned::decode_log(&log.inner) {
                                 Ok(ev) => {
                                     persist_role_assignment(
@@ -866,12 +907,12 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Role_RoleResigned failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Role::Role_RoleRemoved::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Role::Role_RoleRemoved::SIGNATURE_HASH) {
                             match decode::Role::Role_RoleRemoved::decode_log(&log.inner) {
                                 Ok(ev) => {
                                     persist_role_assignment(
@@ -887,11 +928,12 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Role_RoleRemoved failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Role::Role_RoleTransferred::SIGNATURE_HASH)
+                        } else if topic0 == Some(decode::Role::Role_RoleTransferred::SIGNATURE_HASH)
                         {
                             // Transfer is split into two audit rows so
                             // get_role_assignments(module, role) returns the
@@ -921,14 +963,18 @@ pub mod poll {
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Role_RoleTransferred failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Governance::Governance_ProposalCreated::SIGNATURE_HASH)
                         {
                             let module_address = format!("{:#x}", log.address());
-                            match decode::Governance::Governance_ProposalCreated::decode_log(&log.inner) {
+                            match decode::Governance::Governance_ProposalCreated::decode_log(
+                                &log.inner,
+                            ) {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     let cid = String::from_utf8_lossy(&ev.ipfsCid).to_string();
@@ -946,41 +992,72 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Governance_ProposalCreated: module={} proposal={:#x} proposer={:#x} block={}",
-                                        module_address, ev.proposalId, ev.proposer, block_num
+                                        module_address,
+                                        ev.proposalId,
+                                        ev.proposer,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Governance_ProposalCreated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Governance::Governance_ProposalCanceled::SIGNATURE_HASH)
                         {
                             persist_proposal_status(
-                                &db, &log, "canceled",
-                                |inner| decode::Governance::Governance_ProposalCanceled::decode_log(inner)
-                                    .map(|ev| format!("{:#x}", ev.proposalId)),
-                                block_num, &tx_hash,
-                            ).await?;
+                                &db,
+                                &log,
+                                "canceled",
+                                |inner| {
+                                    decode::Governance::Governance_ProposalCanceled::decode_log(
+                                        inner,
+                                    )
+                                    .map(|ev| format!("{:#x}", ev.proposalId))
+                                },
+                                block_num,
+                                &tx_hash,
+                            )
+                            .await?;
                         } else if topic0
-                            == Some(decode::Governance::Governance_ProposalSucceeded::SIGNATURE_HASH)
+                            == Some(
+                                decode::Governance::Governance_ProposalSucceeded::SIGNATURE_HASH,
+                            )
                         {
                             persist_proposal_status(
-                                &db, &log, "succeeded",
-                                |inner| decode::Governance::Governance_ProposalSucceeded::decode_log(inner)
-                                    .map(|ev| format!("{:#x}", ev.proposalId)),
-                                block_num, &tx_hash,
-                            ).await?;
+                                &db,
+                                &log,
+                                "succeeded",
+                                |inner| {
+                                    decode::Governance::Governance_ProposalSucceeded::decode_log(
+                                        inner,
+                                    )
+                                    .map(|ev| format!("{:#x}", ev.proposalId))
+                                },
+                                block_num,
+                                &tx_hash,
+                            )
+                            .await?;
                         } else if topic0
                             == Some(decode::Governance::Governance_ProposalExecuted::SIGNATURE_HASH)
                         {
                             persist_proposal_status(
-                                &db, &log, "executed",
-                                |inner| decode::Governance::Governance_ProposalExecuted::decode_log(inner)
-                                    .map(|ev| format!("{:#x}", ev.proposalId)),
-                                block_num, &tx_hash,
-                            ).await?;
+                                &db,
+                                &log,
+                                "executed",
+                                |inner| {
+                                    decode::Governance::Governance_ProposalExecuted::decode_log(
+                                        inner,
+                                    )
+                                    .map(|ev| format!("{:#x}", ev.proposalId))
+                                },
+                                block_num,
+                                &tx_hash,
+                            )
+                            .await?;
                         } else if topic0
                             == Some(decode::Governance::Governance_VoteCast::SIGNATURE_HASH)
                         {
@@ -1006,17 +1083,22 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Governance_VoteCast: module={} proposal={:#x} voter={:#x} support={} weight={:#x} block={}",
-                                        module_address, ev.proposalId, ev.voter, ev.support, ev.weight, block_num
+                                        module_address,
+                                        ev.proposalId,
+                                        ev.voter,
+                                        ev.support,
+                                        ev.weight,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Governance_VoteCast failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Token::Transfer::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Token::Transfer::SIGNATURE_HASH) {
                             // Token Transfer fires from the Token module address
                             // (which IS the ERC20 contract). Atomic balance
                             // update happens inside store::insert_token_transfer.
@@ -1041,19 +1123,27 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Token Transfer: token={} from={:#x} to={:#x} value={:#x} block={}",
-                                        token_address, ev.from, ev.to, ev.value, block_num
+                                        token_address,
+                                        ev.from,
+                                        ev.to,
+                                        ev.value,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Token Transfer failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Vesting::Vesting_VestingPositionCreated::SIGNATURE_HASH)
                         {
                             let module_address = format!("{:#x}", log.address());
-                            match decode::Vesting::Vesting_VestingPositionCreated::decode_log(&log.inner) {
+                            match decode::Vesting::Vesting_VestingPositionCreated::decode_log(
+                                &log.inner,
+                            ) {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::insert_vesting_position(
@@ -1065,19 +1155,27 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Vesting_VestingPositionCreated: module={} position={:#x} block={}",
-                                        module_address, ev.vestingPositionId, block_num
+                                        module_address,
+                                        ev.vestingPositionId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Vesting_VestingPositionCreated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
-                            == Some(decode::Vesting::Vesting_VestingPositionActivated::SIGNATURE_HASH)
+                            == Some(
+                                decode::Vesting::Vesting_VestingPositionActivated::SIGNATURE_HASH,
+                            )
                         {
                             let module_address = format!("{:#x}", log.address());
-                            match decode::Vesting::Vesting_VestingPositionActivated::decode_log(&log.inner) {
+                            match decode::Vesting::Vesting_VestingPositionActivated::decode_log(
+                                &log.inner,
+                            ) {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::update_vesting_position_status(
@@ -1088,20 +1186,28 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Vesting_VestingPositionActivated: module={} position={:#x} block={}",
-                                        module_address, ev.vestingPositionId, block_num
+                                        module_address,
+                                        ev.vestingPositionId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Vesting_VestingPositionActivated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
-                            == Some(decode::Vesting::Vesting_VestingPositionContributed::SIGNATURE_HASH)
+                            == Some(
+                                decode::Vesting::Vesting_VestingPositionContributed::SIGNATURE_HASH,
+                            )
                         {
                             let module_address = format!("{:#x}", log.address());
                             let log_index = log.log_index.unwrap_or(0);
-                            match decode::Vesting::Vesting_VestingPositionContributed::decode_log(&log.inner) {
+                            match decode::Vesting::Vesting_VestingPositionContributed::decode_log(
+                                &log.inner,
+                            ) {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     let coord = store::LogCoord {
@@ -1119,12 +1225,18 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Vesting_VestingPositionContributed: module={} position={:#x} from={:#x} amount={:#x} block={}",
-                                        module_address, ev.vestingPositionId, ev.from, ev.amount, block_num
+                                        module_address,
+                                        ev.vestingPositionId,
+                                        ev.from,
+                                        ev.amount,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Vesting_VestingPositionContributed failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1151,12 +1263,18 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Vesting_VestingClaimed: module={} position={:#x} to={:#x} amount={:#x} block={}",
-                                        module_address, ev.vestingPositionId, ev.to, ev.amount, block_num
+                                        module_address,
+                                        ev.vestingPositionId,
+                                        ev.to,
+                                        ev.amount,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Vesting_VestingClaimed failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1174,12 +1292,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Vesting_PositionRemoved: module={} position={:#x} block={}",
-                                        module_address, ev.vestingPositionId, block_num
+                                        module_address,
+                                        ev.vestingPositionId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Vesting_PositionRemoved failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1198,19 +1320,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Funding_FundingCreated: module={} funding={:#x} block={}",
-                                        module_address, ev.fundingId, block_num
+                                        module_address,
+                                        ev.fundingId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Funding_FundingCreated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Funding::Funding_FundingActivated::SIGNATURE_HASH)
                         {
                             let module_address = format!("{:#x}", log.address());
-                            match decode::Funding::Funding_FundingActivated::decode_log(&log.inner) {
+                            match decode::Funding::Funding_FundingActivated::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::update_funding_status(
@@ -1221,19 +1348,24 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Funding_FundingActivated: module={} funding={:#x} block={}",
-                                        module_address, ev.fundingId, block_num
+                                        module_address,
+                                        ev.fundingId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Funding_FundingActivated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
                             == Some(decode::Funding::Funding_FinalizedFunding::SIGNATURE_HASH)
                         {
                             let module_address = format!("{:#x}", log.address());
-                            match decode::Funding::Funding_FinalizedFunding::decode_log(&log.inner) {
+                            match decode::Funding::Funding_FinalizedFunding::decode_log(&log.inner)
+                            {
                                 Ok(ev) => {
                                     let conn = db.lock().await;
                                     store::update_funding_status(
@@ -1244,12 +1376,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Funding_FinalizedFunding: module={} funding={:#x} block={}",
-                                        module_address, ev.fundingId, block_num
+                                        module_address,
+                                        ev.fundingId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Funding_FinalizedFunding failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1267,12 +1403,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Funding_FundingRemoved: module={} funding={:#x} block={}",
-                                        module_address, ev.fundingId, block_num
+                                        module_address,
+                                        ev.fundingId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Funding_FundingRemoved failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1296,12 +1436,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Funding_ExitExecuted: module={} exit={:#x} block={}",
-                                        module_address, ev.exitId, block_num
+                                        module_address,
+                                        ev.exitId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Funding_ExitExecuted failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1320,12 +1464,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Budget_BudgetCreated: module={} budget={:#x} block={}",
-                                        module_address, ev.budgetId, block_num
+                                        module_address,
+                                        ev.budgetId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Budget_BudgetCreated failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1343,12 +1491,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Budget_BudgetFrozen: module={} budget={:#x} block={}",
-                                        module_address, ev.budgetId, block_num
+                                        module_address,
+                                        ev.budgetId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Budget_BudgetFrozen failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1366,12 +1518,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Budget_BudgetUnfrozen: module={} budget={:#x} block={}",
-                                        module_address, ev.budgetId, block_num
+                                        module_address,
+                                        ev.budgetId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Budget_BudgetUnfrozen failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1389,12 +1545,16 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Budget_BudgetRemoved: module={} budget={:#x} block={}",
-                                        module_address, ev.budgetId, block_num
+                                        module_address,
+                                        ev.budgetId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Budget_BudgetRemoved failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1422,12 +1582,18 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Budget_BudgetDeposited: module={} budget={:#x} from={:#x} amount={:#x} block={}",
-                                        module_address, ev.budgetId, ev.from, ev.amount, block_num
+                                        module_address,
+                                        ev.budgetId,
+                                        ev.from,
+                                        ev.amount,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Budget_BudgetDeposited failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1455,17 +1621,21 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Budget_BudgetConsumed: module={} budget={:#x} to={:#x} amount={:#x} block={}",
-                                        module_address, ev.budgetId, ev.to, ev.amount, block_num
+                                        module_address,
+                                        ev.budgetId,
+                                        ev.to,
+                                        ev.amount,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Budget_BudgetConsumed failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Fund::Fund_NavProcessed::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Fund::Fund_NavProcessed::SIGNATURE_HASH) {
                             let module_address = format!("{:#x}", log.address());
                             match decode::Fund::Fund_NavProcessed::decode_log(&log.inner) {
                                 Ok(ev) => {
@@ -1483,17 +1653,20 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_NavProcessed: module={} checkpoint={} netNAV={:#x} block={}",
-                                        module_address, ev.checkpointId, ev.netNAV, block_num
+                                        module_address,
+                                        ev.checkpointId,
+                                        ev.netNAV,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_NavProcessed failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Fund::Fund_FlowRequested::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Fund::Fund_FlowRequested::SIGNATURE_HASH) {
                             let module_address = format!("{:#x}", log.address());
                             match decode::Fund::Fund_FlowRequested::decode_log(&log.inner) {
                                 Ok(ev) => {
@@ -1510,17 +1683,21 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_FlowRequested: module={} request={:#x} flowType={} amountIn={:#x} block={}",
-                                        module_address, ev.requestId, ev.flowType, ev.amountIn, block_num
+                                        module_address,
+                                        ev.requestId,
+                                        ev.flowType,
+                                        ev.amountIn,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_FlowRequested failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Fund::Fund_FlowClaimed::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Fund::Fund_FlowClaimed::SIGNATURE_HASH) {
                             let module_address = format!("{:#x}", log.address());
                             match decode::Fund::Fund_FlowClaimed::decode_log(&log.inner) {
                                 Ok(ev) => {
@@ -1537,17 +1714,20 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_FlowClaimed: module={} request={:#x} amountOut={:#x} block={}",
-                                        module_address, ev.requestId, ev.amountOut, block_num
+                                        module_address,
+                                        ev.requestId,
+                                        ev.amountOut,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_FlowClaimed failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Fund::Fund_FlowCancelled::SIGNATURE_HASH)
-                        {
+                        } else if topic0 == Some(decode::Fund::Fund_FlowCancelled::SIGNATURE_HASH) {
                             let module_address = format!("{:#x}", log.address());
                             match decode::Fund::Fund_FlowCancelled::decode_log(&log.inner) {
                                 Ok(ev) => {
@@ -1563,16 +1743,19 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_FlowCancelled: module={} request={:#x} block={}",
-                                        module_address, ev.requestId, block_num
+                                        module_address,
+                                        ev.requestId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_FlowCancelled failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Fund::Fund_PositionOpened::SIGNATURE_HASH)
+                        } else if topic0 == Some(decode::Fund::Fund_PositionOpened::SIGNATURE_HASH)
                         {
                             let module_address = format!("{:#x}", log.address());
                             match decode::Fund::Fund_PositionOpened::decode_log(&log.inner) {
@@ -1588,16 +1771,20 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_PositionOpened: module={} position={:#x} pmId={:#x} block={}",
-                                        module_address, ev.positionId, ev.positionManagerId, block_num
+                                        module_address,
+                                        ev.positionId,
+                                        ev.positionManagerId,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_PositionOpened failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
-                        } else if topic0
-                            == Some(decode::Fund::Fund_PositionClosed::SIGNATURE_HASH)
+                        } else if topic0 == Some(decode::Fund::Fund_PositionClosed::SIGNATURE_HASH)
                         {
                             let module_address = format!("{:#x}", log.address());
                             match decode::Fund::Fund_PositionClosed::decode_log(&log.inner) {
@@ -1613,12 +1800,17 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_PositionClosed: module={} position={:#x} proceeds={:#x} block={}",
-                                        module_address, ev.positionId, ev.quoteAssetReceived, block_num
+                                        module_address,
+                                        ev.positionId,
+                                        ev.quoteAssetReceived,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_PositionClosed failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         } else if topic0
@@ -1644,12 +1836,17 @@ pub mod poll {
                                     )?;
                                     tracing::info!(
                                         "indexed Fund_PositionInteracted: module={} position={:#x} action={} block={}",
-                                        module_address, ev.positionId, ev.action, block_num
+                                        module_address,
+                                        ev.positionId,
+                                        ev.action,
+                                        block_num
                                     );
                                 }
                                 Err(e) => tracing::warn!(
                                     "decode Fund_PositionInteracted failed at block {} tx {}: {}",
-                                    block_num, tx_hash, e
+                                    block_num,
+                                    tx_hash,
+                                    e
                                 ),
                             }
                         }
@@ -1662,7 +1859,9 @@ pub mod poll {
                 if !continuous {
                     tracing::warn!(
                         "REORG/GAP at block {} (hash={}, parent={}); unwinding",
-                        block_num, block_hash, parent_hash
+                        block_num,
+                        block_hash,
+                        parent_hash
                     );
                     let safe = block_num.saturating_sub(1);
                     chain::unwind_above(&conn, safe)?;

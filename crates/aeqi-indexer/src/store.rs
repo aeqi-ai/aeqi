@@ -5,7 +5,7 @@
 //! and re-runs only what's new.
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::path::Path;
 
 /// All schema migrations in order. Add new entries; never remove or reorder.
@@ -786,10 +786,7 @@ fn apply_migrations(conn: &Connection) -> Result<()> {
             .with_context(|| format!("apply migration {}", id))?;
         conn.execute(
             "INSERT INTO schema_migrations (id, applied_at) VALUES (?1, ?2)",
-            params![
-                id,
-                chrono::Utc::now().timestamp()
-            ],
+            params![id, chrono::Utc::now().timestamp()],
         )?;
         tracing::info!("applied migration: {}", id);
     }
@@ -832,7 +829,13 @@ pub fn insert_trust_created(
             creator_address = excluded.creator_address,
             created_block = excluded.created_block,
             created_tx = excluded.created_tx",
-        params![trust_id, trust_address, creator_address, block_number as i64, tx_hash],
+        params![
+            trust_id,
+            trust_address,
+            creator_address,
+            block_number as i64,
+            tx_hash
+        ],
     )?;
 
     // Auto-subscribe: every newly indexed TRUST is added to watched_addresses,
@@ -947,7 +950,8 @@ pub fn mark_trust_signer_signed(
     if n == 0 {
         tracing::warn!(
             "TRUSTApproved for unknown signer pair: trust_id={} signer={} (SignerAdded not yet indexed?)",
-            trust_id, signer_address
+            trust_id,
+            signer_address
         );
     }
     Ok(())
@@ -1442,19 +1446,16 @@ pub fn get_trust_role_assignments(
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(
-            rusqlite::params_from_iter(module_addresses.iter()),
-            |r| {
-                Ok(TrustRoleAssignmentRow {
-                    module_address: r.get(0)?,
-                    role_id: r.get(1)?,
-                    account_address: r.get(2)?,
-                    ipfs_cid: r.get(3)?,
-                    assigned_block: r.get::<_, i64>(4)? as u64,
-                    assigned_tx: r.get(5)?,
-                })
-            },
-        )?
+        .query_map(rusqlite::params_from_iter(module_addresses.iter()), |r| {
+            Ok(TrustRoleAssignmentRow {
+                module_address: r.get(0)?,
+                role_id: r.get(1)?,
+                account_address: r.get(2)?,
+                ipfs_cid: r.get(3)?,
+                assigned_block: r.get::<_, i64>(4)? as u64,
+                assigned_tx: r.get(5)?,
+            })
+        })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(rows)
 }
@@ -1519,7 +1520,8 @@ pub fn update_proposal_status(
     if n == 0 {
         tracing::warn!(
             "proposal status update for unknown proposal: module={} proposal_id={} (ProposalCreated not indexed?)",
-            module_address, proposal_id
+            module_address,
+            proposal_id
         );
     }
     Ok(())
@@ -1716,8 +1718,7 @@ pub fn insert_token_transfer(
                 |r| r.get(0),
             )
             .unwrap_or_else(|_| "0x0".to_string());
-        let prev_u: alloy::primitives::U256 =
-            prev.parse().unwrap_or(alloy::primitives::U256::ZERO);
+        let prev_u: alloy::primitives::U256 = prev.parse().unwrap_or(alloy::primitives::U256::ZERO);
         let new_balance = prev_u.saturating_sub(value);
         tx.execute(
             "INSERT INTO token_balances (token_address, holder_address, balance, last_updated_block)
@@ -1744,8 +1745,7 @@ pub fn insert_token_transfer(
                 |r| r.get(0),
             )
             .unwrap_or_else(|_| "0x0".to_string());
-        let prev_u: alloy::primitives::U256 =
-            prev.parse().unwrap_or(alloy::primitives::U256::ZERO);
+        let prev_u: alloy::primitives::U256 = prev.parse().unwrap_or(alloy::primitives::U256::ZERO);
         let new_balance = prev_u.saturating_add(value);
         tx.execute(
             "INSERT INTO token_balances (token_address, holder_address, balance, last_updated_block)
@@ -1850,7 +1850,12 @@ pub fn insert_vesting_position(
         "INSERT OR IGNORE INTO vesting_positions
             (module_address, position_id, status, created_block, created_tx)
          VALUES (?1, ?2, 'created', ?3, ?4)",
-        params![module_address, position_id, created_block as i64, created_tx],
+        params![
+            module_address,
+            position_id,
+            created_block as i64,
+            created_tx
+        ],
     )?;
     Ok(())
 }
@@ -1871,7 +1876,8 @@ pub fn update_vesting_position_status(
     if n == 0 {
         tracing::warn!(
             "vesting position status update for unknown position: module={} position_id={}",
-            module_address, position_id
+            module_address,
+            position_id
         );
     }
     Ok(())
@@ -2155,7 +2161,8 @@ pub fn update_budget_status(
     if n == 0 {
         tracing::warn!(
             "budget status update for unknown budget: module={} budget_id={}",
-            module_address, budget_id
+            module_address,
+            budget_id
         );
     }
     Ok(())
@@ -2171,10 +2178,7 @@ pub struct BudgetRow {
 }
 
 /// All budgets on a module, oldest first.
-pub fn get_budgets_for_module(
-    conn: &Connection,
-    module_address: &str,
-) -> Result<Vec<BudgetRow>> {
+pub fn get_budgets_for_module(conn: &Connection, module_address: &str) -> Result<Vec<BudgetRow>> {
     let mut stmt = conn.prepare(
         "SELECT module_address, budget_id, status, created_block, created_tx
          FROM budgets WHERE module_address = ?1
@@ -2313,7 +2317,8 @@ pub fn update_funding_status(
     if n == 0 {
         tracing::warn!(
             "funding status update for unknown funding: module={} funding_id={}",
-            module_address, funding_id
+            module_address,
+            funding_id
         );
     }
     Ok(())
@@ -2329,10 +2334,7 @@ pub struct FundingRow {
 }
 
 /// All funding rounds on a module, oldest first.
-pub fn get_fundings_for_module(
-    conn: &Connection,
-    module_address: &str,
-) -> Result<Vec<FundingRow>> {
+pub fn get_fundings_for_module(conn: &Connection, module_address: &str) -> Result<Vec<FundingRow>> {
     let mut stmt = conn.prepare(
         "SELECT module_address, funding_id, status, created_block, created_tx
          FROM fundings WHERE module_address = ?1
@@ -2384,10 +2386,7 @@ pub struct FundingExitRow {
 }
 
 /// Audit log of all funding exits on a module, oldest first.
-pub fn get_funding_exits(
-    conn: &Connection,
-    module_address: &str,
-) -> Result<Vec<FundingExitRow>> {
+pub fn get_funding_exits(conn: &Connection, module_address: &str) -> Result<Vec<FundingExitRow>> {
     let mut stmt = conn.prepare(
         "SELECT module_address, exit_id, block_number, tx_hash, log_index
          FROM funding_exits WHERE module_address = ?1
@@ -2535,7 +2534,8 @@ pub fn update_fund_flow_status(
     if n == 0 {
         tracing::warn!(
             "fund flow status update for unknown request: module={} request_id={}",
-            module_address, request_id
+            module_address,
+            request_id
         );
     }
     Ok(())
@@ -2635,7 +2635,8 @@ pub fn close_fund_position(
     if n == 0 {
         tracing::warn!(
             "fund position close for unknown position: module={} position_id={}",
-            module_address, position_id
+            module_address,
+            position_id
         );
     }
     Ok(())
@@ -2655,10 +2656,7 @@ pub struct FundPositionRow {
 }
 
 /// All positions on a Fund module, oldest first.
-pub fn get_fund_positions(
-    conn: &Connection,
-    module_address: &str,
-) -> Result<Vec<FundPositionRow>> {
+pub fn get_fund_positions(conn: &Connection, module_address: &str) -> Result<Vec<FundPositionRow>> {
     let mut stmt = conn.prepare(
         "SELECT module_address, position_id, position_manager_id, status,
                 quote_asset_received, opened_block, opened_tx, closed_block, closed_tx
@@ -2767,7 +2765,12 @@ pub fn upsert_factory_beacon(
             beacon_address = excluded.beacon_address,
             last_updated_block = excluded.last_updated_block,
             last_updated_tx = excluded.last_updated_tx",
-        params![factory_address, beacon_address, block_number as i64, tx_hash],
+        params![
+            factory_address,
+            beacon_address,
+            block_number as i64,
+            tx_hash
+        ],
     )?;
     Ok(())
 }
@@ -2789,7 +2792,12 @@ pub fn upsert_factory_partner(
             partner_ipfs_cid = excluded.partner_ipfs_cid,
             last_updated_block = excluded.last_updated_block,
             last_updated_tx = excluded.last_updated_tx",
-        params![factory_address, partner_ipfs_cid, block_number as i64, tx_hash],
+        params![
+            factory_address,
+            partner_ipfs_cid,
+            block_number as i64,
+            tx_hash
+        ],
     )?;
     Ok(())
 }
@@ -2934,9 +2942,8 @@ pub fn get_roles_for_trust(conn: &Connection, trust_id: &str) -> Result<Vec<Role
     };
 
     // Find all module addresses attached to this trust.
-    let mut module_stmt = conn.prepare(
-        "SELECT module_address FROM modules WHERE trust_address = ?1",
-    )?;
+    let mut module_stmt =
+        conn.prepare("SELECT module_address FROM modules WHERE trust_address = ?1")?;
     let module_addresses: Vec<String> = module_stmt
         .query_map(params![trust_address], |r| r.get(0))?
         .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -2962,18 +2969,15 @@ pub fn get_roles_for_trust(conn: &Connection, trust_id: &str) -> Result<Vec<Role
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(
-            rusqlite::params_from_iter(module_addresses.iter()),
-            |r| {
-                Ok(RoleRow {
-                    module_address: r.get(0)?,
-                    role_id: r.get(1)?,
-                    creator_address: r.get(2)?,
-                    created_block: r.get::<_, i64>(3)? as u64,
-                    created_tx: r.get(4)?,
-                })
-            },
-        )?
+        .query_map(rusqlite::params_from_iter(module_addresses.iter()), |r| {
+            Ok(RoleRow {
+                module_address: r.get(0)?,
+                role_id: r.get(1)?,
+                creator_address: r.get(2)?,
+                created_block: r.get::<_, i64>(3)? as u64,
+                created_tx: r.get(4)?,
+            })
+        })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(rows)
 }
@@ -3102,6 +3106,149 @@ pub struct TrustRow {
     pub created_tx: Option<String>,
 }
 
+/// All proposals across every Governance module attached to a TRUST, newest
+/// first. Resolves trust_id → trust.address → modules → proposals. `limit`
+/// caps the result (0 = use 50).
+pub fn get_proposals_for_trust(
+    conn: &Connection,
+    trust_id: &str,
+    limit: u32,
+) -> Result<Vec<ProposalRow>> {
+    let trust_address: Option<String> = conn
+        .query_row(
+            "SELECT address FROM trusts WHERE trust_id = ?1",
+            params![trust_id],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten();
+    let Some(trust_address) = trust_address else {
+        return Ok(Vec::new());
+    };
+
+    let mut module_stmt =
+        conn.prepare("SELECT module_address FROM modules WHERE trust_address = ?1")?;
+    let module_addresses: Vec<String> = module_stmt
+        .query_map(params![trust_address], |r| r.get(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if module_addresses.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let cap = if limit == 0 { 50 } else { limit };
+    let placeholders = module_addresses
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut args: Vec<rusqlite::types::ToSqlOutput<'_>> = module_addresses
+        .iter()
+        .map(|a| rusqlite::types::ToSqlOutput::from(a.as_str()))
+        .collect();
+    args.push(rusqlite::types::ToSqlOutput::from(cap as i64));
+    let limit_placeholder = format!("?{}", module_addresses.len() + 1);
+
+    let sql = format!(
+        "SELECT module_address, proposal_id, governance_config_id, proposer_address,
+                vote_start, vote_end, ipfs_cid, status, created_block, created_tx
+         FROM proposals
+         WHERE module_address IN ({})
+         ORDER BY created_block DESC
+         LIMIT {}",
+        placeholders, limit_placeholder
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(args.iter()), |r| {
+            Ok(ProposalRow {
+                module_address: r.get(0)?,
+                proposal_id: r.get(1)?,
+                governance_config_id: r.get(2)?,
+                proposer_address: r.get(3)?,
+                vote_start: r.get::<_, i64>(4)? as u64,
+                vote_end: r.get::<_, i64>(5)? as u64,
+                ipfs_cid: r.get(6)?,
+                status: r.get(7)?,
+                created_block: r.get::<_, i64>(8)? as u64,
+                created_tx: r.get(9)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Voting power for an account on a given governance module. Governance in
+/// AEQI is token-weighted: the voter's weight equals their token balance in
+/// the Token module attached to the same TRUST. We read `token_balances`
+/// directly keyed by (module_address, account_address), where `module_address`
+/// is the Token module that backs this governance module.
+///
+/// In practice the UI passes the governance module address; the token module
+/// for the same TRUST is resolved by finding a sibling module in `modules`
+/// whose module_address appears in `token_balances`. This is intentionally
+/// simple for v1 — a single Token module per TRUST is the expected topology.
+///
+/// Returns `None` if the account has no indexed balance (balance = 0 or no
+/// Transfer event yet).
+pub fn get_voting_power(
+    conn: &Connection,
+    governance_module_address: &str,
+    account_address: &str,
+) -> Result<Option<String>> {
+    // Find the trust this governance module belongs to.
+    let trust_address: Option<String> = conn
+        .query_row(
+            "SELECT trust_address FROM modules WHERE module_address = ?1 LIMIT 1",
+            params![governance_module_address],
+            |r| r.get(0),
+        )
+        .ok();
+    let Some(trust_address) = trust_address else {
+        return Ok(None);
+    };
+
+    // Find all sibling module addresses for that trust.
+    let mut sibling_stmt =
+        conn.prepare("SELECT module_address FROM modules WHERE trust_address = ?1")?;
+    let siblings: Vec<String> = sibling_stmt
+        .query_map(params![trust_address], |r| r.get(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if siblings.is_empty() {
+        return Ok(None);
+    }
+
+    // Among siblings, find one that has a balance row for account_address.
+    let placeholders = siblings
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 2))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT balance FROM token_balances
+         WHERE holder_address = ?1
+           AND token_address IN ({})
+           AND balance != '0x0'
+         ORDER BY last_updated_block DESC
+         LIMIT 1",
+        placeholders
+    );
+    let mut all_args: Vec<rusqlite::types::ToSqlOutput<'_>> =
+        vec![rusqlite::types::ToSqlOutput::from(account_address)];
+    for s in &siblings {
+        all_args.push(rusqlite::types::ToSqlOutput::from(s.as_str()));
+    }
+    let balance: Option<String> = conn
+        .query_row(&sql, rusqlite::params_from_iter(all_args.iter()), |r| {
+            r.get(0)
+        })
+        .ok();
+    Ok(balance)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3137,17 +3284,9 @@ mod tests {
         let trust_id = "0x0000000000000000000000000000000000000000000000000000000000000001";
         let creator = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xabc")
-            .expect("create");
-        update_trust_registered(
-            &conn,
-            trust_id,
-            "0xtemplate0001",
-            "QmIPFSCID",
-            3,
-            5,
-        )
-        .expect("register");
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xabc").expect("create");
+        update_trust_registered(&conn, trust_id, "0xtemplate0001", "QmIPFSCID", 3, 5)
+            .expect("register");
 
         let row = get_trust(&conn, trust_addr).expect("query").expect("row");
         assert_eq!(row.template_id.as_deref(), Some("0xtemplate0001"));
@@ -3167,8 +3306,7 @@ mod tests {
         let signer = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
         let address_key = "0x000000000000000000000000a0ee7a142d267c1f36714e4a8f75612f20a79720";
 
-        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xtx1")
-            .expect("create");
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xtx1").expect("create");
         insert_trust_signer(&conn, trust_id, address_key, signer, true, 43, "0xtx2")
             .expect("signer");
 
@@ -3199,7 +3337,10 @@ mod tests {
 
         mark_trust_signer_signed(&conn, trust_id, cosigner).unwrap();
         let signers = get_trust_signers(&conn, trust_addr).unwrap();
-        assert!(signers[0].has_signed, "approval should flip has_signed to true");
+        assert!(
+            signers[0].has_signed,
+            "approval should flip has_signed to true"
+        );
 
         // Idempotent re-mark is a no-op (UPDATE matches but value already true)
         mark_trust_signer_signed(&conn, trust_id, cosigner).unwrap();
@@ -3226,7 +3367,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert!(stored_addr.is_none(), "trust_address should be NULL pre-create");
+        assert!(
+            stored_addr.is_none(),
+            "trust_address should be NULL pre-create"
+        );
 
         // get_trust_signers(addr) returns nothing because the trust isn't indexed yet
         let signers = get_trust_signers(&conn, trust_addr).unwrap();
@@ -3294,8 +3438,16 @@ mod tests {
         let module_acl = "0x000000000000000000000000000000000000000000000000000000000000000f";
 
         insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xtx1").unwrap();
-        insert_module(&conn, trust_addr, module_id, module_addr, module_acl, 43, "0xtx2")
-            .unwrap();
+        insert_module(
+            &conn,
+            trust_addr,
+            module_id,
+            module_addr,
+            module_acl,
+            43,
+            "0xtx2",
+        )
+        .unwrap();
 
         let modules = get_modules_for_trust(&conn, trust_addr).unwrap();
         assert_eq!(modules.len(), 1);
@@ -3313,8 +3465,16 @@ mod tests {
         assert_eq!(module_watch.kind, "module");
 
         // Idempotent: re-insert same module is a no-op (still 1 row)
-        insert_module(&conn, trust_addr, module_id, module_addr, module_acl, 43, "0xtx2")
-            .unwrap();
+        insert_module(
+            &conn,
+            trust_addr,
+            module_id,
+            module_addr,
+            module_acl,
+            43,
+            "0xtx2",
+        )
+        .unwrap();
         let n: i64 = conn
             .query_row("SELECT COUNT(*) FROM modules", [], |r| r.get(0))
             .unwrap();
@@ -3334,9 +3494,21 @@ mod tests {
         insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xtx0").unwrap();
 
         // Granted then Revoked then Set
-        let c1 = LogCoord { block_number: 50, tx_hash: "0xtx1", log_index: 0 };
-        let c2 = LogCoord { block_number: 51, tx_hash: "0xtx2", log_index: 0 };
-        let c3 = LogCoord { block_number: 52, tx_hash: "0xtx3", log_index: 0 };
+        let c1 = LogCoord {
+            block_number: 50,
+            tx_hash: "0xtx1",
+            log_index: 0,
+        };
+        let c2 = LogCoord {
+            block_number: 51,
+            tx_hash: "0xtx2",
+            log_index: 0,
+        };
+        let c3 = LogCoord {
+            block_number: 52,
+            tx_hash: "0xtx3",
+            log_index: 0,
+        };
         insert_permissions_event(&conn, trust_addr, entity, "granted", "0x3", c1).unwrap();
         insert_permissions_event(&conn, trust_addr, entity, "revoked", "0x1", c2).unwrap();
         insert_permissions_event(&conn, trust_addr, entity, "set", "0xff", c3).unwrap();
@@ -3389,12 +3561,19 @@ mod tests {
         let bob = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
 
         // assigned to alice, then transferred to bob (two rows for one log)
-        let c1 = LogCoord { block_number: 100, tx_hash: "0xtx1", log_index: 0 };
-        let c2 = LogCoord { block_number: 101, tx_hash: "0xtx2", log_index: 0 };
+        let c1 = LogCoord {
+            block_number: 100,
+            tx_hash: "0xtx1",
+            log_index: 0,
+        };
+        let c2 = LogCoord {
+            block_number: 101,
+            tx_hash: "0xtx2",
+            log_index: 0,
+        };
 
         insert_role_assignment(&conn, module_addr, role_id, alice, "assigned", c1).unwrap();
-        insert_role_assignment(&conn, module_addr, role_id, alice, "transferred_from", c2)
-            .unwrap();
+        insert_role_assignment(&conn, module_addr, role_id, alice, "transferred_from", c2).unwrap();
         insert_role_assignment(&conn, module_addr, role_id, bob, "transferred_to", c2).unwrap();
 
         let log = get_role_assignments(&conn, module_addr, role_id).unwrap();
@@ -3404,8 +3583,7 @@ mod tests {
         assert_eq!(log[2].kind, "transferred_to");
 
         // Idempotent: re-insert same triple is no-op
-        insert_role_assignment(&conn, module_addr, role_id, alice, "transferred_from", c2)
-            .unwrap();
+        insert_role_assignment(&conn, module_addr, role_id, alice, "transferred_from", c2).unwrap();
         let n: i64 = conn
             .query_row("SELECT COUNT(*) FROM role_assignments", [], |r| r.get(0))
             .unwrap();
@@ -3463,8 +3641,16 @@ mod tests {
         let alice = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
         let bob = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
 
-        let c1 = LogCoord { block_number: 100, tx_hash: "0xtx1", log_index: 0 };
-        let c2 = LogCoord { block_number: 101, tx_hash: "0xtx2", log_index: 0 };
+        let c1 = LogCoord {
+            block_number: 100,
+            tx_hash: "0xtx1",
+            log_index: 0,
+        };
+        let c2 = LogCoord {
+            block_number: 101,
+            tx_hash: "0xtx2",
+            log_index: 0,
+        };
 
         insert_vote(&conn, module, proposal_id, alice, 1, "0x64", "yes!", c1).unwrap();
         insert_vote(&conn, module, proposal_id, bob, 0, "0x32", "nope", c2).unwrap();
@@ -3496,23 +3682,53 @@ mod tests {
         // Mint 1000 to alice
         let v1000 = U256::from(1000u64);
         insert_token_transfer(
-            &conn, token, ZERO_ADDRESS, alice, "0x3e8", v1000,
-            LogCoord { block_number: 1, tx_hash: "0xtx1", log_index: 0 },
-        ).unwrap();
+            &conn,
+            token,
+            ZERO_ADDRESS,
+            alice,
+            "0x3e8",
+            v1000,
+            LogCoord {
+                block_number: 1,
+                tx_hash: "0xtx1",
+                log_index: 0,
+            },
+        )
+        .unwrap();
 
         // Alice → Bob 300
         let v300 = U256::from(300u64);
         insert_token_transfer(
-            &conn, token, alice, bob, "0x12c", v300,
-            LogCoord { block_number: 2, tx_hash: "0xtx2", log_index: 0 },
-        ).unwrap();
+            &conn,
+            token,
+            alice,
+            bob,
+            "0x12c",
+            v300,
+            LogCoord {
+                block_number: 2,
+                tx_hash: "0xtx2",
+                log_index: 0,
+            },
+        )
+        .unwrap();
 
         // Burn 100 from bob
         let v100 = U256::from(100u64);
         insert_token_transfer(
-            &conn, token, bob, ZERO_ADDRESS, "0x64", v100,
-            LogCoord { block_number: 3, tx_hash: "0xtx3", log_index: 0 },
-        ).unwrap();
+            &conn,
+            token,
+            bob,
+            ZERO_ADDRESS,
+            "0x64",
+            v100,
+            LogCoord {
+                block_number: 3,
+                tx_hash: "0xtx3",
+                log_index: 0,
+            },
+        )
+        .unwrap();
 
         let holders = get_token_holders(&conn, token).unwrap();
         assert_eq!(holders.len(), 2, "should be 2 non-zero holders");
@@ -3520,7 +3736,7 @@ mod tests {
         let alice_row = holders.iter().find(|r| r.holder_address == alice).unwrap();
         let bob_row = holders.iter().find(|r| r.holder_address == bob).unwrap();
         assert_eq!(alice_row.balance, "0x2bc"); // 700
-        assert_eq!(bob_row.balance, "0xc8");    // 200
+        assert_eq!(bob_row.balance, "0xc8"); // 200
 
         // Audit log has 3 transfers
         let transfers = get_token_transfers(&conn, token).unwrap();
@@ -3530,11 +3746,24 @@ mod tests {
 
         // Replay protection: re-insert same transfer doesn't double-mutate balance
         insert_token_transfer(
-            &conn, token, alice, bob, "0x12c", v300,
-            LogCoord { block_number: 2, tx_hash: "0xtx2", log_index: 0 },
-        ).unwrap();
-        let alice_row = get_token_holders(&conn, token).unwrap()
-            .into_iter().find(|r| r.holder_address == alice).unwrap();
+            &conn,
+            token,
+            alice,
+            bob,
+            "0x12c",
+            v300,
+            LogCoord {
+                block_number: 2,
+                tx_hash: "0xtx2",
+                log_index: 0,
+            },
+        )
+        .unwrap();
+        let alice_row = get_token_holders(&conn, token)
+            .unwrap()
+            .into_iter()
+            .find(|r| r.holder_address == alice)
+            .unwrap();
         assert_eq!(alice_row.balance, "0x2bc"); // still 700
     }
 
@@ -3559,14 +3788,22 @@ mod tests {
         let positions = get_vesting_positions(&conn, module).unwrap();
         assert_eq!(positions[0].status, "active");
 
-        let c1 = LogCoord { block_number: 110, tx_hash: "0xtx2", log_index: 0 };
+        let c1 = LogCoord {
+            block_number: 110,
+            tx_hash: "0xtx2",
+            log_index: 0,
+        };
         insert_vesting_contribution(&conn, module, pos, funder, "0x3e8", c1).unwrap();
         let contribs = get_vesting_contributions(&conn, module, pos).unwrap();
         assert_eq!(contribs.len(), 1);
         assert_eq!(contribs[0].from_address, funder);
         assert_eq!(contribs[0].amount, "0x3e8");
 
-        let c2 = LogCoord { block_number: 200, tx_hash: "0xtx3", log_index: 0 };
+        let c2 = LogCoord {
+            block_number: 200,
+            tx_hash: "0xtx3",
+            log_index: 0,
+        };
         insert_vesting_claim(&conn, module, pos, asset, beneficiary, "0x12c", c2).unwrap();
         let claims = get_vesting_claims(&conn, module, pos).unwrap();
         assert_eq!(claims.len(), 1);
@@ -3631,7 +3868,9 @@ mod tests {
 
         // Phase 2: Created lands later
         insert_trust_created(&conn, trust_addr, trust_id, creator, 100, "0xtxC").unwrap();
-        let row = get_trust(&conn, trust_addr).unwrap().expect("row by address");
+        let row = get_trust(&conn, trust_addr)
+            .unwrap()
+            .expect("row by address");
         // Both halves merged via UPSERT(trust_id)
         assert_eq!(row.address.as_deref(), Some(trust_addr));
         assert_eq!(row.creator_address.as_deref(), Some(creator));
@@ -3657,12 +3896,20 @@ mod tests {
         let bob = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";
 
         // Mock an AdminsAdded log with 2 admins (one row per address)
-        let c1 = LogCoord { block_number: 100, tx_hash: "0xtx1", log_index: 0 };
+        let c1 = LogCoord {
+            block_number: 100,
+            tx_hash: "0xtx1",
+            log_index: 0,
+        };
         insert_factory_admin_event(&conn, factory, alice, "added", c1).unwrap();
         insert_factory_admin_event(&conn, factory, bob, "added", c1).unwrap();
 
         // Then alice removed in a later block
-        let c2 = LogCoord { block_number: 200, tx_hash: "0xtx2", log_index: 0 };
+        let c2 = LogCoord {
+            block_number: 200,
+            tx_hash: "0xtx2",
+            log_index: 0,
+        };
         insert_factory_admin_event(&conn, factory, alice, "removed", c2).unwrap();
 
         let log = get_factory_admin_events(&conn, factory).unwrap();
@@ -3702,7 +3949,11 @@ mod tests {
         assert_eq!(rounds[0].status, "finalized");
 
         // Exit audit log
-        let coord = LogCoord { block_number: 200, tx_hash: "0xtxE", log_index: 0 };
+        let coord = LogCoord {
+            block_number: 200,
+            tx_hash: "0xtxE",
+            log_index: 0,
+        };
         let exit_id = "0x0000000000000000000000000000000000000000000000000000000000000bbb";
         insert_funding_exit(&conn, module, exit_id, coord).unwrap();
         let exits = get_funding_exits(&conn, module).unwrap();
@@ -3738,12 +3989,24 @@ mod tests {
         assert_eq!(budgets[0].status, "active");
 
         // Deposit + Consume audit entries
-        let c1 = LogCoord { block_number: 110, tx_hash: "0xtxD", log_index: 0 };
-        let c2 = LogCoord { block_number: 120, tx_hash: "0xtxC", log_index: 0 };
-        insert_budget_movement(&conn, module, budget_id, "deposit", funder, asset, "0x3e8", c1)
-            .unwrap();
-        insert_budget_movement(&conn, module, budget_id, "consume", recipient, asset, "0x12c", c2)
-            .unwrap();
+        let c1 = LogCoord {
+            block_number: 110,
+            tx_hash: "0xtxD",
+            log_index: 0,
+        };
+        let c2 = LogCoord {
+            block_number: 120,
+            tx_hash: "0xtxC",
+            log_index: 0,
+        };
+        insert_budget_movement(
+            &conn, module, budget_id, "deposit", funder, asset, "0x3e8", c1,
+        )
+        .unwrap();
+        insert_budget_movement(
+            &conn, module, budget_id, "consume", recipient, asset, "0x12c", c2,
+        )
+        .unwrap();
 
         let log = get_budget_movements(&conn, module, budget_id).unwrap();
         assert_eq!(log.len(), 2);
@@ -3755,8 +4018,10 @@ mod tests {
         assert_eq!(log[1].amount, "0x12c");
 
         // Idempotent on log coord
-        insert_budget_movement(&conn, module, budget_id, "deposit", funder, asset, "0x3e8", c1)
-            .unwrap();
+        insert_budget_movement(
+            &conn, module, budget_id, "deposit", funder, asset, "0x3e8", c1,
+        )
+        .unwrap();
         let log = get_budget_movements(&conn, module, budget_id).unwrap();
         assert_eq!(log.len(), 2);
 
@@ -3783,7 +4048,11 @@ mod tests {
         // Phase 2: partner profile set later — beacon must survive
         upsert_factory_partner(&conn, factory, "QmPartnerCID", 200, "0xtx2").unwrap();
         let row = get_factory_config(&conn, factory).unwrap().expect("row");
-        assert_eq!(row.beacon_address.as_deref(), Some(beacon), "beacon preserved");
+        assert_eq!(
+            row.beacon_address.as_deref(),
+            Some(beacon),
+            "beacon preserved"
+        );
         assert_eq!(row.partner_ipfs_cid.as_deref(), Some("QmPartnerCID"));
         assert_eq!(row.last_updated_block, 200);
 
@@ -3792,7 +4061,11 @@ mod tests {
         upsert_factory_beacon(&conn, factory, new_beacon, 300, "0xtx3").unwrap();
         let row = get_factory_config(&conn, factory).unwrap().expect("row");
         assert_eq!(row.beacon_address.as_deref(), Some(new_beacon));
-        assert_eq!(row.partner_ipfs_cid.as_deref(), Some("QmPartnerCID"), "partner preserved");
+        assert_eq!(
+            row.partner_ipfs_cid.as_deref(),
+            Some("QmPartnerCID"),
+            "partner preserved"
+        );
         assert_eq!(row.last_updated_block, 300);
     }
 
@@ -3804,15 +4077,24 @@ mod tests {
         let module = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
         // NAV checkpoints — chart-friendly time series
-        insert_fund_nav(&conn, module, 1, "0x3e8", "0x64", "0xa", "0x14", 100, "0xtxN1").unwrap();
-        insert_fund_nav(&conn, module, 2, "0x4b0", "0x6e", "0xc", "0x18", 200, "0xtxN2").unwrap();
+        insert_fund_nav(
+            &conn, module, 1, "0x3e8", "0x64", "0xa", "0x14", 100, "0xtxN1",
+        )
+        .unwrap();
+        insert_fund_nav(
+            &conn, module, 2, "0x4b0", "0x6e", "0xc", "0x18", 200, "0xtxN2",
+        )
+        .unwrap();
         let navs = get_fund_navs(&conn, module).unwrap();
         assert_eq!(navs.len(), 2);
         assert_eq!(navs[0].checkpoint_id, 1);
         assert_eq!(navs[1].net_nav, "0x4b0");
 
         // Idempotent on (module, checkpoint_id)
-        insert_fund_nav(&conn, module, 1, "0x3e8", "0x64", "0xa", "0x14", 100, "0xtxN1").unwrap();
+        insert_fund_nav(
+            &conn, module, 1, "0x3e8", "0x64", "0xa", "0x14", 100, "0xtxN1",
+        )
+        .unwrap();
         let navs = get_fund_navs(&conn, module).unwrap();
         assert_eq!(navs.len(), 2);
 
@@ -3823,8 +4105,16 @@ mod tests {
         assert_eq!(flows[0].status, "requested");
         assert!(flows[0].amount_out.is_none());
 
-        update_fund_flow_status(&conn, module, req_a, "claimed", Some("0xfe"), 120, "0xtxFa2")
-            .unwrap();
+        update_fund_flow_status(
+            &conn,
+            module,
+            req_a,
+            "claimed",
+            Some("0xfe"),
+            120,
+            "0xtxFa2",
+        )
+        .unwrap();
         let flows = get_fund_flows(&conn, module).unwrap();
         assert_eq!(flows[0].status, "claimed");
         assert_eq!(flows[0].amount_out.as_deref(), Some("0xfe"));
@@ -3846,7 +4136,11 @@ mod tests {
         assert_eq!(positions[0].status, "open");
 
         // Interactions audit
-        let coord = LogCoord { block_number: 160, tx_hash: "0xtxPi", log_index: 0 };
+        let coord = LogCoord {
+            block_number: 160,
+            tx_hash: "0xtxPi",
+            log_index: 0,
+        };
         insert_fund_position_interaction(&conn, module, pos, "0xrole1", 7, coord).unwrap();
         let inter = get_fund_position_interactions(&conn, module, pos).unwrap();
         assert_eq!(inter.len(), 1);
@@ -3867,8 +4161,7 @@ mod tests {
         let trust_id = "0x0000000000000000000000000000000000000000000000000000000000000001";
         let creator = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xabc")
-            .expect("insert");
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xabc").expect("insert");
 
         let row = get_trust(&conn, trust_addr)
             .expect("query")
@@ -3880,8 +4173,7 @@ mod tests {
         assert_eq!(row.created_block, Some(42));
 
         // Idempotency: insert again, count stays the same
-        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xabc")
-            .expect("re-insert");
+        insert_trust_created(&conn, trust_addr, trust_id, creator, 42, "0xabc").expect("re-insert");
 
         let n: i64 = conn
             .query_row("SELECT COUNT(*) FROM trusts", [], |r| r.get(0))
@@ -3905,7 +4197,16 @@ mod tests {
 
         // Set up trust + module so get_trust_role_assignments can resolve.
         insert_trust_created(&conn, trust_addr, trust_id, creator, 10, "0xtx0").unwrap();
-        insert_module(&conn, trust_addr, module_id, module_addr, "0x1", 11, "0xtx1").unwrap();
+        insert_module(
+            &conn,
+            trust_addr,
+            module_id,
+            module_addr,
+            "0x1",
+            11,
+            "0xtx1",
+        )
+        .unwrap();
 
         // No assignments yet.
         let rows = get_trust_role_assignments(&conn, trust_id).unwrap();
