@@ -1,7 +1,7 @@
-import type { Blueprint } from "@/lib/types";
+import type { SingleBlueprint } from "@/lib/types";
 
 interface BlueprintSeedCountsProps {
-  template: Blueprint;
+  template: SingleBlueprint;
 }
 
 /**

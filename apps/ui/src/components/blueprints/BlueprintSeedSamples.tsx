@@ -1,4 +1,4 @@
-import type { Blueprint } from "@/lib/types";
+import type { SingleBlueprint as Blueprint } from "@/lib/types";
 
 interface BlueprintSeedSamplesProps {
   template: Blueprint;

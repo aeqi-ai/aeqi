@@ -220,6 +220,21 @@
   color: inherit;
   text-decoration: none;
 }
+
+/* Stack card uses a <button> instead of <Link> — reset chrome, keep display. */
+.bp-stack-card-btn {
+  appearance: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+  color: inherit;
+}
+
 .bp-card {
   display: flex;
   flex-direction: column;
@@ -435,6 +450,63 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* ── Stack tree (detail page) ───────────────────────── */
+
+.bp-stack-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+}
+
+.bp-stack-umbrella {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.bp-stack-children {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bp-stack-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.bp-stack-connector {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.bp-stack-node {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.bp-stack-node--root {
+  font-weight: 600;
+}
+
+.bp-stack-node-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
 }
 
 /* ── Summary pills (under the hero) ────────────────── */

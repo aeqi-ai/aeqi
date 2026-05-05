@@ -1,7 +1,7 @@
-import type { Blueprint, BlueprintSeedAgent, BlueprintSeedRole } from "@/lib/types";
+import type { SingleBlueprint, BlueprintSeedAgent, BlueprintSeedRole } from "@/lib/types";
 
 interface BlueprintTreePreviewProps {
-  template: Blueprint;
+  template: SingleBlueprint;
 }
 
 /**
@@ -123,7 +123,7 @@ function ConnectorRow({ count }: { count: number }) {
 
 /* ── Layout helpers ──────────────────────────────────── */
 
-function computeDeclaredLayers(template: Blueprint, rootName: string): BlueprintSeedRole[][] {
+function computeDeclaredLayers(template: SingleBlueprint, rootName: string): BlueprintSeedRole[][] {
   const roles = template.seed_roles ?? [];
   const edges = template.seed_role_edges ?? [];
   const incoming = new Map<string, string[]>();

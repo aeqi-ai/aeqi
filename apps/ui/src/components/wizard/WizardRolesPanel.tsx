@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Blueprint } from "@/lib/types";
+import type { SingleBlueprint as Blueprint } from "@/lib/types";
 import { Button, Input, Select } from "@/components/ui";
 import { WizardPanel } from "./WizardPanel";
 import styles from "./WizardRolesPanel.module.css";

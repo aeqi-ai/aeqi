@@ -8,13 +8,17 @@ import type {
   BlueprintSeedEvent,
   BlueprintSeedIdea,
   BlueprintSeedQuest,
+  SingleBlueprint,
+  StackBlueprint,
 } from "@/lib/types";
+import { isStackBlueprint } from "@/lib/types";
 import { useDaemonStore } from "@/store/daemon";
 import { Button, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import PageRail from "@/components/PageRail";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import { BlueprintSeedCounts } from "@/components/blueprints/BlueprintSeedCounts";
+import { StackWizard } from "@/components/StackWizard";
 import "@/styles/templates.css";
 import "@/styles/blueprints-store.css";
 
@@ -77,6 +81,7 @@ export default function BlueprintDetailPage() {
   const [template, setTemplate] = useState<Blueprint | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     document.title = template?.name ? `${template.name} · Blueprints · aeqi` : "Blueprint · aeqi";
@@ -135,12 +140,27 @@ export default function BlueprintDetailPage() {
     );
   }
 
+  // Stack blueprints have their own detail shape — no section rail.
+  if (isStackBlueprint(template)) {
+    return (
+      <StackDetailView
+        stack={template}
+        wizardOpen={wizardOpen}
+        onWizardOpen={() => setWizardOpen(true)}
+        onWizardClose={() => setWizardOpen(false)}
+      />
+    );
+  }
+
+  // Single blueprint detail page.
+  const single = template as SingleBlueprint;
+
   // Detail page is preview-only. The launch CTA hands off to
   // `/start/<slug>` (CompanySetupPage) where the operator confirms a
   // name, stages role overrides, and picks a plan before spawn.
   const launchHref = isImportMode
-    ? `/blueprints/${encodeURIComponent(template.slug)}?import_into=${encodeURIComponent(importIntoId ?? "")}`
-    : `/start/${encodeURIComponent(template.slug)}`;
+    ? `/blueprints/${encodeURIComponent(single.slug)}?import_into=${encodeURIComponent(importIntoId ?? "")}`
+    : `/start/${encodeURIComponent(single.slug)}`;
 
   return (
     <div className="page-rail-shell">
@@ -148,7 +168,7 @@ export default function BlueprintDetailPage() {
         tabs={SECTION_TABS}
         defaultTab="overview"
         title="Blueprint"
-        basePath={`/blueprints/${encodeURIComponent(template.slug)}`}
+        basePath={`/blueprints/${encodeURIComponent(single.slug)}`}
         currentValue={activeSection}
       />
       <main className="page-rail-content page-rail-content--full">
@@ -159,17 +179,17 @@ export default function BlueprintDetailPage() {
               className="ideas-toolbar-btn"
               onClick={() =>
                 navigate(
-                  template.category ? `/blueprints?category=${template.category}` : "/blueprints",
+                  single.category ? `/blueprints?category=${single.category}` : "/blueprints",
                 )
               }
               title={
-                template.category
-                  ? `Back to ${CATEGORY_LABELS[template.category]} blueprints`
+                single.category
+                  ? `Back to ${CATEGORY_LABELS[single.category]} blueprints`
                   : "Back to Blueprints"
               }
               aria-label={
-                template.category
-                  ? `Back to ${CATEGORY_LABELS[template.category]} blueprints`
+                single.category
+                  ? `Back to ${CATEGORY_LABELS[single.category]} blueprints`
                   : "Back to Blueprints"
               }
             >
@@ -187,13 +207,13 @@ export default function BlueprintDetailPage() {
                 <path d="M8 3 L4.5 6.5 L8 10" />
               </svg>
             </button>
-            {template.category && (
-              <span className="bp-detail-breadcrumb">{CATEGORY_LABELS[template.category]}</span>
+            {single.category && (
+              <span className="bp-detail-breadcrumb">{CATEGORY_LABELS[single.category]}</span>
             )}
-            <h1 className="bp-detail-toolbar-title">{template.name}</h1>
-            {template.template && (
+            <h1 className="bp-detail-toolbar-title">{single.name}</h1>
+            {single.template && (
               <span className="bp-detail-template-badge" title="On-chain TRUST template">
-                {template.template}
+                {single.template}
               </span>
             )}
             <div className="ideas-toolbar-spacer" aria-hidden />
@@ -231,21 +251,149 @@ export default function BlueprintDetailPage() {
             </div>
           )}
 
-          {activeSection === "overview" && <OverviewSection template={template} />}
-          {activeSection === "roles" && <RolesSection seeds={template.seed_agents} />}
-          {activeSection === "agents" && <AgentsSection seeds={template.seed_agents} />}
-          {activeSection === "events" && <EventsSection seeds={template.seed_events} />}
-          {activeSection === "quests" && <QuestsSection seeds={template.seed_quests} />}
-          {activeSection === "ideas" && <IdeasSection seeds={template.seed_ideas} />}
+          {activeSection === "overview" && <OverviewSection template={single} />}
+          {activeSection === "roles" && <RolesSection seeds={single.seed_agents} />}
+          {activeSection === "agents" && <AgentsSection seeds={single.seed_agents} />}
+          {activeSection === "events" && <EventsSection seeds={single.seed_events} />}
+          {activeSection === "quests" && <QuestsSection seeds={single.seed_quests} />}
+          {activeSection === "ideas" && <IdeasSection seeds={single.seed_ideas} />}
         </div>
       </main>
     </div>
   );
 }
 
+/* ── Stack detail view ─────────────────────────────── */
+
+interface StackDetailViewProps {
+  stack: StackBlueprint;
+  wizardOpen: boolean;
+  onWizardOpen: () => void;
+  onWizardClose: () => void;
+}
+
+function StackDetailView({ stack, wizardOpen, onWizardOpen, onWizardClose }: StackDetailViewProps) {
+  const navigate = useNavigate();
+  const umbrellaSlot = stack.umbrella_slot;
+  const umbrella = umbrellaSlot ? stack.components.find((c) => c.slot === umbrellaSlot) : null;
+  const children = umbrellaSlot
+    ? stack.components.filter((c) => c.slot !== umbrellaSlot)
+    : stack.components;
+
+  return (
+    <>
+      <div className="page-rail-shell">
+        <PageRail tabs={[]} defaultTab="" title="Stack" basePath="" />
+        <main className="page-rail-content page-rail-content--full">
+          <div className="ideas-list-head bp-detail-head">
+            <div className="ideas-toolbar bp-detail-toolbar">
+              <button
+                type="button"
+                className="ideas-toolbar-btn"
+                onClick={() => navigate("/blueprints")}
+                title="Back to Blueprints"
+                aria-label="Back to Blueprints"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 13 13"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M8 3 L4.5 6.5 L8 10" />
+                </svg>
+              </button>
+              <span className="bp-detail-breadcrumb">Multi-company stack</span>
+              <h1 className="bp-detail-toolbar-title">{stack.name}</h1>
+              <div className="ideas-toolbar-spacer" aria-hidden />
+              <Button variant="primary" size="sm" onClick={onWizardOpen}>
+                Use this Stack →
+              </Button>
+            </div>
+          </div>
+
+          <div className="bp-detail-body">
+            {stack.tagline && (
+              <header className="bp-detail-page-head">
+                <p className="bp-detail-page-tagline">{stack.tagline}</p>
+                {stack.description && <p className="bp-detail-page-desc">{stack.description}</p>}
+              </header>
+            )}
+
+            <section className="bp-detail-section">
+              <div className="bp-stack-tree" aria-label="Stack structure">
+                {umbrella && (
+                  <div className="bp-stack-umbrella">
+                    <span className="bp-stack-node bp-stack-node--root">
+                      {umbrella.display_name_default}
+                    </span>
+                    <span className="bp-stack-node-meta">
+                      {umbrella.slot} · {umbrella.blueprint_id}
+                    </span>
+                  </div>
+                )}
+                {children.length > 0 && (
+                  <ul className="bp-stack-children" role="list">
+                    {children.map((c) => (
+                      <li key={c.slot} className="bp-stack-child">
+                        <span className="bp-stack-connector" aria-hidden>
+                          └
+                        </span>
+                        <span className="bp-stack-node">{c.display_name_default}</span>
+                        <span className="bp-stack-node-meta">
+                          {c.slot} · {c.blueprint_id}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {!umbrella &&
+                  stack.components.map((c) => (
+                    <div key={c.slot} className="bp-stack-umbrella">
+                      <span className="bp-stack-node">{c.display_name_default}</span>
+                      <span className="bp-stack-node-meta">
+                        {c.slot} · {c.blueprint_id}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </section>
+
+            <section className="bp-detail-section">
+              <ul className="bp-summary-pills" aria-label="What this stack deploys">
+                <li className="bp-summary-pill">
+                  <span className="bp-summary-pill-value">{stack.component_count}</span>
+                  <span className="bp-summary-pill-label">
+                    {stack.component_count === 1 ? "company" : "companies"}
+                  </span>
+                </li>
+                {stack.edge_count > 0 && (
+                  <li className="bp-summary-pill">
+                    <span className="bp-summary-pill-value">{stack.edge_count}</span>
+                    <span className="bp-summary-pill-label">
+                      {stack.edge_count === 1 ? "cross-company edge" : "cross-company edges"}
+                    </span>
+                  </li>
+                )}
+              </ul>
+            </section>
+          </div>
+        </main>
+      </div>
+
+      {wizardOpen && <StackWizard stack={stack} open={wizardOpen} onClose={onWizardClose} />}
+    </>
+  );
+}
+
 /* ── Overview ──────────────────────────────────────── */
 
-function OverviewSection({ template }: { template: Blueprint }) {
+function OverviewSection({ template }: { template: SingleBlueprint }) {
   return (
     <>
       {(template.tagline || template.description) && (

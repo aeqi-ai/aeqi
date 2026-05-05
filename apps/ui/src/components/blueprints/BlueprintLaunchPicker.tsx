@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
-import type { Blueprint } from "@/lib/types";
+import type { SingleBlueprint as Blueprint } from "@/lib/types";
+import { isSingleBlueprint } from "@/lib/types";
 import { Card, Spinner } from "@/components/ui";
 import { RECOMMENDED_BLUEPRINTS } from "@/lib/recommendedBlueprints";
 import "@/styles/blueprints-store.css";
@@ -49,7 +50,7 @@ export function BlueprintLaunchPicker({
   onSpawnedAgent,
 }: BlueprintLaunchPickerProps) {
   const navigate = useNavigate();
-  const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
+  const [blueprints, setBlueprints] = useState<Blueprint[]>([]); // only single blueprints
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submittingSlug, setSubmittingSlug] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export function BlueprintLaunchPicker({
       .getBlueprints()
       .then((resp) => {
         if (cancelled) return;
-        setBlueprints(resp.blueprints ?? []);
+        setBlueprints((resp.blueprints ?? []).filter(isSingleBlueprint));
       })
       .catch((e: Error) => {
         if (cancelled) return;

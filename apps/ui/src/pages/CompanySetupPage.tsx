@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "@/lib/api";
-import type { Blueprint } from "@/lib/types";
+import type { SingleBlueprint as Blueprint } from "@/lib/types";
+import { isSingleBlueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { Button, Spinner } from "@/components/ui";
@@ -216,7 +217,7 @@ export default function CompanySetupPage() {
       .getBlueprint(slug)
       .then((resp) => {
         if (cancelled) return;
-        if (resp.blueprint) {
+        if (resp.blueprint && isSingleBlueprint(resp.blueprint)) {
           const bp = resp.blueprint;
           setBlueprint(bp);
 

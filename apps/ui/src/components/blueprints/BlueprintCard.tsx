@@ -2,10 +2,10 @@ import { memo } from "react";
 import { Link } from "react-router-dom";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
 import { Card } from "@/components/ui";
-import type { Blueprint, BlueprintTemplate } from "@/lib/types";
+import type { SingleBlueprint, BlueprintTemplate } from "@/lib/types";
 
 interface BlueprintCardProps {
-  template: Blueprint;
+  template: SingleBlueprint;
   importTargetSuffix?: string;
 }
 
@@ -19,7 +19,7 @@ const ONCHAIN_MODULES: Record<BlueprintTemplate, string> = {
 
 /** Human-readable runtime summary: "N agents · M events · K ideas · J quests".
  *  Always counts the implicit root agent so cards are never empty-looking. */
-function formatRuntimeLine(t: Blueprint): string {
+function formatRuntimeLine(t: SingleBlueprint): string {
   const parts: string[] = [];
   const a = (t.seed_agents?.length ?? 0) + 1; // +1 for root
   const e = t.seed_events?.length ?? 0;

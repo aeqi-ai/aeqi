@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Blueprint, RoleOverride, RoleOverrideOccupant } from "@/lib/types";
+import type { SingleBlueprint as Blueprint, RoleOverride, RoleOverrideOccupant } from "@/lib/types";
 import { Select } from "@/components/ui";
 
 interface BlueprintRolePickerProps {

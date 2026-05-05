@@ -346,7 +346,9 @@ export interface RoleOverride {
 export type BlueprintCategory = "company" | "foundation" | "fund";
 export type BlueprintTemplate = "entity" | "venture" | "foundation" | "fund";
 
-export interface Blueprint {
+/** Single-company blueprint — spawns one TRUST + runtime entity. */
+export interface SingleBlueprint {
+  kind?: "single";
   slug: string;
   name: string;
   tagline?: string;
@@ -368,6 +370,78 @@ export interface Blueprint {
    *  agent tree 1:1 to keep the preview honest with what spawns. */
   seed_roles?: BlueprintSeedRole[];
   seed_role_edges?: BlueprintSeedRoleEdge[];
+}
+
+/** One company slot within a StackBlueprint. */
+export interface StackComponent {
+  slot: string;
+  blueprint_id: string;
+  display_name_default: string;
+}
+
+/** Cross-company directed edge within a stack. */
+export interface StackEdge {
+  from_slot: string;
+  to_slot: string;
+  relationship: StackRelationship;
+}
+
+export type StackRelationship =
+  | { type: "token_ownership"; percent_bps: number }
+  | { type: "role_assignment"; role_type: string }
+  | { type: "treasury_flow"; amount_usd: number; schedule_seconds: number };
+
+/** Multi-company stack blueprint — spawns N TRUSTs + cross-company edges. */
+export interface StackBlueprint {
+  kind: "stack";
+  id: string;
+  name: string;
+  tagline: string;
+  description: string;
+  umbrella_slot?: string;
+  component_count: number;
+  edge_count: number;
+  components: StackComponent[];
+}
+
+/** Union discriminator: single-company blueprint or multi-company stack. */
+export type Blueprint = SingleBlueprint | StackBlueprint;
+
+/** Narrow to single blueprint — use on routes that only handle `kind:"single"`. */
+export function isSingleBlueprint(bp: Blueprint): bp is SingleBlueprint {
+  return !bp.kind || bp.kind === "single";
+}
+
+/** Narrow to stack blueprint. */
+export function isStackBlueprint(bp: Blueprint): bp is StackBlueprint {
+  return bp.kind === "stack";
+}
+
+/** Per-component outcome from POST /api/start/stack. */
+export interface StackComponentOutcome {
+  slot: string;
+  entity_id: string;
+  trust_id_hex?: string;
+  trust_address?: string;
+  status: "ok" | "failed";
+  error?: string;
+}
+
+/** Per-edge outcome from POST /api/start/stack. */
+export interface StackEdgeOutcome {
+  from_slot: string;
+  to_slot: string;
+  relationship_type: string;
+  status: "ok" | "skipped" | "failed";
+  error?: string;
+}
+
+/** Full response from POST /api/start/stack. */
+export interface StackProvisionResult {
+  ok: boolean;
+  stack_id: string;
+  components: StackComponentOutcome[];
+  edge_results: StackEdgeOutcome[];
 }
 
 export type OccupantKind = "human" | "agent" | "vacant";
