@@ -26,6 +26,16 @@ workspace root may flag pre-existing formatting issues in sibling crates
 `cargo fmt -p <your-crate> -- --check` to isolate the check to your crate
 only. Fix your crate's fmt; don't fix siblings unless you own that diff.
 
+**`cargo fmt -p <crate>` picks up pre-existing intra-crate drift.** Running
+`cargo fmt -p aeqi-indexer` will reformat ALL files in the crate, including
+ones you didn't author. Before committing, run `cargo fmt -p <crate> -- --check`
+first to see the full scope — if it flags files you didn't touch, decide
+consciously whether to include that whitespace churn. Including it is fine
+(clean slate), but it inflates the diff and makes code review harder. Cost
+(2026-05-05): `chain.rs` + `decode.rs` + `main.rs` in aeqi-indexer each
+reformatted in the governance-queries commit despite being untouched by the
+feature work.
+
 **`.observations/` lives in the main working tree, not worktrees.** The
 `.observations/` directory is only present in `/home/claudedev/aeqi/` (the
 main checkout). Worktrees don't have their own copy. When autonomous
@@ -192,6 +202,27 @@ detects workspace mode, and you're back to pulling stray
 `scripts/smoke-fresh-install.sh`. Hit twice in two consecutive ship
 cycles 2026-05-02 / 2026-05-03 — wrapper added so muscle memory has
 a shorter right answer than the wrong one.
+
+**`aeqi-indexer` deploy recipe.** When `crates/aeqi-indexer/` changes, the
+indexer needs its own rebuild + swap — `./scripts/deploy.sh` does NOT touch
+it (that script builds the runtime binary, not the indexer). Canonical sequence:
+
+```bash
+# 1. Build release binary from the worktree (before /ship merges)
+cargo build -p aeqi-indexer --release
+
+# 2. Stop service, swap binary (rm-then-cp avoids "Text file busy")
+systemctl --user stop aeqi-indexer-anvil.service
+rm /home/claudedev/aeqi/target/release/aeqi-indexer
+cp <worktree>/target/release/aeqi-indexer /home/claudedev/aeqi/target/release/aeqi-indexer
+
+# 3. Fix DB permissions if needed (root-owned DB causes "readonly database")
+sudo chown claudedev:claudedev /var/lib/aeqi/indexer-anvil.db
+
+# 4. Start and verify
+systemctl --user start aeqi-indexer-anvil.service
+curl -s http://localhost:8501/healthz   # should return "ok"
+```
 
 **`aeqi-indexer` deploy — root-process + DB-permissions trap.** A previous
 session that ran `aeqi-indexer-anvil.service` as root leaves two footguns:
