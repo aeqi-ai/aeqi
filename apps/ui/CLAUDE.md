@@ -35,7 +35,9 @@ isn't on that path, don't make it.
 1. **Use the design system. Don't invent.**
    - Tokens live in `src/styles/primitives.css` (`--color-*`, `--text-*`,
      `--bg-*`, `--accent`, `--border*`, `--input-*`, `--space-*`,
-     `--radius-*`, `--font-*`). Use them.
+     `--radius-*`, `--font-*`). Use them. Gotcha: background aliases use
+     `--bg-subtle` / `--bg-row` / `--bg-surface` (not `--color-bg-*` —
+     that namespace doesn't exist). When in doubt, grep primitives.css.
    - Reusable components live in `src/components/ui/` (Button, IconButton,
      Input, Select, Menu, Popover, Spinner, Badge, EmptyState, Tooltip).
      Use them. Extend them via variants — don't fork.
@@ -348,6 +350,8 @@ permission / missing-module errors, fall through to the full `rm -rf
 node_modules && npm install` recipe — it's the only reliable cure
 once the tree is partial. Caveat above still applies: only fall through
 when no sibling worktrees hold a live symlink.
+
+**node_modules can be a partial post-cleanup tree (packages absent, not just `.bin/` broken).** If a prior session cleaned node_modules aggressively, core packages like `typescript` may be missing entirely — not just their `.bin/` symlinks. Symptom: `Cannot find module '/home/claudedev/aeqi/apps/ui/node_modules/typescript/bin/tsc'` at the `node` call level (the package directory doesn't exist, not just the symlink). The parent's `ls node_modules | grep typescript` returns nothing. Fix: `cd /home/claudedev/aeqi/apps/ui && npm install`. Same recipe as the `.bin/`-broken case; the diagnostic difference is `ls node_modules/typescript` failing vs `.bin/tsc` being a dead symlink. Cost (2026-05-05): one `npm install` pass before verify could run.
 
 **`.bin/` disappears mid-session during parallel autonomous pushes.**
 When two subagents run simultaneously and one triggers a deploy script
