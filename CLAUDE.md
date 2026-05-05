@@ -181,6 +181,22 @@ detects workspace mode, and you're back to pulling stray
 cycles 2026-05-02 / 2026-05-03 — wrapper added so muscle memory has
 a shorter right answer than the wrong one.
 
+**`aeqi-indexer` deploy — root-process + DB-permissions trap.** A previous
+session that ran `aeqi-indexer-anvil.service` as root leaves two footguns:
+(a) the binary at `aeqi/target/release/aeqi-indexer` is root-owned, so `cp`
+fails with `Text file busy` even when the service is stopped (the kernel
+marks the inode busy while a root process holds it). Fix: `rm` then `cp`
+rather than a direct overwrite. (b) `/var/lib/aeqi/indexer-anvil.db` is
+root-owned, causing `attempt to write a readonly database` on service start.
+Fix: `sudo chown claudedev:claudedev /var/lib/aeqi/indexer-anvil.db`.
+(c) A stale root process keeps port 8501 bound after `systemctl --user stop`
+returns — user-scoped `pkill`/`fuser -k` can't reach it. Find it with
+`ps aux | grep aeqi-indexer | grep -v grep` and `sudo kill <pid>`.
+Diagnostic walk: `journalctl --user -u aeqi-indexer-anvil.service -n 10`
+shows `Address already in use` → stale root process; `Attempt to write a
+readonly database` → DB permissions; `Error: Text file busy` → rm-then-cp.
+Cost (2026-05-05): ~5 min across three recovery loops.
+
 **`scripts/deploy.sh` swallows UI build failures.** The `[1/4] Building dashboard UI...` step pipes `npm run build` through `2>&1 | tail -3`, so the pipe's exit code (always 0) wins under `set -e` and a failed vite build looks identical to a successful one in the deploy log ("✓ built in Xs" + "staged UI dist"). The Rust binary still ships, but `apps/ui/dist/` stays stale and the live `index-*.js` hash doesn't move. Verify after every full deploy: `cat /home/claudedev/aeqi/apps/ui/dist/index.html | grep -oE 'index-[A-Za-z0-9_-]+\.js'` MUST match `curl -sL https://app.aeqi.ai/ | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1`. If they diverge, the UI build silently failed — run `./node_modules/.bin/vite build` directly from `apps/ui/` to surface the real error (most often the viem partial-tree, fixed via `rm -rf apps/ui/node_modules && npm install`).
 
 **`npm install ENOTEMPTY` when sibling worktrees are active.** When running `ui-deploy.sh` while parallel subagents have active worktrees with `apps/ui/node_modules` symlinked to the parent's tree, `npm install` or `npm ci` hits `ENOTEMPTY: directory not empty, rename` on packages like viem, jsdom, walletconnect that keep file handles open. The `ui-deploy.sh` script tries `rm -rf` recovery, but that also fails with ENOTEMPTY when the handles are held by a sibling. Fallback is in-place `npm install` (no rm), which repairs `.bin/` gradually without atomicity — slower but safe. If deploy hangs on npm install and the log shows `ENOTEMPTY` repeatedly: this is expected when >1 worktree is running. Either wait for sibling worktrees to complete, or manually run `cd /home/claudedev/aeqi/apps/ui && npm install --silent` and then retry `ui-deploy.sh`. Cost (2026-05-05): deploy script hung mid-recovery due to parallel cargo build contention holding file handles.
