@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "@/lib/api";
 import type { Blueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
+import { useDaemonStore } from "@/store/daemon";
 import { Button, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FOUNDER_FEE } from "@/lib/pricing";
@@ -146,6 +147,7 @@ type PanelId = "identity" | "roles" | "token" | "vesting" | "governance" | "revi
 export default function CompanySetupPage() {
   const navigate = useNavigate();
   const { slug = "" } = useParams<{ slug: string }>();
+  const fetchEntities = useDaemonStore((s) => s.fetchEntities);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const userName = useAuthStore((s) => s.user?.name ?? "You");
   const subscriptionStatus = useAuthStore((s) => s.user?.subscription_status ?? null);
@@ -257,7 +259,9 @@ export default function CompanySetupPage() {
         template: blueprint.slug,
         display_name: identity.name.trim(),
       });
-      navigate(`/${resp.entity_id}/overview`);
+      // Refresh the entity list so the company switcher shows the new company.
+      await fetchEntities();
+      navigate(`/c/${resp.entity_id}/overview`);
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         // No active subscription — redirect to Stripe checkout.
