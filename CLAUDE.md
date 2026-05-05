@@ -89,6 +89,18 @@ file has moved`. The fix is `tempfile::TempDir::new()` — keep the
 destructuring tuple). Cost (2026-05-04): test rewrite and second
 `cargo test` pass when adding `aeqi-paymaster`.
 
+**`#[cfg(test)]` is invisible to integration tests.** Methods or items
+gated with `#[cfg(test)]` are compiled only when the *crate itself* is
+built in test mode (`cargo test -p <crate> --lib`). Integration tests
+under `tests/` compile as a *separate crate* — they have no `#[cfg(test)]`
+context and cannot see `#[cfg(test)]`-gated items from the library crate.
+The compiler error is `no method named '<fn>' found for struct '<T>'`.
+Fix: remove `#[cfg(test)]` from methods that integration tests need
+(typically test-helper constructors like `with_base_url`) and document
+their test-only intent in a doc comment instead. Cost (2026-05-05): one
+edit pass when `DeepInfraProvider::with_base_url` was gated but needed
+by `tests/it_chat_completions.rs`.
+
 ### Frontend
 
 - Prettier enforced (double quotes, trailing commas, 100 width)
