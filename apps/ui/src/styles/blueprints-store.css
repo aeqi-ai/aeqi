@@ -548,8 +548,7 @@
   font-family: var(--font-sans);
   font-size: 11px;
   color: var(--text-primary);
-  background: var(--bg-paper);
-  border: 1px solid var(--border-faint);
+  background: var(--bg-subtle);
   border-radius: 4px;
   padding: 1px 6px;
 }

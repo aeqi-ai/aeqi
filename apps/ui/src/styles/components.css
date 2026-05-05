@@ -271,7 +271,7 @@
 
 .quest-row.selected {
   background: transparent;
-  border: 1px solid var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--text-primary);
   border-radius: var(--radius-lg);
 }
 
@@ -968,7 +968,7 @@
   font-size: 11px;
   color: var(--text-primary);
   background: var(--key-pill-bg);
-  border: 1px solid var(--key-pill-border);
+  box-shadow: inset 0 0 0 1px var(--key-pill-border);
   padding: 1px 6px;
   border-radius: var(--key-pill-radius);
   word-break: break-all;
@@ -1086,7 +1086,7 @@
 .integration-modal-scope code {
   font-family: var(--font-sans);
   background: var(--key-pill-bg);
-  border: 1px solid var(--key-pill-border);
+  box-shadow: inset 0 0 0 1px var(--key-pill-border);
   padding: 1px 6px;
   border-radius: var(--key-pill-radius);
   font-size: 11px;

@@ -681,7 +681,7 @@
 /* Code blocks — with header */
 .asv-codeblock {
   margin: 10px 0;
-  border: 1px solid var(--texture-glass-border);
+  box-shadow: inset 0 0 0 1px var(--texture-glass-border);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -733,7 +733,7 @@
 /* Fallback for code blocks without language class */
 .asv-msg-assistant .asv-msg-content pre {
   background: var(--elevation-2);
-  border: 1px solid var(--texture-glass-border);
+  box-shadow: inset 0 0 0 1px var(--texture-glass-border);
   padding: 14px 16px;
   border-radius: var(--radius-md);
   overflow-x: auto;
@@ -767,7 +767,7 @@
 }
 .asv-msg-assistant .asv-msg-content th,
 .asv-msg-assistant .asv-msg-content td {
-  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
   padding: 6px 10px;
   text-align: left;
 }
@@ -1019,7 +1019,7 @@
 .asv-trail {
   margin: 4px 0 2px;
   background: var(--bg-row);
-  border: 1px solid var(--border-faint);
+  box-shadow: inset 0 0 0 1px var(--border-faint);
   border-left: 2px solid var(--color-border-hover);
   border-radius: var(--radius-md);
   transition: var(--transition-normal);
@@ -1265,7 +1265,7 @@
   padding: 2px 6px;
   border-radius: var(--radius-xs);
   background: var(--bg-subtle);
-  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
@@ -1717,7 +1717,7 @@
 }
 .asv-send-stack .asv-send.busy {
   background: var(--bg-surface);
-  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-primary);
 }
 .asv-send-stack .asv-send.busy:hover {
@@ -1765,7 +1765,7 @@
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
   background: var(--stat-card-bg, var(--bg-base));
-  border: 1px solid var(--stat-card-border, var(--border));
+  box-shadow: inset 0 0 0 1px var(--stat-card-border, var(--border));
   border-top: 2px solid var(--border-hover);
   border-radius: var(--radius-md);
   color: inherit;
@@ -1987,7 +1987,7 @@
   padding: 7px 8px;
   background: transparent;
   border: none;
-  border-top: 1px solid var(--border-faint, rgba(0, 0, 0, 0.04));
+  box-shadow: inset 0 1px 0 0 var(--border-faint, rgba(0, 0, 0, 0.04));
   color: inherit;
   font: inherit;
   font-size: var(--font-size-xs);
@@ -2030,7 +2030,7 @@
   font-size: var(--font-size-2xs);
   color: var(--text-muted);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  border: 1px solid var(--key-pill-border, rgba(0, 0, 0, 0.07));
+  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   border-radius: var(--key-pill-radius, 4px);
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2054,7 +2054,7 @@
   font-size: var(--font-size-2xs);
   color: var(--text-muted);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  border: 1px solid var(--key-pill-border, rgba(0, 0, 0, 0.07));
+  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   border-radius: var(--key-pill-radius, 4px);
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2146,7 +2146,7 @@
   font-size: var(--font-size-2xs);
   color: var(--text-muted);
   background: var(--key-pill-bg, rgba(0, 0, 0, 0.035));
-  border: 1px solid var(--key-pill-border, rgba(0, 0, 0, 0.07));
+  box-shadow: inset 0 0 0 1px var(--key-pill-border, rgba(0, 0, 0, 0.07));
   border-radius: var(--key-pill-radius, 4px);
   padding: 1px 5px;
   flex-shrink: 0;
@@ -2180,7 +2180,7 @@
   gap: 5px;
   padding: 2px 8px 2px 6px;
   background: var(--color-ink-card, #0a0a0b);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: var(--font-size-2xs);
@@ -2267,7 +2267,7 @@
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .aeqi-ref-pill--done {
@@ -2295,7 +2295,7 @@
   border-radius: var(--radius-full);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 /* Loading skeleton — matches card shape, pulses softly */
