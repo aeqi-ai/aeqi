@@ -488,7 +488,7 @@ rather than relying on `.bin/` symlinks, which are volatile:
 ```bash
 node /home/claudedev/aeqi/apps/ui/node_modules/typescript/bin/tsc --noEmit
 node /home/claudedev/aeqi/apps/ui/node_modules/prettier/bin/prettier.cjs --check "src/**/*.{ts,tsx,css,mdx}"
-node /home/claudedev/aeqi/apps/ui/node_modules/eslint/bin/eslint.js src/
+node /home/claudedev/aeqi-<topic>/apps/ui/node_modules/eslint/bin/eslint.js src/
 node /home/claudedev/aeqi/apps/ui/node_modules/vitest/vitest.mjs run
 ./node_modules/.bin/vite build
 node scripts/hygiene-check.mjs
@@ -499,6 +499,8 @@ The `PATH=".../node_modules/.bin:$PATH" npm run verify` pattern does
 NOT work in this project — npm spawns a fresh shell that resets PATH,
 so the binary injections never reach the subprocess. The `node` form
 is the only reliable approach when `.bin/` is contested.
+
+**eslint must be invoked via the worktree symlink path, not the parent path.** When the parent's `node_modules/eslint/` exists on disk but is partially extracted (stat shows the directory, `ls` shows files, but `node /home/claudedev/aeqi/apps/ui/node_modules/eslint/bin/eslint.js` throws `MODULE_NOT_FOUND`), the worktree symlink path resolves correctly: `node /home/claudedev/aeqi-<topic>/apps/ui/node_modules/eslint/bin/eslint.js`. The symlink traversal uses a different inode than the direct path when concurrent writes are in progress. Always use the worktree symlink form for eslint specifically. Cost (2026-05-05): one MODULE_NOT_FOUND failure that recovered by switching to the symlink path.
 
 **vite is the exception: use `./node_modules/.bin/vite`, NOT the absolute
 `node .../vite/bin/vite.js` form.** Vite resolves its internal plugins
