@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.39.0 — 2026-05-07
+
+**Headline:** Telegram mention-gate + meeting-orchestration tools (`calendar.find_busy` / `calendar.propose_slots`) + æqi → æiq brand rebrand + role-tile shape semantics.
+
+- **Telegram mention-gate** (`crates/aeqi-gates/src/telegram.rs`): in groups, only `@<bot>` mentions trigger an agent execution turn — DMs always act, non-mention group messages are silently skipped at the channel layer (no eye-react, no typing indicator, no orchestrator dispatch). Resolves the bot's identity at start via `getMe`; degrades open if that call fails. Founder use case: `@aeiq_ea_bot organize a meeting` in a CEO+COO+CTO group should fire only when tagged, never on background traffic. `3116ab38`.
+- **`calendar.find_busy` + `calendar.propose_slots` tools** (`crates/aeqi-pack-google-workspace/`): the two missing pieces of a meeting-orchestration flow on top of the existing Gmail/Calendar pack. `find_busy` queries Google's `/freeBusy` endpoint for any list of calendar IDs and returns busy intervals + per-email errors. `propose_slots` is a pure-Rust intersection helper — given the busy map, a duration, working hours/days, and a target timezone, it returns up to N candidate slots that fit. Together they unblock `@ea organize a meeting with the three of us`. `14f92fda`.
+- **Role tile shape by occupant kind** (`apps/ui/src/components/roles/RoleNode.tsx`): humans render with a circular avatar (Google profile photo, conventional crop), agents render as a square block (matches BlockAvatar fallback and the AgentAvatar primitive's `borderRadius: 4` elsewhere). Per founder: "humans are round, agents are the other shape." Stops the chart and list views from looking like every node is the same kind of entity. `26d10ae9`.
+- **æqi → æiq wordmark + tab title rebrand** (`apps/ui/src/components/Wordmark.tsx`, document.title across page components): the in-product wordmark in the top-left of `AppLayout` and every browser tab title flipped from `æqi` to `æiq` to match the company brand. Storybook docs and CSS comments left alone for a follow-up sweep — those aren't user-facing. `26d10ae9`.
+- **Role-tile BlockAvatar fallback** (`apps/ui/src/components/roles/RoleNode.tsx`): when an agent occupant has no profile image (and previously fell back to text initials), the role tile now renders the deterministic identicon used on the Agents page — visually consistent across the two routes. `bb884448`.
+- **AgentAvatar onError fallback** (`apps/ui/src/components/AgentAvatar.tsx`): `<img onError>` flips to BlockAvatar instead of showing a broken image icon. Caught broken `/avatars/tech-lead.svg` URL on the EA agent during AEIQ dogfood. `096ed5d4`.
+- **Blueprint brand-naming fix** (`presets/blueprints/aeiq-company.json`): the seed ideas baked into the AEIQ blueprint had the company/product naming inverted (canonical idea read "aeiq = the product, AEIQ Inc. = the company" — backwards). This was making the EA agent talk about itself as "aeqi". Bulk-swept `AEIQ` → `aeiq`, fixed the dual-aeqi line in mission. The live AEIQ tenant DB ideas were also corrected orchestrator-direct. `f0816872`.
+
 ## v0.38.0 — 2026-05-07
 
 **Headline:** Quiet Director apex + chart drag/text-selection fix + AA-stack smoke test CLI.
