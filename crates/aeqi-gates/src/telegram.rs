@@ -123,6 +123,20 @@ struct TelegramMessage {
 #[derive(Deserialize)]
 struct TelegramChat {
     id: i64,
+    /// "private" (DM) | "group" | "supergroup" | "channel". Defaults to
+    /// "private" so a fixture missing the field behaves like a DM
+    /// (always spawn) — matches pre-mention-gate behavior.
+    #[serde(rename = "type", default = "default_chat_type")]
+    chat_type: String,
+}
+
+fn default_chat_type() -> String {
+    "private".to_string()
+}
+
+#[derive(Deserialize)]
+struct GetMeResult {
+    username: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -152,6 +166,29 @@ struct SendMessageWithReply {
     reply_to_message_id: Option<i64>,
 }
 
+/// Resolve the bot's @username via `getMe` so we can mention-gate group
+/// messages. Returns the username without the leading `@`. Errors if
+/// the API call fails or the bot has no username (which never happens
+/// for production bots — every Telegram bot is created via @BotFather
+/// with a mandatory username — but the bail keeps the failure mode
+/// explicit instead of silently degrading to "always spawn").
+async fn resolve_bot_username(client: &Client, token: &str) -> Result<String> {
+    let url = format!("{}/bot{}/getMe", TELEGRAM_API, token);
+    let resp = client
+        .post(&url)
+        .send()
+        .await
+        .context("getMe request failed")?;
+    let body: TelegramResponse<GetMeResult> = resp.json().await.context("getMe body parse")?;
+    if !body.ok {
+        anyhow::bail!("getMe returned ok=false: {:?}", body.description);
+    }
+    body.result
+        .and_then(|r| r.username)
+        .filter(|u| !u.is_empty())
+        .context("getMe response missing username")
+}
+
 #[async_trait]
 impl Channel for TelegramChannel {
     async fn start(&self) -> Result<mpsc::Receiver<IncomingMessage>> {
@@ -160,6 +197,22 @@ impl Channel for TelegramChannel {
         let token = self.token.clone();
         let allowed_chats = self.allowed_chats.clone();
         let mut shutdown_rx = self.shutdown_rx.clone();
+
+        // Mention-gate setup: resolve our @username via getMe so we can
+        // distinguish "addressed to me" from "background traffic" in
+        // groups. Empty marker = treat every message as addressed (the
+        // pre-gate behavior) so a startup hiccup never makes the bot
+        // unresponsive.
+        let mention_marker = match resolve_bot_username(&client, &token).await {
+            Ok(name) => {
+                info!(bot_username = %name, "Telegram identity resolved");
+                format!("@{}", name.to_lowercase())
+            }
+            Err(e) => {
+                error!(error = %e, "getMe failed; mention-gate disabled");
+                String::new()
+            }
+        };
 
         tokio::spawn(async move {
             let mut offset: Option<i64> = None;
@@ -201,6 +254,27 @@ impl Channel for TelegramChannel {
                                             debug!(
                                                 chat_id = msg.chat.id,
                                                 "ignoring message from unauthorized chat"
+                                            );
+                                            continue;
+                                        }
+
+                                        // Mention-gate: in groups, only act when our
+                                        // @username appears in the text. DMs always
+                                        // act. If the marker is empty (getMe failed
+                                        // at startup) fall through and act on all,
+                                        // so a transient identity-fetch failure
+                                        // doesn't silence the bot entirely.
+                                        let is_group = msg.chat.chat_type != "private";
+                                        let addressed = mention_marker.is_empty()
+                                            || !is_group
+                                            || msg.text.as_deref().is_some_and(|t| {
+                                                t.to_lowercase().contains(&mention_marker)
+                                            });
+                                        if !addressed {
+                                            debug!(
+                                                chat_id = msg.chat.id,
+                                                chat_type = %msg.chat.chat_type,
+                                                "group message without mention; skipping"
                                             );
                                             continue;
                                         }
