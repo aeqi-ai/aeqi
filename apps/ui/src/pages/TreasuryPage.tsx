@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useBalance } from "wagmi";
+import { anvil } from "wagmi/chains";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,9 +13,14 @@ import { COMPANY_MONTHLY, formatCents, RESOURCE_PACK } from "@/lib/pricing";
 import { useTreasury, type TreasuryTransfer, type TokenBalance } from "@/hooks/useTreasury";
 import { useDaemonStore } from "@/store/daemon";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Chain config ──────────────────────────────────────────────────────────────
 
-const BASE_SEPOLIA_EXPLORER = "https://sepolia.basescan.org/address";
+// VITE_CHAIN_NAME / VITE_CHAIN_EXPLORER let the operator configure the active
+// network without a code change. Defaults match the local anvil dev environment.
+// For Base Sepolia: VITE_CHAIN_NAME="Base Sepolia" VITE_CHAIN_EXPLORER="https://sepolia.basescan.org/address"
+// For Base Mainnet: VITE_CHAIN_NAME="Base" VITE_CHAIN_EXPLORER="https://basescan.org/address"
+const CHAIN_NAME = (import.meta.env.VITE_CHAIN_NAME as string | undefined) || "anvil";
+const CHAIN_EXPLORER = (import.meta.env.VITE_CHAIN_EXPLORER as string | undefined) || "";
 
 interface TreasuryPageProps {
   entityId: string;
@@ -59,6 +66,7 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
   const location = useLocation();
   const entity = useDaemonStore((s) => s.entities.find((e) => e.id === entityId));
   const trustAddress = entity?.trust_address;
+  const trustId = entity?.trust_id;
   // URL-based detection: /me/* routes are always personal accounts (entity.type === 'human')
   // This is reliable because /me/ is reserved for the personal entity (auto-created at signup)
   const isPersonal = location.pathname.startsWith("/me/");
@@ -130,7 +138,9 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
 
       {trustAddress && indexerEnabled() && <ContractInfoRow trustAddress={trustAddress} />}
 
-      {indexerEnabled() && trustAddress && <OnChainHoldings trustAddress={trustAddress} />}
+      {(indexerEnabled() || trustAddress) && (
+        <OnChainHoldings trustAddress={trustAddress} trustId={trustId} />
+      )}
 
       {billingError && (
         <div
@@ -176,7 +186,7 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
 
 function ContractInfoRow({ trustAddress }: { trustAddress: string }) {
   const short = `${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`;
-  const explorerUrl = `${BASE_SEPOLIA_EXPLORER}/${trustAddress}`;
+  const explorerUrl = CHAIN_EXPLORER ? `${CHAIN_EXPLORER}/${trustAddress}` : null;
 
   return (
     <div
@@ -202,31 +212,48 @@ function ContractInfoRow({ trustAddress }: { trustAddress: string }) {
       >
         {short}
       </code>
-      <a
-        href={explorerUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          color: "var(--color-text-muted)",
-          fontSize: "var(--text-xs)",
-          textDecoration: "underline",
-          textUnderlineOffset: "2px",
-        }}
-      >
-        Base Sepolia
-      </a>
+      {explorerUrl ? (
+        <a
+          href={explorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: "var(--color-text-muted)",
+            fontSize: "var(--text-xs)",
+            textDecoration: "underline",
+            textUnderlineOffset: "2px",
+          }}
+        >
+          {CHAIN_NAME}
+        </a>
+      ) : (
+        <span style={{ fontSize: "var(--text-xs)" }}>{CHAIN_NAME}</span>
+      )}
     </div>
   );
 }
 
 // ── On-chain holdings + transfers ─────────────────────────────────────────────
 
-function OnChainHoldings({ trustAddress }: { trustAddress: string }) {
-  const { balances, transfers, loading } = useTreasury(trustAddress);
+function OnChainHoldings({ trustAddress, trustId }: { trustAddress?: string; trustId?: string }) {
+  const { balances, transfers, loading } = useTreasury(trustId);
+
+  // Native ETH balance — read directly from RPC via wagmi.
+  // Uses anvil chain (ID 31337) with the /chain/rpc proxy transport.
+  const { data: ethBalance } = useBalance({
+    address: trustAddress as `0x${string}` | undefined,
+    chainId: anvil.id,
+    query: { enabled: Boolean(trustAddress) },
+  });
 
   return (
     <>
-      <HoldingsSection balances={balances} loading={loading} trustAddress={trustAddress} />
+      <HoldingsSection
+        balances={balances}
+        loading={loading}
+        trustAddress={trustAddress}
+        nativeEth={ethBalance?.formatted}
+      />
       <TransfersSection transfers={transfers} loading={loading} />
     </>
   );
@@ -284,11 +311,17 @@ function HoldingsSection({
   balances,
   loading,
   trustAddress,
+  nativeEth,
 }: {
   balances: TokenBalance[] | null;
   loading: boolean;
   trustAddress?: string;
+  nativeEth?: string;
 }) {
+  const hasEth = nativeEth !== undefined && nativeEth !== "0";
+  const hasErc20 = balances && balances.length > 0;
+  const hasAny = hasEth || hasErc20;
+
   return (
     <section style={{ marginBottom: "var(--space-lg)" }}>
       <SectionLabel>Holdings</SectionLabel>
@@ -300,12 +333,12 @@ function HoldingsSection({
           overflow: "hidden",
         }}
       >
-        {loading ? (
+        {loading && !nativeEth ? (
           <>
             <SkeletonRow widths={["60px", "120px", "80px"]} />
             <SkeletonRow widths={["60px", "120px", "80px"]} />
           </>
-        ) : !balances || balances.length === 0 ? (
+        ) : !hasAny ? (
           <div
             style={{
               padding: "var(--space-lg) var(--space-md)",
@@ -380,16 +413,45 @@ function HoldingsSection({
                     fontWeight: 500,
                   }}
                 >
-                  Holder
+                  Contract
                 </th>
               </tr>
             </thead>
             <tbody>
-              {balances.map((b, i) => (
+              {/* Native ETH row — sourced from RPC, not the indexer */}
+              {nativeEth && (
+                <tr>
+                  <td style={{ padding: "var(--space-xs) var(--space-md)", fontWeight: 500 }}>
+                    ETH
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      textAlign: "right",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                    }}
+                  >
+                    {Number(nativeEth).toFixed(4)}
+                  </td>
+                  <td
+                    style={{
+                      padding: "var(--space-xs) var(--space-md)",
+                      color: "var(--color-text-muted)",
+                      fontSize: "var(--text-xs)",
+                    }}
+                  >
+                    native
+                  </td>
+                </tr>
+              )}
+              {/* ERC-20 rows — sourced from indexer treasuryBalances */}
+              {(balances ?? []).map((b, i) => (
                 <tr
                   key={i}
                   style={{
-                    background: i % 2 === 1 ? "var(--bg-subtle)" : undefined,
+                    background:
+                      (i + (nativeEth ? 1 : 0)) % 2 === 1 ? "var(--bg-subtle)" : undefined,
                   }}
                 >
                   <td style={{ padding: "var(--space-xs) var(--space-md)", fontWeight: 500 }}>
@@ -413,7 +475,7 @@ function HoldingsSection({
                       fontSize: "var(--text-xs)",
                     }}
                   >
-                    {truncateAddress(b.holderAddress)}
+                    {truncateAddress(b.tokenAddress)}
                   </td>
                 </tr>
               ))}

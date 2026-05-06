@@ -7,7 +7,7 @@ import {
   injectedWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { createConfig, http } from "wagmi";
-import { mainnet, sepolia } from "wagmi/chains";
+import { mainnet, sepolia, anvil } from "wagmi/chains";
 
 // Self-hosted-first wallet config.
 //
@@ -40,12 +40,19 @@ const connectors = connectorsForWallets([{ groupName: "Wallets", wallets }], {
   projectId: projectId || "self-hosted-no-walletconnect",
 });
 
+// Active-chain RPC URL: proxied through the platform so the browser can reach
+// a server-local RPC (e.g. anvil at 127.0.0.1:8545). Falls back to the public
+// Anvil default for development; in production the platform's /chain/rpc
+// proxies to whatever AEQI_CHAIN_ACTIVE is configured to.
+const CHAIN_RPC_URL = (import.meta.env.VITE_CHAIN_RPC as string | undefined) || "/chain/rpc";
+
 export const wagmiConfig = createConfig({
   connectors,
-  chains: [mainnet, sepolia],
+  chains: [mainnet, sepolia, anvil],
   transports: {
     [mainnet.id]: http(),
     [sepolia.id]: http(),
+    [anvil.id]: http(CHAIN_RPC_URL),
   },
   ssr: false,
 });

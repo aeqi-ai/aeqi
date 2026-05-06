@@ -1,21 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 
-import {
-  fetchTokenHolders,
-  fetchTrustModules,
-  findModuleByType,
-  indexerEnabled,
-} from "@/lib/indexer";
+import { indexerEnabled } from "@/lib/indexer";
 
 // ── Shape of a token holding ──────────────────────────────────────────────────
 
 export interface TokenBalance {
   /** ERC-20 symbol inferred from address (indexer v1 returns address only). */
   symbol: string;
-  /** Raw balance string from the indexer (no decimals applied — display as-is). */
+  /** Human-readable amount string (18-decimal formatted). */
   amount: string;
-  /** Holder address — the TRUST proxy itself or a delegated beneficiary. */
-  holderAddress: string;
+  /** Token contract address. */
+  tokenAddress: string;
   /** Last-updated block number. */
   lastUpdatedBlock: number;
 }
@@ -54,29 +49,46 @@ function isFieldNotFoundError(err: unknown): boolean {
   return /field.*not.*found|unknown field|cannot query field/i.test(msg);
 }
 
+/** Format a hex balance string with 18 decimals to a human-readable string. */
+function formatHexBalance(hex: string): string {
+  try {
+    const raw = BigInt(hex);
+    const whole = raw / BigInt(1e18);
+    const frac = raw % BigInt(1e18);
+    // Show up to 4 decimal places.
+    const fracStr = frac.toString().padStart(18, "0").slice(0, 4);
+    return `${whole.toString()}.${fracStr}`;
+  } catch {
+    return hex;
+  }
+}
+
+/** Derive a short symbol from a token address (4-char hex prefix). */
+function symbolFromAddress(addr: string): string {
+  return addr.slice(2, 6).toUpperCase();
+}
+
 /**
- * Fetches on-chain treasury state (token holdings + recent transfers) for an
- * entity's TRUST contract.
+ * Fetches on-chain ERC-20 treasury balances + recent transfers for an entity's
+ * TRUST contract, using the indexer's `treasuryBalances(trustId)` field.
  *
- * Graceful-degrade: if the indexer hasn't been extended with
- * `treasuryBalances` / `treasuryTransfers` fields yet, the hook silently
- * returns [] for both and logs a one-time warning. The tab still renders its
- * empty-state UI — no broken surface in prod.
+ * Accepts `trustId` (bytes32 hex, e.g.
+ * `"0x59bc9fd3956a4104aaf883253fde840c0000…"`) — the TRUST's on-chain identity.
  *
- * Returns `{ balances: null, transfers: null, loading: true }` while
- * fetching; `loading: false` once settled (with [] on error / disabled).
+ * Graceful-degrade: if the indexer doesn't have the treasury fields yet, the
+ * hook silently returns [] and logs a one-time warning.
  */
-export function useTreasury(trustAddress: string | undefined): TreasuryState {
+export function useTreasury(trustId: string | undefined): TreasuryState {
   const [balances, setBalances] = useState<TokenBalance[] | null>(null);
   const [transfers, setTransfers] = useState<TreasuryTransfer[] | null>(null);
   const warnedRef = useRef(false);
 
   useEffect(() => {
-    // Reset on address change.
+    // Reset on identity change.
     setBalances(null);
     setTransfers(null);
 
-    if (!trustAddress || !indexerEnabled()) {
+    if (!trustId || !indexerEnabled()) {
       setBalances([]);
       setTransfers([]);
       return;
@@ -93,75 +105,56 @@ export function useTreasury(trustAddress: string | undefined): TreasuryState {
     };
 
     (async () => {
+      // ── ERC-20 balances via treasuryBalances(trustId) ─────────────────────
+      let resolvedBalances: TokenBalance[] = [];
       try {
-        // ── Step 1: resolve modules for this TRUST ────────────────────────
-        const modules = await fetchTrustModules(trustAddress);
-        if (cancelled) return;
-
-        const tokenModule = findModuleByType(modules, "token");
-
-        // ── Step 2: token holdings ────────────────────────────────────────
-        let resolvedBalances: TokenBalance[] = [];
-        if (tokenModule) {
-          try {
-            const raw = await fetchTokenHolders(tokenModule.moduleAddress);
-            if (!cancelled) {
-              resolvedBalances = raw.map((r) => ({
-                // indexer v1 doesn't include symbol; derive a short label from
-                // the address until the extension ships.
-                symbol: `${r.tokenAddress.slice(2, 6).toUpperCase()}`,
-                amount: r.balance,
-                holderAddress: r.holderAddress,
-                lastUpdatedBlock: r.lastUpdatedBlock,
-              }));
-            }
-          } catch (err) {
-            if (isFieldNotFoundError(err)) {
-              warn("indexer not extended yet — treasuryBalances field missing");
-            }
-            // Leave resolvedBalances as [].
-          }
-        }
-        if (!cancelled) setBalances(resolvedBalances);
-
-        // ── Step 3: recent transfers ──────────────────────────────────────
-        // The `treasuryTransfers` field is expected as part of the Roles+Treasury
-        // indexer extension (separate workstream). Until it lands, we return [].
-        let resolvedTransfers: TreasuryTransfer[] = [];
-        try {
-          // Attempt optimistic query — will throw "field not found" until the
-          // extension is deployed.
-          const data = await fetchTreasuryTransfers(trustAddress);
-          if (!cancelled) resolvedTransfers = data;
-        } catch (err) {
-          if (isFieldNotFoundError(err)) {
-            warn("indexer not extended yet — treasuryTransfers field missing");
-          }
-          // Leave resolvedTransfers as [].
-        }
-        if (!cancelled) setTransfers(resolvedTransfers);
-      } catch {
-        // Module fetch failure — treat whole section as empty.
+        const raw = await fetchTreasuryBalances(trustId);
         if (!cancelled) {
-          setBalances([]);
-          setTransfers([]);
+          resolvedBalances = raw.map((r) => ({
+            symbol: symbolFromAddress(r.tokenAddress),
+            amount: formatHexBalance(r.balance),
+            tokenAddress: r.tokenAddress,
+            lastUpdatedBlock: r.lastUpdatedBlock,
+          }));
         }
+      } catch (err) {
+        if (isFieldNotFoundError(err)) {
+          warn("indexer treasuryBalances field missing");
+        }
+        // Leave resolvedBalances as [].
       }
+      if (!cancelled) setBalances(resolvedBalances);
+
+      // ── Recent transfers ──────────────────────────────────────────────────
+      let resolvedTransfers: TreasuryTransfer[] = [];
+      try {
+        const data = await fetchTreasuryTransfers(trustId);
+        if (!cancelled) resolvedTransfers = data;
+      } catch (err) {
+        if (isFieldNotFoundError(err)) {
+          warn("indexer treasuryTransfers field missing");
+        }
+        // Leave resolvedTransfers as [].
+      }
+      if (!cancelled) setTransfers(resolvedTransfers);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [trustAddress]);
+  }, [trustId]);
 
   const loading = balances === null || transfers === null;
   return { balances, transfers, loading };
 }
 
-// ── Optimistic GraphQL call for transfers (extension not yet deployed) ────────
-//
-// This will throw with a "field not found" GraphQL error until the indexer
-// extension lands. The hook catches that and degrades gracefully.
+// ── Indexer helpers ───────────────────────────────────────────────────────────
+
+interface RawTreasuryBalance {
+  tokenAddress: string;
+  balance: string;
+  lastUpdatedBlock: number;
+}
 
 interface RawTransfer {
   direction: string;
@@ -170,42 +163,45 @@ interface RawTransfer {
   block: number;
 }
 
-async function fetchTreasuryTransfers(trustAddress: string): Promise<TreasuryTransfer[]> {
-  if (!indexerEnabled()) return [];
+const ENV_INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
+const INDEXER_URL: string | null =
+  ENV_INDEXER_URL === undefined ? "/indexer/graphql" : (ENV_INDEXER_URL as string) || null;
 
-  // The path must match what aeqi-platform proxies. Override via VITE_INDEXER_URL.
-  const INDEXER_URL =
-    (import.meta.env.VITE_INDEXER_URL as string | undefined) === undefined
-      ? "/indexer/graphql"
-      : (import.meta.env.VITE_INDEXER_URL as string) || null;
-
-  if (!INDEXER_URL) return [];
+async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T | null> {
+  if (!INDEXER_URL) return null;
   const resp = await fetch(INDEXER_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      query: `query($a: String!, $limit: Int!) {
-        treasuryTransfers(trustAddress: $a, limit: $limit) {
-          direction counterparty amount block
-        }
-      }`,
-      variables: { a: trustAddress.toLowerCase(), limit: 20 },
-    }),
+    body: JSON.stringify({ query, variables }),
   });
-
   if (!resp.ok) throw new Error(`indexer http ${resp.status}`);
-
-  interface TransferResponse {
-    data?: { treasuryTransfers?: RawTransfer[] };
+  interface GqlResp {
+    data?: T;
     errors?: { message: string }[];
   }
-
-  const json = (await resp.json()) as TransferResponse;
+  const json = (await resp.json()) as GqlResp;
   if (json.errors && json.errors.length > 0) {
     throw new Error(`indexer graphql: ${json.errors.map((e) => e.message).join("; ")}`);
   }
+  return json.data ?? null;
+}
 
-  return (json.data?.treasuryTransfers ?? []).map((r) => ({
+async function fetchTreasuryBalances(trustId: string): Promise<RawTreasuryBalance[]> {
+  if (!INDEXER_URL) return [];
+  const data = await gql<{ treasuryBalances: RawTreasuryBalance[] }>(
+    `query($id: String!) { treasuryBalances(trustId: $id) { tokenAddress balance lastUpdatedBlock } }`,
+    { id: trustId },
+  );
+  return data?.treasuryBalances ?? [];
+}
+
+async function fetchTreasuryTransfers(trustId: string): Promise<TreasuryTransfer[]> {
+  if (!INDEXER_URL) return [];
+  const data = await gql<{ treasuryTransfers: RawTransfer[] }>(
+    `query($id: String!, $limit: Int!) { treasuryTransfers(trustId: $id, limit: $limit) { direction counterparty amount block } }`,
+    { id: trustId, limit: 20 },
+  );
+  return (data?.treasuryTransfers ?? []).map((r) => ({
     direction: (r.direction === "out" ? "out" : "in") as TransferDirection,
     counterparty: r.counterparty,
     amount: r.amount,

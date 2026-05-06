@@ -6,6 +6,18 @@ import TreasuryPage from "@/pages/TreasuryPage";
 import { api } from "@/lib/api";
 import { useDaemonStore } from "@/store/daemon";
 
+// ── Wagmi mock ────────────────────────────────────────────────────────────────
+
+// useBalance calls the RPC in production; stub it in tests so there's no real
+// network dependency. The stub returns no balance by default (undefined).
+vi.mock("wagmi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("wagmi")>();
+  return {
+    ...actual,
+    useBalance: vi.fn(() => ({ data: undefined, isLoading: false })),
+  };
+});
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const TRUST_ADDRESS = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
@@ -73,14 +85,15 @@ describe("TreasuryPage", () => {
     expect(await screen.findByRole("heading", { name: /treasury/i })).toBeInTheDocument();
   });
 
-  it("shows the contract info row when trust_address is present", async () => {
+  it("shows the contract info row with chain name when trust_address is present", async () => {
     renderPage();
-    // The contract info row shows a truncated address and a Base Sepolia link.
+    // The contract info row shows a truncated address and the chain label.
+    // Default CHAIN_NAME is "anvil" (no VITE_CHAIN_NAME env in tests).
     await waitFor(() => {
-      expect(screen.getByText(/base sepolia/i)).toBeInTheDocument();
+      expect(screen.getByText(/anvil/i)).toBeInTheDocument();
     });
-    // Truncated: 0xdeadb…beef
-    expect(screen.getByText(/0xdead/)).toBeInTheDocument();
+    // Truncated address appears in the contract info row (and possibly in the holdings hint).
+    expect(screen.getAllByText(/0xdead/).length).toBeGreaterThan(0);
   });
 
   it("shows Holdings and Recent transfers section labels", async () => {
@@ -95,8 +108,8 @@ describe("TreasuryPage", () => {
   it("shows empty-state copy in both sections when indexer returns no data", async () => {
     renderPage();
     // useTreasury will hit the indexer, get field-not-found errors for
-    // transfers, and [] from module fetch (no modules seeded). Both sections
-    // land on the empty state.
+    // transfers, and [] from the treasury balances query (no data seeded).
+    // Both sections land on the empty state.
     await waitFor(
       () => {
         // Holdings empty state shows the zero-balance line.
@@ -157,7 +170,9 @@ describe("TreasuryPage", () => {
     renderPage();
 
     await screen.findByRole("heading", { name: /treasury/i });
-    expect(screen.queryByText(/base sepolia/i)).not.toBeInTheDocument();
+    // Contract info row is only shown when indexerEnabled() && trustAddress are set.
+    // With no trust_address, no contract row renders.
+    expect(screen.queryByText(/0xdead/i)).not.toBeInTheDocument();
   });
 
   it("renders the Resource pack section", async () => {

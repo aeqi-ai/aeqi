@@ -1,52 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 
-// ── Module mocks must be declared before importing the hook ───────────────────
+// ── Module mock for indexer ───────────────────────────────────────────────────
+// The new useTreasury hook calls the indexer directly via fetch (no indexer
+// lib helpers). We only need indexerEnabled() to stay truthy in tests.
 
 vi.mock("@/lib/indexer", async () => {
   const actual = await vi.importActual<typeof import("@/lib/indexer")>("@/lib/indexer");
   return {
     ...actual,
     indexerEnabled: () => true,
-    fetchTrustModules: vi.fn(),
-    fetchTokenHolders: vi.fn(),
-    findModuleByType: actual.findModuleByType,
   };
 });
 
 import { useTreasury } from "@/hooks/useTreasury";
-import * as indexer from "@/lib/indexer";
 
-const mockedFetchTrustModules = vi.mocked(indexer.fetchTrustModules);
-const mockedFetchTokenHolders = vi.mocked(indexer.fetchTokenHolders);
-
-const TRUST = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+const TRUST_ID = "0x59bc9fd3956a4104aaf883253fde840c00000000000000000000000000000000";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const TOKEN_MODULE: indexer.IndexedModule = {
-  trustAddress: TRUST,
-  moduleId: indexer.MODULE_ID.token,
-  moduleAddress: "0xaaaa",
-  moduleAcl: "0x",
-  attachedBlock: 100,
-};
+/** Stub fetch to return the given GraphQL response body. */
+function stubFetch(body: unknown) {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => body,
+  });
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("useTreasury", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: empty module list (no on-chain data yet).
-    mockedFetchTrustModules.mockResolvedValue([]);
-    mockedFetchTokenHolders.mockResolvedValue([]);
-
-    // Stub global fetch for the treasury-transfers call (not yet deployed).
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        errors: [{ message: "Cannot query field 'treasuryTransfers'" }],
-      }),
+    // Default: both queries return empty arrays — field present but no data.
+    stubFetch({
+      data: { treasuryBalances: [], treasuryTransfers: [] },
     });
   });
 
@@ -55,16 +43,26 @@ describe("useTreasury", () => {
   });
 
   it("returns loading=true initially", () => {
-    const { result } = renderHook(() => useTreasury(TRUST));
+    const { result } = renderHook(() => useTreasury(TRUST_ID));
     expect(result.current.loading).toBe(true);
     expect(result.current.balances).toBeNull();
     expect(result.current.transfers).toBeNull();
   });
 
-  it("resolves to empty arrays when no modules exist", async () => {
-    mockedFetchTrustModules.mockResolvedValue([]);
+  it("resolves to empty arrays when indexer returns no data", async () => {
+    // Each fetch call only returns one query result. Mock both calls.
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { treasuryBalances: [] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { treasuryTransfers: [] } }),
+      });
 
-    const { result } = renderHook(() => useTreasury(TRUST));
+    const { result } = renderHook(() => useTreasury(TRUST_ID));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -72,57 +70,80 @@ describe("useTreasury", () => {
     expect(result.current.transfers).toEqual([]);
   });
 
-  it("returns [] balances + [] transfers when indexer is disabled (no address)", async () => {
+  it("returns [] when trustId is undefined", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch");
     const { result } = renderHook(() => useTreasury(undefined));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.balances).toEqual([]);
     expect(result.current.transfers).toEqual([]);
-    expect(mockedFetchTrustModules).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("maps token holders into TokenBalance rows when token module is found", async () => {
-    mockedFetchTrustModules.mockResolvedValue([TOKEN_MODULE]);
-    mockedFetchTokenHolders.mockResolvedValue([
-      {
-        tokenAddress: "0xaaaa",
-        holderAddress: "0xbbbb",
-        balance: "1000000000000000000",
-        lastUpdatedBlock: 200,
-      },
-    ]);
+  it("maps treasury balances into TokenBalance rows", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: {
+            treasuryBalances: [
+              {
+                tokenAddress: "0xc26adf1e8385689ca692c9a69e8d205877be339a",
+                balance: "0xde0b6b3a7640000", // 1 ETH in wei
+                lastUpdatedBlock: 100,
+              },
+            ],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { treasuryTransfers: [] } }),
+      });
 
-    const { result } = renderHook(() => useTreasury(TRUST));
+    const { result } = renderHook(() => useTreasury(TRUST_ID));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.balances).toHaveLength(1);
-    expect(result.current.balances![0].amount).toBe("1000000000000000000");
-    expect(result.current.balances![0].holderAddress).toBe("0xbbbb");
-    expect(result.current.balances![0].lastUpdatedBlock).toBe(200);
+    expect(result.current.balances![0].tokenAddress).toBe(
+      "0xc26adf1e8385689ca692c9a69e8d205877be339a",
+    );
+    expect(result.current.balances![0].symbol).toBe("C26A");
+    expect(result.current.balances![0].amount).toMatch(/1\.0000/);
+    expect(result.current.balances![0].lastUpdatedBlock).toBe(100);
   });
 
-  it("degrades gracefully when transfers field is not found (console.warn once)", async () => {
-    mockedFetchTrustModules.mockResolvedValue([]);
+  it("degrades gracefully when treasuryBalances field is not found", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          errors: [{ message: "Cannot query field 'treasuryBalances'" }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { treasuryTransfers: [] } }),
+      });
+
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    // The global fetch stub already returns a "field not found" error for
-    // the transfers query — just verify it doesn't throw and emits [].
-    const { result } = renderHook(() => useTreasury(TRUST));
+    const { result } = renderHook(() => useTreasury(TRUST_ID));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.transfers).toEqual([]);
-    // The warn may or may not fire depending on the global dedup key, but
-    // the hook must NOT throw.
+    expect(result.current.balances).toEqual([]);
     warnSpy.mockRestore();
   });
 
-  it("handles module fetch failure without crashing", async () => {
-    mockedFetchTrustModules.mockRejectedValue(new Error("network error"));
+  it("degrades gracefully when fetch fails", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("network error"));
 
-    const { result } = renderHook(() => useTreasury(TRUST));
+    const { result } = renderHook(() => useTreasury(TRUST_ID));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -130,17 +151,19 @@ describe("useTreasury", () => {
     expect(result.current.transfers).toEqual([]);
   });
 
-  it("resets to loading when trustAddress changes", async () => {
-    mockedFetchTrustModules.mockResolvedValue([]);
+  it("resets to loading when trustId changes", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ data: { treasuryBalances: [] } }) });
 
-    const { result, rerender } = renderHook(({ addr }: { addr: string }) => useTreasury(addr), {
-      initialProps: { addr: TRUST },
+    const { result, rerender } = renderHook(({ id }: { id: string }) => useTreasury(id), {
+      initialProps: { id: TRUST_ID },
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    // Change the address — should reset immediately.
-    rerender({ addr: "0xnewaddress" });
+    // Change the id — should reset immediately.
+    rerender({ id: "0xnewtrustid" });
     expect(result.current.loading).toBe(true);
   });
 });
