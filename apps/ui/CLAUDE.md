@@ -904,6 +904,7 @@ The v3 shorthand scale (`--space-xs` through `--space-xl`) was used extensively 
 `GovernancePage.tsx` and `TreasuryPage.tsx` but was never defined in `primitives.css`
 or `tokens.css`. Every padding, margin, and gap that referenced these aliases silently
 resolved to zero — the pages had no visible spacing until the bridge was added (2026-05-06):
+
 ```css
 --space-xs: var(--space-2); /* 8px */
 --space-sm: var(--space-3); /* 12px */
@@ -911,6 +912,7 @@ resolved to zero — the pages had no visible spacing until the bridge was added
 --space-lg: var(--space-6); /* 24px */
 --space-xl: var(--space-8); /* 32px */
 ```
+
 These aliases are now in `primitives.css` `:root`. They are the ONLY supported shorthand
 form. New pages must use `--space-{N}` (the canonical numeric scale). These bridges exist
 only for backward compat with pages written against the v3 schema. Do NOT add new usage
@@ -931,6 +933,7 @@ Rule: after any hover CSS edit, verify the property you're setting differs betwe
 state and hover state. The canonical hover signals are: `box-shadow` lift (`--shadow-sm`),
 `background` step-up ONE tier (card → card-elevated, never jumping two), or `opacity`
 reduction for danger/muted actions. Grep for no-op candidates:
+
 ```bash
 # Find hover rules that set background to card-elevated, then check if
 # the same selector's resting state also uses card-elevated.
@@ -997,8 +1000,16 @@ envelope painted as a peer of the CTO node.
 
 Rule: if you're building a chart surface over `Role[]` + `RoleEdge[]`, import
 `layoutChart` (and `NODE_W` / `NODE_H`) from `roles/layout.ts` and render nodes
-at their absolute `(x, y)` positions. The Agents list view keeps its section-header
-grouping by parent-role title — that's separate from the chart and correct.
+at their absolute `(x, y)` positions.
+
+**List views use pre-order DAG traversal + depth indent, not section headers.**
+`RolesList` (Roles tab list view) and `AgentsList` (Agents tab list view) both
+express hierarchy as a depth-indented flat list — pre-order DFS from roots,
+`paddingLeft: depth * 24` on the first cell. Section-header grouping by
+`role_type` or department label was the prior anti-pattern and was removed
+(2026-05-06) from `EntityRolesTab.tsx`. Do not reintroduce `ROLE_TYPE_ORDER`
+or any section-header loop in the list view — hierarchy lives in the indent,
+not in headers.
 
 CSS classes that are gone and must NOT be added back:
 `.roles-chart-dept-cluster`, `.roles-chart-dept-root`, `.roles-chart-ceo-row`,
