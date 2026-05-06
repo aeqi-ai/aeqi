@@ -99,7 +99,7 @@ isn't on that path, don't make it.
   reload, drops Zustand store state, and breaks scroll restoration. In reusable
   section components that need to trigger navigation (e.g., a catalog list-row
   button inside `BlueprintCategorySection`), pass an `onNavigate: (path: string)
-  => void` prop and call it with the target path — the page component wires its
+=> void` prop and call it with the target path — the page component wires its
   own `navigate` in. Cost (2026-05-05): caught during blueprint category-section
   implementation; required adding `onNavigate` prop and re-threading `navigate`
   down from `BlueprintsPage`.
@@ -274,6 +274,7 @@ ln -sfn /home/claudedev/aeqi/apps/ui/node_modules \
 ```
 
 **CRITICAL: The symlink MUST exist before any npm command.** The worktree's node_modules points to the parent's to share the `node_modules/.bin/` cache and avoid redundant installs across branches. Without it:
+
 - `npm run verify` fails with `tsc: not found`, `prettier: not found`, etc. even if the parent's node_modules is healthy
 - `npm install` in the worktree creates a fresh `node_modules` tree instead of using the parent's, doubling build time and contending with parallel sibling worktrees (ENOTEMPTY errors during deploy)
 - Any npm command that expects dev tools will fail
@@ -368,6 +369,7 @@ missing (interrupted install). Run `npm install` once more from the parent
 reinstall from scratch; that triggers the ELOOP loop again.
 
 Recovery sequence (fastest path):
+
 ```bash
 # 1. Remove worktree symlink to break ELOOP
 rm /home/claudedev/aeqi-<topic>/apps/ui/node_modules
@@ -518,12 +520,12 @@ not that your TypeScript or lint had errors. When you see exit 216 from
 chasing phantom type errors. Fix is always `npm install --ignore-scripts`,
 not editing code. Cost (2026-05-05): ~30s confusion before diagnosing.
 
-**P0 triage: run prettier on only the changed file, not `src/**/*`.**
+**P0 triage: run prettier on only the changed file, not `src/**/_`.**
 When main has pre-existing prettier drift in unrelated files (e.g.
-`RolesList.tsx` failing format checks from a prior session's merge), a
-blanket `prettier --check "src/**/*.{ts,tsx,css}"` creates false-alarm
+`RolesList.tsx`failing format checks from a prior session's merge), a
+blanket`prettier --check "src/\*\*/_.{ts,tsx,css}"`creates false-alarm
 noise during a P0 fix and can look like your change is dirty. Narrow to
-the changed file for the surgical signal: `prettier --check
+the changed file for the surgical signal:`prettier --check
 "src/pages/YourChangedFile.tsx"`. If it's clean, the P0 fix is clean —
 the other file's drift is pre-existing and not your regression.
 
@@ -713,8 +715,8 @@ and type aliases but silently drops function or class imports. If you write
 treats the identifier as `undefined` at runtime. The correct split:
 
 ```ts
-import type { SingleBlueprint } from "@/lib/types";  // type only
-import { isSingleBlueprint } from "@/lib/types";      // runtime function
+import type { SingleBlueprint } from "@/lib/types"; // type only
+import { isSingleBlueprint } from "@/lib/types"; // runtime function
 ```
 
 Rule: scan every new `import type { ... }` for function or const exports
@@ -722,3 +724,24 @@ mixed in with interfaces. Move those to a plain `import { ... }` line.
 Cost (2026-05-05): `BlueprintLaunchPicker.tsx` had `isSingleBlueprint`
 stuck in a type import from the prior session; caught at session start
 before tsc ran.
+
+## Test copy coupling — update tests when changing empty-state text
+
+Component tests use exact string matchers for user-visible copy
+(`screen.getByText("No proposals yet.")`, `/no treasury activity yet/i`).
+When an empty-state or heading string changes during a copy polish pass,
+the companion test file must be updated in the same commit or verify will
+fail with "Unable to find an element with the text: ...".
+
+Rule: after any copy change in a page component (`src/pages/*.tsx`), grep
+the companion test file (`src/test/components/<Page>.test.tsx`) for the
+old string and update every match. The search is quick; missing it costs a
+wasted verify run. Cost (2026-05-06): TreasuryPage and GovernancePage tests
+both needed copy updates when empty-state text was polished.
+
+Pattern for the search:
+
+```bash
+OLD="No treasury activity yet"
+grep -rn "$OLD" src/test/ src/pages/
+```
