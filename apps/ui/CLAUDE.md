@@ -656,6 +656,41 @@ The per-repo drift list in /ship tracks known files; add new ones there. Cost
 (2026-05-05): one stash-dance cycle when margin-normalize edits landed in main
 before worktree was cut.
 
+## Adding a UI dependency from inside a worktree
+
+Two-step recipe — installs the package into the parent's `node_modules` so the
+symlinked worktree can resolve it immediately, AND updates the worktree's
+`package-lock.json` so prod ships reproducibly. Worked first try on the
+BlockNote ship (2026-05-06) without any ELOOP / ENOTEMPTY contention.
+
+```bash
+# 1. Add the dep entry to the worktree's package.json (Edit tool)
+
+# 2. Install into PARENT'S node_modules without touching the parent's
+#    package.json — `--no-save` avoids polluting main's tree. The
+#    worktree's symlink picks the package up at the same inode the
+#    parent has it; vite + tsc + verify all resolve immediately.
+cd /home/claudedev/aeqi/apps/ui && npm install --no-save --silent <pkg>@<ver> [<pkg2>@<ver2>...]
+
+# 3. Update the WORKTREE'S package-lock.json without re-installing.
+#    This is the file that gets committed; prod's `npm ci` reads it
+#    and gets the same versions the worktree built+verified against.
+cd /home/claudedev/aeqi-<topic>/apps/ui && npm install --package-lock-only --silent
+
+# 4. Verify and ship as normal.
+cd /home/claudedev/aeqi-<topic>/apps/ui && npm run verify
+```
+
+Why this order: doing `npm install <pkg>` in the worktree directly would
+create a real `node_modules` (breaking the symlink) and contend with sibling
+worktrees. Doing it in the parent without `--no-save` would dirty main's
+package.json. The split keeps the worktree's diff scoped to package.json +
+package-lock.json + the actual feature code, and the parent's tree stays
+write-clean except for the new package directories.
+
+Pre-flight: confirm the package supports the project's React major before
+pinning. `npm view <pkg> peerDependencies` is the one-line check.
+
 ## Cross-package code (`packages/web-shared`, `packages/tokens`)
 
 When apps/ui imports from a sibling package (`@aeqi/web-shared/*`,
