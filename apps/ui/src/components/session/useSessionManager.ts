@@ -141,10 +141,19 @@ export function useSessionManager({
   // needing to restart the interval on every streaming toggle. Pauses while
   // the global rate-limit is engaged — otherwise a single 429 triggers an
   // endless 3-per-interval cascade that keeps the lockout extended.
+  //
+  // ALSO short-circuits on the global `streamingSessions[activeSessionId]`
+  // flag written by `useWebSocketChat`. The local `streamingRef` is set/cleared
+  // by the same hook, but in component-mount races the global flag can be true
+  // while the local ref hasn't synced yet. Without this gate, a polling tick
+  // mid-turn pulls the in-progress draft assistant message from the DB and
+  // sets it on top of the live LiveTrail — rendering two thinking bars until
+  // the stream completes. See investigation 2026-05-07 symptom 2 path (a).
   useEffect(() => {
     if (!activeSessionId) return;
     const iv = setInterval(() => {
       if (streamingRef.current) return;
+      if (useChatStore.getState().streamingSessions[activeSessionId]) return;
       if (isRateLimited()) return;
       api
         .getSessionMessages(activeSessionId, 1000)

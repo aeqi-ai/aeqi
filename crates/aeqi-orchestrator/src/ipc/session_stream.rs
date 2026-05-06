@@ -25,10 +25,18 @@ pub async fn handle_subscribe(
     if session_id.is_empty() {
         return write_json(writer, &no_session_id()).await;
     }
-    if !execution_registry.is_active(session_id).await {
-        return write_json(writer, &no_active_run(session_id)).await;
-    }
 
+    // Subscribe live regardless of whether an executor is currently registered.
+    // The UI's canonical flow is "subscribe-then-send": the WS subscribe arrives
+    // BEFORE the POST that triggers the executor. Returning early here used to
+    // emit a synthetic Complete{no_active_run:true} and tear down the WS before
+    // any real events fired, leaving the user staring at an empty turn until a
+    // refresh or 10s polling tick replayed the persisted final from the DB.
+    //
+    // For a fresh session_id we want started_ms_ago=0, an empty backlog, and a
+    // live receiver wired up before the POST fires. `started_elapsed_ms` falls
+    // back to 0 when there's no active execution; `get_or_create` mints a
+    // broadcast channel on first subscribe so the producer's `.send` lands here.
     let started_ms_ago = execution_registry
         .started_elapsed_ms(session_id)
         .await
@@ -95,15 +103,6 @@ fn done(session_id: &str, completed: bool) -> serde_json::Value {
         "session_id": session_id,
         "subscribed": true,
         "completed": completed,
-    })
-}
-
-fn no_active_run(session_id: &str) -> serde_json::Value {
-    serde_json::json!({
-        "done": true,
-        "type": "Complete",
-        "session_id": session_id,
-        "no_active_run": true,
     })
 }
 
