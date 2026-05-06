@@ -818,6 +818,25 @@ vi.mock("wagmi", async (importOriginal) => {
 });
 ```
 
+## Lazy wallet split — QueryClientProvider stays at root
+
+**When lazy-loading the wallet provider stack, `QueryClientProvider` must stay in `main.tsx`, NOT inside the lazy module.** The app uses react-query throughout (ideas, quests, events, agents, channels queries) — not only for wagmi. If `QueryClientProvider` moves inside the lazy `WalletProvider` chunk, every non-wallet query throws "No QueryClient set" until the wallet bundle loads.
+
+Correct tree (as of 2026-05-06):
+
+```
+StrictMode
+  QueryClientProvider          ← EAGER in main.tsx
+    Suspense
+      WalletProvider (lazy)    ← WagmiProvider + RainbowKitProvider only
+        BrowserRouter
+          App
+```
+
+`WagmiProvider` sees `QueryClientProvider` as an ancestor — that satisfies wagmi's requirement. `wagmiConfig` and both rainbowkit imports live inside `WalletProvider.tsx` only.
+
+**`import type { ReactNode }` in new lazy components.** The project uses `"jsx": "react-jsx"` — no auto `import React`. New lazy components that accept `{ children }` must import the type explicitly: `import type { ReactNode } from "react"`. Cost (2026-05-06): first draft used `React.ReactNode` without an import, caught immediately by tsc.
+
 ## v3 token drift — broken aliases with no compat bridge
 
 **`--text-{2xs,xs,sm,base,lg,xl}` are broken tokens — no bridge, no v4 equivalent.**
