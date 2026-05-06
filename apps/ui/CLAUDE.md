@@ -898,3 +898,32 @@ Key points:
   the skip link. Don't fix one branch and miss the other.
 - **P2 gap as of 2026-05-06:** `SignupPage` (`src/pages/SignupPage.tsx`) still lacks
   the skip link. Apply the same pattern there.
+
+## Org-chart viewport — `offsetWidth` not `scrollWidth` for auto-fit
+
+**`scrollWidth` / `scrollHeight` are clamped by parent overflow — use `offsetWidth` / `offsetHeight`.**
+The zoom-viewport auto-fit in `OrgZoomViewport` (`RolesChart.tsx`) computes the initial
+scale from the inner div's natural width. `scrollWidth` only reflects overflow that has
+scrolled past the edge — when the parent container uses `overflow: hidden` (as the
+viewport does), `scrollWidth` is clamped to the container width rather than the content
+width. The result: a 7-cluster dept-row ~1740px wide reports `scrollWidth ≈ 1440` (the
+container width), the computed scale lands at ≈1.0, and the rightmost clusters clip.
+`offsetWidth` is the element's laid-out box width, independent of parent clipping.
+Fix: `inner.offsetWidth` / `inner.offsetHeight`. Cost (2026-05-06): clusters visible but
+rightmost two (CFO, CLO) clipped at default zoom until this was corrected.
+
+## Agents chart — always reuse `layoutDepts`, never a fresh layer algorithm
+
+**Any new chart-view component over the role DAG must import `layoutDepts` from `roles/layout.ts`.**
+When `AgentsChart` was originally written, it used a hand-rolled `layoutRoles` function
+that produced flat layers — same algorithm as the Roles chart used *before* clustering was
+added. The result: Agents chart view showed ungrouped cards while Roles showed neat
+dept-cluster columns. The fix is always to import `layoutDepts` (and its `NODE_W` /
+`NODE_H` constants), filter to operational roles, and render `roles-chart-dept-cluster`
+wrappers for each cluster. The same CSS classes and layout constants are shared — no
+duplication needed.
+
+Rule: if you're building a chart surface over `Role[]` + `RoleEdge[]`, start from
+`layoutDepts` in `roles/layout.ts`. Don't write a new depth-first layering function —
+it will silently miss clustering. Cost (2026-05-06): agents chart shipped without
+clusters; required a full rewrite of `AgentsChart` + new `AgentCard` component.
