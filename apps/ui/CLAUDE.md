@@ -905,24 +905,30 @@ The zoom-viewport auto-fit in `OrgZoomViewport` (`RolesChart.tsx`) computes the 
 scale from the inner div's natural width. `scrollWidth` only reflects overflow that has
 scrolled past the edge — when the parent container uses `overflow: hidden` (as the
 viewport does), `scrollWidth` is clamped to the container width rather than the content
-width. The result: a 7-cluster dept-row ~1740px wide reports `scrollWidth ≈ 1440` (the
-container width), the computed scale lands at ≈1.0, and the rightmost clusters clip.
+width. For a wide org tree the canvas can be ~1740px but `scrollWidth` reports ≈1440
+(the container width), the computed scale lands at ≈1.0, and the rightmost nodes clip.
 `offsetWidth` is the element's laid-out box width, independent of parent clipping.
-Fix: `inner.offsetWidth` / `inner.offsetHeight`. Cost (2026-05-06): clusters visible but
-rightmost two (CFO, CLO) clipped at default zoom until this was corrected.
+Fix: `inner.offsetWidth` / `inner.offsetHeight`. Cost (2026-05-06): right-side nodes
+clipped at default zoom until this was corrected.
 
-## Agents chart — always reuse `layoutDepts`, never a fresh layer algorithm
+## Org chart — use `layoutChart` directly, no dept-cluster envelopes
 
-**Any new chart-view component over the role DAG must import `layoutDepts` from `roles/layout.ts`.**
-When `AgentsChart` was originally written, it used a hand-rolled `layoutRoles` function
-that produced flat layers — same algorithm as the Roles chart used *before* clustering was
-added. The result: Agents chart view showed ungrouped cards while Roles showed neat
-dept-cluster columns. The fix is always to import `layoutDepts` (and its `NODE_W` /
-`NODE_H` constants), filter to operational roles, and render `roles-chart-dept-cluster`
-wrappers for each cluster. The same CSS classes and layout constants are shared — no
-duplication needed.
+**Both `RolesChart` and `AgentsChart` render a pure Sugiyama-lite layered DAG via
+`layoutChart` from `roles/layout.ts`.** The chart is a single SVG canvas: CEO at layer 0,
+direct reports at layer 1, grandchildren at layer 2, etc. There are no painted
+department-cluster envelopes — hierarchy is expressed by vertical position and bezier
+edges alone.
 
-Rule: if you're building a chart surface over `Role[]` + `RoleEdge[]`, start from
-`layoutDepts` in `roles/layout.ts`. Don't write a new depth-first layering function —
-it will silently miss clustering. Cost (2026-05-06): agents chart shipped without
-clusters; required a full rewrite of `AgentsChart` + new `AgentCard` component.
+`layoutDepts` and the `DeptCluster` / `DeptLayout` interfaces were deleted in
+`100ac7b9` (2026-05-06). Do not reintroduce them. The old "swim-lane" model was
+wrong because Backend Intern belongs in Backend Engineer's subtree, not in a CTO
+envelope painted as a peer of the CTO node.
+
+Rule: if you're building a chart surface over `Role[]` + `RoleEdge[]`, import
+`layoutChart` (and `NODE_W` / `NODE_H`) from `roles/layout.ts` and render nodes
+at their absolute `(x, y)` positions. The Agents list view keeps its section-header
+grouping by parent-role title — that's separate from the chart and correct.
+
+CSS classes that are gone and must NOT be added back:
+`.roles-chart-dept-cluster`, `.roles-chart-dept-root`, `.roles-chart-ceo-row`,
+`.roles-chart-dept-row`, `.roles-chart-dept-label`.
