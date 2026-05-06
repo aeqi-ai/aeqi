@@ -1,5 +1,16 @@
 # Release Notes
 
+## v0.42.0 — 2026-05-08
+
+**Headline:** Agents touch the world — Architect spawns Companies from a brief, W33B wires real cross-Company role grants on-chain, Drive read+write completes the OAuth loop.
+
+- **Architect — Wave 34 Phase 1** (`crates/aeqi-architect` + `apps/ui/src/pages/StudioPage.tsx`): new crate scaffold + brief→blueprint IPC + `/studio` page with LLM stub. The natural-language org-design front door starts here — type a brief, get a stack blueprint, spawn the Company. First wedge of the architect-agent vision (`architecture_architect_agent_vision.md`); Phases 2-6 follow in Waves 31-35. `eae10243`.
+- **Google Drive pack — `drive.list_files` + `drive.read_file` + `drive.create_doc`** (`crates/aeqi-pack-google-workspace`): three new agent tools — list files (filtered + paginated), read file content, create new Google Doc. Closes the OAuth loop shipped v0.40.0: Connect Google → agent now reads and writes Drive in addition to Gmail/Calendar. Companion platform commit (`010ca2b`) adds Drive scopes to the agent OAuth Path B authorize URL. `2063fbd6`.
+- **Company Settings tab killed; EntityHeroStrip on Overview** (`apps/ui/src/pages/company/EntityHeroStrip.tsx` + tab refactor): the Company rail loses its Settings tab; identity edits (name, tagline, public toggle, plan link) are now click-to-edit affordances on the Overview hero strip. Settings was a dead seventh tab — name/plan changes belong on the page that shows them. Companion platform commit (`32e8edf`) adds `tagline` + `public` columns + `PUT /api/entities/{id}` handler. `a57f97d3`.
+- **react-vendor chunk split — 1.44MB → 232KB raw / 74KB gz (-83%)** (`apps/ui/vite.config.ts`): the manual `react-vendor` chunk regex was over-broad — anything mentioning React anywhere in its dependency graph (editor stack, wallet stack, BlockNote, viem) was being absorbed into one mega-bundle. Anchored the match to `/node_modules/react/` proper so editor + wallet stacks ship in their own lazy chunks. First-paint payload drops accordingly. `35a1bc6f`.
+- **Bare-/ post-login lands on /me/inbox; inbox probe cached per deploy-hash** (`apps/ui/src/pages/Index.tsx` + bootstrapper): authed visitors hitting bare `/` now redirect to `/me/inbox`, with the inbox probe outcome cached in localStorage keyed on the deploy-hash so we don't re-fire it on every navigation. The "first 90 seconds after sign-in" path stays clean across SPA navigations. `d76bf43a`.
+- **Dead-code drop — `invoke_pattern` + legacy event columns** (`crates/aeqi-orchestrator/src/events/`): retired the pre-tool-calls invocation surface (`invoke_pattern`) and the legacy event columns it depended on. Tool-calls unification (`architecture_tool_calls_unification.md`) shipped 2026-04-19 made these dead; this release drops them from the schema. `755bc84e`.
+
 ## v0.41.0 — 2026-05-08
 
 **Headline:** Co-creation surface lands — BlockNote ideas, Slack-shaped channels, Linear-shaped quests, agent personality tab, inference spend visibility, and a UX P0 sweep.
