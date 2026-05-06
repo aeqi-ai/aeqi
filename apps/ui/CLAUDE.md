@@ -529,6 +529,18 @@ the changed file for the surgical signal:`prettier --check
 "src/pages/YourChangedFile.tsx"`. If it's clean, the P0 fix is clean —
 the other file's drift is pre-existing and not your regression.
 
+**`replace_all` on inline style strings triggers prettier reformatting — run `prettier --write` after any `replace_all` pass.**
+When `replace_all` substitutes a shorter/longer token alias inside an inline JSX style
+object (e.g. `var(--text-muted)` → `var(--color-text-muted)`), adjacent lines in the
+same style object may now exceed prettier's 100-char limit, causing `prettier --check`
+to fail on lines you didn't intend to touch. The fix is always `prettier --write` on
+the affected files immediately after the `replace_all` pass — not manual line-splitting.
+Three files hit this in the role-pages token sweep (2026-05-06):
+`RoleEditPage.tsx`, `RoleInvitePage.tsx`, `RoleNewPage.tsx`. Only `RoleDetailPage.tsx`
+(which used surgical single-line edits, not `replace_all`) was unaffected.
+Rule: after any `replace_all` pass on TSX/TS files, run
+`./node_modules/.bin/prettier --write <file>` on all modified files before verify.
+
 **eslint must be invoked via the worktree symlink path, not the parent path.** When the parent's `node_modules/eslint/` exists on disk but is partially extracted (stat shows the directory, `ls` shows files, but `node /home/claudedev/aeqi/apps/ui/node_modules/eslint/bin/eslint.js` throws `MODULE_NOT_FOUND`), the worktree symlink path resolves correctly: `node /home/claudedev/aeqi-<topic>/apps/ui/node_modules/eslint/bin/eslint.js`. The symlink traversal uses a different inode than the direct path when concurrent writes are in progress. Always use the worktree symlink form for eslint specifically. Cost (2026-05-05): one MODULE_NOT_FOUND failure that recovered by switching to the symlink path.
 
 **vite is the exception: use `./node_modules/.bin/vite`, NOT the absolute
