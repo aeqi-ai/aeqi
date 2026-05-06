@@ -1,5 +1,19 @@
 # Release Notes
 
+## v0.35.0 — 2026-05-06
+
+**Headline:** Org chart pure nested tree + agent-spawn data integrity (no duplicate roles, no phantom entities).
+
+- **Org chart:** removed painted department-cluster envelopes per founder direction. Roles + Agents charts now render as a single layered DAG via `layoutChart` (Sugiyama-lite, arbitrary depth). Backend Intern under Backend Engineer under CTO renders as a clean 3-level tree, no misleading "CTO group" boxes. List-view department grouping unchanged (founder explicitly approved that).
+- **Spawn integrity:** `POST /api/agents/spawn` no longer creates a phantom Company entity when `entity_id` is already known. `spawn_with_entity_id` pre-checks entity existence; HTTP handler accepts `entity_id` in the request body. The signup flow that mints a personal Company per new user is unchanged (entity_id absent → still mint).
+- **Role uniqueness:** `POST /api/roles` now upserts when a role for the same `(entity_id, occupant_id)` already exists. Spawning an agent then assigning a role no longer leaves a duplicate orphan role row in the table.
+- **A11y:** SignupPage gets the skip-to-main-content link (LoginPage shipped earlier in v0.34.0).
+- **Docs:** `aeqi-sandbox-*` deploy gap documented — sandboxes need explicit `systemctl restart` after Rust deploys (the script only restarts host-placement services).
+
+**Architecture notes:** All spawn/role bugs trace back to the org-chart redesign exposing pre-existing data shapes. The fixes harden the runtime contract: 1 entity → many agents → 1 role per agent → DAG via role_edges.
+
+**Known limitations / next:** AEIQ test data still has Backend Intern at depth 3 (test artefact, harmless). W33B stack-blueprint cross-Company on-chain edge wiring still in flight. Wave 34/35 (Architect meta-agent + /studio chat UI) deferred.
+
 ## v0.34.0 — 2026-05-06
 
 **Headline:** Org chart departmental clustering + agents list grouped by team + 144kB gzip perf win.
