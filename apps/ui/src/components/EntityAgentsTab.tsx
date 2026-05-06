@@ -7,7 +7,7 @@ import { Button, EmptyState, Popover, Tooltip } from "./ui";
 import AgentAvatar from "./AgentAvatar";
 import { BlueprintPickerModal } from "@/components/blueprints/BlueprintPickerModal";
 import { relativeTime } from "./ideas/types";
-import { layoutDepts, NODE_W, NODE_H } from "@/components/roles/layout";
+import { layoutChart, NODE_W, NODE_H } from "@/components/roles/layout";
 
 type ViewMode = "list" | "chart";
 type SortMode = "recent" | "alpha-asc" | "alpha-desc" | "active";
@@ -556,12 +556,12 @@ function AgentRow({ agent: a, onSelect }: { agent: Agent; onSelect: (id: string)
 }
 
 /**
- * Department-clustered chart over agent-occupied roles.
+ * Pure layered-DAG chart over agent-occupied roles.
  *
- * Uses the same `layoutDepts` algorithm as the Roles chart so both
- * tabs share one mental model. CEO sits above a row of department
- * cluster columns. Each cluster shows cards for every role in that
- * subtree, resolved to their agent occupant where one exists.
+ * Uses `layoutChart` (Sugiyama-lite) directly over the operational
+ * role DAG. CEO at layer 0; direct reports at layer 1; grandchildren
+ * at layer 2; etc. No painted department-cluster envelopes — hierarchy
+ * is expressed by vertical position and connecting bezier edges.
  *
  * Unoccupied roles render as muted vacant placeholders so the shape
  * of the org is visible even when agents haven't been assigned yet.
@@ -602,12 +602,12 @@ function AgentsChart({
     );
   }
 
-  // Only operational roles feed the dept-cluster layout (directors/advisors
+  // Only operational roles feed the tree layout (directors/advisors
   // are governance tiers, not org-chart nodes).
   const opPositions = positions.filter((r) => r.role_type === "operational");
   const opIds = new Set(opPositions.map((r) => r.id));
   const opEdges = edges.filter((e) => opIds.has(e.parent_role_id) && opIds.has(e.child_role_id));
-  const deptLayout = layoutDepts(opPositions, opEdges);
+  const treeLayout = layoutChart(opPositions, opEdges);
 
   if (opPositions.length === 0) {
     return (
@@ -622,51 +622,45 @@ function AgentsChart({
 
   return (
     <div className="ideas-list-body" style={{ padding: "24px 28px 48px", overflowX: "auto" }}>
-      <div className="roles-chart-dept-root" role="figure" aria-label="Agents org chart">
-        {deptLayout.ceo && (
-          <div className="roles-chart-ceo-row">
-            <AgentCard
-              role={deptLayout.ceo}
-              agent={
-                deptLayout.ceo.occupant_id ? agentById.get(deptLayout.ceo.occupant_id) : undefined
-              }
-              apex
-              onSelect={onSelect}
-              style={{ width: NODE_W, minHeight: NODE_H }}
-            />
-          </div>
-        )}
-        {deptLayout.clusters.length > 0 && (
-          <div className="roles-chart-dept-row">
-            {deptLayout.clusters.map((cluster) => (
-              <div
-                key={cluster.head.id}
-                className="roles-chart-dept-cluster"
-                aria-label={cluster.head.title}
-              >
-                <div className="roles-chart-dept-label">{cluster.head.title}</div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                    alignItems: "stretch",
-                  }}
-                >
-                  {cluster.layout.nodes.map((n) => (
-                    <AgentCard
-                      key={n.role.id}
-                      role={n.role}
-                      agent={n.role.occupant_id ? agentById.get(n.role.occupant_id) : undefined}
-                      onSelect={onSelect}
-                      style={{ width: NODE_W, minHeight: NODE_H }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div
+        className="roles-chart-canvas"
+        style={{ position: "relative", width: treeLayout.width, height: treeLayout.height }}
+        role="figure"
+        aria-label="Agents org chart"
+      >
+        <svg
+          className="roles-chart-edges"
+          width={treeLayout.width}
+          height={treeLayout.height}
+          viewBox={`0 0 ${treeLayout.width} ${treeLayout.height}`}
+          aria-hidden
+        >
+          {treeLayout.edges.map((e, i) => {
+            const x1 = e.from.x + NODE_W / 2;
+            const y1 = e.from.y + NODE_H;
+            const x2 = e.to.x + NODE_W / 2;
+            const y2 = e.to.y;
+            const midY = (y1 + y2) / 2;
+            const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+            return <path key={i} d={d} className="roles-chart-edge-path" />;
+          })}
+        </svg>
+        {treeLayout.nodes.map((n) => (
+          <AgentCard
+            key={n.role.id}
+            role={n.role}
+            agent={n.role.occupant_id ? agentById.get(n.role.occupant_id) : undefined}
+            apex={n.layer === 0}
+            onSelect={onSelect}
+            style={{
+              position: "absolute",
+              left: n.x,
+              top: n.y,
+              width: NODE_W,
+              minHeight: NODE_H,
+            }}
+          />
+        ))}
       </div>
     </div>
   );

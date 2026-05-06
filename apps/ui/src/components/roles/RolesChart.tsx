@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { Role, RoleEdge } from "@/lib/types";
 import { IconButton } from "@/components/ui";
 import RoleNode from "./RoleNode";
-import { layoutDepts, NODE_H, NODE_W } from "./layout";
+import { layoutChart, NODE_H, NODE_W } from "./layout";
 
 export interface RolesChartProps {
   roles: Role[];
@@ -29,12 +29,11 @@ const FIT_TRANSFORM: Transform = { scale: 1, tx: 0, ty: 0 };
  *                 Governance is not reporting; the board is appointed,
  *                 not managed, so a bezier into the operational tree
  *                 would be a category error.
- *   ORG         — operational roles as department clusters. The CEO (root)
- *                 sits above a horizontal row of department columns. Each
- *                 column is headed by a C-suite role and shows its full
- *                 subtree via the Sugiyama-lite layout. Departments are
- *                 visually separated with whitespace and a subtle tinted
- *                 background — no hairlines.
+ *   ORG         — operational roles as a pure layered DAG tree via
+ *                 the Sugiyama-lite layout. CEO at layer 0; direct
+ *                 reports at layer 1; grandchildren at layer 2; etc.
+ *                 No painted department-cluster envelopes — hierarchy
+ *                 is expressed by vertical position alone.
  *   ADVISORS    — advisors as a trailing horizontal roster.
  *
  * Empty bands collapse entirely. Cross-band edges are dropped silently.
@@ -50,7 +49,7 @@ export default function RolesChart({ roles, edges, agentNames, onSelectRole }: R
 
   const opIds = new Set(operational.map((r) => r.id));
   const opEdges = edges.filter((e) => opIds.has(e.parent_role_id) && opIds.has(e.child_role_id));
-  const deptLayout = layoutDepts(operational, opEdges);
+  const treeLayout = layoutChart(operational, opEdges);
 
   if (roles.length === 0) return null;
 
@@ -65,77 +64,48 @@ export default function RolesChart({ roles, edges, agentNames, onSelectRole }: R
             onSelect={onSelectRole}
           />
         )}
-        {(deptLayout.ceo != null || deptLayout.clusters.length > 0) && (
+        {operational.length > 0 && (
           <section className="roles-chart-zone" aria-label="Org">
             <div className="roles-chart-zone-eyebrow">Org</div>
-            <div className="roles-chart-dept-root" role="figure" aria-label="Organisation chart">
-              {deptLayout.ceo && (
-                <div className="roles-chart-ceo-row">
-                  <RoleNode
-                    role={deptLayout.ceo}
-                    agentName={
-                      deptLayout.ceo.occupant_id
-                        ? agentNames.get(deptLayout.ceo.occupant_id)
-                        : undefined
-                    }
-                    onClick={() => onSelectRole(deptLayout.ceo!)}
-                    className="role-node--apex"
-                    style={{ width: NODE_W, height: NODE_H }}
-                  />
-                </div>
-              )}
-              {deptLayout.clusters.length > 0 && (
-                <div className="roles-chart-dept-row">
-                  {deptLayout.clusters.map((cluster) => (
-                    <div
-                      key={cluster.head.id}
-                      className="roles-chart-dept-cluster"
-                      aria-label={cluster.head.title}
-                    >
-                      <div className="roles-chart-dept-label">{cluster.head.title}</div>
-                      <div
-                        className="roles-chart-canvas"
-                        style={{ width: cluster.layout.width, height: cluster.layout.height }}
-                      >
-                        <svg
-                          className="roles-chart-edges"
-                          width={cluster.layout.width}
-                          height={cluster.layout.height}
-                          viewBox={`0 0 ${cluster.layout.width} ${cluster.layout.height}`}
-                          aria-hidden
-                        >
-                          {cluster.layout.edges.map((e, i) => {
-                            const x1 = e.from.x + NODE_W / 2;
-                            const y1 = e.from.y + NODE_H;
-                            const x2 = e.to.x + NODE_W / 2;
-                            const y2 = e.to.y;
-                            const midY = (y1 + y2) / 2;
-                            const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
-                            return <path key={i} d={d} className="roles-chart-edge-path" />;
-                          })}
-                        </svg>
-                        {cluster.layout.nodes.map((n) => (
-                          <RoleNode
-                            key={n.role.id}
-                            role={n.role}
-                            agentName={
-                              n.role.occupant_id ? agentNames.get(n.role.occupant_id) : undefined
-                            }
-                            onClick={() => onSelectRole(n.role)}
-                            style={{
-                              position: "absolute",
-                              left: n.x,
-                              top: n.y,
-                              width: NODE_W,
-                              height: NODE_H,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div
+              className="roles-chart-canvas"
+              style={{ width: treeLayout.width, height: treeLayout.height }}
+              role="figure"
+              aria-label="Organisation chart"
+            >
+              <svg
+                className="roles-chart-edges"
+                width={treeLayout.width}
+                height={treeLayout.height}
+                viewBox={`0 0 ${treeLayout.width} ${treeLayout.height}`}
+                aria-hidden
+              >
+                {treeLayout.edges.map((e, i) => {
+                  const x1 = e.from.x + NODE_W / 2;
+                  const y1 = e.from.y + NODE_H;
+                  const x2 = e.to.x + NODE_W / 2;
+                  const y2 = e.to.y;
+                  const midY = (y1 + y2) / 2;
+                  const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+                  return <path key={i} d={d} className="roles-chart-edge-path" />;
+                })}
+              </svg>
+              {treeLayout.nodes.map((n) => (
+                <RoleNode
+                  key={n.role.id}
+                  role={n.role}
+                  agentName={n.role.occupant_id ? agentNames.get(n.role.occupant_id) : undefined}
+                  onClick={() => onSelectRole(n.role)}
+                  className={n.layer === 0 ? "role-node--apex" : undefined}
+                  style={{
+                    position: "absolute",
+                    left: n.x,
+                    top: n.y,
+                    width: NODE_W,
+                    height: NODE_H,
+                  }}
+                />
+              ))}
             </div>
           </section>
         )}
