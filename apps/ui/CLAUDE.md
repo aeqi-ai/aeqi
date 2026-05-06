@@ -899,6 +899,44 @@ parent's color instead of reading as demoted/muted text. Fix: `--text-tertiary` 
 occurrences in blueprints-store.css, blueprint-launch-picker.css, and pages.css with
 no matching definition anywhere in the token files.
 
+**`--space-{xs,sm,md,lg,xl}` v3 shorthand aliases were undefined — now bridged.**
+The v3 shorthand scale (`--space-xs` through `--space-xl`) was used extensively in
+`GovernancePage.tsx` and `TreasuryPage.tsx` but was never defined in `primitives.css`
+or `tokens.css`. Every padding, margin, and gap that referenced these aliases silently
+resolved to zero — the pages had no visible spacing until the bridge was added (2026-05-06):
+```css
+--space-xs: var(--space-2); /* 8px */
+--space-sm: var(--space-3); /* 12px */
+--space-md: var(--space-4); /* 16px */
+--space-lg: var(--space-6); /* 24px */
+--space-xl: var(--space-8); /* 32px */
+```
+These aliases are now in `primitives.css` `:root`. They are the ONLY supported shorthand
+form. New pages must use `--space-{N}` (the canonical numeric scale). These bridges exist
+only for backward compat with pages written against the v3 schema. Do NOT add new usage
+of `--space-xs/sm/md/lg/xl` in new pages or components — go to `--space-{2,3,4,6,8}`
+directly. Grep for silent zeros: `grep -rn 'var(--space-[a-z]' src/`.
+
+## Hover audit — verify `.is-clickable:hover` actually changes the visual state
+
+**A hover style that sets the same property to the same value as the resting state
+is a no-op — invisible to the user but not to the linter.** Pattern to catch:
+`.role-node.is-clickable:hover { background: var(--color-card-elevated); }` — this was
+a no-op because `.role-node`'s resting background IS `var(--color-card-elevated)`. The
+rule compiled fine but provided zero hover feedback. Fixed (2026-05-06) by switching to
+`box-shadow: var(--shadow-sm)`, which provides perceivable lift without changing the
+background tier.
+
+Rule: after any hover CSS edit, verify the property you're setting differs between resting
+state and hover state. The canonical hover signals are: `box-shadow` lift (`--shadow-sm`),
+`background` step-up ONE tier (card → card-elevated, never jumping two), or `opacity`
+reduction for danger/muted actions. Grep for no-op candidates:
+```bash
+# Find hover rules that set background to card-elevated, then check if
+# the same selector's resting state also uses card-elevated.
+grep -A2 ':hover' src/styles/*.css | grep 'color-card-elevated'
+```
+
 ## Auth pages — skip link pattern
 
 **Auth pages render outside `AppLayout` and need their own skip link.** `AppLayout`
