@@ -49,6 +49,7 @@ pub async fn handle_agents_registry(
                     "last_active": a.last_active.map(|dt| dt.to_rfc3339()),
                     "session_count": a.session_count,
                     "total_tokens": a.total_tokens,
+                    "lifetime_cost_usd": a.lifetime_cost_usd,
                     "color": a.color,
                     "avatar": a.avatar,
                     "faces": a.faces,

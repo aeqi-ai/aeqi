@@ -49,6 +49,11 @@ pub struct Agent {
     pub last_active: Option<DateTime<Utc>>,
     pub session_count: u32,
     pub total_tokens: u64,
+    /// Running USD cost across every inference call attributed to this agent.
+    /// Updated atomically by `record_inference_call`. Denormalized for fast
+    /// agents-list rendering — `inference_calls` table is the audit trail.
+    #[serde(default)]
+    pub lifetime_cost_usd: f64,
     // --- Visual identity ---
     pub color: Option<String>,
     pub avatar: Option<String>,
@@ -569,6 +574,40 @@ fn ensure_agent_columns(conn: &Connection) -> rusqlite::Result<()> {
             "ALTER TABLE agents ADD COLUMN can_ask_director INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
+    if !cols.iter().any(|c| c == "lifetime_cost_usd") {
+        // Denormalized running USD cost across every inference call attributed
+        // to this agent. Populated by `record_inference_call`; rendered on the
+        // agents-list view without joining `inference_calls`.
+        conn.execute_batch(
+            "ALTER TABLE agents ADD COLUMN lifetime_cost_usd REAL NOT NULL DEFAULT 0;",
+        )?;
+    }
+    Ok(())
+}
+
+/// Per-call inference accounting table — source of truth for the per-agent
+/// cost / token rollups stored on `agents.total_tokens` /
+/// `agents.lifetime_cost_usd` / `agents.session_count`. One row per
+/// `agent completed` emission. Idempotent; safe to call on every open.
+fn ensure_inference_calls_table(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS inference_calls (
+             id TEXT PRIMARY KEY,
+             agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+             session_id TEXT,
+             model TEXT NOT NULL,
+             prompt_tokens INTEGER NOT NULL DEFAULT 0,
+             completion_tokens INTEGER NOT NULL DEFAULT 0,
+             cost_usd REAL NOT NULL DEFAULT 0,
+             stop_reason TEXT,
+             correlation_id TEXT,
+             created_at TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS idx_inference_calls_agent
+             ON inference_calls(agent_id);
+         CREATE INDEX IF NOT EXISTS idx_inference_calls_created
+             ON inference_calls(created_at);",
+    )?;
     Ok(())
 }
 
@@ -1246,6 +1285,12 @@ impl AgentRegistry {
         // Must run after channels table exists (backfill JOINs on it).
         ensure_agent_columns(&conn)?;
 
+        // ── Inference accounting (idempotent) ───────────────────────────────
+        // Source-of-truth `inference_calls` rows + `agents.lifetime_cost_usd`
+        // running totals. Written by `record_inference_call` from the
+        // queue executor every time an agent run completes.
+        ensure_inference_calls_table(&conn)?;
+
         // ── Scope-model migration for aeqi.db (idempotent) ──────────────────
         // Normalises legacy scope values in events and ideas to the new enum.
         ensure_aeqi_db_scope_columns(&conn)?;
@@ -1599,6 +1644,7 @@ impl AgentRegistry {
             last_active: None,
             session_count: 0,
             total_tokens: 0,
+            lifetime_cost_usd: 0.0,
             color: None,
             avatar: None,
             faces: None,
@@ -2270,6 +2316,88 @@ impl AgentRegistry {
         )?;
         debug!(id = %id, tokens, "agent session recorded");
         Ok(())
+    }
+
+    /// Record one inference call against an agent. Inserts a row into
+    /// `inference_calls` AND atomically rolls the totals up onto the
+    /// `agents` row (`total_tokens`, `session_count`, `lifetime_cost_usd`,
+    /// `last_active`). Single transaction so the audit row and the
+    /// running totals stay consistent.
+    ///
+    /// `cost_usd` should be pre-computed by the caller via
+    /// `aeqi_providers::estimate_cost(&model, prompt_tokens, completion_tokens)`.
+    /// Unknown models fall back to `DEFAULT_PRICE` (1.00 / 3.00 per Mtok),
+    /// not zero, so the column never lies about cost being free.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_inference_call(
+        &self,
+        agent_id: &str,
+        session_id: Option<&str>,
+        model: &str,
+        prompt_tokens: u32,
+        completion_tokens: u32,
+        cost_usd: f64,
+        stop_reason: Option<&str>,
+        correlation_id: Option<&str>,
+    ) -> Result<()> {
+        let call_id = uuid::Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+        let total_tokens = prompt_tokens as i64 + completion_tokens as i64;
+        let db = self.db.lock().await;
+        // Single SQL transaction — INSERT the audit row, then UPDATE the
+        // agents rollup atomically. SQLite's implicit savepoint per
+        // execute() is fine here; we use BEGIN/COMMIT to keep the two
+        // writes coupled if a future caller adds a third write.
+        db.execute_batch("BEGIN IMMEDIATE;")?;
+        let insert_res = db.execute(
+            "INSERT INTO inference_calls
+                 (id, agent_id, session_id, model, prompt_tokens,
+                  completion_tokens, cost_usd, stop_reason, correlation_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                call_id,
+                agent_id,
+                session_id,
+                model,
+                prompt_tokens as i64,
+                completion_tokens as i64,
+                cost_usd,
+                stop_reason,
+                correlation_id,
+                now,
+            ],
+        );
+        if let Err(e) = insert_res {
+            db.execute_batch("ROLLBACK;")?;
+            return Err(e.into());
+        }
+        let update_res = db.execute(
+            "UPDATE agents SET
+                 session_count = session_count + 1,
+                 total_tokens = total_tokens + ?1,
+                 lifetime_cost_usd = lifetime_cost_usd + ?2,
+                 last_active = ?3
+             WHERE id = ?4",
+            params![total_tokens, cost_usd, now, agent_id],
+        );
+        match update_res {
+            Ok(_) => {
+                db.execute_batch("COMMIT;")?;
+                debug!(
+                    agent_id = %agent_id,
+                    model = %model,
+                    prompt_tokens,
+                    completion_tokens,
+                    cost_usd,
+                    "inference call recorded"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                db.execute_batch("ROLLBACK;")?;
+                Err(e.into())
+            }
+        }
     }
 
     /// Change agent status.
@@ -4024,6 +4152,7 @@ fn row_to_agent(row: &rusqlite::Row) -> Agent {
             .map(|d| d.with_timezone(&Utc)),
         session_count: row.get("session_count").unwrap_or(0),
         total_tokens: row.get::<_, i64>("total_tokens").unwrap_or(0) as u64,
+        lifetime_cost_usd: row.get::<_, f64>("lifetime_cost_usd").unwrap_or(0.0),
         color: row.get("color").ok(),
         avatar: row.get("avatar").ok(),
         faces: row
@@ -4707,6 +4836,73 @@ mod tests {
         let updated = reg.get(&agent.id).await.unwrap().unwrap();
         assert_eq!(updated.session_count, 2);
         assert_eq!(updated.total_tokens, 8000);
+    }
+
+    #[tokio::test]
+    async fn record_inference_call_writes_audit_row_and_updates_rollup() {
+        let reg = test_registry().await;
+        let agent = reg.spawn("billable", None, None).await.unwrap();
+
+        // Two calls under deepseek pricing (0.27 in / 1.10 out per Mtok).
+        // call A: 1000 prompt + 500 completion
+        // call B: 500 prompt + 250 completion
+        let cost_a = aeqi_providers::estimate_cost("deepseek/deepseek-chat", 1000, 500);
+        let cost_b = aeqi_providers::estimate_cost("deepseek/deepseek-chat", 500, 250);
+        reg.record_inference_call(
+            &agent.id,
+            Some("session-A"),
+            "deepseek/deepseek-chat",
+            1000,
+            500,
+            cost_a,
+            Some("EndTurn"),
+            Some("corr-A"),
+        )
+        .await
+        .unwrap();
+        reg.record_inference_call(
+            &agent.id,
+            Some("session-B"),
+            "deepseek/deepseek-chat",
+            500,
+            250,
+            cost_b,
+            Some("EndTurn"),
+            Some("corr-B"),
+        )
+        .await
+        .unwrap();
+
+        let updated = reg.get(&agent.id).await.unwrap().unwrap();
+        assert_eq!(updated.session_count, 2, "session_count counts calls");
+        assert_eq!(updated.total_tokens, 1000 + 500 + 500 + 250);
+        // f64 sum of two fixed inputs is exact at this magnitude — no epsilon needed.
+        assert!(
+            (updated.lifetime_cost_usd - (cost_a + cost_b)).abs() < 1e-12,
+            "lifetime_cost_usd must accumulate atomically: got {}, want {}",
+            updated.lifetime_cost_usd,
+            cost_a + cost_b
+        );
+        assert!(updated.last_active.is_some(), "last_active must be stamped");
+
+        // Audit table populated.
+        let db = reg.db.lock().await;
+        let n: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM inference_calls WHERE agent_id = ?1",
+                params![agent.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 2);
+        let total_cost: f64 = db
+            .query_row(
+                "SELECT COALESCE(SUM(cost_usd), 0) FROM inference_calls WHERE agent_id = ?1",
+                params![agent.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!((total_cost - (cost_a + cost_b)).abs() < 1e-12);
     }
 
     #[tokio::test]

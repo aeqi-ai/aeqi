@@ -320,6 +320,51 @@ impl SessionExecutor for QueueExecutor {
             .unregister(&spawned.session_id)
             .await;
 
+        // Per-agent inference accounting. Every successful agent run is one
+        // billable inference call: we INSERT a row into `inference_calls` and
+        // roll the totals up onto the `agents` row. Errored / panicked runs
+        // are skipped — there's no truthful token count to attribute.
+        if let Ok(Ok(result)) = &run_result
+            && (result.total_prompt_tokens > 0 || result.total_completion_tokens > 0)
+        {
+            let cost_usd = aeqi_providers::estimate_cost(
+                &result.model,
+                result.total_prompt_tokens,
+                result.total_completion_tokens,
+            );
+            // Default pricing fires when the model lookup falls through — log
+            // the model name once so unknown models surface in the journal.
+            let priced = aeqi_providers::pricing::lookup(&result.model);
+            if priced.prompt_per_mtok == 1.0 && priced.completion_per_mtok == 3.0 {
+                warn!(
+                    model = %result.model,
+                    "no pricing rate for model — using default 1.00/3.00 USD/Mtok"
+                );
+            }
+            let stop_reason = format!("{:?}", result.stop_reason);
+            if let Err(e) = self
+                .agent_registry
+                .record_inference_call(
+                    &spawned.agent_id,
+                    Some(&spawned.session_id),
+                    &result.model,
+                    result.total_prompt_tokens,
+                    result.total_completion_tokens,
+                    cost_usd,
+                    Some(&stop_reason),
+                    Some(&spawned.correlation_id),
+                )
+                .await
+            {
+                warn!(
+                    agent_id = %spawned.agent_id,
+                    session_id = %spawned.session_id,
+                    error = %e,
+                    "failed to record inference accounting"
+                );
+            }
+        }
+
         // Persist the final assistant message for non-web transports.
         //
         // `SpawnOptions::interactive()` above makes `spawn_session` skip its
