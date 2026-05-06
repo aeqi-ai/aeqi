@@ -576,6 +576,19 @@ on the last line. When monitoring the script in background mode, grep for
 and the timestamp makes it non-constant). Skip `./scripts/deploy.sh` — that's
 for full runtime+platform rebuilds.
 
+**Background `ui-deploy.sh` stale-output-file race.** When the script is
+run in background mode and the output file already exists from a prior run,
+the Monitor tool may fire on the old `rsync complete` line before the new
+run reaches that point — giving a false success signal. The new run may then
+fail silently (e.g. because the worktree was already removed, or a build
+environment issue). Prevention: run `ui-deploy.sh` synchronously when
+possible. If background mode is required, confirm the deploy by checking the
+live hash after the script finishes: `curl -sL https://app.aeqi.ai/ | grep -oE
+'index-[A-Za-z0-9_-]+\.js' | head -1` must match `cat apps/ui/dist/index.html
+| grep -oE 'index-[A-Za-z0-9_-]+\.js'`. Cost (2026-05-06): background deploy
+appeared to succeed (Monitor fired on stale `rsync complete`); synchronous
+re-run was needed to actually ship.
+
 ## /ship — automate the entire ritual
 
 The user has explicitly delegated the merge / push / deploy / cleanup

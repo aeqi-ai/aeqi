@@ -5,7 +5,6 @@ export const NODE_H = 76;
 export const H_GAP = 28;
 export const V_GAP = 76;
 export const PAD = 36;
-export const DEPT_GAP = 48;
 
 export interface NodePos {
   role: Role;
