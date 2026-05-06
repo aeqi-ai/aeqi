@@ -366,7 +366,10 @@ export default function LoginPage() {
   if (authMode === "secret") {
     return (
       <main className="signup-split">
-        <div className="signup-form-side">
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
+        <div className="signup-form-side" id="main-content">
           <div className="auth-container">
             <div className="auth-logo">
               <Wordmark size={36} />
@@ -433,7 +436,10 @@ export default function LoginPage() {
   // Accounts mode
   return (
     <main className="signup-split">
-      <div className="signup-form-side">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <div className="signup-form-side" id="main-content">
         <div className="auth-container" role="region" aria-live="polite">
           <div className="auth-logo">
             <Wordmark size={36} />

@@ -224,7 +224,7 @@ export default function AgentOrgChart({
   };
 
   return (
-    <div className="org-chart" ref={chartRef} onKeyDown={onKeyDown}>
+    <div className="org-chart" data-testid="org-chart" ref={chartRef} onKeyDown={onKeyDown}>
       <div className="org-scroll">
         <OrgNodeView node={org} onSelect={handleSelect} onAddChild={() => setPickerOpen(true)} />
       </div>
