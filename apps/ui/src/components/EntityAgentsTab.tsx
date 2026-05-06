@@ -43,9 +43,10 @@ const STATUS_VALUES = new Set<StatusFilter>(STATUS_ORDER);
  * and Blueprints. State (q, sort, filter, view) persists in the URL via the
  * same `patchParams` idiom Ideas / Quests / Positions adopted.
  *
- * "+ New agent" opens the shared BlueprintPickerModal, which spawns the
- * picked blueprint into this entity. Same modal as `/start`; only the
- * destination differs.
+ * List view groups agents by department (the parent role's title for each
+ * C-suite head in the DAG). Agents whose role has no parent are grouped
+ * under the C-suite label directly; agents with no role at all fall into
+ * "Unassigned".
  *
  * Chart view mirrors EntityPositionsTab's layered-DAG renderer so both
  * tabs answer the same shape from different lenses — Positions reads
@@ -80,18 +81,17 @@ export default function EntityAgentsTab({ entityId }: { entityId: string }) {
     [allAgents, entityId],
   );
 
-  // Positions + edges drive the chart view. Loaded lazily so the list
-  // view doesn't pay the round-trip when chart isn't requested.
+  // Roles + edges are used by both the list view (grouping) and the chart
+  // view. Load once for the entity and share across both views.
   const [positions, setPositions] = useState<Role[]>([]);
   const [edges, setEdges] = useState<RoleEdge[]>([]);
-  const [chartLoading, setChartLoading] = useState(false);
+  const [rolesLoading, setRolesLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
-    if (view !== "chart") return;
     let cancelled = false;
-    setChartLoading(true);
+    setRolesLoading(true);
     setChartError(null);
     api
       .getRoles(entityId)
@@ -102,15 +102,15 @@ export default function EntityAgentsTab({ entityId }: { entityId: string }) {
       })
       .catch((e: Error) => {
         if (cancelled) return;
-        setChartError(e.message || "Could not load org chart.");
+        setChartError(e.message || "Could not load roles.");
       })
       .finally(() => {
-        if (!cancelled) setChartLoading(false);
+        if (!cancelled) setRolesLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [view, entityId]);
+  }, [entityId]);
 
   const patchParams = useCallback(
     (mut: (p: URLSearchParams) => void) => {
@@ -156,6 +156,15 @@ export default function EntityAgentsTab({ entityId }: { entityId: string }) {
     rows.sort((a, b) => compareAgents(a, b, sort));
     return rows;
   }, [entityAgents, search, sort, status]);
+
+  // Build agent → department label mapping from the role DAG.
+  // Department = the title of the direct child of the root role (C-suite head).
+  // Agents in the root role itself get their own role title as the label.
+  // Agents with no role → "Unassigned".
+  const agentDeptLabel = useMemo(
+    () => buildDeptMap(entityAgents, positions, edges),
+    [entityAgents, positions, edges],
+  );
 
   // Active-filter chip strip mirrors IdeasListView — only renders when
   // a non-resting filter is in play.
@@ -311,13 +320,13 @@ export default function EntityAgentsTab({ entityId }: { entityId: string }) {
           <AgentsEmptyState onNew={openPicker} />
         </div>
       ) : view === "list" ? (
-        <AgentsList agents={filtered} onSelect={openAgent} />
+        <AgentsList agents={filtered} deptLabel={agentDeptLabel} onSelect={openAgent} />
       ) : (
         <AgentsChart
           positions={positions}
           edges={edges}
           entityAgents={entityAgents}
-          loading={chartLoading}
+          loading={rolesLoading}
           error={chartError}
           onSelect={openAgent}
         />
@@ -361,6 +370,88 @@ function compareAgents(a: Agent, b: Agent, mode: SortMode): number {
   }
 }
 
+/**
+ * Build a map of agentId → department label.
+ *
+ * Department = the title of the role that is a direct child of the DAG
+ * root (i.e. the C-suite head). For example:
+ *   CEO → CTO → Backend Engineer  →  label "CTO"
+ *   CEO → CMO → Content Writer    →  label "CMO"
+ *   CEO (root) directly            →  label "C-suite" / root title
+ *   No role found                  →  "Unassigned"
+ */
+function buildDeptMap(agents: Agent[], roles: Role[], edges: RoleEdge[]): Map<string, string> {
+  const result = new Map<string, string>();
+  if (roles.length === 0) return result;
+
+  const roleById = new Map(roles.map((r) => [r.id, r]));
+  const incoming = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  for (const r of roles) {
+    incoming.set(r.id, []);
+    outgoing.set(r.id, []);
+  }
+  for (const e of edges) {
+    if (!roleById.has(e.parent_role_id) || !roleById.has(e.child_role_id)) continue;
+    incoming.get(e.child_role_id)!.push(e.parent_role_id);
+    outgoing.get(e.parent_role_id)!.push(e.child_role_id);
+  }
+
+  // Identify the root role(s) — no incoming edges in this entity.
+  const rootIds = new Set(
+    roles.filter((r) => (incoming.get(r.id) ?? []).length === 0).map((r) => r.id),
+  );
+
+  // Walk up from a role to find the department head (direct child of root).
+  // Returns the role id of the dept head, or null if the role IS the root.
+  function deptHead(roleId: string, visited: Set<string>): string | null {
+    if (visited.has(roleId)) return null;
+    visited.add(roleId);
+    const parents = incoming.get(roleId) ?? [];
+    if (parents.length === 0) return null; // this role is a root
+    for (const parentId of parents) {
+      if (rootIds.has(parentId)) return roleId; // direct child of root = dept head
+      const ancestor = deptHead(parentId, visited);
+      if (ancestor) return ancestor;
+    }
+    return null;
+  }
+
+  // Map: roleId → dept label
+  const roleDeptLabel = new Map<string, string>();
+  for (const role of roles) {
+    if (rootIds.has(role.id)) {
+      roleDeptLabel.set(role.id, role.title);
+      continue;
+    }
+    const head = deptHead(role.id, new Set());
+    if (head) {
+      roleDeptLabel.set(role.id, roleById.get(head)?.title ?? "Other");
+    } else {
+      roleDeptLabel.set(role.id, "Other");
+    }
+  }
+
+  // Build occupant → role map.
+  const occupantRole = new Map<string, Role>();
+  for (const r of roles) {
+    if (r.occupant_kind === "agent" && r.occupant_id) {
+      occupantRole.set(r.occupant_id, r);
+    }
+  }
+
+  for (const agent of agents) {
+    const role = occupantRole.get(agent.id);
+    if (!role) {
+      result.set(agent.id, "Unassigned");
+    } else {
+      result.set(agent.id, roleDeptLabel.get(role.id) ?? "Other");
+    }
+  }
+
+  return result;
+}
+
 function AgentsEmptyState({ onNew }: { onNew: () => void }) {
   return (
     <EmptyState
@@ -376,7 +467,15 @@ function AgentsEmptyState({ onNew }: { onNew: () => void }) {
   );
 }
 
-function AgentsList({ agents, onSelect }: { agents: Agent[]; onSelect: (id: string) => void }) {
+function AgentsList({
+  agents,
+  deptLabel,
+  onSelect,
+}: {
+  agents: Agent[];
+  deptLabel: Map<string, string>;
+  onSelect: (id: string) => void;
+}) {
   if (agents.length === 0) {
     return (
       <div className="ideas-list-body">
@@ -387,31 +486,71 @@ function AgentsList({ agents, onSelect }: { agents: Agent[]; onSelect: (id: stri
       </div>
     );
   }
+
+  // Group agents by department label, preserving relative sort order within
+  // each group. Department order: root title first, then alphabetical dept
+  // names, then "Unassigned" last.
+  const groups = new Map<string, Agent[]>();
+  for (const agent of agents) {
+    const label = deptLabel.get(agent.id) ?? "Unassigned";
+    const bucket = groups.get(label) ?? [];
+    bucket.push(agent);
+    groups.set(label, bucket);
+  }
+
+  const sortedLabels = Array.from(groups.keys()).sort((a, b) => {
+    if (a === "Unassigned") return 1;
+    if (b === "Unassigned") return -1;
+    return a.localeCompare(b);
+  });
+
+  // If every agent belongs to one label (no real grouping), render flat.
+  if (sortedLabels.length <= 1) {
+    return (
+      <div className="ideas-list-body">
+        {agents.map((a) => (
+          <AgentRow key={a.id} agent={a} onSelect={onSelect} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="ideas-list-body">
-      {agents.map((a) => (
-        <button key={a.id} type="button" className="ideas-list-row" onClick={() => onSelect(a.id)}>
-          <div className="ideas-list-row-head">
-            <span aria-hidden style={{ display: "inline-flex", alignItems: "center" }}>
-              <AgentAvatar name={a.name} />
-            </span>
-            <span className="ideas-list-row-name">{a.name}</span>
-            {a.model && <span className="ideas-list-row-more">{a.model}</span>}
-            <span
-              className="ideas-list-row-more"
-              style={{ display: "inline-flex", alignItems: "center" }}
-            >
-              <span
-                className={`agent-settings-status-dot${a.status === "active" ? " live" : ""}`}
-                aria-hidden
-              />
-              {a.status || "unknown"}
-            </span>
-            <span className="ideas-list-row-time">{relativeTime(a.last_active) || "—"}</span>
-          </div>
-        </button>
+      {sortedLabels.map((label) => (
+        <div key={label}>
+          <div className="agents-group-label">{label}</div>
+          {(groups.get(label) ?? []).map((a) => (
+            <AgentRow key={a.id} agent={a} onSelect={onSelect} />
+          ))}
+        </div>
       ))}
     </div>
+  );
+}
+
+function AgentRow({ agent: a, onSelect }: { agent: Agent; onSelect: (id: string) => void }) {
+  return (
+    <button type="button" className="ideas-list-row" onClick={() => onSelect(a.id)}>
+      <div className="ideas-list-row-head">
+        <span aria-hidden style={{ display: "inline-flex", alignItems: "center" }}>
+          <AgentAvatar name={a.name} />
+        </span>
+        <span className="ideas-list-row-name">{a.name}</span>
+        {a.model && <span className="ideas-list-row-more">{a.model}</span>}
+        <span
+          className="ideas-list-row-more"
+          style={{ display: "inline-flex", alignItems: "center" }}
+        >
+          <span
+            className={`agent-settings-status-dot${a.status === "active" ? " live" : ""}`}
+            aria-hidden
+          />
+          {a.status || "unknown"}
+        </span>
+        <span className="ideas-list-row-time">{relativeTime(a.last_active) || "—"}</span>
+      </div>
+    </button>
   );
 }
 

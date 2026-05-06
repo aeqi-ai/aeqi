@@ -5,6 +5,7 @@ export const NODE_H = 76;
 export const H_GAP = 28;
 export const V_GAP = 76;
 export const PAD = 36;
+export const DEPT_GAP = 48;
 
 export interface NodePos {
   role: Role;
@@ -153,4 +154,89 @@ export function layoutChart(roles: Role[], edges: RoleEdge[]): ChartLayout {
   }
 
   return { nodes, edges: edgesOut, width, height };
+}
+
+export interface DeptCluster {
+  /** The C-suite (or root) role anchoring this column. */
+  head: Role;
+  /** The sub-layout for head + all its descendants. */
+  layout: ChartLayout;
+}
+
+/**
+ * Split the operational DAG into per-department clusters.
+ *
+ * Algorithm:
+ *   1. Find the root role(s) — those with no incoming edges.
+ *   2. If there is exactly one root (CEO), treat its direct children as
+ *      department heads. Each head + its full subtree becomes one cluster.
+ *      The root itself sits above all clusters and is returned as `ceo`.
+ *   3. If there are multiple roots (flat board situation), fall back to a
+ *      single "Org" cluster over all roles.
+ */
+export interface DeptLayout {
+  ceo: Role | null;
+  clusters: DeptCluster[];
+}
+
+export function layoutDepts(roles: Role[], edges: RoleEdge[]): DeptLayout {
+  if (roles.length === 0) return { ceo: null, clusters: [] };
+
+  const byId = new Map(roles.map((r) => [r.id, r]));
+  const incoming = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  for (const r of roles) {
+    incoming.set(r.id, []);
+    outgoing.set(r.id, []);
+  }
+  for (const e of edges) {
+    if (!byId.has(e.parent_role_id) || !byId.has(e.child_role_id)) continue;
+    incoming.get(e.child_role_id)!.push(e.parent_role_id);
+    outgoing.get(e.parent_role_id)!.push(e.child_role_id);
+  }
+
+  const roots = roles.filter((r) => (incoming.get(r.id) ?? []).length === 0);
+
+  // No single CEO → flat fallback: one cluster for everything.
+  if (roots.length !== 1) {
+    return {
+      ceo: null,
+      clusters: [{ head: roots[0] ?? roles[0], layout: layoutChart(roles, edges) }],
+    };
+  }
+
+  const ceo = roots[0];
+  const directChildren = (outgoing.get(ceo.id) ?? [])
+    .map((id) => byId.get(id))
+    .filter((r): r is Role => r != null);
+
+  // No C-suite reports → single cluster containing everything under CEO.
+  if (directChildren.length === 0) {
+    return { ceo, clusters: [{ head: ceo, layout: layoutChart(roles, edges) }] };
+  }
+
+  // Collect the subtree (inclusive) under a given root.
+  function subtree(startId: string): { roles: Role[]; edges: RoleEdge[] } {
+    const visited = new Set<string>();
+    const queue = [startId];
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      for (const child of outgoing.get(cur) ?? []) queue.push(child);
+    }
+    return {
+      roles: Array.from(visited)
+        .map((id) => byId.get(id))
+        .filter((r): r is Role => r != null),
+      edges: edges.filter((e) => visited.has(e.parent_role_id) && visited.has(e.child_role_id)),
+    };
+  }
+
+  const clusters: DeptCluster[] = directChildren.map((head) => {
+    const sub = subtree(head.id);
+    return { head, layout: layoutChart(sub.roles, sub.edges) };
+  });
+
+  return { ceo, clusters };
 }

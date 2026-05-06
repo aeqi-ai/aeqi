@@ -199,6 +199,96 @@
 }
 
 /* ------------------------------------------------------------------
+   Department cluster layout — swim-lane org chart.
+
+   CEO sits alone in a centred row. Below it, each C-suite head + its
+   subtree occupies a tinted column. Separation comes from background
+   contrast and whitespace, not hairlines.
+   ------------------------------------------------------------------ */
+
+/* Root wrapper that stacks the CEO row above the dept columns. */
+.roles-chart-dept-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* CEO sits centred above the department row. A short connector spine
+   is drawn via ::after so the tree reads continuous. */
+.roles-chart-ceo-row {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 32px;
+  position: relative;
+}
+.roles-chart-ceo-row::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  height: 32px;
+  background: var(--border-strong, var(--border));
+  transform: translateX(-0.5px);
+}
+
+/* The horizontal row of department columns. Top-padding makes space for
+   the spine stubs that connect each cluster back to the horizontal bar. */
+.roles-chart-dept-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  padding-top: 28px;
+}
+
+/* A horizontal bar drawn at the very top of dept-row, spanning across
+   all clusters so the CEO spine fans out to each department. */
+.roles-chart-dept-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: var(--border-strong, var(--border));
+}
+
+/* Each column: tinted card background, generous padding. */
+.roles-chart-dept-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 20px;
+  background: var(--bg-subtle, var(--bg-row));
+  border-radius: var(--radius-lg, var(--radius-md));
+  position: relative;
+}
+/* Short vertical spine from the horizontal bar down into each cluster. */
+.roles-chart-dept-cluster::before {
+  content: "";
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  width: 1px;
+  height: 28px;
+  background: var(--border-strong, var(--border));
+  transform: translateX(-0.5px);
+}
+
+/* Dept label — muted eyebrow above the cluster canvas. */
+.roles-chart-dept-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
    Cards view — responsive grid.
    ------------------------------------------------------------------ */
 .roles-cards-grid {
