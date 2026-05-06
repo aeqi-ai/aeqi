@@ -495,15 +495,614 @@ impl Tool for CalendarDeleteEventTool {
     }
 }
 
+// ------------------------------------------------------------------------
+// calendar.find_busy
+// ------------------------------------------------------------------------
+//
+// Hits Google's `/freeBusy` endpoint and returns the busy intervals per
+// calendar id (typically email) so the LLM can compute candidate slots.
+// Per-email errors are surfaced separately — Google reports
+// `{ errors: [{ domain, reason }, ...] }` on calendars the agent can't
+// see, which is a recoverable per-attendee fact rather than a tool-level
+// failure.
+
+pub struct CalendarFindBusyTool;
+
+#[async_trait]
+impl Tool for CalendarFindBusyTool {
+    async fn execute(&self, _args: Value) -> Result<ToolResult> {
+        Ok(ToolResult::error(
+            "calendar.find_busy requires credentials — invoked without substrate",
+        ))
+    }
+
+    fn spec(&self) -> ToolSpec {
+        ToolSpec {
+            name: "calendar.find_busy".into(),
+            description: "Query Google Calendar /freeBusy for one or more calendar ids (typically email addresses). Returns the busy intervals per email plus any per-email errors (e.g. calendar not shared with the agent).".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "emails":   { "type": "array", "items": { "type": "string" }, "description": "Calendar ids — usually email addresses" },
+                    "time_min": { "type": "string", "description": "RFC3339 start of the search window" },
+                    "time_max": { "type": "string", "description": "RFC3339 end of the search window" }
+                },
+                "required": ["emails", "time_min", "time_max"]
+            }),
+        }
+    }
+
+    fn name(&self) -> &str {
+        "calendar.find_busy"
+    }
+
+    fn required_credentials(&self) -> Vec<CredentialNeed> {
+        vec![need(vec![SCOPE_RO])]
+    }
+
+    async fn execute_with_credentials(
+        &self,
+        args: Value,
+        credentials: Vec<Option<UsableCredential>>,
+    ) -> Result<ToolResult> {
+        let cred = match first_cred(credentials) {
+            Some(c) => c,
+            None => return Ok(missing_credential()),
+        };
+        let client = build_client(&cred);
+        if let Err(e) = client.ensure_scopes(&[SCOPE_RO]) {
+            return Ok(into_tool_error(e));
+        }
+        let time_min = args.get("time_min").and_then(|v| v.as_str()).unwrap_or("");
+        let time_max = args.get("time_max").and_then(|v| v.as_str()).unwrap_or("");
+        if time_min.is_empty() || time_max.is_empty() {
+            return Ok(ToolResult::error("missing 'time_min' or 'time_max'"));
+        }
+        let emails: Vec<String> = match args.get("emails").and_then(|v| v.as_array()) {
+            Some(arr) => arr
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
+            None => {
+                return Ok(ToolResult::error(
+                    "missing 'emails' (must be a string array)",
+                ));
+            }
+        };
+        if emails.is_empty() {
+            return Ok(ToolResult::error("'emails' is empty"));
+        }
+        let items: Vec<Value> = emails.iter().map(|e| json!({ "id": e })).collect();
+        let body = json!({
+            "timeMin": time_min,
+            "timeMax": time_max,
+            "items":   items,
+        });
+        let url = format!("{}/freeBusy", client.calendar_base().trim_end_matches('/'),);
+        let resp: Value = match client.post_json(url, body).await {
+            Ok(v) => v,
+            Err(e) => return Ok(into_tool_error(e)),
+        };
+        let mut busy_per_email = serde_json::Map::new();
+        let mut errors_per_email = serde_json::Map::new();
+        if let Some(cals) = resp.get("calendars").and_then(|v| v.as_object()) {
+            for (email, cal) in cals {
+                let busy = cal.get("busy").cloned().unwrap_or(Value::Array(Vec::new()));
+                busy_per_email.insert(email.clone(), busy);
+                if let Some(errs) = cal.get("errors").and_then(|v| v.as_array()) {
+                    let reasons: Vec<Value> = errs
+                        .iter()
+                        .filter_map(|e| {
+                            e.get("reason")
+                                .and_then(|v| v.as_str())
+                                .map(|s| Value::String(s.into()))
+                        })
+                        .collect();
+                    if !reasons.is_empty() {
+                        errors_per_email.insert(email.clone(), Value::Array(reasons));
+                    }
+                }
+            }
+        }
+        Ok(ToolResult::success(format!(
+            "free/busy for {} calendar(s); {} with errors",
+            busy_per_email.len(),
+            errors_per_email.len(),
+        ))
+        .with_data(json!({
+            "busy_per_email":   Value::Object(busy_per_email),
+            "errors_per_email": Value::Object(errors_per_email),
+        })))
+    }
+}
+
+// ------------------------------------------------------------------------
+// calendar.propose_slots
+// ------------------------------------------------------------------------
+//
+// Pure function — no API call, no credential. Walks the search window in
+// 15-minute increments, drops candidates that fall outside working
+// hours/days (in the target timezone) or overlap any busy interval for
+// any provided email, returns the first `count` survivors.
+
+pub struct CalendarProposeSlotsTool;
+
+#[derive(Clone, Copy, Debug)]
+struct Interval {
+    start: chrono::DateTime<chrono::Utc>,
+    end: chrono::DateTime<chrono::Utc>,
+}
+
+fn parse_rfc3339(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+fn collect_busy_intervals(busy_per_email: &Value) -> Vec<Interval> {
+    let mut out = Vec::new();
+    let Some(obj) = busy_per_email.as_object() else {
+        return out;
+    };
+    for (_email, intervals) in obj {
+        let Some(arr) = intervals.as_array() else {
+            continue;
+        };
+        for it in arr {
+            let start = it
+                .get("start")
+                .and_then(|v| v.as_str())
+                .and_then(parse_rfc3339);
+            let end = it
+                .get("end")
+                .and_then(|v| v.as_str())
+                .and_then(parse_rfc3339);
+            if let (Some(s), Some(e)) = (start, end)
+                && e > s
+            {
+                out.push(Interval { start: s, end: e });
+            }
+        }
+    }
+    out
+}
+
+/// Returns true if [start, end] overlaps any busy interval. Half-open
+/// semantics: a candidate ending exactly when a busy block starts (or
+/// starting exactly when a busy block ends) does NOT overlap.
+fn overlaps_any(
+    start: chrono::DateTime<chrono::Utc>,
+    end: chrono::DateTime<chrono::Utc>,
+    busy: &[Interval],
+) -> bool {
+    busy.iter().any(|b| start < b.end && b.start < end)
+}
+
+/// Snap a UTC datetime up to the next 15-minute boundary (00/15/30/45).
+fn snap_up_15min(dt: chrono::DateTime<chrono::Utc>) -> chrono::DateTime<chrono::Utc> {
+    use chrono::Timelike;
+    let minute = dt.minute();
+    let rem = minute % 15;
+    if rem == 0 && dt.second() == 0 && dt.nanosecond() == 0 {
+        return dt;
+    }
+    let add = 15 - rem;
+    let base = dt
+        .with_second(0)
+        .and_then(|d| d.with_nanosecond(0))
+        .unwrap_or(dt);
+    base + chrono::Duration::minutes(add as i64)
+}
+
+/// Inputs for [`compute_slots`]. Bundled so the call site stays readable
+/// and clippy's `too_many_arguments` lint doesn't fire.
+#[derive(Clone, Debug)]
+pub struct ProposeSlotsRequest<'a> {
+    pub busy_per_email: &'a Value,
+    pub time_min: chrono::DateTime<chrono::Utc>,
+    pub time_max: chrono::DateTime<chrono::Utc>,
+    pub duration_minutes: u32,
+    pub working_hours_start: u8,
+    pub working_hours_end: u8,
+    pub working_days: &'a [u8],
+    pub count: u32,
+    pub tz: chrono_tz::Tz,
+}
+
+/// Compute candidate slots. Pure — used by the tool and by unit tests.
+pub fn compute_slots(
+    req: &ProposeSlotsRequest<'_>,
+) -> Vec<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> {
+    use chrono::{Datelike, Timelike};
+    let busy = collect_busy_intervals(req.busy_per_email);
+    let duration = chrono::Duration::minutes(req.duration_minutes as i64);
+    let mut out = Vec::new();
+    if req.duration_minutes == 0
+        || req.working_hours_end <= req.working_hours_start
+        || req.working_hours_end > 24
+        || req.working_days.is_empty()
+    {
+        return out;
+    }
+    let mut t = snap_up_15min(req.time_min);
+    while t + duration <= req.time_max && (out.len() as u32) < req.count {
+        let local = t.with_timezone(&req.tz);
+        // weekday: chrono's Weekday::num_days_from_sunday() returns 0=Sun..6=Sat
+        let wd = local.weekday().num_days_from_sunday() as u8;
+        if !req.working_days.contains(&wd) {
+            t += chrono::Duration::minutes(15);
+            continue;
+        }
+        // Working-hours check: candidate must start at or after
+        // working_hours_start and END at or before working_hours_end on
+        // the SAME local day.
+        let local_end = (t + duration).with_timezone(&req.tz);
+        let h_start = local.hour() as u16 * 60 + local.minute() as u16;
+        let h_end = local_end.hour() as u16 * 60 + local_end.minute() as u16;
+        let wh_start = req.working_hours_start as u16 * 60;
+        let wh_end = req.working_hours_end as u16 * 60;
+        let crosses_midnight = local.date_naive() != local_end.date_naive();
+        // Allow ending at exactly midnight when working_hours_end == 24.
+        let same_day = !crosses_midnight || (h_end == 0 && req.working_hours_end == 24);
+        let h_end_effective = if crosses_midnight && h_end == 0 {
+            24 * 60
+        } else {
+            h_end
+        };
+        if !same_day || h_start < wh_start || h_end_effective > wh_end {
+            t += chrono::Duration::minutes(15);
+            continue;
+        }
+        if overlaps_any(t, t + duration, &busy) {
+            t += chrono::Duration::minutes(15);
+            continue;
+        }
+        out.push((t, t + duration));
+        t += chrono::Duration::minutes(15);
+    }
+    out
+}
+
+#[async_trait]
+impl Tool for CalendarProposeSlotsTool {
+    async fn execute(&self, args: Value) -> Result<ToolResult> {
+        let time_min_str = args.get("time_min").and_then(|v| v.as_str()).unwrap_or("");
+        let time_max_str = args.get("time_max").and_then(|v| v.as_str()).unwrap_or("");
+        let time_min = match parse_rfc3339(time_min_str) {
+            Some(t) => t,
+            None => {
+                return Ok(ToolResult::error(
+                    "missing or invalid 'time_min' (must be RFC3339)",
+                ));
+            }
+        };
+        let time_max = match parse_rfc3339(time_max_str) {
+            Some(t) => t,
+            None => {
+                return Ok(ToolResult::error(
+                    "missing or invalid 'time_max' (must be RFC3339)",
+                ));
+            }
+        };
+        if time_max <= time_min {
+            return Ok(ToolResult::error("'time_max' must be after 'time_min'"));
+        }
+        let duration_minutes = args
+            .get("duration_minutes")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        if duration_minutes == 0 {
+            return Ok(ToolResult::error("missing or zero 'duration_minutes'"));
+        }
+        let working_hours_start = args
+            .get("working_hours_start")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.min(24) as u8)
+            .unwrap_or(9);
+        let working_hours_end = args
+            .get("working_hours_end")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.min(24) as u8)
+            .unwrap_or(18);
+        let working_days: Vec<u8> = args
+            .get("working_days")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_u64())
+                    .filter(|d| *d <= 6)
+                    .map(|d| d as u8)
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![1, 2, 3, 4, 5]);
+        let count = args
+            .get("count")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.min(u32::MAX as u64) as u32)
+            .unwrap_or(3);
+        let tz_name = args
+            .get("timezone")
+            .and_then(|v| v.as_str())
+            .unwrap_or("UTC");
+        let tz: chrono_tz::Tz = match tz_name.parse() {
+            Ok(t) => t,
+            Err(_) => {
+                return Ok(ToolResult::error(format!(
+                    "invalid IANA timezone: {tz_name}"
+                )));
+            }
+        };
+        let busy_per_email = args
+            .get("busy_per_email")
+            .cloned()
+            .unwrap_or(Value::Object(serde_json::Map::new()));
+        let slots = compute_slots(&ProposeSlotsRequest {
+            busy_per_email: &busy_per_email,
+            time_min,
+            time_max,
+            duration_minutes,
+            working_hours_start,
+            working_hours_end,
+            working_days: &working_days,
+            count,
+            tz,
+        });
+        let slot_values: Vec<Value> = slots
+            .iter()
+            .map(|(s, e)| {
+                json!({
+                    "start": s.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                    "end":   e.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                })
+            })
+            .collect();
+        Ok(
+            ToolResult::success(format!("{} candidate slot(s)", slot_values.len()))
+                .with_data(json!({ "slots": slot_values })),
+        )
+    }
+
+    fn spec(&self) -> ToolSpec {
+        ToolSpec {
+            name: "calendar.propose_slots".into(),
+            description: "Pure function — given busy intervals per email (output of calendar.find_busy), propose meeting-slot candidates inside [time_min, time_max] that fit the duration, working hours, working days, and skip every busy block. Returns up to `count` slots; empty array if none.".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "busy_per_email": {
+                        "type": "object",
+                        "description": "{ \"email\": [{\"start\": ISO8601, \"end\": ISO8601}, ...] }",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "start": { "type": "string" },
+                                    "end":   { "type": "string" }
+                                }
+                            }
+                        }
+                    },
+                    "time_min":            { "type": "string", "description": "RFC3339 start of search window" },
+                    "time_max":            { "type": "string", "description": "RFC3339 end of search window" },
+                    "duration_minutes":    { "type": "integer", "minimum": 1 },
+                    "working_hours_start": { "type": "integer", "minimum": 0, "maximum": 24, "default": 9 },
+                    "working_hours_end":   { "type": "integer", "minimum": 0, "maximum": 24, "default": 18 },
+                    "working_days":        { "type": "array",   "items": { "type": "integer", "minimum": 0, "maximum": 6 }, "default": [1,2,3,4,5], "description": "0=Sun..6=Sat" },
+                    "count":               { "type": "integer", "minimum": 1, "default": 3 },
+                    "timezone":            { "type": "string",  "default": "UTC", "description": "IANA timezone, e.g. 'Europe/Berlin'" }
+                },
+                "required": ["time_min", "time_max", "duration_minutes"]
+            }),
+        }
+    }
+
+    fn name(&self) -> &str {
+        "calendar.propose_slots"
+    }
+
+    fn required_credentials(&self) -> Vec<CredentialNeed> {
+        Vec::new()
+    }
+}
+
 pub fn all_tools() -> Vec<std::sync::Arc<dyn Tool>> {
     vec![
         std::sync::Arc::new(CalendarListEventsTool),
         std::sync::Arc::new(CalendarCreateEventTool),
         std::sync::Arc::new(CalendarUpdateEventTool),
         std::sync::Arc::new(CalendarDeleteEventTool),
+        std::sync::Arc::new(CalendarFindBusyTool),
+        std::sync::Arc::new(CalendarProposeSlotsTool),
     ]
 }
 
 pub const READONLY_SCOPE: &str = SCOPE_RO;
 pub const FULL_SCOPE: &str = SCOPE_RW;
 pub const CALENDAR_API_BASE: &str = CALENDAR_BASE;
+
+#[cfg(test)]
+mod propose_slots_tests {
+    use super::*;
+    use chrono::TimeZone;
+    use serde_json::json;
+
+    fn utc(
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        minute: u32,
+    ) -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc
+            .with_ymd_and_hms(year, month, day, hour, minute, 0)
+            .unwrap()
+    }
+
+    fn req<'a>(
+        busy: &'a Value,
+        time_min: chrono::DateTime<chrono::Utc>,
+        time_max: chrono::DateTime<chrono::Utc>,
+        duration_minutes: u32,
+        working_days: &'a [u8],
+        count: u32,
+    ) -> ProposeSlotsRequest<'a> {
+        ProposeSlotsRequest {
+            busy_per_email: busy,
+            time_min,
+            time_max,
+            duration_minutes,
+            working_hours_start: 9,
+            working_hours_end: 18,
+            working_days,
+            count,
+            tz: chrono_tz::UTC,
+        }
+    }
+
+    #[test]
+    fn empty_busy_returns_first_count_slots_in_working_hours() {
+        // Mon 2026-05-04 spans 09:00..18:00 → with 60-min duration, slots at
+        // 09:00, 09:15, 09:30, ... ; we ask for 3.
+        let busy = json!({});
+        let r = req(
+            &busy,
+            utc(2026, 5, 4, 9, 0),
+            utc(2026, 5, 4, 18, 0),
+            60,
+            &[1, 2, 3, 4, 5],
+            3,
+        );
+        let slots = compute_slots(&r);
+        assert_eq!(slots.len(), 3);
+        assert_eq!(slots[0].0, utc(2026, 5, 4, 9, 0));
+        assert_eq!(slots[0].1, utc(2026, 5, 4, 10, 0));
+        assert_eq!(slots[1].0, utc(2026, 5, 4, 9, 15));
+        assert_eq!(slots[2].0, utc(2026, 5, 4, 9, 30));
+    }
+
+    #[test]
+    fn busy_interval_skips_overlapping_candidates() {
+        // alice busy 09:00..10:00. First clean 60-min slot starts at 10:00.
+        let busy = json!({
+            "alice@example.com": [
+                { "start": "2026-05-04T09:00:00Z", "end": "2026-05-04T10:00:00Z" }
+            ]
+        });
+        let r = req(
+            &busy,
+            utc(2026, 5, 4, 9, 0),
+            utc(2026, 5, 4, 18, 0),
+            60,
+            &[1, 2, 3, 4, 5],
+            1,
+        );
+        let slots = compute_slots(&r);
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].0, utc(2026, 5, 4, 10, 0));
+    }
+
+    #[test]
+    fn multiple_emails_only_fully_free_slots_returned() {
+        // alice 09:00..11:00, bob 11:00..12:00 → first free slot 12:00..13:00.
+        let busy = json!({
+            "alice@example.com": [
+                { "start": "2026-05-04T09:00:00Z", "end": "2026-05-04T11:00:00Z" }
+            ],
+            "bob@example.com": [
+                { "start": "2026-05-04T11:00:00Z", "end": "2026-05-04T12:00:00Z" }
+            ]
+        });
+        let r = req(
+            &busy,
+            utc(2026, 5, 4, 9, 0),
+            utc(2026, 5, 4, 18, 0),
+            60,
+            &[1, 2, 3, 4, 5],
+            1,
+        );
+        let slots = compute_slots(&r);
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].0, utc(2026, 5, 4, 12, 0));
+        assert_eq!(slots[0].1, utc(2026, 5, 4, 13, 0));
+    }
+
+    #[test]
+    fn weekend_skipped_when_workdays_are_mon_fri() {
+        // Sat 2026-05-02 09:00..Mon 2026-05-04 18:00. With Mon-Fri only, all
+        // Saturday and Sunday slots are skipped; first slot is Mon 09:00.
+        let busy = json!({});
+        let r = req(
+            &busy,
+            utc(2026, 5, 2, 9, 0), // Saturday
+            utc(2026, 5, 4, 18, 0),
+            60,
+            &[1, 2, 3, 4, 5],
+            1,
+        );
+        let slots = compute_slots(&r);
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].0, utc(2026, 5, 4, 9, 0));
+    }
+
+    #[test]
+    fn timezone_working_hours_apply_in_target_tz_not_utc() {
+        // Working hours 9-17 in America/New_York (UTC-4 on 2026-05-04 — DST).
+        // 09:00 NY = 13:00 UTC, 17:00 NY = 21:00 UTC.
+        // Search window 09:00..21:00 UTC, duration 60 min, count 1.
+        // 09:00 UTC = 05:00 NY → outside working hours → skipped.
+        // First valid slot: 13:00 UTC = 09:00 NY.
+        let busy = json!({});
+        let r = ProposeSlotsRequest {
+            busy_per_email: &busy,
+            time_min: utc(2026, 5, 4, 9, 0),
+            time_max: utc(2026, 5, 4, 21, 0),
+            duration_minutes: 60,
+            working_hours_start: 9,
+            working_hours_end: 17,
+            working_days: &[1, 2, 3, 4, 5],
+            count: 1,
+            tz: chrono_tz::America::New_York,
+        };
+        let slots = compute_slots(&r);
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].0, utc(2026, 5, 4, 13, 0)); // 09:00 NY
+    }
+
+    #[test]
+    fn no_slots_when_window_is_entirely_busy() {
+        let busy = json!({
+            "alice@example.com": [
+                { "start": "2026-05-04T09:00:00Z", "end": "2026-05-04T18:00:00Z" }
+            ]
+        });
+        let r = req(
+            &busy,
+            utc(2026, 5, 4, 9, 0),
+            utc(2026, 5, 4, 18, 0),
+            60,
+            &[1, 2, 3, 4, 5],
+            3,
+        );
+        let slots = compute_slots(&r);
+        assert!(slots.is_empty());
+    }
+
+    #[test]
+    fn snap_up_15min_aligns_to_quarter_hours() {
+        assert_eq!(snap_up_15min(utc(2026, 5, 4, 9, 0)), utc(2026, 5, 4, 9, 0));
+        assert_eq!(snap_up_15min(utc(2026, 5, 4, 9, 1)), utc(2026, 5, 4, 9, 15));
+        assert_eq!(
+            snap_up_15min(utc(2026, 5, 4, 9, 14)),
+            utc(2026, 5, 4, 9, 15)
+        );
+        assert_eq!(
+            snap_up_15min(utc(2026, 5, 4, 9, 16)),
+            utc(2026, 5, 4, 9, 30)
+        );
+        assert_eq!(
+            snap_up_15min(utc(2026, 5, 4, 9, 59)),
+            utc(2026, 5, 4, 10, 0)
+        );
+    }
+}
