@@ -1,0 +1,61 @@
+[Unit]
+Description=AEQI ERC-4337 bundler (rundler v0.11.0) — dev anvil :8545
+Documentation=https://github.com/alchemyplatform/rundler
+# Requires dev anvil at :8545. The anvil process is not a tracked systemd unit;
+# ensure it is running before starting this service.
+After=network.target
+
+[Service]
+Type=simple
+User=aeqi-bundler
+Group=aeqi-bundler
+
+# Load secrets + config from the env file (mode 600, aeqi-bundler owner)
+EnvironmentFile=/etc/aeqi-bundler/env
+
+# Ensure canonical EntryPoint v0.7 is set on the local dev anvil before starting.
+# anvil_setCode seeds the bytecode at 0x0000000071727De22E5E9d8BAf0edAc6f37da032.
+# This is idempotent; safe to run on every start.
+ExecStartPre=/usr/local/bin/aeqi-bundler-preflight
+
+# Custom chain spec: chain ID 31337 (anvil default), EP v0.7 at canonical address.
+# Do NOT use --network dev; that hardcodes chain ID 1337 (foundry anvil is 31337).
+ExecStart=/usr/local/bin/rundler node \
+    --chain_spec /etc/aeqi-bundler/chain-spec.toml \
+    --node_http ${NODE_HTTP} \
+    --unsafe \
+    --rpc.host ${RPC_HOST} \
+    --rpc.port ${RPC_PORT} \
+    --metrics.host ${METRICS_HOST} \
+    --metrics.port ${METRICS_PORT} \
+    --pool.host ${POOL_HOST} \
+    --pool.port ${POOL_PORT} \
+    --builder.host ${BUILDER_HOST} \
+    --builder.port ${BUILDER_PORT} \
+    --enabled_entry_points ${ENABLED_ENTRY_POINTS} \
+    --signer.private_keys ${SIGNER_PRIVATE_KEYS}
+
+# Restart on non-zero exit; give the node 5s to recover before retry
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aeqi-bundler
+
+# Resource limits — prevent the bundler mempool from growing unbounded on a busy
+# dev node. 512 MiB is generous for a single-EP dev bundler; raise if needed.
+MemoryMax=512M
+LimitNOFILE=65536
+
+WorkingDirectory=/var/lib/aeqi-bundler
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aeqi-bundler
+
+[Install]
+WantedBy=multi-user.target

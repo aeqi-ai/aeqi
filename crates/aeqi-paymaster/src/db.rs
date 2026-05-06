@@ -77,6 +77,48 @@ pub fn get_or_init_budget(conn: &Connection, entity_id: &str, month: &str) -> Re
     }
 }
 
+/// One row from the gas_budgets table, returned by [`list_budgets_for_month`].
+pub struct BudgetRow {
+    pub entity_id: String,
+    pub month: String,
+    pub budget_remaining_wei: u128,
+    pub last_updated: String,
+}
+
+/// List all budget rows for the given `month`.
+///
+/// Returns rows sorted by `budget_remaining_wei` ascending (most-consumed first).
+pub fn list_budgets_for_month(conn: &Connection, month: &str) -> Result<Vec<BudgetRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT entity_id, month, budget_remaining_wei, last_updated
+         FROM gas_budgets
+         WHERE month = ?1
+         ORDER BY CAST(budget_remaining_wei AS INTEGER) ASC",
+    )?;
+    let rows = stmt
+        .query_map(rusqlite::params![month], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .filter_map(|r| r.ok())
+        .map(
+            |(entity_id, month, budget_remaining_wei_str, last_updated)| BudgetRow {
+                entity_id,
+                month,
+                budget_remaining_wei: budget_remaining_wei_str
+                    .parse()
+                    .unwrap_or(DEFAULT_MONTHLY_BUDGET_WEI),
+                last_updated,
+            },
+        )
+        .collect();
+    Ok(rows)
+}
+
 /// Deduct `cost_wei` from the budget for `entity_id` in `month`.
 ///
 /// Caller must verify budget > cost_wei before calling this; this function

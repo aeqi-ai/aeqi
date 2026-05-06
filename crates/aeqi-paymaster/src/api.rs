@@ -29,6 +29,11 @@
 //! ### `GET /health`
 //!
 //! Returns `{"status": "ok"}` when the service is ready.
+//!
+//! ### `GET /stats`
+//!
+//! Per-entity gas budget usage for the current calendar month, sorted by
+//! consumption descending (highest-spend first). Operator use only.
 
 use std::sync::Arc;
 
@@ -168,6 +173,8 @@ pub fn router(state: AppState) -> Router {
         // REST shim — internal tooling + smoke tests.
         .route("/paymaster/sponsor", post(sponsor_handler))
         .route("/health", get(health_handler))
+        // Operator visibility: per-entity gas budget usage for the current month.
+        .route("/stats", get(stats_handler))
         .with_state(state)
 }
 
@@ -362,6 +369,99 @@ async fn sponsor_handler(
 /// `GET /health` — liveness probe.
 async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({"status": "ok"})))
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+/// One entity's budget snapshot in the `/stats` response.
+#[derive(Debug, Serialize)]
+pub struct StatsEntry {
+    pub entity_id: String,
+    pub month: String,
+    /// Wei remaining in the monthly budget.
+    pub budget_remaining_wei: String,
+    /// Wei consumed this month (default_budget − remaining).
+    pub consumed_wei: String,
+    /// Remaining budget expressed as a fraction (0.0–1.0) of the default.
+    pub remaining_fraction: f64,
+    pub last_updated: String,
+}
+
+/// Response body for `GET /stats`.
+#[derive(Debug, Serialize)]
+pub struct StatsResponse {
+    pub month: String,
+    pub default_monthly_budget_wei: String,
+    pub entity_count: usize,
+    pub entities: Vec<StatsEntry>,
+}
+
+/// `GET /stats` — operator visibility into per-entity gas budget usage.
+///
+/// Returns all budget rows for the current calendar month, sorted by consumption
+/// descending (highest-spend entities first). Intended for internal operator use;
+/// NOT authenticated in Phase-1 (service is loopback-only).
+async fn stats_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let db_path = state.db_path.clone();
+    let month = chrono::Utc::now().format("%Y-%m").to_string();
+    let month_clone = month.clone();
+
+    let result = spawn_blocking(move || -> Result<Vec<db::BudgetRow>, PaymasterError> {
+        let conn = rusqlite::Connection::open(&db_path)?;
+        db::list_budgets_for_month(&conn, &month_clone)
+            .map_err(|e| PaymasterError::Internal(e.to_string()))
+    })
+    .await;
+
+    let rows = match result {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            error!(error = %e, "stats db error");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "database error"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(error = %e, "stats spawn_blocking error");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "internal error"})),
+            )
+                .into_response();
+        }
+    };
+
+    let default_budget = db::DEFAULT_MONTHLY_BUDGET_WEI;
+
+    // Sort by consumed (highest first) = lowest remaining first (already from DB),
+    // then reverse so highest-spend is index 0.
+    let entities: Vec<StatsEntry> = rows
+        .into_iter()
+        .rev()
+        .map(|row| {
+            let consumed = default_budget.saturating_sub(row.budget_remaining_wei);
+            let remaining_fraction = row.budget_remaining_wei as f64 / default_budget as f64;
+            StatsEntry {
+                entity_id: row.entity_id,
+                month: row.month,
+                budget_remaining_wei: row.budget_remaining_wei.to_string(),
+                consumed_wei: consumed.to_string(),
+                remaining_fraction,
+                last_updated: row.last_updated,
+            }
+        })
+        .collect();
+
+    let response = StatsResponse {
+        month: month.clone(),
+        default_monthly_budget_wei: default_budget.to_string(),
+        entity_count: entities.len(),
+        entities,
+    };
+
+    (StatusCode::OK, Json(response)).into_response()
 }
 
 /// Phase-1 stub: derive a deterministic "UserOp hash" from sender + nonce.
