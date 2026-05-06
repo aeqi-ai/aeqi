@@ -1605,7 +1605,13 @@ mod tests {
         // each shipped blueprint deserializes into a full `Template`.
         let loaded = crate::blueprints::company_blueprints();
         let slugs: Vec<&str> = loaded.iter().map(|t| t.slug.as_str()).collect();
-        for expected in ["aeqi", "solo-founder", "studio", "tech-studio", "personal-os"] {
+        for expected in [
+            "aeqi",
+            "solo-founder",
+            "studio",
+            "tech-studio",
+            "personal-os",
+        ] {
             assert!(
                 slugs.contains(&expected),
                 "canonical blueprint '{expected}' missing; loaded: {slugs:?}",
