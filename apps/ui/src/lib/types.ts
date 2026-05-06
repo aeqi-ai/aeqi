@@ -483,6 +483,8 @@ export interface RoleInvitation {
   redeemed_at: string | null;
   redeemed_by_user_id: string | null;
   declined_at: string | null;
+  /** `false` for invitations created with skip_email=true (seed/dry-run). */
+  email_sent: boolean;
 }
 
 /** Public invitation detail — returned by GET /api/invitations/:token.

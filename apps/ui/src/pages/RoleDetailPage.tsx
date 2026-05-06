@@ -342,6 +342,8 @@ function InvitationRow({
         ? "Open link"
         : (invitation.target_entity_id ?? "—");
 
+  const emailNotSent = invitation.email_sent === false;
+
   return (
     <div
       style={{
@@ -365,11 +367,36 @@ function InvitationRow({
           }}
         >
           {invitation.token.slice(0, 12)}… · expires {expiresAt}
+          {emailNotSent && (
+            <span
+              style={{
+                marginLeft: "var(--space-2)",
+                color: "var(--text-secondary)",
+                fontFamily: "inherit",
+                fontStyle: "italic",
+              }}
+            >
+              · invite not sent
+            </span>
+          )}
         </span>
       </div>
-      <Button variant="ghost" size="sm" onClick={handleCancel} loading={cancelling}>
-        Cancel
-      </Button>
+      <div style={{ display: "flex", gap: "var(--space-1)", alignItems: "center" }}>
+        {emailNotSent && (
+          <Button
+            variant="secondary"
+            size="sm"
+            type="button"
+            disabled
+            title="Send invite (coming soon)"
+          >
+            Send invite
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={handleCancel} loading={cancelling}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }
