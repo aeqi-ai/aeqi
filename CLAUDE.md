@@ -159,6 +159,8 @@ Cost (2026-05-05): v11 pre-walk probe used `trustAddress` on treasury+proposals 
 and got GraphQL errors; the browser walk still passed (UI uses correct shapes internally)
 but the probe returned empty data and logged schema-mismatch errors. ~3 min to diagnose.
 
+**Playwright repro/probe scripts must live under `/home/claudedev/aeqi/scripts/` (not `/tmp`).** `playwright` is installed at `/home/claudedev/aeqi/node_modules/playwright` only — Node's ESM resolver walks up from the script's directory, so a script written to `/tmp/repro.mjs` fails with `ERR_MODULE_NOT_FOUND: Cannot find package 'playwright'`. Always write one-off browser probes into `scripts/_<name>.mjs` (the underscore prefix marks them as ad-hoc; `.gitignore` doesn't exclude them but `/ship` should `rm` them before merge). Mint JWTs via the documented recipe: `export AEQI_WEB_SECRET=...; TOKEN=$(node scripts/_mint-jwt.mjs <user_id> <email>); AEQI_TOKEN="$TOKEN" node scripts/_repro.mjs`. The `export` is required — chaining `AEQI_WEB_SECRET=... TOKEN=$(...)` only puts the var in the assignment scope, not the subprocess. Cost (2026-05-06): one move + one env-var retry on the routing-fix repro.
+
 **UX walk — browser reorders `box-shadow` computed style: color first, `inset` last.**
 `window.getComputedStyle(el).boxShadow` returns the browser's canonical form, NOT the
 CSS source order. A CSS declaration `box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1)`
