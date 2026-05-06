@@ -896,8 +896,7 @@ Key points:
   `<main>` is the two-column split wrapper — landing there skips nothing visible.
 - `LoginPage` has **two render branches** (secret mode + accounts mode). Both need
   the skip link. Don't fix one branch and miss the other.
-- **P2 gap as of 2026-05-06:** `SignupPage` (`src/pages/SignupPage.tsx`) still lacks
-  the skip link. Apply the same pattern there.
+- `SignupPage` has one render branch. Both auth pages are now fully covered (fixed 2026-05-06).
 
 ## Org-chart viewport — `offsetWidth` not `scrollWidth` for auto-fit
 
