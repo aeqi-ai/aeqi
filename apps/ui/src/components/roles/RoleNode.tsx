@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { Role } from "@/lib/types";
+import BlockAvatar from "../BlockAvatar";
 
 export interface RoleNodeProps {
   role: Role;
@@ -15,14 +17,17 @@ export interface RoleNodeProps {
  * Canonical role tile — used by the org chart and the cards view so the
  * two surfaces share one visual language. Three variants:
  *
- *   agent     — filled accent monogram (or real avatar), agent name beneath title
- *   human     — outline monogram (or Google profile photo), "human" sublabel
+ *   agent     — deterministic BlockAvatar identicon (or real avatar URL), agent name beneath title
+ *   human     — Google profile photo (or initials fallback), "human" sublabel
  *   vacant    — dashed shell, "vacant" sublabel, muted accent
  *
  * Avatar priority:
  *   1. Real URL (occupant_avatar_url for humans, agentAvatar for agents) → img circle
- *   2. occupant color (agents only) → colored circle with initials
- *   3. fallback → neutral grey circle with initials
+ *   2. Agent occupant fallback → BlockAvatar identicon (matches Agents page)
+ *   3. Human occupant fallback → text initials inside the monogram
+ *
+ * onError on the <img> swaps to the fallback path (initials/identicon)
+ * if the image URL is unreachable.
  */
 export default function RoleNode({
   role,
@@ -36,6 +41,7 @@ export default function RoleNode({
   const occupant = describeOccupant(role, agentName);
   const initials = occupant.label ? initialsFor(occupant.label) : "·";
   const isVacant = role.occupant_kind === "vacant";
+  const [imgErrored, setImgErrored] = useState(false);
 
   // Resolve the avatar URL: human → occupant_avatar_url, agent → agentAvatar prop.
   const avatarUrl =
@@ -44,6 +50,8 @@ export default function RoleNode({
       : role.occupant_kind === "agent"
         ? (agentAvatar ?? null)
         : null;
+  const showImage = avatarUrl && !imgErrored;
+  const isAgent = role.occupant_kind === "agent";
 
   const classNames = [
     "role-node",
@@ -70,10 +78,11 @@ export default function RoleNode({
             <circle cx="7" cy="5" r="2.4" strokeWidth="1.2" />
             <path d="M2.5 11.5 C3.5 9 10.5 9 11.5 11.5" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
-        ) : avatarUrl ? (
+        ) : showImage ? (
           <img
-            src={avatarUrl}
+            src={avatarUrl ?? undefined}
             alt=""
+            onError={() => setImgErrored(true)}
             style={{
               width: "100%",
               height: "100%",
@@ -82,6 +91,8 @@ export default function RoleNode({
               display: "block",
             }}
           />
+        ) : isAgent ? (
+          <BlockAvatar name={occupant.label} size={22} />
         ) : (
           initials
         )}
