@@ -1032,6 +1032,25 @@ StrictMode
 
 **`import type { ReactNode }` in new lazy components.** The project uses `"jsx": "react-jsx"` — no auto `import React`. New lazy components that accept `{ children }` must import the type explicitly: `import type { ReactNode } from "react"`. Cost (2026-05-06): first draft used `React.ReactNode` without an import, caught immediately by tsc.
 
+## BlockNote schema — defaults already include every block
+
+**`useCreateBlockNote()` with no `schema` argument uses `defaultBlockSpecs`, which already includes every shipping block — `paragraph`, `heading`, `bulletListItem`, `numberedListItem`, `checkListItem`, `codeBlock`, `quote`, `divider`, `pageBreak`, `image`, `video`, `audio`, `file`, `toggleListItem`, `table`, etc.** The slash menu and drag-handle add-block menu surface all of them automatically. There is no "enable the X block" config — every block ships on.
+
+So if a brief says "enable the table block" or "turn on the toggle list," the work is one of two things:
+
+1. **Already on.** Open any BlockEditor in dev, type `/`, confirm the block appears in the slash menu. If it does, ship a CSS pass against the design tokens (BlockNote's default styles use hardcoded `#ddd` cell borders, etc.) and call it done.
+2. **Schema is intentionally restricted.** If `BlockNoteSchema.create({ blockSpecs: { paragraph, heading } })` was used to lock the editor down, then "enabling X" means widening the spec map. Grep for `BlockNoteSchema.create` first.
+
+When extending for Phase 2 / 3 work (custom blocks, formula bars), the canonical pattern is:
+
+```ts
+const editorSchema = BlockNoteSchema.create({
+  blockSpecs: { ...defaultBlockSpecs, customBlock: customBlockSpec },
+});
+```
+
+Don't replace `defaultBlockSpecs` with a hand-picked subset unless you specifically want to disable blocks. Cost (2026-05-07): ~3 min reading BlockNote `.d.ts` to confirm `table` is in the defaults — confirmed, no enablement work was needed for Tables-in-Ideas Phase 1, only an explicit-schema declaration (for future extension hooks) plus design-token border CSS.
+
 ## v3 token drift — broken aliases with no compat bridge
 
 **`--text-{2xs,xs,sm,base,lg,xl}` are broken tokens — no bridge, no v4 equivalent.**
