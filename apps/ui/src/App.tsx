@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import type { ReactNode } from "react";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Spinner } from "@/components/ui";
@@ -18,6 +19,60 @@ import InvitationAcceptPage from "@/pages/InvitationAcceptPage";
 // App pages -- lazy-loaded for route-level code splitting
 const AgentsPage = lazy(() => import("@/pages/AgentsPage"));
 const ChangePasswordPage = lazy(() => import("@/pages/ChangePasswordPage"));
+const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+
+/**
+ * Top-level URL segments that must NEVER resolve to a public profile.
+ * These collide with auth pages, app shell, API, and assets surfaces; if
+ * a Company's entity_id ever matched one of them the public-profile
+ * route would shadow real product surfaces. Listed here once so the
+ * `<PublicProfileRoute />` guard and any future entity-id validator can
+ * agree on the deny list.
+ */
+const RESERVED_SLUGS = new Set([
+  "api",
+  "auth",
+  "me",
+  "c",
+  "trust",
+  "start",
+  "studio",
+  "economy",
+  "blueprints",
+  "signup",
+  "login",
+  "verify",
+  "waitlist",
+  "reset-password",
+  "invitations",
+  "admin",
+  "agents",
+  "change-password",
+  "sessions",
+  "assets",
+  "static",
+  "signin",
+]);
+
+/**
+ * Public-profile route wrapper. Renders the profile page only when the
+ * URL segment is NOT a reserved slug; reserved slugs (auth pages, app
+ * shell paths, asset prefixes) delegate to the authed protected tree so
+ * `/me`, `/admin`, `/start`, etc. continue to render the in-shell app
+ * surface for authenticated users (and bounce to /login for everyone
+ * else, the same as before this route existed). Without this delegation
+ * react-router would prefer `/:slug` over `/*` and shadow `/me` for
+ * authenticated users.
+ */
+function PublicProfileRoute({ protectedFallback }: { protectedFallback: ReactNode }) {
+  const { slug } = useParams<{ slug: string }>();
+  if (!slug) return <NotFoundPage />;
+  if (RESERVED_SLUGS.has(slug.toLowerCase())) {
+    return <>{protectedFallback}</>;
+  }
+  return <PublicProfilePage />;
+}
 
 const LoadingSpinner = () => (
   <div
@@ -125,6 +180,64 @@ function RootRouteSwitch() {
  * no root is active; it still inherits the shell.
  */
 export default function App() {
+  // Protected app shell — extracted so the public-profile route can
+  // delegate to it for reserved slugs (`/me`, `/admin`, `/start`, etc.)
+  // without router-shadowing collisions.
+  const protectedTree = (
+    <ProtectedRoute>
+      <Routes>
+        {/* Standalone full-page routes — wizard-style surfaces that
+            intentionally do NOT inherit the shell. */}
+        <Route path="agents" element={<AgentsPage />} />
+        <Route path="change-password" element={<ChangePasswordPage />} />
+
+        {/* Legacy flat session URL — resolves the owning agent +
+            entity, then Navigate replace to the canonical deep shape. */}
+        <Route path="sessions/:sessionId" element={<SessionRedirect />} />
+
+        {/* Home dashboard + profile + every company at /c/:entityId/...
+            share the same shell — AppLayout decides content from path. */}
+        <Route element={<AppLayout />}>
+          <Route path="me" element={null} />
+          <Route path="me/:tab" element={null} />
+          <Route path="admin" element={null} />
+          <Route path="start" element={null} />
+          <Route path="start/:slug" element={null} />
+          <Route path="trust/:trustAddress" element={null}>
+            <Route index element={null} />
+            <Route path="agents/:agentId" element={null}>
+              <Route index element={null} />
+              <Route path=":tab" element={null} />
+              <Route path=":tab/:itemId" element={null} />
+            </Route>
+            <Route path="roles/new" element={null} />
+            <Route path="roles/:roleId" element={null} />
+            <Route path="roles/:roleId/edit" element={null} />
+            <Route path="roles/:roleId/invite" element={null} />
+            <Route path=":tab" element={null} />
+            <Route path=":tab/:itemId" element={null} />
+          </Route>
+          <Route path="c/:entityId" element={null}>
+            <Route index element={null} />
+            <Route path="agents/:agentId" element={null}>
+              <Route index element={null} />
+              <Route path=":tab" element={null} />
+              <Route path=":tab/:itemId" element={null} />
+            </Route>
+            <Route path="roles/new" element={null} />
+            <Route path="roles/:roleId" element={null} />
+            <Route path="roles/:roleId/edit" element={null} />
+            <Route path="roles/:roleId/invite" element={null} />
+            <Route path=":tab" element={null} />
+            <Route path=":tab/:itemId" element={null} />
+          </Route>
+          {/* Catch-all 404 inside the protected shell. Lives last. */}
+          <Route path="*" element={null} />
+        </Route>
+      </Routes>
+    </ProtectedRoute>
+  );
+
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingSpinner />}>
@@ -170,96 +283,16 @@ export default function App() {
           <Route path="/blueprints/:slug" element={<GatedAppShell />} />
           <Route path="/blueprints/:slug/:section" element={<GatedAppShell />} />
 
-          {/* Protected routes */}
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <Routes>
-                  {/* Standalone full-page routes — wizard-style surfaces
-                      that intentionally do NOT inherit the shell. */}
-                  <Route path="agents" element={<AgentsPage />} />
-                  <Route path="change-password" element={<ChangePasswordPage />} />
+          {/* Public profile — top-level `/<slug>` route. Lives BEFORE the
+              authed catch-all so unauth visitors can hit a Company's
+              public profile without bouncing to /login. Reserved slugs
+              (api / auth / me / c / trust / login / signup / etc.)
+              delegate to the protected tree so authed surfaces continue
+              to render correctly for those segments. */}
+          <Route path="/:slug" element={<PublicProfileRoute protectedFallback={protectedTree} />} />
 
-                  {/* Legacy flat session URL — resolves the owning
-                      agent + entity (inbox store fast path, then
-                      getSessions recovery), then Navigate replace to
-                      the canonical deep shape. Lives outside the
-                      shell: the redirect renders before any chrome
-                      mounts, so the user never sees the old URL
-                      decorated with composer / rail wiring. */}
-                  <Route path="sessions/:sessionId" element={<SessionRedirect />} />
-
-                  {/* Home dashboard + profile + every company at
-                      /c/:entityId/... share the same shell — AppLayout
-                      decides content from path + params. `/` and
-                      `/blueprints` are routed via GatedAppShell above
-                      and never enter the protected branch. User-scoped
-                      routes are registered before the legacy redirect
-                      so react-router prefers the literal match. */}
-                  <Route element={<AppLayout />}>
-                    {/* `/` is registered publicly above via
-                        GatedAppShell; no index route here. */}
-                    <Route path="me" element={null} />
-                    <Route path="me/:tab" element={null} />
-                    {/* Admin dashboard — gated server-side on is_admin and
-                        client-side via redirect in AdminPage itself. */}
-                    <Route path="admin" element={null} />
-                    {/* /start renders inside the shell — Company
-                        creation is part of the app, not a separate
-                        wizard. AppLayout dispatches StartPage when
-                        path === "/start". */}
-                    <Route path="start" element={null} />
-                    <Route path="start/:slug" element={null} />
-                    {/* Canonical on-chain company route group.
-                        `/trust/:trustAddress/...` is the primary URL for
-                        entities whose registerTRUST tx has landed. Same
-                        child shape as /c/:entityId — AppLayout resolves
-                        the entity via useCurrentCompany(). */}
-                    <Route path="trust/:trustAddress" element={null}>
-                      <Route index element={null} />
-                      <Route path="agents/:agentId" element={null}>
-                        <Route index element={null} />
-                        <Route path=":tab" element={null} />
-                        <Route path=":tab/:itemId" element={null} />
-                      </Route>
-                      <Route path="roles/new" element={null} />
-                      <Route path="roles/:roleId" element={null} />
-                      <Route path="roles/:roleId/edit" element={null} />
-                      <Route path="roles/:roleId/invite" element={null} />
-                      <Route path=":tab" element={null} />
-                      <Route path=":tab/:itemId" element={null} />
-                    </Route>
-                    {/* Legacy / pending company route group. Used while the
-                        entity has no trust_address yet (pre-registerTRUST).
-                        Server returns 301 → /trust/:trustAddress once the
-                        address is known. */}
-                    <Route path="c/:entityId" element={null}>
-                      <Route index element={null} />
-                      <Route path="agents/:agentId" element={null}>
-                        <Route index element={null} />
-                        <Route path=":tab" element={null} />
-                        <Route path=":tab/:itemId" element={null} />
-                      </Route>
-                      {/* Role sub-pages — must be listed before the
-                          generic :tab/:itemId catch-all so react-router
-                          prefers the specific match. AppLayout dispatches
-                          these via useShellSurface flags. */}
-                      <Route path="roles/new" element={null} />
-                      <Route path="roles/:roleId" element={null} />
-                      <Route path="roles/:roleId/edit" element={null} />
-                      <Route path="roles/:roleId/invite" element={null} />
-                      <Route path=":tab" element={null} />
-                      <Route path=":tab/:itemId" element={null} />
-                    </Route>
-                    {/* Catch-all 404 inside the protected shell. Lives
-                        last so every other matcher above wins first. */}
-                    <Route path="*" element={null} />
-                  </Route>
-                </Routes>
-              </ProtectedRoute>
-            }
-          />
+          {/* Protected routes — catches everything not handled above. */}
+          <Route path="/*" element={protectedTree} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

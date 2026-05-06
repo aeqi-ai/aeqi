@@ -13,15 +13,42 @@ import BlockAvatar from "./BlockAvatar";
  * `/me/billing` for workspace billing — the per-Company plan tab is
  * retired with this ship.
  *
+ * In `public` mode the strip renders read-only: no click-to-edit on name
+ * or tagline, no plan label, no public/private toggle (the viewer is
+ * already on the public profile, so the toggle would be tautological).
+ * The data source switches from the daemon store to the public-profile
+ * payload passed in via `publicEntity` — daemon store is empty for
+ * unauthenticated visitors. Used by `PublicProfilePage`.
+ *
  * Design tokens only; no bespoke colors, no hairline borders. The strip
  * sits above the existing dashboard grid; height is content-driven
  * (inline editor swaps grow vertically without knocking the grid).
  */
-interface EntityHeroStripProps {
-  entityId: string;
+interface PublicEntityShape {
+  display_name: string;
+  tagline: string | null;
 }
 
-export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
+interface EntityHeroStripProps {
+  entityId: string;
+  /**
+   * When true, render the strip read-only — hides edit affordances, plan
+   * label, and public/private toggle. Used by the unauthenticated public
+   * profile page.
+   */
+  public?: boolean;
+  /**
+   * Public-mode data source. Required when `public={true}` because the
+   * daemon store is empty for unauth visitors. Ignored otherwise.
+   */
+  publicEntity?: PublicEntityShape;
+}
+
+export default function EntityHeroStrip({
+  entityId,
+  public: isPublicMode = false,
+  publicEntity,
+}: EntityHeroStripProps) {
   const entities = useDaemonStore((s) => s.entities);
   const fetchEntities = useDaemonStore((s) => s.fetchEntities);
   const entity = entities.find((e) => e.id === entityId);
@@ -113,8 +140,8 @@ export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
     return "Free workspace";
   })();
 
-  const name = entity?.name ?? entityId;
-  const tagline = entity?.tagline ?? "";
+  const name = isPublicMode ? (publicEntity?.display_name ?? entityId) : (entity?.name ?? entityId);
+  const tagline = isPublicMode ? (publicEntity?.tagline ?? "") : (entity?.tagline ?? "");
 
   return (
     <header
@@ -145,7 +172,7 @@ export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {editingName ? (
+        {!isPublicMode && editingName ? (
           <input
             ref={nameInputRef}
             value={nameDraft}
@@ -175,6 +202,20 @@ export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
               outline: "none",
             }}
           />
+        ) : isPublicMode ? (
+          <h1
+            style={{
+              font: "inherit",
+              fontSize: "var(--font-size-3xl)",
+              fontWeight: 600,
+              lineHeight: 1.1,
+              padding: 0,
+              margin: 0,
+              color: "var(--color-text-primary)",
+            }}
+          >
+            {name}
+          </h1>
         ) : (
           <button
             type="button"
@@ -200,7 +241,7 @@ export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
           </button>
         )}
 
-        {editingTagline ? (
+        {!isPublicMode && editingTagline ? (
           <textarea
             ref={taglineInputRef}
             value={taglineDraft}
@@ -232,6 +273,22 @@ export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
               resize: "none",
             }}
           />
+        ) : isPublicMode ? (
+          tagline ? (
+            <p
+              style={{
+                font: "inherit",
+                fontStyle: "italic",
+                fontSize: "var(--font-size-sm)",
+                lineHeight: 1.4,
+                padding: 0,
+                margin: "var(--space-2) 0 0 0",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              {tagline}
+            </p>
+          ) : null
         ) : (
           <button
             type="button"
@@ -257,55 +314,59 @@ export default function EntityHeroStrip({ entityId }: EntityHeroStripProps) {
           </button>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            gap: "var(--space-4)",
-            alignItems: "center",
-            marginTop: "var(--space-4)",
-            flexWrap: "wrap",
-            fontSize: "var(--font-size-sm)",
-            color: "var(--color-text-muted)",
-          }}
-        >
-          <Link
-            to="/me/billing"
+        {!isPublicMode && (
+          <div
             style={{
-              color: "inherit",
-              textDecoration: "none",
-              fontVariantNumeric: "tabular-nums",
-            }}
-            title="Manage workspace billing"
-          >
-            {planLabel}
-          </Link>
-
-          <span aria-hidden style={{ opacity: 0.5 }}>
-            ·
-          </span>
-
-          <label
-            style={{
-              display: "inline-flex",
+              display: "flex",
+              gap: "var(--space-4)",
               alignItems: "center",
-              gap: "var(--space-2)",
-              cursor: savingPublic ? "wait" : "pointer",
-              userSelect: "none",
+              marginTop: "var(--space-4)",
+              flexWrap: "wrap",
+              fontSize: "var(--font-size-sm)",
+              color: "var(--color-text-muted)",
             }}
-            title={
-              isPublic ? "Profile is public at app.aeqi.ai/<slug>" : "Profile is private to members"
-            }
           >
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={togglePublic}
-              disabled={savingPublic}
-              style={{ accentColor: "var(--color-accent)" }}
-            />
-            <span>{isPublic ? "Public" : "Private"}</span>
-          </label>
-        </div>
+            <Link
+              to="/me/billing"
+              style={{
+                color: "inherit",
+                textDecoration: "none",
+                fontVariantNumeric: "tabular-nums",
+              }}
+              title="Manage workspace billing"
+            >
+              {planLabel}
+            </Link>
+
+            <span aria-hidden style={{ opacity: 0.5 }}>
+              ·
+            </span>
+
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--space-2)",
+                cursor: savingPublic ? "wait" : "pointer",
+                userSelect: "none",
+              }}
+              title={
+                isPublic
+                  ? "Profile is public at app.aeqi.ai/<slug>"
+                  : "Profile is private to members"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={togglePublic}
+                disabled={savingPublic}
+                style={{ accentColor: "var(--color-accent)" }}
+              />
+              <span>{isPublic ? "Public" : "Private"}</span>
+            </label>
+          </div>
+        )}
       </div>
     </header>
   );
