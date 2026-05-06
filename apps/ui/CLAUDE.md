@@ -523,6 +523,36 @@ there too, they're pre-existing — skip and proceed. Don't chase them unless yo
 touches `OwnershipPage.tsx` or its mock data. Cost (2026-05-06): ~1 min confirmation per
 session that sees them.
 
+**`Icon.tsx` / `Icon.stories.tsx` lucide-react tsc errors are pre-existing — not your regression.**
+`src/components/ui/Icon.tsx` and `src/components/ui/Icon.stories.tsx` emit `TS7016:
+Could not find a declaration file for module 'lucide-react'` on main and every worktree
+branch. When `tsc --noEmit` exits 2 with only these two errors, they're pre-existing drift —
+confirm with `git -C /home/claudedev/aeqi stash && node node_modules/typescript/bin/tsc
+--noEmit 2>&1 | grep lucide` from the parent. The error count on main must match exactly;
+any additional errors are your regression and require a fix. Don't chase the lucide errors
+unless your change touches `Icon.tsx` or its stories. Cost (2026-05-06): ~1 min verification
+per session that sees them.
+
+**Avatar render architecture — agent avatars are client-side, human avatars are proxy-injected.**
+The roles surfaces (`RoleNode`, `RolesList`, `RolesChart`, `RolesCards`) and agents list
+(`EntityAgentsTab`) resolve avatar URLs from two different sources:
+
+- **Agent occupants**: `agent.avatar` field from the daemon store — available in `EntityRolesTab`
+  as `agentAvatars: Map<string, string>` (built from `useDaemonStore(s => s.agents)`). No extra
+  HTTP call needed — the daemon store already has it.
+- **Human occupants**: `role.occupant_avatar_url` field on the `Role` type — injected by the
+  platform proxy's `patch_role` helper in `aeqi-platform/src/routes/proxy.rs` from the `users`
+  table `avatar_url` column (Google OAuth photo URL).
+
+When a URL is present, render it as a circular `<img>` (borderRadius `999px`, objectFit `cover`).
+When absent, fall back to a neutral grey initials circle (`--color-bg-subtle` background). No
+per-role color field exists; the `occupant_color` field is on Agent, not Role.
+
+If avatar data stops showing: (a) for agents, check that `useDaemonStore` returns agents with
+`avatar` populated; (b) for humans, check that `proxy.rs` `patch_role` is hitting the user
+record — the `users` table `avatar_url` may be null if the user authenticated without Google.
+Cost (2026-05-06): ~2 sessions of implicit knowledge about this split before it was written down.
+
 **`npm run verify` exit code 216 = binary not found, not a code error.**
 Exit 216 is Node.js's "could not find the executable" signal — it means
 the first binary in the verify chain (`tsc`, `prettier`, etc.) was missing,
