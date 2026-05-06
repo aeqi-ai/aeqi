@@ -277,6 +277,18 @@ their test-only intent in a doc comment instead. Cost (2026-05-05): one
 edit pass when `DeepInfraProvider::with_base_url` was gated but needed
 by `tests/it_chat_completions.rs`.
 
+**`fail!` macro (or any early-return macro) with `$msg:expr` arm infers `Option<&str>` from the first literal call.** When a helper macro captures an error value with `$msg:expr` and stores it in a field typed `Option<String>`, the compiler infers `Option<&'static str>` from the first string-literal call site. Every subsequent call that passes a non-literal (e.g. `format!(...)` result or a variable) fails with `mismatched types: expected &str, found String`. Two fixes: (a) change the arm to `($fmt:literal $($args:tt)*)` and store `format!($fmt $($args)*)` — handles both bare literals (Rust 2021 implicit captures work) and explicit format args; (b) wrap the stored value in `.to_string()` immediately (`error: Some(($msg).to_string())`). Pattern (a) is cleaner when the macro is always used at call sites with format-style args. Cost (2026-05-06): two compiler-error passes before the macro arm was restructured to use `$fmt:literal`.
+
+**`aa-smoke` — AA stack smoke test binary location and usage.** The CLI binary that exercises the full ERC-4337 stack end-to-end (deploys Paymaster.sol + SimpleAccount, submits no-op UserOp, polls for receipt) lives at `crates/aeqi-paymaster/src/bin/aa_smoke.rs`. Run it:
+
+```bash
+cargo run -p aeqi-paymaster --bin aa-smoke --release
+# or with JSON output:
+SMOKE_JSON=1 cargo run -p aeqi-paymaster --bin aa-smoke --release
+```
+
+Requires anvil (:8545), bundler (:3000), and aeqi-paymaster (:3001) running. SimpleAccount bytecode is auto-compiled to `/tmp/simple-account-test/` on first run if absent. Exit 0 = stack healthy; exit 1 = fault with error message.
+
 ### Frontend
 
 - Prettier enforced (double quotes, trailing commas, 100 width)
