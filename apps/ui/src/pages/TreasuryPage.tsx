@@ -159,11 +159,11 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
 
       {!billing && !billingError && (
         <EmptyState
-          title={`No subscription on this ${entityTerm}`}
+          title="No active plan"
           description={
             isPersonal
-              ? "No active subscription on this account."
-              : "No active subscription on this Company."
+              ? "Subscribe to unlock inference, compute, and on-chain features."
+              : "Add a plan to this Company to unlock inference and on-chain features."
           }
         />
       )}
@@ -360,7 +360,7 @@ function HoldingsSection({
                 fontSize: "var(--font-size-sm)",
               }}
             >
-              Once your Treasury earns or spends, balances will appear here.
+              Nothing here yet — fund this Treasury to get started.
             </div>
             {trustAddress && (
               <div
@@ -522,7 +522,7 @@ function TransfersSection({
               textAlign: "center",
             }}
           >
-            Once your Treasury earns or spends, transfers will appear here.
+            No transfers yet.
           </div>
         ) : (
           <table

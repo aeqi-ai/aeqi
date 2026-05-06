@@ -32,7 +32,7 @@
 }
 .start-sub {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   line-height: 1.55;
   color: var(--color-text-secondary);
   max-width: 60ch;
@@ -79,13 +79,13 @@
 }
 .bp-launch-blank-name {
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   letter-spacing: -0.005em;
   color: var(--color-text-primary);
 }
 .bp-launch-blank-tagline {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   color: var(--color-text-secondary);
 }
@@ -167,7 +167,7 @@
 }
 .bp-launch-browse-link {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   text-decoration: none;
   transition: color var(--transition-fast);

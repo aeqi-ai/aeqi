@@ -37,7 +37,7 @@
   cursor: pointer;
 }
 .role-node.is-clickable:hover {
-  background: var(--color-card-elevated);
+  box-shadow: var(--shadow-sm);
 }
 .role-node.is-clickable:focus-visible {
   outline: 2px solid var(--accent-dim);
@@ -58,7 +58,7 @@
   border-radius: 999px;
   background: var(--accent);
   color: var(--btn-primary-text, #fff);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
   font-family: var(--font-sans);
@@ -89,7 +89,7 @@
   flex: 1;
 }
 .role-node-title {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--color-text-primary);
   white-space: nowrap;
@@ -97,7 +97,7 @@
   text-overflow: ellipsis;
 }
 .role-node-occupant {
-  font-size: 11px;
+  font-size: var(--font-size-micro);
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -251,7 +251,7 @@
   margin-bottom: var(--space-1);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   transition: background 0.12s ease;
 }

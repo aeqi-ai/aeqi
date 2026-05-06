@@ -233,6 +233,16 @@
   --event-tone-loop: #c66a4a;
   --event-tone-webhook: var(--success);
   --event-tone-telegram: #4fa0b8;
+
+  /* ── Space aliases (v3 bridge) ────────────────────────
+     GovernancePage / TreasuryPage use --space-{xs,sm,md,lg,xl} shorthand.
+     Bridge to the canonical --space-N numeric scale once here so these
+     tokens resolve correctly everywhere they're used. */
+  --space-xs: var(--space-2); /* 8px */
+  --space-sm: var(--space-3); /* 12px */
+  --space-md: var(--space-4); /* 16px */
+  --space-lg: var(--space-6); /* 24px */
+  --space-xl: var(--space-8); /* 32px */
 }
 
 /* ── Base element styles (dashboard-specific) ──────── */

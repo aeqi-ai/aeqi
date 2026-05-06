@@ -2328,10 +2328,9 @@
 }
 
 .idea-entry.selected {
-  border-color: var(--border-hover);
-  background: var(--bg-surface);
-  border-left: 2px solid var(--color-text-primary);
-  padding-left: calc(var(--space-4) - 1px);
+  background: var(--color-card);
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: -2px;
 }
 
 .idea-entry {
@@ -2428,10 +2427,9 @@
 .ideas-detail {
   width: 340px;
   flex-shrink: 0;
-  border-left: 1px solid var(--border);
   padding: var(--space-4);
   overflow-y: auto;
-  background: var(--bg-surface);
+  background: var(--color-card-subtle);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

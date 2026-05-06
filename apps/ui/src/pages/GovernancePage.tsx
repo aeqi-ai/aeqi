@@ -159,7 +159,7 @@ function GrantRow({ grantLabel, grantDesc, holders, onOpenRole }: GrantRowProps)
             style={{
               color: "var(--color-text-muted)",
               fontSize: "var(--font-size-sm)",
-              marginTop: "var(--space-0)",
+              marginTop: "var(--space-1)",
             }}
           >
             {grantDesc}
@@ -338,7 +338,7 @@ function ProposalRow({ proposal: p }: { proposal: IndexedProposal }) {
             style={{
               color: "var(--color-text-muted)",
               fontSize: "var(--font-size-sm)",
-              marginTop: "var(--space-0)",
+              marginTop: "var(--space-1)",
             }}
           >
             {isPast ? "Ended" : "Ends"} {endsAt}
@@ -384,7 +384,7 @@ function VoteBar({ forVotes, againstVotes }: { forVotes: string; againstVotes: s
         aria-valuemax={100}
         style={{
           height: 4,
-          background: "var(--color-bg-base)",
+          background: "var(--bg-subtle)",
           overflow: "hidden",
         }}
       >

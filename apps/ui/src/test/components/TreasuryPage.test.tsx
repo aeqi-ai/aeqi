@@ -115,9 +115,7 @@ describe("TreasuryPage", () => {
         // Holdings empty state shows the zero-balance line.
         expect(screen.getByText("0 ETH · 0 USDC")).toBeInTheDocument();
         // Transfers empty state.
-        expect(
-          screen.getByText(/once your treasury earns or spends, transfers will appear here/i),
-        ).toBeInTheDocument();
+        expect(screen.getByText(/no transfers yet/i)).toBeInTheDocument();
       },
       { timeout: 3000 },
     );
@@ -144,7 +142,7 @@ describe("TreasuryPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/no subscription on this company/i)).toBeInTheDocument();
+      expect(screen.getByText(/no active plan/i)).toBeInTheDocument();
     });
   });
 
