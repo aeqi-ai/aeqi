@@ -1,5 +1,26 @@
 # Release Notes
 
+## v0.33.0 — 2026-05-06
+
+**Headline:** Org chart zoom + 1,035 v3→v4 token migrations + treasury native ETH + a11y P0/P1 batch.
+
+- **Roles:** org chart now supports zoom, pan, and auto-fits container width on mount + resize (founder ask)
+- **Roles + Ownership:** human occupants render display name ("Luca Eich") instead of raw wallet address — platform proxies inject `occupant_name` into `/api/roles` responses (`6a4f6a3` in aeqi-platform)
+- **Treasury:** shows native ETH balance via wagmi `useBalance` + new `/chain/rpc` browser proxy; chain label honors `VITE_CHAIN_NAME` instead of hardcoded "Base Sepolia" (`42f613b` in aeqi-platform)
+- **Inbox:** "Open inbox" agent-overview link now navigates to `/me/inbox` (was `/`); pane borders replaced with tint shifts; loading state gates empty-state copy
+- **Design system:** 1,035 v3 token aliases swept to v4 canonical names across 45 files in `apps/ui` (`--text-{primary/secondary/muted}` → `--color-text-*`, `--text-{xs/sm/...}` → `--font-size-*`, broken patterns now documented)
+- **A11y:** skip-to-main-content link, sidebar nav `:focus-visible` ring, `aria-label` on icon-only toolbar buttons, invalid roles removed from buttons, `prefers-reduced-motion` guards on pulse animations
+- **Drive:** 3 hairline borders removed from DrivePage; replaced with tint/spacing per locked no-hairlines rule
+- **UX-batch-A:** Company rail tab order corrected to spec (Roles → Ownership → Treasury → Governance); Stripe vendor name removed from Treasury + Governance copy; `/me/portfolio` → `/me/treasury` redirect
+- **AA polish:** paymaster `/stats` endpoint exposing per-Company sponsorship visibility; bundler systemd hardening (Restart, MemoryMax, log rotation)
+- **Roles:** invitation-not-sent badge + "Send invite" affordance on detail page
+
+**Architecture notes:** Board vs org-chart correction landed earlier in v0.32.0 ship cycle (memory `architecture_board_vs_org_chart.md`). AEIQ dogfood Company stable on production with corrected role types.
+
+**UX score:** baseline 3.25/5 → post-fixes 4.5/5 (delta walk verified, 6 routes).
+
+**Known limitations / next:** Wallet Phase 3 (multi-signer rotation UI) deferred to Wave 29+. W33B stack-blueprint cross-Company on-chain edge wiring still in flight.
+
 ## v0.32.0 — 2026-05-06
 
 **Headline:** aeiq dogfood company live + role invitation polish + Treasury/Governance empty-state cleanup.
