@@ -782,6 +782,37 @@ OLD="No treasury activity yet"
 grep -rn "$OLD" src/test/ src/pages/
 ```
 
+## Test store-state coupling — update `initialLoaded` when adding a loading gate
+
+Smoke tests that call `useDaemonStore.setState({ ..., initialLoaded: false })` in
+`beforeEach` will break immediately when a loading gate is added to the component
+under test. The component now renders a `<Spinner />` instead of content, so any
+test that queries for a button, heading, or element inside the empty state will get
+`null` and fail with "expected null not to be null."
+
+Rule: when adding a loading gate (any `if (!initialLoaded)` or `if (isLoading)` early
+return) to a component, search `src/test/` for `initialLoaded: false` in any
+`beforeEach`/`setState` block that also renders that component. Flip to `true` (or
+the specific test's required loaded state). The daemon store's default is `false`,
+so any existing smoke test that happened to pass before the gate was added only
+passed because the gate didn't exist yet.
+
+Pattern for the search:
+
+```bash
+grep -rn "initialLoaded: false" src/test/
+```
+
+For react-query hooks (`useAgentIdeas`, `useAgentEvents`), the equivalent trap is
+tests that don't mock the query — react-query starts as `isLoading: true` in JSDOM
+because no server is running, so the new loading gate renders the spinner on every
+test render. Mock the query to return `{ data: [], isLoading: false }` in the test's
+`beforeEach`, or use `queryClient.setQueryData(...)` to seed the result.
+
+Cost (2026-05-06): smoke test `AgentQuestsTab smoke > exposes a New quest button on
+the empty board` failed after adding `initialLoaded` gate — `beforeEach` had
+`initialLoaded: false`; fix was a one-line flip to `true`.
+
 ## wagmi + native chain balance — `/chain/rpc` proxy pattern
 
 **The browser cannot reach `127.0.0.1:8545` (anvil) directly.** Any wagmi hook that reads native ETH balance (`useBalance`) or calls RPC methods must go through the platform's `/chain/rpc` reverse-proxy, not directly to the node URL.
