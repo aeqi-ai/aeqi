@@ -329,6 +329,8 @@ Requires anvil (:8545), bundler (:3000), and aeqi-paymaster (:3001) running. Sim
 - Auto-commit at end of turn in quest worktrees
 - Tools configurable per agent via tool_deny
 
+**`find_or_create_dm_session` does NOT set `sessions.agent_id` — use `create_session` for agent-bound DM sessions.** `find_or_create_dm_session(session_type, name, kind_a, id_a, kind_b, id_b)` only writes the session row + participant rows; the `agent_id` column on `sessions` stays NULL. Downstream consumers that route by `session.agent_id` (notably `handle_answer_inbox`, which rejects with `"session has no agent binding"` when the column is NULL) will silently fail. When seeding any agent-bound DM (inbox greetings, founder ↔ assistant onboarding flows, role-addressed seeds), the canonical pattern is: `create_session(agent_id, "dm", name, None, None)` then `add_session_participant` for each side. The participant table holds the same information for multi-participant queries; the column on the row keeps single-agent reply routing simple. Cost (2026-05-06): the `seed_inbox_message` path used `find_or_create_dm_session` and shipped to AEIQ — every founder reply 4xx'd with "session has no agent binding" until the path was rewritten and the live DB was backfilled.
+
 ### Deploy
 
 ```
