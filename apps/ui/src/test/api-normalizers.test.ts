@@ -34,7 +34,7 @@ describe("entity API normalization", () => {
 });
 
 describe("agent API normalization", () => {
-  it("synthesizes root agents and lets scoped agent records win by id", () => {
+  it("returns only real agents from agentsData; entities param is ignored", () => {
     expect(
       buildAgentDirectory(
         {
@@ -80,5 +80,23 @@ describe("agent API normalization", () => {
         status: "idle",
       },
     ]);
+  });
+
+  it("does not synthesize a fake agent row when entities are provided but agentsData is empty", () => {
+    expect(
+      buildAgentDirectory(
+        {
+          entities: [
+            {
+              id: "ent_1",
+              agent_id: "agent_root",
+              display_name: "Acme",
+              running: true,
+            },
+          ],
+        },
+        { agents: [] },
+      ),
+    ).toEqual([]);
   });
 });
