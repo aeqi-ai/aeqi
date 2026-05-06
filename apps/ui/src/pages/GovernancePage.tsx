@@ -271,8 +271,8 @@ function ProposalsSection({ proposals, votingPower, error }: ProposalsSectionPro
 
       {!error && proposals !== null && proposals.length === 0 && (
         <EmptyState
-          title="No governance proposals yet."
-          description="Once Roles propose changes on-chain, they'll appear here."
+          title="No proposals yet."
+          description="Once a Role files one, it'll appear here."
         />
       )}
 

@@ -226,7 +226,7 @@ function OnChainHoldings({ trustAddress }: { trustAddress: string }) {
 
   return (
     <>
-      <HoldingsSection balances={balances} loading={loading} />
+      <HoldingsSection balances={balances} loading={loading} trustAddress={trustAddress} />
       <TransfersSection transfers={transfers} loading={loading} />
     </>
   );
@@ -283,9 +283,11 @@ function SkeletonRow({ widths }: { widths: string[] }) {
 function HoldingsSection({
   balances,
   loading,
+  trustAddress,
 }: {
   balances: TokenBalance[] | null;
   loading: boolean;
+  trustAddress?: string;
 }) {
   return (
     <section style={{ marginBottom: "var(--space-lg)" }}>
@@ -307,15 +309,41 @@ function HoldingsSection({
           <div
             style={{
               padding: "var(--space-lg) var(--space-md)",
-              color: "var(--color-text-muted)",
-              fontSize: "var(--text-sm)",
               textAlign: "center",
             }}
           >
-            No treasury activity yet.{" "}
-            <span style={{ display: "block", marginTop: "var(--space-xs)" }}>
-              Token balances appear here once the TRUST holds assets.
-            </span>
+            <div
+              style={{
+                fontWeight: 500,
+                fontSize: "var(--text-base)",
+                marginBottom: "var(--space-xs)",
+              }}
+            >
+              0 ETH · 0 USDC
+            </div>
+            <div
+              style={{
+                color: "var(--color-text-muted)",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              Once your Treasury earns or spends, balances will appear here.
+            </div>
+            {trustAddress && (
+              <div
+                style={{
+                  marginTop: "var(--space-md)",
+                  color: "var(--color-text-muted)",
+                  fontSize: "var(--text-xs)",
+                }}
+              >
+                Send ETH or USDC to{" "}
+                <code style={{ fontFamily: "var(--font-mono)" }}>
+                  {`${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`}
+                </code>{" "}
+                to fund this Treasury.
+              </div>
+            )}
           </div>
         ) : (
           <table
@@ -432,10 +460,7 @@ function TransfersSection({
               textAlign: "center",
             }}
           >
-            No treasury activity yet.{" "}
-            <span style={{ display: "block", marginTop: "var(--space-xs)" }}>
-              Transfers in and out of this TRUST will appear here.
-            </span>
+            Once your Treasury earns or spends, transfers will appear here.
           </div>
         ) : (
           <table

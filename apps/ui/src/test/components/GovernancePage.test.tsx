@@ -149,7 +149,7 @@ describe("GovernancePage", () => {
       expect(screen.getAllByRole("button", { name: /CEO/ }).length).toBeGreaterThan(0);
     });
 
-    expect(await screen.findByText("No governance proposals yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No proposals yet.")).toBeInTheDocument();
   });
 
   it("shows the proposals empty state when the governance module has no proposals", async () => {
@@ -168,7 +168,7 @@ describe("GovernancePage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("No governance proposals yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No proposals yet.")).toBeInTheDocument();
   });
 
   it("falls back to proposal id when title is absent", async () => {
