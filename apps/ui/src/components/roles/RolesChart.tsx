@@ -25,20 +25,17 @@ interface Transform {
 const FIT_TRANSFORM: Transform = { scale: 1, tx: 0, ty: 0 };
 
 /**
- * Three-band org surface:
+ * Org surface — three role tiers rendered as calm peers:
  *
- *   BOARD       — directors as a horizontal roster (no edges drawn).
- *                 Governance is not reporting; the board is appointed,
- *                 not managed, so a bezier into the operational tree
- *                 would be a category error.
- *   ORG         — operational roles as a pure layered DAG tree via
- *                 the Sugiyama-lite layout. CEO at layer 0; direct
- *                 reports at layer 1; grandchildren at layer 2; etc.
- *                 No painted department-cluster envelopes — hierarchy
- *                 is expressed by vertical position alone.
- *   ADVISORS    — advisors as a trailing horizontal roster.
+ *   Directors   — horizontal roster at the top; no tinted zone, no band
+ *                 divider, no eyebrow label. Board governance is orthogonal
+ *                 to the operational tree — directors appear as peer nodes.
+ *   Operational — pure layered DAG tree via the Sugiyama-lite layout.
+ *                 CEO at layer 0; direct reports at layer 1; etc.
+ *                 No painted department-cluster envelopes.
+ *   Advisors    — trailing horizontal roster.
  *
- * Empty bands collapse entirely. Cross-band edges are dropped silently.
+ * Empty sections collapse entirely. Cross-section edges are dropped silently.
  *
  * The chart content is wrapped in a zoom+pan viewport. Wheel zooms,
  * click+drag pans, and the toolbar buttons (+/-/fit) give precise
@@ -65,8 +62,7 @@ export default function RolesChart({
     <OrgZoomViewport>
       <div className="roles-chart-stack">
         {directors.length > 0 && (
-          <section className="roles-chart-zone roles-chart-zone--board" aria-label="Director">
-            <div className="roles-chart-zone-eyebrow">Director</div>
+          <section className="roles-chart-zone" aria-label="Director">
             <div className="roles-chart-roster">
               {directors.map((r) => (
                 <RoleNode
@@ -81,12 +77,8 @@ export default function RolesChart({
             </div>
           </section>
         )}
-        {directors.length > 0 && operational.length > 0 && (
-          <div className="roles-chart-band-divider" role="separator" aria-hidden={true} />
-        )}
         {operational.length > 0 && (
           <section className="roles-chart-zone" aria-label="Operational">
-            <div className="roles-chart-zone-eyebrow">Operational</div>
             <div
               className="roles-chart-canvas"
               style={{ width: treeLayout.width, height: treeLayout.height }}
@@ -134,7 +126,6 @@ export default function RolesChart({
         )}
         {advisors.length > 0 && (
           <section className="roles-chart-zone" aria-label="Advisor">
-            <div className="roles-chart-zone-eyebrow">Advisor</div>
             <div className="roles-chart-roster">
               {advisors.map((r) => (
                 <RoleNode
@@ -188,7 +179,7 @@ function OrgZoomViewport({ children }: { children: React.ReactNode }) {
     const ih = inner.offsetHeight;
     if (iw === 0 || ih === 0) return;
     const scale = Math.min(1, (vw - 24) / iw);
-    // Center horizontally; small top offset keeps eyebrow labels visible.
+    // Center horizontally; small top offset for visual breathing room.
     const tx = (vw - iw * scale) / 2;
     const ty = 16;
     setTransform({ scale, tx, ty });
@@ -250,6 +241,7 @@ function OrgZoomViewport({ children }: { children: React.ReactNode }) {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest(".role-node")) return;
+    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setTransform((prev) => {
       dragRef.current = {
