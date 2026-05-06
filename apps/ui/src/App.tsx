@@ -90,6 +90,29 @@ function GatedAppShell() {
   return <Navigate to={`/login?next=${encodeURIComponent(here)}`} replace />;
 }
 
+/**
+ * Bare `/` while authed lands on `/me/inbox` — the daily-action surface
+ * per the personal rail spec. The previous shape fell through to the
+ * Economy front door, which is wrong for habitual users (Inbox is the
+ * canonical daily destination). Unauthed visitors and `auth=none` mode
+ * still see the Economy/AppLayout dispatch via GatedAppShell.
+ */
+function RootRouteSwitch() {
+  const authMode = useAuthStore((s) => s.authMode);
+  const token = useAuthStore((s) => s.token);
+  const fetchAuthMode = useAuthStore((s) => s.fetchAuthMode);
+
+  useEffect(() => {
+    fetchAuthMode();
+  }, [fetchAuthMode]);
+
+  if (!authMode) return <LoadingSpinner />;
+  if (authMode !== "none" && token) {
+    return <Navigate to="/me/inbox" replace />;
+  }
+  return <GatedAppShell />;
+}
+
 // `/` is only the user-scope landing before an entity exists. Once an entity
 // exists, AppLayout canonicalizes the shell to `/c/:entityId` so sidebar tabs
 // never generate bogus top-level paths like `/quests`.
@@ -125,7 +148,7 @@ export default function App() {
               fullscreen DiscoverPage at `/` was retired in favor of the
               in-shell Economy. `/economy` redirects to `/` to keep one
               canonical URL. */}
-          <Route path="/" element={<GatedAppShell />} />
+          <Route path="/" element={<RootRouteSwitch />} />
           <Route path="/economy" element={<Navigate to="/" replace />} />
 
           {/* Blueprints — top-level destination, auth-gated end-to-end.

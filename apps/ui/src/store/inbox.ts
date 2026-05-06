@@ -22,27 +22,47 @@ export interface InboxState {
   clearInbox: () => void;
 }
 
-// Module-level probe: attempt HEAD on the dismiss endpoint once per session.
+// Module-level probe: attempt HEAD on the dismiss endpoint once per deploy.
 // If it 404s, the endpoint isn't deployed yet — gate the archive button.
 //
-// Cached in sessionStorage so navigating between routes that mount the inbox
-// composer doesn't re-fire the probe and leak a 401 into the devtools console
-// on every paint. Bearer token forwarded so the probe matches the same
-// auth-required surface the real dismiss POST hits — without it the platform
-// returns 401 and the UI flags it as a console error even when the endpoint
-// exists and is deployed.
-const PROBE_CACHE_KEY = "aeqi_inbox_probe_v1";
+// Cached in localStorage keyed by deploy hash so:
+//  (a) every fresh tab on the same deploy is a cache hit (no probe fire)
+//  (b) a new deploy invalidates automatically — cache key changes when the
+//      hashed `index-XXXX.js` filename changes
+// The bearer token is forwarded so the probe matches the same auth-required
+// surface the real dismiss POST hits.
+const PROBE_CACHE_KEY_PREFIX = "aeqi_inbox_probe_v2_";
+
+// Derive the current deploy hash from the live `index-<hash>.js` script tag
+// vite emits. Falls back to a stable string when the script tag isn't found
+// (dev server, SSR, or a future bundler shape) — the probe still runs once
+// per cache wipe in that case.
+function getDeployHash(): string {
+  try {
+    const scripts = document.querySelectorAll<HTMLScriptElement>("script[src*=index-]");
+    for (const s of Array.from(scripts)) {
+      const m = s.src.match(/index-([A-Za-z0-9_-]+)\.js/);
+      if (m) return m[1];
+    }
+  } catch {
+    // document unavailable — fall through.
+  }
+  return "dev";
+}
+
 let dismissEndpointAvailable: boolean | null = null;
 export async function probeDismissEndpoint(): Promise<boolean> {
   if (dismissEndpointAvailable !== null) return dismissEndpointAvailable;
+
+  const cacheKey = PROBE_CACHE_KEY_PREFIX + getDeployHash();
   try {
-    const cached = sessionStorage.getItem(PROBE_CACHE_KEY);
+    const cached = localStorage.getItem(cacheKey);
     if (cached === "1" || cached === "0") {
       dismissEndpointAvailable = cached === "1";
       return dismissEndpointAvailable;
     }
   } catch {
-    // sessionStorage unavailable (private mode, etc.) — fall through to live probe.
+    // localStorage unavailable (private mode, etc.) — fall through to live probe.
   }
 
   const token = localStorage.getItem("aeqi_token");
@@ -80,20 +100,22 @@ export async function probeDismissEndpoint(): Promise<boolean> {
     });
     // 401 = auth failed (transient — don't cache). 400 = entity scope rejected
     // (also transient; the localStorage entity may have been pruned by a sign-out
-    // race). 404/405/2xx = route registered.
-    if (resp.status === 401 || resp.status === 400) {
+    // race). Network failures (resp.status === 0) are transient too. 404/405/2xx
+    // = route registered → cache the verdict for this deploy.
+    if (resp.status === 401 || resp.status === 400 || resp.status === 0) {
       return false;
     }
-    dismissEndpointAvailable = resp.status !== 0;
+    dismissEndpointAvailable = true;
+    try {
+      localStorage.setItem(cacheKey, "1");
+    } catch {
+      // localStorage write failure — non-fatal, we'll re-probe next mount.
+    }
+    return true;
   } catch {
-    dismissEndpointAvailable = false;
+    // Network error / fetch threw — don't cache; retry next session.
+    return false;
   }
-  try {
-    sessionStorage.setItem(PROBE_CACHE_KEY, dismissEndpointAvailable ? "1" : "0");
-  } catch {
-    // sessionStorage write failure — non-fatal, we'll re-probe next mount.
-  }
-  return dismissEndpointAvailable ?? false;
 }
 
 // MVP server emits a full snapshot on signature change; v2 may layer
