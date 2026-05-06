@@ -131,8 +131,20 @@ pub async fn handle_agent_spawn(
         .filter(|s| !s.is_empty());
     let can_self_delegate = request.get("can_self_delegate").and_then(|v| v.as_bool());
     let can_ask_director = request.get("can_ask_director").and_then(|v| v.as_bool());
+    // Optional entity_id override: attach the new agent to an existing Company
+    // instead of minting a fresh one.  Ignored when parent_agent_id is set
+    // (child spawns always inherit the parent's entity).
+    let entity_id = request
+        .get("entity_id")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
 
-    let agent = match ctx.agent_registry.spawn(name, parent_agent_id, model).await {
+    let agent = match ctx
+        .agent_registry
+        .spawn_with_entity_id(name, parent_agent_id, model, entity_id)
+        .await
+    {
         Ok(a) => a,
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };

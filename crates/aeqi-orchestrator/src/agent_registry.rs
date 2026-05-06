@@ -1560,16 +1560,32 @@ impl AgentRegistry {
             let fresh_entity_id = entity_id_override
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-            db.execute(
-                "INSERT INTO entities (id, type, name, slug, metadata, created_at)
-                     VALUES (?1, 'company', ?2, ?3, '{}', ?4)",
-                params![
-                    fresh_entity_id,
-                    canonical_name,
-                    canonical_name,
-                    now.to_rfc3339(),
-                ],
-            )?;
+            // When the caller supplied an explicit entity_id_override, skip the
+            // INSERT if that entity already exists — the agent is being attached
+            // to an existing Company, not creating a new one.  When no override
+            // was given (fresh root spawn, e.g. signup flow) always insert.
+            let already_exists = entity_id_override.is_some() && {
+                let count: i64 = db
+                    .query_row(
+                        "SELECT COUNT(*) FROM entities WHERE id = ?1",
+                        params![fresh_entity_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap_or(0);
+                count > 0
+            };
+            if !already_exists {
+                db.execute(
+                    "INSERT INTO entities (id, type, name, slug, metadata, created_at)
+                         VALUES (?1, 'company', ?2, ?3, '{}', ?4)",
+                    params![
+                        fresh_entity_id,
+                        canonical_name,
+                        canonical_name,
+                        now.to_rfc3339(),
+                    ],
+                )?;
+            }
             (fresh_entity_id, None)
         };
 
