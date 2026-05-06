@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::activity_log::ActivityLog;
 use crate::agent_registry::AgentRegistry;
 
-use super::PERSONA_IDEA_TAGS;
+use super::persona_idea_tags;
 
 /// Unified agents tool combining hire, retire, list, and self-introspection.
 pub struct AgentsTool {
@@ -74,7 +74,7 @@ impl AgentsTool {
 
         if let (Some(store), Some(prompt)) = (self.idea_store.as_ref(), system_prompt) {
             let idea_name = format!("Persona — {}", agent.name);
-            let tags: Vec<String> = PERSONA_IDEA_TAGS.iter().map(|s| s.to_string()).collect();
+            let tags = persona_idea_tags(&agent.id);
             let _ = store
                 .store(&idea_name, prompt, &tags, Some(&agent.id))
                 .await;

@@ -173,7 +173,7 @@ pub async fn handle_agent_spawn(
         match ctx.idea_store.as_ref() {
             Some(store) => {
                 let idea_name = format!("Persona — {}", agent.name);
-                let tags = vec!["identity".to_string(), "evergreen".to_string()];
+                let tags = crate::tools::persona_idea_tags(&agent.id);
                 if let Err(err) = store
                     .store(&idea_name, prompt, &tags, Some(&agent.id))
                     .await

@@ -726,7 +726,14 @@ async fn store_identity_idea(
     warnings: &mut Vec<String>,
 ) {
     let idea_name = format!("Persona — {name}");
-    let tags = vec!["identity".to_string(), "evergreen".to_string()];
+    // The `personality:<agent_id>` tag is the deterministic per-agent
+    // lookup key the Personality tab on the agent rail reads from. It
+    // co-exists with the legacy `identity` tag so the existing
+    // session:start tag-policy assembly path keeps working unchanged —
+    // identity-tagged ideas are pulled into the system prompt today,
+    // and the new tag is purely a UI handle. See `tools/mod.rs` for the
+    // shared helper used by every persona-creation surface.
+    let tags = crate::tools::persona_idea_tags(agent_id);
     if let Err(err) = idea_store
         .store(&idea_name, system_prompt, &tags, Some(agent_id))
         .await

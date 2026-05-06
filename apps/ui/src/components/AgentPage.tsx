@@ -20,6 +20,7 @@ const EntityRolesTab = lazy(() => import("./EntityRolesTab"));
 const EntityOverviewTab = lazy(() => import("./EntityOverviewTab"));
 const AgentOverviewTab = lazy(() => import("./AgentOverviewTab"));
 const AgentIntegrationsTab = lazy(() => import("@/pages/Agent/Integrations"));
+const PersonalityPage = lazy(() => import("@/pages/agents/PersonalityPage"));
 const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
 
 // Agent-scoped page rail — shown only when drilled into a specific
@@ -38,6 +39,10 @@ const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
 // far left, sessions list to its right, chat to the right of that.
 export const AGENT_RAIL_TABS = [
   { id: "overview", label: "Overview" },
+  // Personality slots between Overview and Sessions per the agent rail
+  // v1 spec amendment — the most-common operator action ("teach the
+  // agent") is one click off Overview.
+  { id: "personality", label: "Personality" },
   { id: "sessions", label: "Sessions" },
   { id: "quests", label: "Quests" },
   { id: "events", label: "Events" },
@@ -54,6 +59,7 @@ export const AGENT_RAIL_TABS = [
 // lives outside of this component.
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "personality", label: "Personality" },
   { id: "sessions", label: "Sessions" },
   { id: "settings", label: "Settings" },
   { id: "roles", label: "Roles" },
@@ -131,6 +137,8 @@ export default function AgentPage({
           ) : (
             <EntityOverviewTab entityId={resolvedEntityId} />
           ))}
+
+        {activeTab === "personality" && <PersonalityPage agentId={resolvedAgentId} />}
 
         {activeTab === "sessions" && (
           <div className="agent-page-chat">
