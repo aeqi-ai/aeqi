@@ -1,5 +1,16 @@
 # Release Notes
 
+## v0.40.0 — 2026-05-07
+
+**Headline:** AEIQ Executive Assistant goes live — Telegram bot answering, mention-gate live, Google OAuth Path B end-to-end, session-streaming P0 fix.
+
+- **Session-streaming P0+P1 fix** (`crates/aeqi-orchestrator/src/ipc/session_stream.rs` + `apps/ui/src/components/session/useSessionManager.ts`): the daemon's `session_subscribe` was short-circuiting subscribes-before-executor with a synthetic `Complete{no_active_run:true}` — UI's "subscribe-then-send" pattern guaranteed the race. WS tore down before any real events fired; refresh worked because messages persist to DB. Removed the `is_active` early-return; subscribers now wait on `rx.recv()` regardless of executor state. Plus polling no longer repaints messages mid-turn (gates on `streamingSessions[id]`), eliminating duplicate thinking-bar trails. `7aae78c7`.
+- **Per-agent Google OAuth Path B** — three commits across three repos shipping the canonical agent-scoped Google integration:
+  - `aeqi 5c2900ee` — `credentials_ingest` IPC verb + `POST /api/integrations/credentials/ingest` HTTP endpoint. The persist side: takes plaintext OAuth tokens from the platform, writes them encrypted into the per-tenant credentials substrate scoped `(scope_kind=Agent, scope_id=<agent_id>, provider="google", name="oauth_token")`. The same key the existing `aeqi-pack-google-workspace` reads.
+  - `aeqi-platform 0b5676e` — `GET /api/agents/{id}/integrations/google/start` (mints HMAC-signed state token, builds Google authorize URL with offline access + force consent), wired callback exchange (decodes state, POSTs to `https://oauth2.googleapis.com/token`, calls `credentials_ingest` over IPC), and `/api/agents/{id}/integrations/google/status` for UI to render Connect/Connected toggle. Caught and fixed a bug in the original 501 stub: callback was registered behind auth (would have 401'd Google's redirect); now public-routed.
+  - `aeqi/apps/ui f64c7b77` — `Connect Google` button on agent settings. Calls `/start`, redirects via `window.location.href`, refetches status on `?connected=google` return.
+  - **Activation:** paste `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `AEQI_OAUTH_STATE_SECRET=$(openssl rand -hex 32)` into `/etc/aeqi/secrets.env`; restart `aeqi-platform.service`. Routes flip from 503 setup-required to live. Pattern memorialized in `architecture_agent_scoped_oauth_path_b.md`.
+
 ## v0.39.0 — 2026-05-07
 
 **Headline:** Telegram mention-gate + meeting-orchestration tools (`calendar.find_busy` / `calendar.propose_slots`) + æqi → æiq brand rebrand + role-tile shape semantics.
