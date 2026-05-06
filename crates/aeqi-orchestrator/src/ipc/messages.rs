@@ -422,17 +422,25 @@ fn role_for_from_kind(from_kind: &str) -> &'static str {
 
 // ── @-mention wiring for messages ────────────────────────────────────────────
 
-/// Parse `@<token>` mentions from a message body and auto-subscribe each
-/// resolved identity as a `session_participant` (`joined_by = "mention"`).
+/// Parse `@<token>` mentions from a message body, auto-subscribe each
+/// resolved identity as a `session_participant` (`joined_by = "mention"`),
+/// and — for agent mentions — enqueue a spawn so the mentioned agent reads
+/// the message and replies. Parity with the Telegram mention-gate: the
+/// front door to the in-app channel surface.
+///
+/// Order is participant-add → enqueue (subscribe-then-send), so a
+/// non-participant agent is silently auto-added BEFORE its spawn fires.
 ///
 /// No separate system message is emitted — the message itself is the
 /// notification (Linear / Notion behaviour).
 ///
 /// Fuzzy mentions (bare `@name`) resolve via agent-name lookup only.
-/// Unresolved mentions are skipped silently.
+/// Unresolved mentions are skipped silently. Non-agent mentions
+/// (`@user:`, `@position:`) subscribe but do not spawn — those identities
+/// are humans or organizational pointers, not agents you can call.
 async fn wire_at_mentions_in_message(
     ctx: &super::CommandContext,
-    ss: &crate::session_store::SessionStore,
+    ss: &std::sync::Arc<crate::session_store::SessionStore>,
     session_id: &str,
     body: &str,
 ) {
@@ -459,9 +467,88 @@ async fn wire_at_mentions_in_message(
         };
 
         // Idempotent subscribe — no system message (the message itself notifies).
+        // Auto-adds non-participant agents silently per Linear/Notion behaviour.
         let _ = ss
             .add_session_participant(session_id, resolved_kind, &resolved_id, Some("mention"))
             .await;
+
+        // Spawn enqueue: only agent mentions trigger an agent run. Users and
+        // roles get participant rows for visibility but no spawn (humans
+        // aren't callable, role-routing is its own target_kind path).
+        if resolved_kind == crate::mentions::KIND_AGENT {
+            enqueue_mention_spawn(ctx, ss.clone(), session_id, &resolved_id, body).await;
+        }
+    }
+}
+
+/// Build a `chat`-shaped `QueuedMessage` for a mentioned agent and push it
+/// onto the per-session pending queue. The original message body has
+/// already been recorded by `append_message_from`; we mark
+/// `initial_message_recorded` so `spawn_session` doesn't write it twice.
+///
+/// Degrades silently when `default_provider` is None — the daemon hasn't
+/// finished bootstrapping. The participant subscription persists; a
+/// future trigger picks the agent up.
+async fn enqueue_mention_spawn(
+    ctx: &super::CommandContext,
+    ss: std::sync::Arc<crate::session_store::SessionStore>,
+    session_id: &str,
+    agent_id: &str,
+    body: &str,
+) {
+    let Some(provider) = ctx.default_provider.clone() else {
+        tracing::warn!(
+            session_id,
+            agent_id,
+            "mention spawn: no default_provider; participant added but spawn deferred"
+        );
+        return;
+    };
+
+    let executor: std::sync::Arc<dyn crate::session_queue::SessionExecutor> =
+        std::sync::Arc::new(crate::queue_executor::QueueExecutor {
+            session_manager: ctx.session_manager.clone(),
+            agent_registry: ctx.agent_registry.clone(),
+            stream_registry: ctx.stream_registry.clone(),
+            execution_registry: ctx.execution_registry.clone(),
+            provider,
+            activity_log: Some(ctx.activity_log.clone()),
+            session_store: ctx.session_store.clone(),
+            idea_store: ctx.idea_store.clone(),
+            adaptive_retry: ctx.dispatcher.config.adaptive_retry,
+            failure_analysis_model: ctx.dispatcher.config.failure_analysis_model.clone(),
+            extra_tools: Vec::new(),
+            pattern_dispatcher: ctx.pattern_dispatcher.clone(),
+        });
+
+    let qm = crate::queue_executor::QueuedMessage::chat(
+        agent_id.to_string(),
+        body.to_string(),
+        None,
+        Some("mention".to_string()),
+    )
+    .with_initial_message_recorded();
+
+    let payload = match qm.to_payload() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(
+                session_id,
+                agent_id,
+                error = %e,
+                "mention spawn: payload encode failed"
+            );
+            return;
+        }
+    };
+
+    if let Err(e) = crate::session_queue::enqueue(ss, executor, session_id, &payload).await {
+        tracing::warn!(
+            session_id,
+            agent_id,
+            error = %e,
+            "mention spawn: enqueue failed"
+        );
     }
 }
 
