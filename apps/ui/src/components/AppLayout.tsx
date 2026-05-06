@@ -211,9 +211,30 @@ export default function AppLayout() {
   // Stale entity ref after a data reset would point at a non-existent
   // entity. Bounce home; the user picks (or creates) a fresh entity from
   // there. Applies to both /c/:entityId and /trust/:trustAddress shapes.
+  //
+  // BUT only bounce when we're sure the entity doesn't exist — i.e. the
+  // user-scoped entity list is non-empty AND the target id isn't in it.
+  // If `entities` is empty, the request hasn't resolved yet (or the
+  // /api/agents call 502'd mid-flight before agents materialized) and
+  // bouncing here drops the user onto the `/economy` shell rather than
+  // showing a degraded company shell. Holds them on the URL while the
+  // host service recovers; once `agents` repopulates, `rootAgent`
+  // becomes non-null and the shell renders normally. If the entity is
+  // genuinely missing from a non-empty entities list, the bounce still
+  // fires — that's the canonical stale-ref case.
   if ((routeEntityId || routeTrustAddress) && !rootAgent) {
-    localStorage.removeItem("aeqi_entity");
-    return <Navigate to="/" replace />;
+    const entityKnown = effectiveRouteEntityId
+      ? entities.some((e) => e.id === effectiveRouteEntityId)
+      : false;
+    const entityListSettled = entities.length > 0;
+    if (entityListSettled && !entityKnown) {
+      localStorage.removeItem("aeqi_entity");
+      return <Navigate to="/" replace />;
+    }
+    // Else: entities not yet loaded, or the entity exists but agents
+    // haven't (host restart, transient 502). Render the shell with a
+    // boot spinner — the periodic refresh will recover.
+    return <BootLoader />;
   }
 
   // The agent surface mounts on either the entity-root agent (company

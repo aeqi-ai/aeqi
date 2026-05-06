@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, type InboxItem } from "@/lib/api";
+import { getScopedEntity } from "@/lib/appMode";
 
 // Optimistic dismissal hides via pendingDismissal instead of mutating
 // `items` so an error path can `restoreItem` without re-fetching, and a
@@ -52,6 +53,17 @@ export async function probeDismissEndpoint(): Promise<boolean> {
     return false;
   }
 
+  // The platform proxy on /api/inbox/* requires an X-Entity header — without
+  // it the catch-all extracts a missing entity id and returns 400 (NOT 401),
+  // which leaks a console error on every inbox mount. Skip the probe until an
+  // entity scope is set; the next inbox mount with a real X-Entity will run
+  // the probe cleanly. This mirrors the daemon-store fetchAll ordering rule
+  // (entity-scoped fetches gate on getScopedEntity()).
+  const entityId = getScopedEntity();
+  if (!entityId) {
+    return false;
+  }
+
   try {
     // Use a dummy session ID; a 404 from the route itself vs. a 405/200
     // tells us whether the endpoint exists at all. The platform returns 404
@@ -61,10 +73,15 @@ export async function probeDismissEndpoint(): Promise<boolean> {
     // the store handle 404 per-call gracefully.
     const resp = await fetch("/api/inbox/__probe__/dismiss", {
       method: "HEAD",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Entity": entityId,
+      },
     });
-    // 401 = auth failed (transient — don't cache). 404/405/2xx = route registered.
-    if (resp.status === 401) {
+    // 401 = auth failed (transient — don't cache). 400 = entity scope rejected
+    // (also transient; the localStorage entity may have been pruned by a sign-out
+    // race). 404/405/2xx = route registered.
+    if (resp.status === 401 || resp.status === 400) {
       return false;
     }
     dismissEndpointAvailable = resp.status !== 0;

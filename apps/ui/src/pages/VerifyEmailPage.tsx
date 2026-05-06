@@ -24,7 +24,7 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     if (isAuthenticated()) {
       localStorage.removeItem("aeqi_pending_email");
-      navigate("/", { replace: true });
+      navigate("/me/inbox", { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -54,7 +54,8 @@ export default function VerifyEmailPage() {
       verifyEmail(email, full).then((ok) => {
         if (ok) {
           localStorage.removeItem("aeqi_pending_email");
-          navigate("/", { replace: true });
+          // Post-signup verify → onboarding (no companies yet).
+          navigate("/start", { replace: true });
         }
       });
     }
@@ -76,7 +77,8 @@ export default function VerifyEmailPage() {
       verifyEmail(email, text).then((ok) => {
         if (ok) {
           localStorage.removeItem("aeqi_pending_email");
-          navigate("/", { replace: true });
+          // Post-signup verify → onboarding (no companies yet).
+          navigate("/start", { replace: true });
         }
       });
     }

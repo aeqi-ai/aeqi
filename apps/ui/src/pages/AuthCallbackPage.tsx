@@ -29,11 +29,13 @@ export default function AuthCallbackPage() {
           if (!roots || roots.length === 0) {
             navigate("/start", { replace: true });
           } else {
-            navigate("/", { replace: true });
+            // Post-auth default is the personal Inbox — daily-action
+            // surface, not the Economy front door.
+            navigate("/me/inbox", { replace: true });
           }
         })
         .catch(() => {
-          navigate("/", { replace: true });
+          navigate("/me/inbox", { replace: true });
         });
     } else {
       navigate("/login", { replace: true });
