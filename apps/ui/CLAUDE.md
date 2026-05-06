@@ -512,6 +512,16 @@ NOT work in this project — npm spawns a fresh shell that resets PATH,
 so the binary injections never reach the subprocess. The `node` form
 is the only reliable approach when `.bin/` is contested.
 
+**`OwnershipPage` snapshot tests are pre-existing failing drift — not your regression.**
+`src/test/components/OwnershipPage.test.tsx` has 2 snapshot tests that fail on main
+and on every worktree branch. They show a stale "Human" occupant label vs the live
+"user…er-1" truncated ID rendering. When `vitest run` reports these 2 failures, confirm
+they also fail on main before diagnosing your change: `git -C /home/claudedev/aeqi stash
+&& node .../vitest.mjs run src/test/components/OwnershipPage.test.tsx`. If they fail
+there too, they're pre-existing — skip and proceed. Don't chase them unless your change
+touches `OwnershipPage.tsx` or its mock data. Cost (2026-05-06): ~1 min confirmation per
+session that sees them.
+
 **`npm run verify` exit code 216 = binary not found, not a code error.**
 Exit 216 is Node.js's "could not find the executable" signal — it means
 the first binary in the verify chain (`tsc`, `prettier`, etc.) was missing,
