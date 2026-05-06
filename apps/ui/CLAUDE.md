@@ -799,7 +799,10 @@ export const wagmiConfig = createConfig({
 import { useBalance } from "wagmi";
 import { anvil } from "wagmi/chains";
 
-const { data: ethBalance } = useBalance({ address: trustAddress as `0x${string}`, chainId: anvil.id });
+const { data: ethBalance } = useBalance({
+  address: trustAddress as `0x${string}`,
+  chainId: anvil.id,
+});
 // ethBalance?.formatted → "1.0000" (18-decimal ETH string)
 ```
 
@@ -813,3 +816,21 @@ vi.mock("wagmi", async (importOriginal) => {
   return { ...actual, useBalance: vi.fn(() => ({ data: undefined, isLoading: false })) };
 });
 ```
+
+## v3 token drift — broken aliases with no compat bridge
+
+**`--text-{2xs,xs,sm,base,lg,xl}` are broken tokens — no bridge, no v4 equivalent.**
+These font-size shorthands exist in some pages but are NOT defined anywhere in
+`primitives.css` or `tokens.css`. They silently produce `undefined` (fontSize not
+applied). Canonical fix: `--text-{size}` → `--font-size-{size}` (direct rename, the
+`--font-size-*` scale is the v4 canonical set). Affected files found in v3-sweep
+(2026-05-06): OwnershipPage, GovernancePage, TreasuryPage, WalletUpgradeSection,
+AAEnrollmentPage. Grep: `grep -rn 'var(--text-[0-9a-z]' src/`.
+
+**`--text-tertiary` has no compat bridge — silently applies no color.**
+`primitives.css` bridges `--text-{primary,secondary,muted}` to the v4 `--color-text-*`
+equivalents, but `--text-tertiary` was never bridged. Elements using it inherit their
+parent's color instead of reading as demoted/muted text. Fix: `--text-tertiary` →
+`--color-text-muted`. Cost (2026-05-06): discovered mid-sweep when grep found 14
+occurrences in blueprints-store.css, blueprint-launch-picker.css, and pages.css with
+no matching definition anywhere in the token files.
