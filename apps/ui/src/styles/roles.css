@@ -116,22 +116,46 @@
 /* ------------------------------------------------------------------
    Chart view — DAG canvas + connectors.
    ------------------------------------------------------------------ */
-.roles-chart-scroll {
+
+/* Viewport: fills the allocated space, clips overflow, handles events. */
+.roles-chart-viewport {
   width: 100%;
   height: 100%;
-  overflow: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 12px;
+  overflow: hidden;
+  position: relative;
+  /* touch-action: none lets pointer events fire without browser scroll
+     interference on mobile. */
+  touch-action: none;
 }
+
+/* Inner: the transform target. transform-origin top-left so our
+   translate/scale math is in viewport coordinates. */
+.roles-chart-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  /* No transition — we want instant tracking during drag/wheel. */
+}
+
 .roles-chart-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 28px;
   flex-shrink: 0;
-  padding: 12px 0;
+  padding: 12px;
+}
+
+/* Zoom controls — bottom-right corner overlay. */
+.roles-chart-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
 }
 .roles-chart-zone {
   display: flex;
