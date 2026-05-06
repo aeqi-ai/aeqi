@@ -36,6 +36,8 @@ consciously whether to include that whitespace churn. Including it is fine
 reformatted in the governance-queries commit despite being untouched by the
 feature work.
 
+**`cargo fmt -p A -p B -- --check` reports diff but exits 0 when the LAST `-p` crate is clean.** The combined invocation runs fmt on each crate in order; only the LAST package's exit code propagates to the shell. If `-p aeqi-orchestrator` (clean) is listed after `-p aeqi-web` (drifty), the command prints `aeqi-web`'s diff to stderr but exits 0. To detect drift reliably, run each crate's check independently and inspect each exit code: `cargo fmt -p aeqi-orchestrator -- --check; echo "ORCH: $?"; cargo fmt -p aeqi-web -- --check; echo "WEB: $?"`. Don't trust a combined `--check` exit code as a green light. Cost (2026-05-06): ~30s doubting myself on channels-surface ship before scoping per-crate.
+
 **`.observations/` lives in the main working tree, not worktrees.** The
 `.observations/` directory is only present in `/home/claudedev/aeqi/` (the
 main checkout). Worktrees don't have their own copy. When autonomous
@@ -338,6 +340,10 @@ For UI-only changes (no Rust touched), use the lighter UI deploy path documented
 **`presets/blueprints/*.json` are compiled into the binary via `include_str!`.** Changes to any blueprint JSON require a full `./scripts/deploy.sh` — NOT the UI-only rsync path. Two consumers embed them at compile time: `crates/aeqi-orchestrator/src/blueprints/mod.rs` (runtime) and `aeqi-platform/src/blueprints.rs` (platform). Changing a blueprint JSON means both repos need a Rust rebuild and deploy to pick up the change. Caught 2026-05-04 when adding `templateSlug` field — the `/ship` skill correctly routed to full deploy because the files aren't under `apps/ui/`, but the reason (compile-time embedding) wasn't obvious.
 
 ### Deploy — known traps
+
+**Push to `origin main` auto-fires a webhook deploy that races your manual `./scripts/deploy.sh`.** The platform's `aeqi-platform.service` listens for a `push` webhook and runs `AEQI_WEBHOOK_DEPLOY=1 /home/claudedev/aeqi/scripts/deploy.sh` automatically. If you push then immediately invoke `./scripts/deploy.sh` from the same shell, both deploys run concurrently and step on each other's binary swap (one finishes first; the other reports a stale binary mtime). After `git push origin main` always wait ~5–10s and check `journalctl -u aeqi-platform.service -n 5 | grep "deploy webhook"` before invoking deploy.sh — if the webhook fired and succeeded (binary mtime is fresh), you're done; if it failed, run deploy.sh once. Never run both. Cost (2026-05-06): ~30s confusion on channels-surface ship when I ran deploy.sh and saw stale 22:53 mtime, then re-ran and the second run was the one that landed.
+
+**`./scripts/deploy.sh` step [3/4] (aeqi-platform binary) can fail without breaking step [2/4] (aeqi runtime binary).** Steps run in order: [1/4] UI, [2/4] aeqi runtime, [3/4] aeqi-platform, [4/4] restart. If a previous unrelated session left an unmerged conflict marker in `aeqi-platform/src/` (e.g. `<<<<<<< Updated upstream` in `src/routes/account.rs`), step [3/4] errors out with `error: could not compile aeqi-platform` and `set -e` kills the script — but step [2/4] already swapped the runtime binary at `/home/claudedev/aeqi-platform/runtime/bin/aeqi`. Symptom: deploy.sh exits 101, runtime IPC verbs you just shipped are present in the binary (`strings | grep <new_verb>`), platform binary at `/usr/local/bin/aeqi-platform` is stale. Diagnostic: `grep -rn "<<<<<<<\|>>>>>>>" /home/claudedev/aeqi-platform/src/` finds the conflict. The runtime ship is durable; the platform ship needs the conflict resolved by whoever owns that change. Cost (2026-05-06): ~60s on channels-surface ship before I confirmed step [2/4] succeeded via `strings` check.
 
 **`scripts/deploy.sh` leaves per-tenant host services stopped.** The
 script stops every `aeqi-host-<entity>.service`, swaps the binary,
