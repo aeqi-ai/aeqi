@@ -16,6 +16,11 @@ const STATUS_LABEL: Record<QuestStatus, string> = {
 export interface QuestStatusPopoverProps {
   status: QuestStatus;
   onChange: (next: QuestStatus) => void;
+  /** Optional controlled-open. When provided, the parent owns the popover
+   * state — used by the `S` keyboard shortcut on Quest detail to open
+   * the picker without a click. Falls back to internal state otherwise. */
+  open?: boolean;
+  onOpenChange?: (next: boolean) => void;
 }
 
 /**
@@ -24,8 +29,18 @@ export interface QuestStatusPopoverProps {
  * `quest-status-dot` glyph + label + chevron. Popover rows reuse
  * the shared `.ideas-filter-popover` shell.
  */
-export default function QuestStatusPopover({ status, onChange }: QuestStatusPopoverProps) {
-  const [open, setOpen] = useState(false);
+export default function QuestStatusPopover({
+  status,
+  onChange,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: QuestStatusPopoverProps) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setOpenState(next);
+    onOpenChangeProp?.(next);
+  };
   const popoverId = useId();
   return (
     <Popover

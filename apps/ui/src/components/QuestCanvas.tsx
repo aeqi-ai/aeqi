@@ -76,6 +76,12 @@ function QuestToolbar({
   onSave,
   linkedIdeaSlot,
   trailingSlot,
+  statusOpen,
+  onStatusOpenChange,
+  priorityOpen,
+  onPriorityOpenChange,
+  assigneeOpen,
+  onAssigneeOpenChange,
 }: {
   agentId: string;
   agents: { id: string; name: string }[];
@@ -101,6 +107,15 @@ function QuestToolbar({
   onSave: () => void;
   linkedIdeaSlot?: React.ReactNode;
   trailingSlot?: React.ReactNode;
+  /** Controlled-open hooks. Threaded so the parent (ViewCanvas) can pop
+   * the popovers via the S / P / A keyboard shortcuts. Optional —
+   * uncontrolled by default so ComposeCanvas keeps its existing UX. */
+  statusOpen?: boolean;
+  onStatusOpenChange?: (next: boolean) => void;
+  priorityOpen?: boolean;
+  onPriorityOpenChange?: (next: boolean) => void;
+  assigneeOpen?: boolean;
+  onAssigneeOpenChange?: (next: boolean) => void;
 }) {
   void agentId;
   return (
@@ -143,13 +158,25 @@ function QuestToolbar({
         </Tooltip>
       )}
       {linkedIdeaSlot}
-      <QuestStatusPopover status={status} onChange={onStatusChange} />
-      <QuestPriorityPopover priority={priority} onChange={onPriorityChange} />
+      <QuestStatusPopover
+        status={status}
+        onChange={onStatusChange}
+        open={statusOpen}
+        onOpenChange={onStatusOpenChange}
+      />
+      <QuestPriorityPopover
+        priority={priority}
+        onChange={onPriorityChange}
+        open={priorityOpen}
+        onOpenChange={onPriorityOpenChange}
+      />
       <AssigneePicker
         assignee={assignee}
         agents={agents}
         users={users}
         onChange={onAssigneeChange}
+        open={assigneeOpen}
+        onOpenChange={onAssigneeOpenChange}
         renderTrigger={({ open, display }) => (
           <Button
             variant="secondary"
@@ -442,6 +469,15 @@ function ViewCanvas({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [bodyDirty, setBodyDirty] = useState(false);
 
+  // Linear-style single-key shortcuts on the detail page open the
+  // matching popover. Owning the open state up here is what lets `S`,
+  // `P`, `A` flip the controlled `open` props on the children. `D`
+  // (due-date) is intentionally omitted — Quests have no due-date
+  // schema yet (Phase 2 lands the field + picker together).
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+
   const debounceRef = useRef<number | null>(null);
   const canvasRef = useRef<IdeaCanvasHandle | null>(null);
   const lifecycleRef = useRef({ status, priority, assignee, scope });
@@ -492,6 +528,44 @@ function ViewCanvas({
 
   const handleRevertBody = useCallback(() => {
     canvasRef.current?.revert();
+  }, []);
+
+  // S / P / A shortcuts. Skip when focus is inside an editable
+  // element (BlockEditor, search input, etc.) and when any modifier
+  // is held — same conventions as the j/k navigation in
+  // AgentQuestsTab. Open the matching popover on key-down; the
+  // popover's own focus handling takes over from there.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      if (isEditable) return;
+      if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        setStatusOpen((prev) => !prev);
+        setPriorityOpen(false);
+        setAssigneeOpen(false);
+        return;
+      }
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        setPriorityOpen((prev) => !prev);
+        setStatusOpen(false);
+        setAssigneeOpen(false);
+        return;
+      }
+      if (e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        setAssigneeOpen((prev) => !prev);
+        setStatusOpen(false);
+        setPriorityOpen(false);
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   if (!quest.idea) {
@@ -549,6 +623,12 @@ function ViewCanvas({
           onNew={() => goEntity(entityId, "quests", "new", { replace: false })}
           onCancel={handleRevertBody}
           onSave={handleSaveBody}
+          statusOpen={statusOpen}
+          onStatusOpenChange={setStatusOpen}
+          priorityOpen={priorityOpen}
+          onPriorityOpenChange={setPriorityOpen}
+          assigneeOpen={assigneeOpen}
+          onAssigneeOpenChange={setAssigneeOpen}
           trailingSlot={
             quest.sibling_quest_ids && quest.sibling_quest_ids.length > 0 ? (
               <span

@@ -16,6 +16,11 @@ const PRIORITY_LABEL: Record<QuestPriority, string> = {
 export interface QuestPriorityPopoverProps {
   priority: QuestPriority;
   onChange: (next: QuestPriority) => void;
+  /** Optional controlled-open. When provided, the parent owns the popover
+   * state — used by the `P` keyboard shortcut on Quest detail to open
+   * the picker without a click. Falls back to internal state otherwise. */
+  open?: boolean;
+  onOpenChange?: (next: boolean) => void;
 }
 
 /**
@@ -25,8 +30,18 @@ export interface QuestPriorityPopoverProps {
  * board cards. Shared `.ideas-filter-popover` shell with
  * IdeasScopePopover + QuestStatusPopover.
  */
-export default function QuestPriorityPopover({ priority, onChange }: QuestPriorityPopoverProps) {
-  const [open, setOpen] = useState(false);
+export default function QuestPriorityPopover({
+  priority,
+  onChange,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: QuestPriorityPopoverProps) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setOpenState(next);
+    onOpenChangeProp?.(next);
+  };
   const popoverId = useId();
   return (
     <Popover

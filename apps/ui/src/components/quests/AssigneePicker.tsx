@@ -28,6 +28,8 @@ export default function AssigneePicker({
   onChange,
   renderTrigger,
   placement = "bottom-start",
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: {
   assignee: string | null | undefined;
   agents: Pick<Agent, "id" | "name">[];
@@ -35,8 +37,18 @@ export default function AssigneePicker({
   onChange: (next: string | null) => void;
   renderTrigger: (args: { open: boolean; display: AssigneeDisplay | null }) => ReactNode;
   placement?: "bottom-start" | "bottom-end" | "top-start" | "top-end";
+  /** Optional controlled-open. When provided, the parent owns the popover
+   * state — used by the `A` keyboard shortcut on Quest detail to open
+   * the picker without a click. Falls back to internal state otherwise. */
+  open?: boolean;
+  onOpenChange?: (next: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setOpenState(next);
+    onOpenChangeProp?.(next);
+  };
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
