@@ -511,6 +511,13 @@ done
 
 Diagnostic: `strings /home/claudedev/aeqi-platform/runtime/bin/aeqi | grep "<new-sql-string>"` — if absent, the binary wasn't rebuilt. If present but the sandbox still misbehaves, the process is running the old image; restart the sandbox unit. Cost (2026-05-06): phantom entity fix appeared deployed (health 200, binary fresh mtime) but sandbox ran old code; two phantom entities created before root cause found.
 
+**Per-tenant `aeqi.db` lives at different paths for sandbox vs host placements — `/var/lib/aeqi/hosts/<slug>/aeqi.db` is dormant.** When verifying a schema migration on a tenant DB, use the path the live systemd unit actually opens, not the canonical-looking one:
+
+- **sandbox** (`aeqi-sandbox-<entity_id>.service`) → `/var/lib/aeqi/containers/<entity_id>/aeqi.db`
+- **host** (`aeqi-host-<entity_id>.service`) → `$HOME/.aeqi/aeqi.db` (e.g. `/home/claudedev/.aeqi/aeqi.db`) — the unit sets `HOME=/home/claudedev` + `WorkingDirectory=/home/claudedev/aeqi`, so the runtime resolves data dir to `~/.aeqi`, NOT to a per-slug path under `/var/lib/aeqi/hosts/`.
+
+The `/var/lib/aeqi/hosts/<slug>/aeqi.db` file exists but is stale legacy state from a pre-2026-04-29 layout — its schema does not auto-upgrade because no daemon ever opens it. Diagnostic: `cat /etc/systemd/system/aeqi-host-<entity_id>.service | grep -E "Environment=HOME|WorkingDirectory"` resolves the live path. Cost (2026-05-06): inference-accounting verify queried `/var/lib/aeqi/hosts/luca-eich/aeqi.db` and saw `lifetime_cost_usd` missing + `inference_calls` table absent; the live DB at `~/.aeqi/aeqi.db` had both. ~3 min to diagnose.
+
 **Planned stub routes MUST return explicit 501, not be left unregistered.** When a frontend feature is built against a route that isn't implemented yet (e.g. `POST /api/wallet/upgrade-to-passkey`), leaving the route unregistered causes axum's authed catch-all to return 401 "missing authorization header" — which is indistinguishable from a real auth failure. Frontend graceful-degradation logic that checks `if (msg.includes("501") || msg.toLowerCase().includes("not implemented"))` never fires; the user sees a red error banner instead of the intended "processing in background" success state. **Fix**: always register a one-liner 501 stub in aeqi-platform before shipping the frontend that calls it: `post(|| async { (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "not yet implemented"}))) })`. Cost (2026-05-05): dogfood v3 — passkey upgrade modal showed error banner for every user instead of the graceful success state.
 
 ## Release tagging convention
