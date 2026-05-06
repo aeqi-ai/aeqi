@@ -94,7 +94,7 @@ fn catalog() -> Vec<IntegrationCatalogEntry> {
             provider: "google",
             name: "oauth_token",
             label: "Google Workspace",
-            description: "Gmail, Calendar, and Meet via the pack:google-workspace toolset. Eleven tools \
+            description: "Gmail send, Calendar busy/propose, Drive read/write via the pack:google-workspace toolset. Fourteen tools \
                  backed by the oauth2 lifecycle with refresh-on-401.",
             lifecycle_kind: "oauth2",
             auth_url: Some("https://accounts.google.com/o/oauth2/v2/auth"),
@@ -103,6 +103,8 @@ fn catalog() -> Vec<IntegrationCatalogEntry> {
             oauth_scopes: vec![
                 "https://www.googleapis.com/auth/gmail.modify",
                 "https://www.googleapis.com/auth/calendar",
+                "https://www.googleapis.com/auth/drive.readonly",
+                "https://www.googleapis.com/auth/drive.file",
             ],
             client_id_env: Some("AEQI_OAUTH_GOOGLE_CLIENT_ID"),
             client_secret_env: Some("AEQI_OAUTH_GOOGLE_CLIENT_SECRET"),

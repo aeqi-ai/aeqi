@@ -1,7 +1,7 @@
-//! `pack:google-workspace` — Gmail / Calendar / Meet tools backed by T1.9's
-//! `oauth2` credential lifecycle.
+//! `pack:google-workspace` — Gmail / Calendar / Meet / Drive tools backed by
+//! T1.9's `oauth2` credential lifecycle.
 //!
-//! Eleven tools, all per-agent-scoped (`ScopeHint::Agent`):
+//! Fourteen tools, all per-agent-scoped (`ScopeHint::Agent`):
 //!
 //! | Tool                         | Scope                                                 |
 //! | ---------------------------- | ----------------------------------------------------- |
@@ -14,6 +14,9 @@
 //! | `calendar.delete_event`      |                                                       |
 //! | `meet.create`,               | `https://www.googleapis.com/auth/calendar`            |
 //! | `meet.list_active`           |                                                       |
+//! | `drive.list_files`,          | `https://www.googleapis.com/auth/drive.readonly`      |
+//! | `drive.read_file`            |                                                       |
+//! | `drive.create_doc`           | `https://www.googleapis.com/auth/drive.file`          |
 //!
 //! Tools declare their narrowest scope via `Tool::required_credentials()`;
 //! the bootstrap consent flow requests the union of declared scopes.
@@ -24,6 +27,7 @@
 
 pub mod api;
 pub mod calendar;
+pub mod drive;
 pub mod gmail;
 pub mod meet;
 
@@ -37,6 +41,7 @@ pub fn all_tools() -> Vec<std::sync::Arc<dyn aeqi_core::traits::Tool>> {
     tools.extend(gmail::all_tools());
     tools.extend(calendar::all_tools());
     tools.extend(meet::all_tools());
+    tools.extend(drive::all_tools());
     tools
 }
 
