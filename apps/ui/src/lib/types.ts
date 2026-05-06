@@ -18,6 +18,12 @@ export interface Entity {
   trust_address?: string;
   /** EOA that created this Entity's on-chain TRUST mirror. */
   creator_address?: string;
+  /** Root agent UUID for this entity. Surfaced by the platform's
+   *  `/api/entities` payload as `agent_id` so per-entity surfaces (`/me/*`,
+   *  AgentPage) can resolve the root without an entity-scoped agents fetch. */
+  agent_id?: string;
+  /** Placement type — `"host"`, `"sandbox"`, `"vps"`, or `"unknown"`. */
+  placement_type?: string;
 }
 
 export interface Agent {

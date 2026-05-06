@@ -1,8 +1,9 @@
 import { lazy, Suspense, useMemo } from "react";
-import { useParams, Navigate } from "react-router-dom";
+import { useParams, Navigate, useNavigate } from "react-router-dom";
 import AgentPage from "@/components/AgentPage";
 import MeInboxPage from "@/pages/MeInboxPage";
 import TreasuryPage from "@/pages/TreasuryPage";
+import { Button, EmptyState } from "@/components/ui";
 import { useDaemonStore } from "@/store/daemon";
 import { useAuthStore } from "@/store/auth";
 
@@ -58,63 +59,49 @@ export default function MePage() {
 
 /**
  * Renders personal entity tabs (inbox / agents / events / quests / ideas / treasury).
- * Resolves the personal entity from the user's roots array against the entities list.
- * Falls back to the first entity when the roots match fails.
+ *
+ * Resolution order for the personal Entity:
+ *   1. The first `host`-typed entity (the platform-owner placement carved out
+ *      for the user's own workspace — see `architecture_user_account_is_company.md`).
+ *   2. The first entry in `user.roots` that exists in `entities`.
+ *   3. `entities[0]` as final fallback.
+ *
+ * Once resolved, `entity.agent_id` is the root agent UUID directly off the
+ * `/api/entities` payload — no entity-scoped agents fetch required (the
+ * daemon's `agents` array is filtered by active X-Entity scope and may not
+ * include the personal entity's root when the user is scoped to a company).
  */
 function MePersonalRail({ tab }: { tab: string }) {
   const entities = useDaemonStore((s) => s.entities);
-  const agents = useDaemonStore((s) => s.agents);
+  const initialLoaded = useDaemonStore((s) => s.initialLoaded);
   const user = useAuthStore((s) => s.user);
 
-  // Resolve the personal entity: prefer the first entry in user.roots that
-  // exists in our entities list; fall back to entities[0].
-  const personalEntityId = useMemo(() => {
+  const personalEntity = useMemo(() => {
+    if (entities.length === 0) return null;
+    const host = entities.find((e) => e.placement_type === "host");
+    if (host) return host;
     const rootIds = user?.roots ?? [];
     for (const rid of rootIds) {
-      if (entities.some((e) => e.id === rid)) return rid;
+      const match = entities.find((e) => e.id === rid);
+      if (match) return match;
     }
-    return entities[0]?.id ?? null;
+    return entities[0] ?? null;
   }, [user?.roots, entities]);
 
-  const personalRootAgent = useMemo(
-    () =>
-      personalEntityId ? (agents.find((a) => a.entity_id === personalEntityId) ?? null) : null,
-    [agents, personalEntityId],
-  );
+  const personalEntityId = personalEntity?.id ?? null;
+  const personalRootAgentId = personalEntity?.agent_id ?? null;
 
   if (tab === "inbox") return <MeInboxPage />;
 
   if (tab === "treasury") {
-    if (!personalEntityId)
-      return (
-        <div
-          style={{
-            padding: "var(--space-6)",
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-size-base)",
-          }}
-        >
-          No personal entity found.
-        </div>
-      );
+    if (!personalEntityId) return <NoPersonalEntity loaded={initialLoaded} />;
     return <TreasuryPage entityId={personalEntityId} />;
   }
 
   // agents / events / quests / ideas — route through AgentPage on the personal root agent.
   if (tab === "agents" || tab === "events" || tab === "quests" || tab === "ideas") {
-    if (!personalRootAgent?.id)
-      return (
-        <div
-          style={{
-            padding: "var(--space-6)",
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-size-base)",
-          }}
-        >
-          No personal entity found.
-        </div>
-      );
-    return <AgentPage agentId={personalRootAgent.id} tab={tab} />;
+    if (!personalRootAgentId) return <NoPersonalEntity loaded={initialLoaded} />;
+    return <AgentPage agentId={personalRootAgentId} tab={tab} />;
   }
 
   // Retired route — portfolio moved to treasury
@@ -125,5 +112,35 @@ function MePersonalRail({ tab }: { tab: string }) {
     <Suspense fallback={null}>
       <ProfilePage />
     </Suspense>
+  );
+}
+
+/**
+ * Empty-state fallback for `/me/{agents,quests,ideas,events,treasury}` when
+ * the user's personal Entity hasn't materialised yet (initial load in flight,
+ * or a pre-2026-05-03 account whose signup pre-dated the auto-create rule).
+ *
+ * The CTA routes the user to `/start`, which gates on subscription tier and
+ * either provisions a personal Company synchronously or surfaces the
+ * subscription paywall.
+ */
+function NoPersonalEntity({ loaded }: { loaded: boolean }) {
+  const navigate = useNavigate();
+  if (!loaded) {
+    // Still loading entities — render nothing rather than flashing the CTA.
+    return null;
+  }
+  return (
+    <div style={{ padding: "var(--space-6)" }}>
+      <EmptyState
+        title="Your personal workspace isn't set up yet"
+        description="A personal workspace gives you a private surface for agents, quests, and ideas — separate from any company you join. Spin yours up from /start; it takes about a minute."
+        action={
+          <Button variant="primary" onClick={() => navigate("/start")}>
+            Create my personal workspace
+          </Button>
+        }
+      />
+    </div>
   );
 }

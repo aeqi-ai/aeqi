@@ -34,6 +34,8 @@ export function normalizeEntityRoots(data: EntitiesResponse | null | undefined):
       trust_id: optionalString(entity.trust_id),
       trust_address: optionalString(entity.trust_address),
       creator_address: optionalString(entity.creator_address),
+      agent_id: optionalString(entity.agent_id),
+      placement_type: optionalString(entity.placement_type),
     }))
     .filter((entity) => entity.id && entity.name);
 }

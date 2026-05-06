@@ -21,27 +21,62 @@ export interface InboxState {
   clearInbox: () => void;
 }
 
-// Module-level probe: attempt HEAD on the dismiss endpoint once.
+// Module-level probe: attempt HEAD on the dismiss endpoint once per session.
 // If it 404s, the endpoint isn't deployed yet — gate the archive button.
+//
+// Cached in sessionStorage so navigating between routes that mount the inbox
+// composer doesn't re-fire the probe and leak a 401 into the devtools console
+// on every paint. Bearer token forwarded so the probe matches the same
+// auth-required surface the real dismiss POST hits — without it the platform
+// returns 401 and the UI flags it as a console error even when the endpoint
+// exists and is deployed.
+const PROBE_CACHE_KEY = "aeqi_inbox_probe_v1";
 let dismissEndpointAvailable: boolean | null = null;
 export async function probeDismissEndpoint(): Promise<boolean> {
   if (dismissEndpointAvailable !== null) return dismissEndpointAvailable;
+  try {
+    const cached = sessionStorage.getItem(PROBE_CACHE_KEY);
+    if (cached === "1" || cached === "0") {
+      dismissEndpointAvailable = cached === "1";
+      return dismissEndpointAvailable;
+    }
+  } catch {
+    // sessionStorage unavailable (private mode, etc.) — fall through to live probe.
+  }
+
+  const token = localStorage.getItem("aeqi_token");
+  // Skip the probe entirely pre-auth — the route is auth-required and a
+  // pre-auth HEAD will 401, which leaks into the console as a network error.
+  // The probe will run on the next call after login.
+  if (!token) {
+    return false;
+  }
+
   try {
     // Use a dummy session ID; a 404 from the route itself vs. a 405/200
     // tells us whether the endpoint exists at all. The platform returns 404
     // for unknown session IDs on real endpoints, but returns a generic 404
     // when the route doesn't exist at all — indistinguishable here, so we
-    // treat any non-network-error as "endpoint deployed" and let the store
-    // handle 404 per-call gracefully.
-    const resp = await fetch("/api/inbox/__probe__/dismiss", { method: "HEAD" });
-    // 404 on a real endpoint = session not found = endpoint exists.
-    // 405 = wrong method but route exists. 200 = shouldn't happen.
-    // Any response means the route is registered.
+    // treat any non-network-error / non-401 as "endpoint deployed" and let
+    // the store handle 404 per-call gracefully.
+    const resp = await fetch("/api/inbox/__probe__/dismiss", {
+      method: "HEAD",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // 401 = auth failed (transient — don't cache). 404/405/2xx = route registered.
+    if (resp.status === 401) {
+      return false;
+    }
     dismissEndpointAvailable = resp.status !== 0;
   } catch {
     dismissEndpointAvailable = false;
   }
-  return dismissEndpointAvailable;
+  try {
+    sessionStorage.setItem(PROBE_CACHE_KEY, dismissEndpointAvailable ? "1" : "0");
+  } catch {
+    // sessionStorage write failure — non-fatal, we'll re-probe next mount.
+  }
+  return dismissEndpointAvailable ?? false;
 }
 
 // MVP server emits a full snapshot on signature change; v2 may layer
