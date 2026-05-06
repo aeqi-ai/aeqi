@@ -21,7 +21,6 @@
 
 use aeqi_core::detector::{DetectedPattern, DetectionContext, PatternDetector};
 use async_trait::async_trait;
-use tracing::warn;
 
 use super::{Middleware, MiddlewareAction, ORDER_COMPLETION_GUARDS, WorkerContext};
 
@@ -71,7 +70,7 @@ impl Middleware for CompletionGuardMiddleware {
 
     async fn after_step(
         &self,
-        ctx: &mut WorkerContext,
+        _ctx: &mut WorkerContext,
         response_text: &str,
         _stop_reason: &str,
     ) -> MiddlewareAction {
@@ -83,30 +82,7 @@ impl Middleware for CompletionGuardMiddleware {
             return MiddlewareAction::Continue;
         }
 
-        if let Some(ref registry) = ctx.registry {
-            let ectx = ctx.as_execution_context();
-            let preview: String = response_text.chars().take(160).collect();
-            let trigger_args = serde_json::json!({
-                "agent_id": ctx.agent_name,
-                "session_id": ctx.session_id,
-                "message_preview": preview,
-            });
-            let reg = registry.clone();
-            tokio::spawn(async move {
-                if let Err(e) = reg
-                    .invoke_pattern("agent:premature_completion", &ectx, &trigger_args)
-                    .await
-                {
-                    warn!(error = %e, "completion_guards: invoke_pattern failed");
-                }
-            });
-        } else {
-            warn!(
-                agent = %ctx.agent_name,
-                "agent:premature_completion (no registry — pattern logged only): \
-                 turn ended with no tool calls and a completion-shaped phrase",
-            );
-        }
+        // Response (event tool_calls) is dispatched via PatternDetector::detect.
 
         MiddlewareAction::Continue
     }

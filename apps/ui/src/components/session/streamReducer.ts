@@ -272,12 +272,10 @@ function ideaActivityLabel(event: RawEvent): string {
 }
 
 function eventFire(event: RawEvent) {
-  const ideaIds = Array.isArray(event.idea_ids) ? event.idea_ids.map(String) : [];
   return {
     eventId: String(event.event_id ?? ""),
     eventName: String(event.event_name ?? ""),
     pattern: String(event.pattern ?? ""),
-    ideaIds,
     scope: typeof event.scope === "string" && event.scope.length > 0 ? event.scope : "self",
   };
 }

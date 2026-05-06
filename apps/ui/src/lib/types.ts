@@ -255,10 +255,6 @@ export interface AgentEvent {
   scope?: ScopeValue;
   name: string;
   pattern: string;
-  idea_ids: string[];
-  query_template?: string | null;
-  query_top_k?: number | null;
-  query_tag_filter?: string[] | null;
   tool_calls?: ToolCall[] | null;
   enabled: boolean;
   cooldown_secs: number;

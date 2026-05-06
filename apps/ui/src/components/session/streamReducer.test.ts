@@ -89,7 +89,6 @@ describe("reduceStreamEvent", () => {
         eventId: "ev-1",
         eventName: "on_start",
         pattern: "session:start",
-        ideaIds: [],
         scope: "self",
       },
     });

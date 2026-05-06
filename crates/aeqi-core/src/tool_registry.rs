@@ -438,28 +438,6 @@ impl ToolRegistry {
             .map(|t| t.produces_context())
             .unwrap_or(false)
     }
-
-    /// Fire all events configured for `pattern`, running their tool_calls.
-    ///
-    /// The registry has no event store wired — this method always returns `Ok(false)`
-    /// so callers know to use their inline fallback. Operator-configurable event
-    /// dispatch goes through `PatternDispatcher` (implemented by the orchestrator via
-    /// its event store). This method is the bare-CLI / test fallback entry point that
-    /// middleware detectors call; the pattern fires through `PatternDispatcher` when
-    /// a full orchestrator is running.
-    pub async fn invoke_pattern(
-        &self,
-        pattern: &str,
-        ctx: &ExecutionContext,
-        _trigger_args: &serde_json::Value,
-    ) -> Result<bool> {
-        info!(
-            pattern = %pattern,
-            session = %ctx.session_id,
-            "invoke_pattern: no event store wired (bare registry — caller should use PatternDispatcher)"
-        );
-        Ok(false)
-    }
 }
 
 #[cfg(test)]
@@ -620,31 +598,6 @@ mod tests {
             .await;
         assert!(err.is_err());
         assert!(err.unwrap_err().to_string().contains("unknown tool"));
-    }
-
-    /// invoke_pattern always returns Ok(false) — no event store is wired in the
-    /// bare ToolRegistry. Callers should use PatternDispatcher for event-driven
-    /// dispatch; this method is a pass-through for bare-CLI / test environments.
-    #[tokio::test]
-    async fn invoke_pattern_always_returns_false() {
-        let reg = ToolRegistry::new(vec![]);
-        let ctx = ExecutionContext::test("s1", "a1");
-        let args = serde_json::json!({});
-        // All patterns return Ok(false) — no default handler fallback.
-        for pattern in &[
-            "loop:detected",
-            "guardrail:violation",
-            "graph_guardrail:high_impact",
-            "shell:command_failed",
-            "some:unknown:pattern",
-        ] {
-            let r = reg.invoke_pattern(pattern, &ctx, &args).await;
-            assert!(r.is_ok(), "invoke_pattern must not error for {pattern}");
-            assert!(
-                !r.unwrap(),
-                "invoke_pattern must return false (no event store) for {pattern}"
-            );
-        }
     }
 
     // ── T1.12a max_result_chars truncation ─────────────────────────────────

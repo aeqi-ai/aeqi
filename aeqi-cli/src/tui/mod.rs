@@ -233,7 +233,6 @@ fn process_ws_event(state: &mut AppState, evt: ChatStreamEvent, stdout: &mut imp
         ChatStreamEvent::EventFired {
             event_name,
             pattern,
-            idea_ids,
             ..
         } => {
             let label = if event_name.is_empty() {
@@ -241,7 +240,7 @@ fn process_ws_event(state: &mut AppState, evt: ChatStreamEvent, stdout: &mut imp
             } else {
                 event_name
             };
-            state.push_system(&format!("event {label} → {} idea(s)", idea_ids.len()));
+            state.push_system(&format!("event {label} fired"));
         }
         ChatStreamEvent::FileChanged {
             path,

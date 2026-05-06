@@ -28,7 +28,6 @@ describe("PrimitivePreview", () => {
         agent_id: "root-1",
         name: "Morning kickoff",
         pattern: "session:start",
-        idea_ids: [],
         enabled: true,
         cooldown_secs: 0,
         fire_count: 0,

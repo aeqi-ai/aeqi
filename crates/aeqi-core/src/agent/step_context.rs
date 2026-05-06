@@ -42,7 +42,6 @@ pub struct StepEventMeta {
     pub event_id: String,
     pub event_name: String,
     pub pattern: String,
-    pub idea_ids: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------

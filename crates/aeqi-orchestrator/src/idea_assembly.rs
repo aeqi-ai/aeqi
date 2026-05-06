@@ -1,26 +1,16 @@
 //! Idea assembly — event-driven context construction.
 //!
-//! Walks the agent ancestor chain, collects ideas activated by the
-//! target event pattern, and concatenates their content into a single
-//! assembled context. Tool restrictions from each idea merge across the set
-//! (intersection of allows, union of denies). Scope controls whether an
-//! ancestor's idea reaches the target agent.
+//! Walks the agent ancestor chain, finds events matching the target pattern,
+//! and dispatches each event's `tool_calls` (e.g. `ideas.assemble`,
+//! `ideas.search`) through the `ToolRegistry`. Tool outputs that produce
+//! context (per `produces_context()`) are appended to the assembled prompt.
+//! Tool restrictions from each idea merge across the set (intersection of
+//! allows, union of denies). Scope controls whether an ancestor's idea reaches
+//! the target agent.
 //!
-//! Events may also declare a `query_template`: a string with placeholders
-//! that is expanded at fire-time and then run through the idea store's
-//! semantic search. Returned ideas are merged after the static idea_ids.
-//! Placeholder semantics are loose — unknown placeholders pass through
-//! literally.
-//!
-//! ## Phase-2 tool_calls dispatch
-//!
-//! Events that have a non-empty `tool_calls` field take a separate path:
-//! the legacy `idea_ids`/`query_template` processing is skipped.
-//! When a `ToolDispatch` is provided, each tool call is executed via the
-//! `ToolRegistry` and its output is appended to the assembled context.
-//! When no `ToolDispatch` is provided (None), the old Phase-1 warning is
-//! logged and the event produces no ideas (safe fallback for callers that
-//! have not yet been updated to pass a registry).
+//! When no `ToolDispatch` is provided (None), events with tool_calls log a
+//! warning and produce nothing (safe fallback for callers that have not yet
+//! been wired to a registry — bare CLI / unit tests).
 //!
 //! `substitute_args` is a convenience for operator-readable event configs
 //! (e.g. `{user_input}` → actual value). It is NOT a security boundary.
@@ -55,7 +45,7 @@ pub struct ToolDispatch<'a> {
     pub session_store: Option<Arc<SessionStore>>,
 }
 
-/// Runtime values available to a query_template.
+/// Runtime values available to tool_call placeholder substitution.
 /// Fields left `None` substitute to the empty string; placeholders that do
 /// not correspond to any known field pass through literally.
 #[derive(Debug, Clone, Default)]
@@ -70,8 +60,7 @@ pub struct AssemblyContext {
 /// skills) that persists across every turn and iteration.
 ///
 /// Per-turn refresh context lives in `assemble_execution_context` and is
-/// injected ephemerally by the agent loop; per-iteration refresh lives in
-/// `assemble_step_ideas_for_worker`.
+/// injected ephemerally by the agent loop.
 ///
 /// Order: root ancestor → ... → parent → self → task ideas.
 /// Within each level, ideas are ordered as referenced by their events.
@@ -214,92 +203,6 @@ pub async fn assemble_ideas_for_quest_start(
     .await
 }
 
-/// Collect `session:step_start` ideas for a worker's agent ancestry and
-/// snapshot them into `StepIdeaSpec`s. Returns the specs plus the IDs of
-/// every event that contributed at least one non-empty idea (so the
-/// scheduler can `record_fire` each).
-///
-/// Fires once per worker-run (= session), matching interactive-chat
-/// semantics — see design doc `docs/design/as-011-worker-step-context.md`
-/// for the per-session vs per-LLM-call decision.
-pub async fn assemble_step_ideas_for_worker(
-    registry: &AgentRegistry,
-    idea_store: Option<&Arc<dyn IdeaStore>>,
-    event_store: &EventHandlerStore,
-    agent_id: &str,
-) -> (Vec<aeqi_core::StepIdeaSpec>, Vec<String>) {
-    let Some(store) = idea_store else {
-        return (Vec::new(), Vec::new());
-    };
-
-    let ancestors = registry.get_ancestors(agent_id).await.unwrap_or_default();
-    let mut specs: Vec<aeqi_core::StepIdeaSpec> = Vec::new();
-    let mut fired_event_ids: Vec<String> = Vec::new();
-    let mut fired_event_seen: HashSet<String> = HashSet::new();
-    let mut collected_idea_ids: HashSet<String> = HashSet::new();
-
-    // Root-first walk so parent step ideas precede self's.
-    for agent in ancestors.iter().rev() {
-        let (clause, params) = scope_visibility::visibility_sql_clause(registry, &agent.id)
-            .await
-            .unwrap_or_else(|_| (String::new(), Vec::new()));
-        let events = if clause.is_empty() {
-            Vec::new()
-        } else {
-            event_store
-                .get_events_for_pattern_visible(&clause, &params, "session:step_start")
-                .await
-        };
-
-        let mut event_idea_ids: Vec<String> = Vec::new();
-        let mut event_owner: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
-        for event in &events {
-            for idea_id in &event.idea_ids {
-                if !idea_id.is_empty() && collected_idea_ids.insert(idea_id.clone()) {
-                    event_idea_ids.push(idea_id.clone());
-                    event_owner.insert(idea_id.clone(), event.id.clone());
-                }
-            }
-        }
-
-        if event_idea_ids.is_empty() {
-            continue;
-        }
-
-        match store.get_by_ids(&event_idea_ids).await {
-            Ok(ideas) => {
-                for idea in ideas {
-                    specs.push(aeqi_core::StepIdeaSpec {
-                        // TODO(as-012): StepIdeaSpec currently requires a path
-                        // even for store-sourced ideas. Using idea.name keeps
-                        // diagnostics readable until the spec grows a proper
-                        // enum variant.
-                        path: std::path::PathBuf::from(&idea.name),
-                        allow_shell: false,
-                        name: idea.name.clone(),
-                        content: Some(idea.content.clone()),
-                    });
-                    if let Some(owner) = event_owner.get(&idea.id)
-                        && fired_event_seen.insert(owner.clone())
-                    {
-                        fired_event_ids.push(owner.clone());
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::warn!(
-                    agent = %agent.id,
-                    error = %e,
-                    "failed to fetch session:step_start ideas",
-                );
-            }
-        }
-    }
-
-    (specs, fired_event_ids)
-}
-
 /// Like `assemble_ideas` but for an arbitrary event pattern and with an
 /// explicit runtime context used to expand any `query_template` fields on
 /// matching events.
@@ -354,7 +257,6 @@ pub async fn assemble_ideas_for_patterns(
     // get_ancestors returns [self, parent, grandparent, ..., root].
     // We want root-first ordering.
     let ancestors = registry.get_ancestors(agent_id).await.unwrap_or_default();
-    let ancestor_ids: Vec<String> = ancestors.iter().map(|a| a.id.clone()).collect();
 
     // T1.3: pre-resolve `meta:placeholder-providers` once for this assembly
     // call. The map lives for the duration of the traversal; sync template
@@ -371,14 +273,12 @@ pub async fn assemble_ideas_for_patterns(
     let mut parts: Vec<AssembledPromptSegment> = Vec::new();
     let mut allow_sets: Vec<Vec<String>> = Vec::new();
     let mut deny_all: Vec<String> = Vec::new();
-    let mut collected_idea_ids: HashSet<String> = HashSet::new();
+    let mut collected_task_idea_ids: HashSet<String> = HashSet::new();
     let mut fired_event_ids: Vec<String> = Vec::new();
     let mut fired_event_seen: HashSet<String> = HashSet::new();
 
     // Walk from root to self (reverse of get_ancestors order).
-    for (depth, agent) in ancestors.iter().rev().enumerate() {
-        let is_self = depth == ancestors.len() - 1;
-
+    for agent in ancestors.iter().rev() {
         let (clause, vis_params) = scope_visibility::visibility_sql_clause(registry, &agent.id)
             .await
             .unwrap_or_else(|_| (String::new(), Vec::new()));
@@ -398,127 +298,31 @@ pub async fn assemble_ideas_for_patterns(
             }
         }
 
-        // Phase-2: dispatch tool_calls for events that have opted in.
-        // When tool_dispatch is Some, run the tools and append their output to parts.
-        // When tool_dispatch is None, warn and skip (Phase-1 fallback).
-        let mut event_idea_ids: Vec<String> = Vec::new();
+        // Dispatch tool_calls for every matched event. Events with no
+        // tool_calls fire as a no-op (operators may attach calls later).
         for event in &events_for_agent {
-            if !event.tool_calls.is_empty() {
-                match tool_dispatch {
-                    Some(dispatch) => {
-                        let fired = dispatch_event_tool_calls(
-                            event,
-                            dispatch,
-                            context,
-                            Some(&placeholder_providers),
-                            &mut parts,
-                        )
-                        .await;
-                        if fired && fired_event_seen.insert(event.id.clone()) {
-                            fired_event_ids.push(event.id.clone());
-                        }
-                    }
-                    None => {
-                        tracing::warn!(
-                            event_id = %event.id,
-                            event_name = %event.name,
-                            tool_calls_count = event.tool_calls.len(),
-                            "tool_calls dispatch skipped: no ToolDispatch provided \
-                             (caller has not been updated to Phase 2 — skipping legacy idea_ids path)"
-                        );
-                    }
-                }
-                // Either dispatched or warned — skip legacy path either way.
+            if event.tool_calls.is_empty() {
                 continue;
             }
-            // Legacy path: static idea_ids.
-            for idea_id in &event.idea_ids {
-                if !idea_id.is_empty() && collected_idea_ids.insert(idea_id.clone()) {
-                    event_idea_ids.push(idea_id.clone());
-                }
-            }
-        }
-
-        if let Some(store) = idea_store
-            && !event_idea_ids.is_empty()
-        {
-            match store.get_by_ids(&event_idea_ids).await {
-                Ok(ideas) => {
-                    let event_owner: std::collections::HashMap<&str, &str> = events_for_agent
-                        .iter()
-                        .flat_map(|e| e.idea_ids.iter().map(move |i| (i.as_str(), e.id.as_str())))
-                        .collect();
-                    for idea in ideas {
-                        append_idea(
-                            &idea,
-                            is_self,
-                            &mut parts,
-                            &mut allow_sets,
-                            &mut deny_all,
-                            tag_policy_cache,
-                        );
-                        if let Some(owner) = event_owner.get(idea.id.as_str())
-                            && fired_event_seen.insert(owner.to_string())
-                        {
-                            fired_event_ids.push(owner.to_string());
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(agent = %agent.id, error = %e, "failed to fetch event-referenced ideas");
-                }
-            }
-        }
-
-        // Dynamic query_template expansion → semantic search.
-        // Skip events that have opted into the new tool_calls path.
-        if let Some(store) = idea_store {
-            for event in &events_for_agent {
-                if !event.tool_calls.is_empty() {
-                    continue;
-                }
-                let Some(template) = event.query_template.as_deref() else {
-                    continue;
-                };
-                let expanded =
-                    expand_template_with_providers(template, context, Some(&placeholder_providers));
-                if expanded.trim().is_empty() {
-                    continue;
-                }
-                let top_k = event.query_top_k.unwrap_or(5) as usize;
-                let tag_filter = event.query_tag_filter.clone().unwrap_or_default();
-                match store
-                    .hierarchical_search_with_tags(&expanded, &ancestor_ids, top_k, &tag_filter)
-                    .await
-                {
-                    Ok(ideas) => {
-                        let mut injected_any = false;
-                        for idea in ideas {
-                            if collected_idea_ids.insert(idea.id.clone()) {
-                                append_idea(
-                                    &idea,
-                                    is_self,
-                                    &mut parts,
-                                    &mut allow_sets,
-                                    &mut deny_all,
-                                    tag_policy_cache,
-                                );
-                                injected_any = true;
-                            }
-                        }
-                        if injected_any && fired_event_seen.insert(event.id.clone()) {
-                            fired_event_ids.push(event.id.clone());
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            agent = %agent.id,
-                            event = %event.name,
-                            error = %e,
-                            "query_template semantic search failed"
-                        );
-                    }
-                }
+            let Some(dispatch) = tool_dispatch else {
+                tracing::warn!(
+                    event_id = %event.id,
+                    event_name = %event.name,
+                    tool_calls_count = event.tool_calls.len(),
+                    "tool_calls dispatch skipped: no ToolDispatch provided"
+                );
+                continue;
+            };
+            let fired = dispatch_event_tool_calls(
+                event,
+                dispatch,
+                context,
+                Some(&placeholder_providers),
+                &mut parts,
+            )
+            .await;
+            if fired && fired_event_seen.insert(event.id.clone()) {
+                fired_event_ids.push(event.id.clone());
             }
         }
     }
@@ -529,7 +333,7 @@ pub async fn assemble_ideas_for_patterns(
     {
         let task_ids: Vec<String> = task_idea_ids
             .iter()
-            .filter(|id| !id.is_empty() && collected_idea_ids.insert((*id).clone()))
+            .filter(|id| !id.is_empty() && collected_task_idea_ids.insert((*id).clone()))
             .cloned()
             .collect();
         if !task_ids.is_empty() {
@@ -1342,404 +1146,6 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent_registry::AgentRegistry;
-    use crate::event_handler::{EventHandlerStore, NewEvent, ToolCall as EventToolCall};
-    use aeqi_core::traits::{Idea, IdeaQuery, IdeaStore};
-    use async_trait::async_trait;
-    use chrono::Utc;
-    use std::sync::Mutex;
-
-    /// Stub idea store that captures `hierarchical_search` queries and
-    /// returns one pre-seeded idea. Used to prove the on_quest_start path
-    /// expands `{quest_description}` and merges the returned idea into the
-    /// assembled context — this is the lu-005 closed-loop wiring.
-    struct StubIdeaStore {
-        seen_queries: Mutex<Vec<String>>,
-        idea: Idea,
-    }
-
-    #[async_trait]
-    impl IdeaStore for StubIdeaStore {
-        async fn store(
-            &self,
-            _: &str,
-            _: &str,
-            _: &[String],
-            _: Option<&str>,
-        ) -> anyhow::Result<String> {
-            unreachable!("stub should never be asked to store")
-        }
-
-        async fn search(&self, _q: &IdeaQuery) -> anyhow::Result<Vec<Idea>> {
-            Ok(Vec::new())
-        }
-
-        async fn hierarchical_search(
-            &self,
-            query: &str,
-            _ancestor_ids: &[String],
-            _top_k: usize,
-        ) -> anyhow::Result<Vec<Idea>> {
-            self.seen_queries.lock().unwrap().push(query.to_string());
-            Ok(vec![self.idea.clone()])
-        }
-
-        async fn hierarchical_search_with_tags(
-            &self,
-            query: &str,
-            _ancestor_ids: &[String],
-            _top_k: usize,
-            _tags: &[String],
-        ) -> anyhow::Result<Vec<Idea>> {
-            self.seen_queries.lock().unwrap().push(query.to_string());
-            Ok(vec![self.idea.clone()])
-        }
-
-        async fn get_by_ids(&self, ids: &[String]) -> anyhow::Result<Vec<Idea>> {
-            // Return the seeded idea if its id is in the requested set — lets
-            // tests exercise static idea_ids injection without spinning up the
-            // real sqlite store.
-            if ids.iter().any(|id| id == &self.idea.id) {
-                Ok(vec![self.idea.clone()])
-            } else {
-                Ok(Vec::new())
-            }
-        }
-
-        async fn delete(&self, _id: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-
-        fn name(&self) -> &str {
-            "stub"
-        }
-    }
-
-    #[tokio::test]
-    async fn quest_start_query_template_pulls_promoted_skills() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let event_store = EventHandlerStore::new(registry.db());
-        let event = event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "recall-promoted-skills".into(),
-                pattern: "session:quest_start".into(),
-                query_template: Some("skills relevant to: {quest_description}".into()),
-                query_top_k: Some(3),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let promoted_skill = Idea {
-            id: "skill-1".to_string(),
-            name: "promoted-skill".to_string(),
-            content: "Prefer TDD for this quest type.".to_string(),
-            tags: vec!["skill".into(), "promoted".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let stub = Arc::new(StubIdeaStore {
-            seen_queries: Mutex::new(Vec::new()),
-            idea: promoted_skill,
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let assembled = assemble_ideas_for_quest_start(
-            &registry,
-            Some(&store),
-            &event_store,
-            &agent.id,
-            &[],
-            "Build feature X",
-            None,
-        )
-        .await;
-
-        assert!(
-            assembled.system.contains("Prefer TDD for this quest type."),
-            "assembled context must merge the promoted skill content, got: {:?}",
-            assembled.system
-        );
-
-        let queries = stub.seen_queries.lock().unwrap();
-        assert_eq!(
-            queries.len(),
-            1,
-            "hierarchical_search should be invoked exactly once for one matching event"
-        );
-        assert_eq!(
-            queries[0], "skills relevant to: Build feature X",
-            "query_template should expand {{quest_description}} from AssemblyContext"
-        );
-        assert_eq!(
-            assembled.fired_event_ids,
-            vec![event.id.clone()],
-            "event that produced an injected idea must appear in fired_event_ids so record_fire can run"
-        );
-    }
-
-    /// Sibling regression: a plain `session:start` assembly must not trigger
-    /// the `session:quest_start` event's query_template. This pins the fix
-    /// where `get_events_for_pattern` could previously LIKE-prefix-match
-    /// `session:start` against `session:quest_start`.
-    #[tokio::test]
-    async fn plain_session_start_does_not_fire_quest_start_template() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let event_store = EventHandlerStore::new(registry.db());
-        event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "quest-recall".into(),
-                pattern: "session:quest_start".into(),
-                query_template: Some("q: {quest_description}".into()),
-                query_top_k: Some(3),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let stub = Arc::new(StubIdeaStore {
-            seen_queries: Mutex::new(Vec::new()),
-            idea: Idea {
-                id: "x".into(),
-                name: "x".into(),
-                content: "should not appear".into(),
-                tags: Vec::new(),
-                agent_id: Some(agent.id.clone()),
-                created_at: Utc::now(),
-                session_id: None,
-                score: 0.0,
-                scope: aeqi_core::Scope::SelfScope,
-                inheritance: "self".into(),
-                tool_allow: Vec::new(),
-                tool_deny: Vec::new(),
-            },
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let assembled =
-            assemble_ideas(&registry, Some(&store), &event_store, &agent.id, &[], None).await;
-
-        assert!(
-            !assembled.system.contains("should not appear"),
-            "session:start assembly must not fire session:quest_start events"
-        );
-        assert!(
-            stub.seen_queries.lock().unwrap().is_empty(),
-            "no semantic search should run when only quest_start events exist"
-        );
-        assert!(
-            assembled.fired_event_ids.is_empty(),
-            "no event fired → fired_event_ids must remain empty, got {:?}",
-            assembled.fired_event_ids
-        );
-    }
-
-    /// Regression test for leak #5 (as-010): `session:quest_end` was declared as
-    /// a system event but nothing in the runtime consumed it. The close tool's
-    /// `action_close` now assembles ideas for this pattern and prepends them to
-    /// the result. This test pins the read-side: a `session:quest_end` event
-    /// with an attached idea_id must surface in assembled.system and the event
-    /// must appear in fired_event_ids so record_fire runs.
-    #[tokio::test]
-    async fn quest_end_static_idea_ids_surface_in_assembly() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let postmortem_idea = Idea {
-            id: "quest-end-idea-1".to_string(),
-            name: "postmortem-template".to_string(),
-            content: "POSTMORTEM: list any regressions you might have introduced.".to_string(),
-            tags: vec!["template".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let event_store = EventHandlerStore::new(registry.db());
-        let event = event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "quest-postmortem".into(),
-                pattern: "session:quest_end".into(),
-                idea_ids: vec![postmortem_idea.id.clone()],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let stub = Arc::new(StubIdeaStore {
-            seen_queries: Mutex::new(Vec::new()),
-            idea: postmortem_idea,
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let context = AssemblyContext {
-            quest_description: Some("Quest q-1 closed: refactor done".to_string()),
-            ..Default::default()
-        };
-        let assembled = assemble_ideas_for_pattern(
-            &registry,
-            Some(&store),
-            &event_store,
-            &agent.id,
-            &[],
-            "session:quest_end",
-            &context,
-            None,
-        )
-        .await;
-
-        assert!(
-            assembled
-                .system
-                .contains("POSTMORTEM: list any regressions"),
-            "quest_end event's static idea_ids must appear in assembled.system, got: {:?}",
-            assembled.system
-        );
-        assert_eq!(
-            assembled.fired_event_ids,
-            vec![event.id.clone()],
-            "the event that contributed an idea must be in fired_event_ids so record_fire runs"
-        );
-        assert!(
-            stub.seen_queries.lock().unwrap().is_empty(),
-            "no semantic search should run when the event has only static idea_ids"
-        );
-    }
-
-    #[tokio::test]
-    async fn step_ideas_for_worker_snapshots_content_and_fires() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let step_idea = Idea {
-            id: "step-idea-1".to_string(),
-            name: "reminder-check-work".to_string(),
-            content: "Before every tool call: re-read your last message.".to_string(),
-            tags: vec!["step".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let event_store = EventHandlerStore::new(registry.db());
-        let event = event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "step-reminder".into(),
-                pattern: "session:step_start".into(),
-                idea_ids: vec![step_idea.id.clone()],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let stub = Arc::new(StubIdeaStore {
-            seen_queries: Mutex::new(Vec::new()),
-            idea: step_idea,
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let (specs, fired) =
-            assemble_step_ideas_for_worker(&registry, Some(&store), &event_store, &agent.id).await;
-
-        assert_eq!(specs.len(), 1, "one step idea should surface");
-        assert_eq!(
-            specs[0].name, "reminder-check-work",
-            "spec name must come from the idea, not the event"
-        );
-        assert_eq!(
-            specs[0].content.as_deref(),
-            Some("Before every tool call: re-read your last message."),
-            "content must be snapshotted — no mid-flight disk re-reads"
-        );
-        assert_eq!(
-            fired,
-            vec![event.id],
-            "the contributing event must be in fired_event_ids so record_fire runs"
-        );
-        assert!(
-            stub.seen_queries.lock().unwrap().is_empty(),
-            "no semantic search — session:step_start resolves by static idea_ids only",
-        );
-    }
-
-    #[tokio::test]
-    async fn step_ideas_for_worker_empty_when_no_matching_events() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let event_store = EventHandlerStore::new(registry.db());
-
-        let placeholder_idea = Idea {
-            id: "placeholder".to_string(),
-            name: "placeholder".to_string(),
-            content: String::new(),
-            tags: Vec::new(),
-            agent_id: None,
-            created_at: Utc::now(),
-            session_id: None,
-            score: 0.0,
-            scope: aeqi_core::Scope::Global,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-        let stub = Arc::new(StubIdeaStore {
-            seen_queries: Mutex::new(Vec::new()),
-            idea: placeholder_idea,
-        });
-        let store: Arc<dyn IdeaStore> = stub;
-
-        let (specs, fired) =
-            assemble_step_ideas_for_worker(&registry, Some(&store), &event_store, &agent.id).await;
-
-        assert!(specs.is_empty(), "no events → no specs");
-        assert!(fired.is_empty(), "no events → no fired_event_ids");
-    }
 
     #[test]
     fn expand_template_substitutes_known_placeholders() {
@@ -1956,69 +1362,6 @@ mod tests {
     /// Phase-1: events with non-empty `tool_calls` must NOT contribute ideas
     /// through the legacy `idea_ids` path — the stub path is taken instead,
     /// and assembled.system must be empty (no ideas from that event).
-    #[tokio::test]
-    async fn tool_calls_event_skips_legacy_idea_ids_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let tc_idea = Idea {
-            id: "tc-idea-1".to_string(),
-            name: "tc-idea".to_string(),
-            content: "SHOULD NOT APPEAR — owned by tool_calls event".to_string(),
-            tags: vec!["test".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let event_store = EventHandlerStore::new(registry.db());
-        // Create an event with both idea_ids AND tool_calls — the tool_calls
-        // path should win, so the idea must not appear in assembled.system.
-        event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "tc-event".into(),
-                pattern: "session:start".into(),
-                idea_ids: vec![tc_idea.id.clone()],
-                tool_calls: vec![EventToolCall {
-                    tool: "ideas.assemble".to_string(),
-                    args: serde_json::json!({"names": ["session:primer"]}),
-                }],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let stub = Arc::new(StubIdeaStore {
-            seen_queries: Mutex::new(Vec::new()),
-            idea: tc_idea,
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let assembled =
-            assemble_ideas(&registry, Some(&store), &event_store, &agent.id, &[], None).await;
-
-        assert!(
-            !assembled.system.contains("SHOULD NOT APPEAR"),
-            "tool_calls events must not fall through to legacy idea_ids path, got: {:?}",
-            assembled.system
-        );
-        // No semantic search should run either.
-        assert!(
-            stub.seen_queries.lock().unwrap().is_empty(),
-            "no query_template search must run when the event has tool_calls"
-        );
-    }
-
     /// Hygiene guard for the observability-as-a-feature invariant:
     /// every production use of `assembled.fired_event_ids` (or the
     /// tuple-returning `assemble_step_ideas_for_worker`) must either
@@ -2073,284 +1416,6 @@ mod tests {
              and are not on the dry-run allowlist: {offenders:?}. \
              Either wire `record_fire` for every contributing event, or add the file to \
              DRY_RUN_PATHS in this test with a comment explaining why it's a preview/dry-run path."
-        );
-    }
-
-    // ── T1.11 prompt-cache annotation tests ──────────────────────────
-
-    /// Stub idea store that returns a fixed `idea` from `get_by_ids` and
-    /// also serves a tag-policy meta-idea via `ideas_by_tags` so the
-    /// `TagPolicyCache` can resolve `cache_breakpoint=true` for the
-    /// configured tag.
-    struct PolicyAwareStubStore {
-        target: Idea,
-        policy_tag: String,
-    }
-
-    #[async_trait]
-    impl IdeaStore for PolicyAwareStubStore {
-        async fn store(
-            &self,
-            _: &str,
-            _: &str,
-            _: &[String],
-            _: Option<&str>,
-        ) -> anyhow::Result<String> {
-            unreachable!("not used by these tests")
-        }
-        async fn search(&self, _q: &IdeaQuery) -> anyhow::Result<Vec<Idea>> {
-            Ok(Vec::new())
-        }
-        async fn hierarchical_search(
-            &self,
-            _: &str,
-            _: &[String],
-            _: usize,
-        ) -> anyhow::Result<Vec<Idea>> {
-            Ok(Vec::new())
-        }
-        async fn hierarchical_search_with_tags(
-            &self,
-            _: &str,
-            _: &[String],
-            _: usize,
-            _: &[String],
-        ) -> anyhow::Result<Vec<Idea>> {
-            Ok(Vec::new())
-        }
-        async fn get_by_ids(&self, ids: &[String]) -> anyhow::Result<Vec<Idea>> {
-            if ids.iter().any(|id| id == &self.target.id) {
-                Ok(vec![self.target.clone()])
-            } else {
-                Ok(Vec::new())
-            }
-        }
-        async fn ideas_by_tags(&self, tags: &[String], _limit: usize) -> anyhow::Result<Vec<Idea>> {
-            if tags.iter().any(|t| t == "meta:tag-policy") {
-                let body = format!("tag = \"{}\"\ncache_breakpoint = true\n", self.policy_tag);
-                let policy_idea = Idea {
-                    id: format!("meta:tag-policy:{}", self.policy_tag),
-                    name: format!("meta:tag-policy:{}", self.policy_tag),
-                    content: body,
-                    tags: vec!["meta:tag-policy".into()],
-                    agent_id: None,
-                    created_at: Utc::now(),
-                    session_id: None,
-                    score: 1.0,
-                    scope: aeqi_core::Scope::Global,
-                    inheritance: "self".to_string(),
-                    tool_allow: Vec::new(),
-                    tool_deny: Vec::new(),
-                };
-                Ok(vec![policy_idea])
-            } else {
-                Ok(Vec::new())
-            }
-        }
-        async fn delete(&self, _id: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn name(&self) -> &str {
-            "policy-aware-stub"
-        }
-    }
-
-    #[tokio::test]
-    async fn t1_11_segment_is_marked_when_cache_breakpoint_policy_set() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let identity_idea = Idea {
-            id: "id-1".into(),
-            name: "identity-core".into(),
-            content: "I am the AEQI assistant.".into(),
-            tags: vec!["identity".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let event_store = EventHandlerStore::new(registry.db());
-        event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "session-start-identity".into(),
-                pattern: "session:start".into(),
-                idea_ids: vec![identity_idea.id.clone()],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let stub = Arc::new(PolicyAwareStubStore {
-            target: identity_idea,
-            policy_tag: "identity".into(),
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let cache = aeqi_ideas::tag_policy::default_cache();
-        // Force the cache to load policies from the stub now so the sync
-        // `get_or_default` path inside `append_idea` finds the marker.
-        let _ = cache.resolve(&*store, &["identity".to_string()]).await;
-
-        let assembled = assemble_ideas_with_cache(
-            &registry,
-            Some(&store),
-            &event_store,
-            &agent.id,
-            &[],
-            None,
-            Some(&cache),
-        )
-        .await;
-
-        assert_eq!(assembled.segments.len(), 1, "exactly one idea assembled");
-        assert_eq!(
-            assembled.segments[0].cache_control,
-            Some(aeqi_core::CacheControl::Ephemeral),
-            "identity tag with cache_breakpoint=true must mark its segment as Ephemeral",
-        );
-        assert!(
-            assembled.system.contains("I am the AEQI assistant."),
-            "flat system string still carries the content verbatim"
-        );
-    }
-
-    #[tokio::test]
-    async fn t1_11_segment_is_unmarked_when_no_policy_set() {
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let plain_idea = Idea {
-            id: "plain-1".into(),
-            name: "plain".into(),
-            content: "Some advice.".into(),
-            // Tag not in the policy cache → no `cache_breakpoint=true` vote.
-            tags: vec!["fact".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let event_store = EventHandlerStore::new(registry.db());
-        event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "session-start-plain".into(),
-                pattern: "session:start".into(),
-                idea_ids: vec![plain_idea.id.clone()],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        // The stub serves a policy for `identity` only — `fact` resolves to
-        // the default policy which leaves `cache_breakpoint=None`.
-        let stub = Arc::new(PolicyAwareStubStore {
-            target: plain_idea,
-            policy_tag: "identity".into(),
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        let cache = aeqi_ideas::tag_policy::default_cache();
-        let _ = cache.resolve(&*store, &["fact".to_string()]).await;
-
-        let assembled = assemble_ideas_with_cache(
-            &registry,
-            Some(&store),
-            &event_store,
-            &agent.id,
-            &[],
-            None,
-            Some(&cache),
-        )
-        .await;
-
-        assert_eq!(assembled.segments.len(), 1);
-        assert!(
-            assembled.segments[0].cache_control.is_none(),
-            "no cache_breakpoint policy → segment must be plain"
-        );
-    }
-
-    #[tokio::test]
-    async fn t1_11_no_tag_policy_cache_means_no_markers() {
-        // Baseline preservation: when no TagPolicyCache is wired (the
-        // pre-T1.11 codepath), every assembled segment is plain.
-        let dir = tempfile::tempdir().unwrap();
-        let registry = AgentRegistry::open(dir.path()).unwrap();
-        let agent = registry
-            .spawn("assistant", None, Some("claude-sonnet-4.6"))
-            .await
-            .unwrap();
-
-        let identity_idea = Idea {
-            id: "id-2".into(),
-            name: "identity-core".into(),
-            content: "I am the AEQI assistant.".into(),
-            tags: vec!["identity".into()],
-            agent_id: Some(agent.id.clone()),
-            created_at: Utc::now(),
-            session_id: None,
-            score: 1.0,
-            scope: aeqi_core::Scope::SelfScope,
-            inheritance: "self".to_string(),
-            tool_allow: Vec::new(),
-            tool_deny: Vec::new(),
-        };
-
-        let event_store = EventHandlerStore::new(registry.db());
-        event_store
-            .create(&NewEvent {
-                agent_id: Some(agent.id.clone()),
-                name: "session-start-no-cache".into(),
-                pattern: "session:start".into(),
-                idea_ids: vec![identity_idea.id.clone()],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let stub = Arc::new(PolicyAwareStubStore {
-            target: identity_idea,
-            policy_tag: "identity".into(),
-        });
-        let store: Arc<dyn IdeaStore> = stub.clone();
-
-        // Note: passing `None` for tag_policy_cache.
-        let assembled = assemble_ideas_with_cache(
-            &registry,
-            Some(&store),
-            &event_store,
-            &agent.id,
-            &[],
-            None,
-            None,
-        )
-        .await;
-
-        assert_eq!(assembled.segments.len(), 1);
-        assert!(
-            assembled.segments[0].cache_control.is_none(),
-            "no policy cache wired → segments must remain plain"
         );
     }
 

@@ -197,7 +197,6 @@ async fn handle_session_send_event(
             event_id,
             event_name,
             pattern,
-            idea_ids,
             prepersisted,
         } => {
             if !*prepersisted {
@@ -206,7 +205,6 @@ async fn handle_session_send_event(
                         "event_id": event_id,
                         "event_name": event_name,
                         "pattern": pattern,
-                        "idea_ids": idea_ids,
                     });
                     let _ = cs
                         .record_event_by_session(
@@ -2004,7 +2002,6 @@ impl Daemon {
                                         "event_id": event.id,
                                         "event_name": event.name,
                                         "pattern": event.pattern,
-                                        "idea_ids": event.idea_ids,
                                         "scope": event.scope.as_str(),
                                     });
                                     let _ = ss
@@ -2024,7 +2021,6 @@ impl Daemon {
                                         event_id: event.id,
                                         event_name: event.name,
                                         pattern: event.pattern,
-                                        idea_ids: event.idea_ids,
                                         prepersisted: true,
                                     });
                                 }

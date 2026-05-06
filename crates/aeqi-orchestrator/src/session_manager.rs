@@ -1301,57 +1301,11 @@ impl SessionManager {
             base_observer
         };
 
-        // Load session:step_start ideas as step context (injected every LLM call).
-        //
-        // `record_fire` is NOT called here — step_start events fire per LLM
-        // step, not once per session. The Agent emits `EventFired` at each
-        // `StepStart`, and the daemon stream reader records the fire when
-        // the pill flows through. That keeps the fire count truthful.
-        let mut step_event_metas: Vec<aeqi_core::StepEventMeta> = Vec::new();
-        if let Some(idea_store) = &self.idea_store {
-            let viewer_id = agent_uuid.as_deref().unwrap_or("");
-            let (step_clause, step_params) =
-                scope_visibility::visibility_sql_clause(agent_registry, viewer_id)
-                    .await
-                    .unwrap_or_else(|_| (String::new(), Vec::new()));
-            let step_events = if step_clause.is_empty() {
-                Vec::new()
-            } else {
-                event_store
-                    .get_events_for_pattern_visible(
-                        &step_clause,
-                        &step_params,
-                        "session:step_start",
-                    )
-                    .await
-            };
-            let mut step_idea_ids: Vec<String> = Vec::new();
-            for ev in &step_events {
-                step_idea_ids.extend(ev.idea_ids.iter().filter(|id| !id.is_empty()).cloned());
-            }
-            if !step_idea_ids.is_empty()
-                && let Ok(ideas) = idea_store.get_by_ids(&step_idea_ids).await
-            {
-                for idea in &ideas {
-                    step_idea_specs.push(aeqi_core::StepIdeaSpec {
-                        path: std::path::PathBuf::from(&idea.name),
-                        allow_shell: false,
-                        name: idea.name.clone(),
-                        content: Some(idea.content.clone()),
-                    });
-                }
-            }
-            for ev in &step_events {
-                if ev.idea_ids.iter().any(|id| !id.is_empty()) {
-                    step_event_metas.push(aeqi_core::StepEventMeta {
-                        event_id: ev.id.clone(),
-                        event_name: ev.name.clone(),
-                        pattern: ev.pattern.clone(),
-                        idea_ids: ev.idea_ids.clone(),
-                    });
-                }
-            }
-        }
+        // session:step_start fires per LLM step. The Agent emits `EventFired`
+        // at each `StepStart` for any wired step events; per-step content
+        // injection should flow through `tool_calls` on those events
+        // (dispatched via the standard PatternDispatcher path).
+        let step_event_metas: Vec<aeqi_core::StepEventMeta> = Vec::new();
 
         let mut agent =
             aeqi_core::Agent::new(agent_config, provider, tools, observer, system_prompt)
@@ -1520,7 +1474,6 @@ impl SessionManager {
                         "event_id": event.id,
                         "event_name": event.name,
                         "pattern": event.pattern,
-                        "idea_ids": event.idea_ids,
                         "scope": event.scope.as_str(),
                     });
                     let _ = ss
@@ -1541,7 +1494,6 @@ impl SessionManager {
                     event_id: event.id,
                     event_name: event.name,
                     pattern: event.pattern,
-                    idea_ids: event.idea_ids,
                     prepersisted: true,
                 });
             }

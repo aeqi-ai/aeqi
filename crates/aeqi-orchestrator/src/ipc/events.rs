@@ -57,26 +57,6 @@ pub async fn handle_create_event(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let idea_ids = match parse_required_idea_ids(request) {
-        Ok(ids) => ids,
-        Err(error) => return serde_json::json!({"ok": false, "error": error}),
-    };
-
-    let query_template = request_field(request, "query_template").map(|s| s.to_string());
-    let query_top_k = request
-        .get("query_top_k")
-        .and_then(|v| v.as_u64())
-        .and_then(|v| u32::try_from(v).ok());
-    let query_tag_filter: Option<Vec<String>> = request
-        .get("query_tag_filter")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect()
-        })
-        .filter(|v: &Vec<String>| !v.is_empty());
-
     let tool_calls = parse_tool_calls(request);
 
     if let Err(error) = validate_tool_calls(&tool_calls) {
@@ -98,10 +78,6 @@ pub async fn handle_create_event(
         scope,
         name: name.to_string(),
         pattern: pattern.to_string(),
-        idea_ids,
-        query_template,
-        query_top_k,
-        query_tag_filter,
         tool_calls,
         cooldown_secs,
         system,
@@ -130,33 +106,6 @@ pub async fn handle_update_event(
     let enabled = request.get("enabled").and_then(|v| v.as_bool());
     let pattern = request_field(request, "pattern");
     let cooldown_secs = request.get("cooldown_secs").and_then(|v| v.as_u64());
-    let idea_ids = match parse_optional_idea_ids(request) {
-        Ok(ids) => ids,
-        Err(error) => return serde_json::json!({"ok": false, "error": error}),
-    };
-
-    let query_template: Option<Option<String>> = request.get("query_template").map(|v| match v {
-        serde_json::Value::Null => None,
-        serde_json::Value::String(s) => Some(s.clone()),
-        _ => None,
-    });
-    let query_top_k: Option<Option<u32>> = request.get("query_top_k").map(|v| match v {
-        serde_json::Value::Null => None,
-        serde_json::Value::Number(n) => n.as_u64().and_then(|v| u32::try_from(v).ok()),
-        _ => None,
-    });
-    let query_tag_filter: Option<Option<Vec<String>>> =
-        request.get("query_tag_filter").map(|v| match v {
-            serde_json::Value::Null => None,
-            serde_json::Value::Array(arr) => {
-                let tags: Vec<String> = arr
-                    .iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect();
-                if tags.is_empty() { None } else { Some(tags) }
-            }
-            _ => None,
-        });
 
     let tool_calls_opt: Option<Vec<ToolCall>> = if request.get("tool_calls").is_some() {
         Some(parse_tool_calls(request))
@@ -171,14 +120,7 @@ pub async fn handle_update_event(
     }
 
     // Check if any field is provided at all.
-    if enabled.is_none()
-        && pattern.is_none()
-        && cooldown_secs.is_none()
-        && idea_ids.is_none()
-        && query_template.is_none()
-        && query_top_k.is_none()
-        && query_tag_filter.is_none()
-        && tool_calls_opt.is_none()
+    if enabled.is_none() && pattern.is_none() && cooldown_secs.is_none() && tool_calls_opt.is_none()
     {
         return serde_json::json!({"ok": false, "error": "at least one field to update is required"});
     }
@@ -189,10 +131,6 @@ pub async fn handle_update_event(
             enabled,
             pattern,
             cooldown_secs,
-            idea_ids.as_deref(),
-            query_template.as_ref().map(|v| v.as_deref()),
-            query_top_k,
-            query_tag_filter.as_ref().map(|v| v.as_deref()),
             tool_calls_opt.as_deref(),
         )
         .await
@@ -625,10 +563,6 @@ fn event_to_json(e: &crate::event_handler::Event) -> serde_json::Value {
         "scope": e.scope.as_str(),
         "name": e.name,
         "pattern": e.pattern,
-        "idea_ids": e.idea_ids,
-        "query_template": e.query_template,
-        "query_top_k": e.query_top_k,
-        "query_tag_filter": e.query_tag_filter,
         "tool_calls": e.tool_calls,
         "enabled": e.enabled,
         "cooldown_secs": e.cooldown_secs,
@@ -656,59 +590,9 @@ fn parse_tool_calls(request: &serde_json::Value) -> Vec<ToolCall> {
         .collect()
 }
 
-fn parse_required_idea_ids(request: &serde_json::Value) -> Result<Vec<String>, String> {
-    match request.get("idea_ids") {
-        None => Ok(Vec::new()),
-        Some(value) => parse_idea_ids_array(value),
-    }
-}
-
-fn parse_optional_idea_ids(request: &serde_json::Value) -> Result<Option<Vec<String>>, String> {
-    match request.get("idea_ids") {
-        None => Ok(None),
-        Some(value) => parse_idea_ids_array(value).map(Some),
-    }
-}
-
-fn parse_idea_ids_array(value: &serde_json::Value) -> Result<Vec<String>, String> {
-    let Some(items) = value.as_array() else {
-        return Err("idea_ids must be an array of strings".to_string());
-    };
-
-    let mut ids = Vec::with_capacity(items.len());
-    for item in items {
-        let Some(id) = item.as_str() else {
-            return Err("idea_ids must be an array of strings".to_string());
-        };
-        ids.push(id.to_string());
-    }
-    Ok(ids)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parse_optional_idea_ids_distinguishes_omitted_from_empty() {
-        let omitted = serde_json::json!({});
-        assert_eq!(parse_optional_idea_ids(&omitted).unwrap(), None);
-
-        let empty = serde_json::json!({"idea_ids": []});
-        assert_eq!(parse_optional_idea_ids(&empty).unwrap(), Some(vec![]));
-
-        let populated = serde_json::json!({"idea_ids": ["i1", "i2"]});
-        assert_eq!(
-            parse_optional_idea_ids(&populated).unwrap(),
-            Some(vec!["i1".to_string(), "i2".to_string()])
-        );
-    }
-
-    #[test]
-    fn parse_optional_idea_ids_rejects_non_array_values() {
-        let invalid = serde_json::json!({"idea_ids": "not-an-array"});
-        assert!(parse_optional_idea_ids(&invalid).is_err());
-    }
 
     /// `plan_install_default_events` must count all missing defaults on a
     /// brand-new agent and flip counts to 0 installed / 2 skipped after the

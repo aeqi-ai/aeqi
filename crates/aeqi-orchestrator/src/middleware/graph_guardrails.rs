@@ -130,36 +130,16 @@ impl Middleware for GraphGuardrailsMiddleware {
             .map(|(_, rel)| rel.to_string())
             .unwrap_or(file_path.clone());
 
-        if let Some(warning) = self.check_edit_impact(&ctx.project_name, &rel_path, &call.input) {
+        if self
+            .check_edit_impact(&ctx.project_name, &rel_path, &call.input)
+            .is_some()
+        {
             debug!(
                 project = %ctx.project_name,
                 file = %rel_path,
                 "graph guardrails: firing graph_guardrail:high_impact pattern"
             );
-            // Detector fires pattern; event system or default handler authors content.
-            if let Some(ref registry) = ctx.registry {
-                let ectx = ctx.as_execution_context();
-                let trigger_args = serde_json::json!({
-                    "warning": warning,
-                    "file_path": rel_path,
-                    "project": ctx.project_name,
-                });
-                let reg = registry.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = reg
-                        .invoke_pattern("graph_guardrail:high_impact", &ectx, &trigger_args)
-                        .await
-                    {
-                        tracing::warn!(error = %e, "graph_guardrails: invoke_pattern failed");
-                    }
-                });
-            } else {
-                tracing::warn!(
-                    file = %rel_path,
-                    warning = %warning,
-                    "graph_guardrail:high_impact (no registry — warning logged only)"
-                );
-            }
+            // Response (event tool_calls) is dispatched via PatternDetector::detect.
         }
 
         MiddlewareAction::Continue

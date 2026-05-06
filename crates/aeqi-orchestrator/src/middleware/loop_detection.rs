@@ -7,9 +7,8 @@
 //! `halt_threshold`).
 //!
 //! Content authoring (what the LLM sees) is owned by events configured for
-//! the `loop:detected` pattern. When no event is configured, `invoke_pattern`
-//! falls back to the default handler which injects the old warning string via
-//! `transcript.inject`.
+//! the `loop:detected` pattern. The detector fires through
+//! `PatternDetector::detect`; the response runs through `PatternDispatcher`.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -125,7 +124,7 @@ impl Middleware for LoopDetectionMiddleware {
 
     async fn after_tool(
         &self,
-        ctx: &mut WorkerContext,
+        _ctx: &mut WorkerContext,
         call: &ToolCall,
         _result: &ToolResult,
     ) -> MiddlewareAction {
@@ -153,35 +152,7 @@ impl Middleware for LoopDetectionMiddleware {
                 threshold = self.warn_threshold,
                 "possible loop detected — firing loop:detected pattern"
             );
-            // Detector fires pattern; event system or default handler authors content.
-            if let Some(ref registry) = ctx.registry {
-                let ectx = ctx.as_execution_context();
-                let trigger_args = serde_json::json!({
-                    "tool_name": call.name,
-                    "count": count,
-                    "window_size": self.window_size,
-                });
-                let reg = registry.clone();
-                // Spawn to avoid holding a borrow on ctx across the await.
-                tokio::spawn(async move {
-                    if let Err(e) = reg
-                        .invoke_pattern("loop:detected", &ectx, &trigger_args)
-                        .await
-                    {
-                        warn!(error = %e, "loop_detection: invoke_pattern failed");
-                    }
-                });
-            } else {
-                // No registry wired — log the warning directly as fallback.
-                warn!(
-                    tool = %call.name,
-                    count,
-                    window = self.window_size,
-                    "loop:detected (no registry — warning logged only): \
-                     identical call appeared {} times in last {} calls",
-                    count, self.window_size
-                );
-            }
+            // Response (event tool_calls) is dispatched via PatternDetector::detect.
         }
 
         MiddlewareAction::Continue

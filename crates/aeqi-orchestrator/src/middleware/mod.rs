@@ -77,10 +77,10 @@ use crate::runtime::RuntimeOutcome;
 
 /// Result of a middleware hook invocation.
 ///
-/// `Inject` has been removed: content authoring now goes through events
-/// (via `ToolRegistry::invoke_pattern`). The only injection pathway is
-/// tool_calls fired by events, making all runtime injections visible and
-/// operator-configurable.
+/// `Inject` has been removed: content authoring now goes through events.
+/// Detectors fire patterns via `PatternDetector::detect`; the response
+/// (event tool_calls) runs through `PatternDispatcher`. This makes all
+/// runtime injections visible and operator-configurable.
 #[derive(Debug, Clone)]
 pub enum MiddlewareAction {
     /// Proceed to the next middleware in the chain.
@@ -174,7 +174,7 @@ pub struct WorkerContext {
     pub agent_name: String,
     /// Project name the task belongs to.
     pub project_name: String,
-    /// Session identifier (used to build ExecutionContext for invoke_pattern).
+    /// Session identifier (used to build ExecutionContext for pattern dispatch).
     pub session_id: String,
     /// Messages buffer — used by context_compression and context_budget
     /// to track and trim accumulated context fragments.
@@ -190,9 +190,10 @@ pub struct WorkerContext {
     pub agent_compaction_active: bool,
     /// Model name for accurate cost estimation via pricing table.
     pub model: String,
-    /// Tool registry — middleware detectors call invoke_pattern via this registry
-    /// to fire the appropriate event or fall back to default handlers.
-    /// `None` in contexts without a runtime registry (bare tests).
+    /// Tool registry — wired for tool dispatch; pattern firing now goes
+    /// through `PatternDetector::detect` + `PatternDispatcher`, not the
+    /// registry directly. `None` in contexts without a runtime registry
+    /// (bare tests).
     pub registry: Option<Arc<ToolRegistry>>,
 }
 
@@ -240,10 +241,9 @@ impl WorkerContext {
         }
     }
 
-    /// Build an ExecutionContext from this WorkerContext for use in invoke_pattern.
+    /// Build an ExecutionContext from this WorkerContext for pattern dispatch.
     ///
     /// Uses `session_id` and `agent_name`; other fields left at defaults.
-    /// Middleware detectors use this when calling `registry.invoke_pattern()`.
     pub fn as_execution_context(&self) -> ExecutionContext {
         ExecutionContext {
             session_id: self.session_id.clone(),
@@ -313,8 +313,8 @@ pub trait Middleware: Send + Sync + 'static {
 
     /// Called when the model finishes a step with no tool calls.
     /// Allows middleware to validate the agent's response before accepting it.
-    /// Detector middleware fires patterns via `ctx.registry.invoke_pattern()`;
-    /// the event system owns response content authoring.
+    /// Detector middleware fires patterns via `PatternDetector::detect`; the
+    /// event system owns response content authoring through `PatternDispatcher`.
     async fn after_step(
         &self,
         _ctx: &mut WorkerContext,

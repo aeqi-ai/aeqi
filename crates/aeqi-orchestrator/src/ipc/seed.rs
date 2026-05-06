@@ -37,8 +37,8 @@ pub async fn handle_seed_ideas(
     };
 
     let mut idea_results = Vec::new();
-    // Track ideas per agent for event wiring.
-    let mut agent_idea_ids: std::collections::HashMap<String, Vec<String>> =
+    // Track idea names per agent for event wiring (drives `ideas.assemble({names})`).
+    let mut agent_idea_names: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
     // Phase 1: Store ideas.
@@ -67,10 +67,10 @@ pub async fn handle_seed_ideas(
                 Ok(id) => {
                     // Track this idea for event wiring.
                     if let Some(agent) = agent_id {
-                        agent_idea_ids
+                        agent_idea_names
                             .entry(agent.to_string())
                             .or_default()
-                            .push(id.clone());
+                            .push(name.to_string());
                     }
                     idea_results
                         .push(serde_json::json!({"name": name, "id": id, "status": "created"}));
@@ -107,12 +107,26 @@ pub async fn handle_seed_ideas(
                     // Reassign ideas that reference this agent by name to use UUID.
                     let _ = idea_store.reassign_agent(name, &agent.id).await;
 
-                    // Wire on_session_start event with the agent's ideas.
-                    if let Some(idea_ids) = agent_idea_ids.remove(name)
+                    // Wire on_session_start event with tool_calls that
+                    // assemble the agent's seeded ideas by name.
+                    if let Some(idea_names) = agent_idea_names.remove(name)
+                        && !idea_names.is_empty()
                         && let Some(ref ehs) = ctx.event_handler_store
                     {
+                        let tool_calls = vec![crate::event_handler::ToolCall {
+                            tool: "ideas.assemble".to_string(),
+                            args: serde_json::json!({ "names": idea_names }),
+                        }];
                         let _ = ehs
-                            .update_on_session_start_ideas(&agent.id, &idea_ids)
+                            .create(&crate::event_handler::NewEvent {
+                                agent_id: Some(agent.id.clone()),
+                                scope: aeqi_core::Scope::SelfScope,
+                                name: "on_session_start".to_string(),
+                                pattern: "session:start".to_string(),
+                                tool_calls,
+                                cooldown_secs: 0,
+                                system: false,
+                            })
                             .await;
                     }
 

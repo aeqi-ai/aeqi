@@ -86,7 +86,6 @@ pub enum ChatStreamEvent {
         event_id: String,
         event_name: String,
         pattern: String,
-        idea_ids: Vec<String>,
         #[serde(default)]
         prepersisted: bool,
     },

@@ -1054,7 +1054,6 @@ impl Agent {
                         event_id: ev.event_id.clone(),
                         event_name: ev.event_name.clone(),
                         pattern: ev.pattern.clone(),
-                        idea_ids: ev.idea_ids.clone(),
                         prepersisted: false,
                     });
                 }

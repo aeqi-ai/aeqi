@@ -192,7 +192,7 @@ impl Middleware for GuardrailsMiddleware {
         ORDER_GUARDRAILS
     }
 
-    async fn before_tool(&self, ctx: &mut WorkerContext, call: &ToolCall) -> MiddlewareAction {
+    async fn before_tool(&self, _ctx: &mut WorkerContext, call: &ToolCall) -> MiddlewareAction {
         match self.classify(call) {
             PermissionTier::Allow => {
                 debug!(tool = %call.name, "guardrails: allowed");
@@ -208,30 +208,7 @@ impl Middleware for GuardrailsMiddleware {
                         tool = %call.name,
                         "guardrails: ask tier, supervised mode — firing guardrail:violation pattern"
                     );
-                    // Detector fires pattern; event system or default handler authors content.
-                    if let Some(ref registry) = ctx.registry {
-                        let ectx = ctx.as_execution_context();
-                        let trigger_args = serde_json::json!({
-                            "tool_name": call.name,
-                            "rule": "not on the allow list",
-                        });
-                        let reg = std::sync::Arc::clone(registry);
-                        tokio::spawn(async move {
-                            if let Err(e) = reg
-                                .invoke_pattern("guardrail:violation", &ectx, &trigger_args)
-                                .await
-                            {
-                                tracing::warn!(error = %e, "guardrails: invoke_pattern failed");
-                            }
-                        });
-                    } else {
-                        tracing::warn!(
-                            tool = %call.name,
-                            "[Guardrails] Tool '{}' is not on the allow list. \
-                             Verify this action is safe before proceeding.",
-                            call.name
-                        );
-                    }
+                    // Response (event tool_calls) is dispatched via PatternDetector::detect.
                     MiddlewareAction::Continue
                 }
             },

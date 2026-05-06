@@ -77,10 +77,9 @@ pub struct AssembledContext {
     pub system: String,
     /// Merged tool restrictions (intersection of allows, union of denies).
     pub tools: ToolRestrictions,
-    /// IDs of events whose idea_ids or query_template produced at least one
-    /// idea that reached the assembled context. Runtime callers persist these
-    /// via `EventHandlerStore::record_fire` so the Events UI can show the
-    /// real fire count; preflight callers ignore this field.
+    /// IDs of events whose tool_calls dispatched and produced output. Runtime
+    /// callers persist these via `EventHandlerStore::record_fire` so the Events
+    /// UI can show the real fire count; preflight callers ignore this field.
     pub fired_event_ids: Vec<String>,
     /// (T1.11) Per-idea segments mirroring `system`. Always populated by
     /// the assembler so providers that opt into cache_control annotations

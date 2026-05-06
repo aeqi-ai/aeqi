@@ -118,12 +118,22 @@ impl Tool for EventsTool {
                     resolved_agent_id
                 };
 
-                let idea_ids: Vec<String> = args
-                    .get("idea_ids")
+                let tool_calls: Vec<crate::event_handler::ToolCall> = args
+                    .get("tool_calls")
                     .and_then(|v| v.as_array())
                     .map(|arr| {
                         arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
+                            .filter_map(|item| {
+                                let tool = item.get("tool")?.as_str()?.to_string();
+                                let call_args = item
+                                    .get("args")
+                                    .cloned()
+                                    .unwrap_or(serde_json::Value::Object(Default::default()));
+                                Some(crate::event_handler::ToolCall {
+                                    tool,
+                                    args: call_args,
+                                })
+                            })
                             .collect()
                     })
                     .unwrap_or_default();
@@ -135,7 +145,7 @@ impl Tool for EventsTool {
                         scope,
                         name: name.to_string(),
                         pattern: pattern.clone(),
-                        idea_ids,
+                        tool_calls,
                         cooldown_secs,
                         ..Default::default()
                     })
@@ -193,14 +203,16 @@ impl Tool for EventsTool {
                 let items: Vec<String> = events
                     .iter()
                     .map(|e| {
-                        let ideas = if e.idea_ids.is_empty() {
+                        let tools = if e.tool_calls.is_empty() {
                             String::new()
                         } else {
-                            format!(", idea_ids: [{}]", e.idea_ids.join(", "))
+                            let names: Vec<&str> =
+                                e.tool_calls.iter().map(|t| t.tool.as_str()).collect();
+                            format!(", tools: [{}]", names.join(", "))
                         };
                         format!(
                             "- {} (id: {}, pattern: {}, enabled: {}, fires: {}{})",
-                            e.name, e.id, e.pattern, e.enabled, e.fire_count, ideas
+                            e.name, e.id, e.pattern, e.enabled, e.fire_count, tools
                         )
                     })
                     .collect();

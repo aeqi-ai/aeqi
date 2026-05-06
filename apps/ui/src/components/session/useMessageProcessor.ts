@@ -161,13 +161,10 @@ export function useMessageProcessor() {
         applyAssistantMeta(agent, (m.metadata || {}) as Record<string, unknown>);
       } else if (eventType === "event_fired") {
         const meta = (m.metadata || {}) as Record<string, unknown>;
-        const rawIdeaIds = meta.idea_ids;
-        const ideaIds = Array.isArray(rawIdeaIds) ? rawIdeaIds.map(String) : [];
         const fire = {
           eventId: String(meta.event_id ?? ""),
           eventName: String(meta.event_name ?? ""),
           pattern: String(meta.pattern ?? ""),
-          ideaIds,
           scope: typeof meta.scope === "string" && meta.scope.length > 0 ? meta.scope : "self",
         };
         // Mid-turn fires (the agent is already producing output) inline at

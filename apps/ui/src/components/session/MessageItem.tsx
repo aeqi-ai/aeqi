@@ -368,15 +368,8 @@ function PositionChip({ title }: { title: string }) {
 function EventFireItem({ msg }: { msg: Message }) {
   const { goEntity, entityId } = useNav();
   const fire = msg.eventFire;
-  const { data: ideas } = useAgentIdeas(entityId);
-  const ideaIds = fire?.ideaIds ?? [];
 
   if (!fire) return null;
-
-  const nameFor = (id: string) => {
-    const hit = ideas?.find((i) => i.id === id);
-    return hit?.name ?? id.slice(0, 8);
-  };
 
   return (
     <div className="asv-event-fire">
@@ -391,19 +384,6 @@ function EventFireItem({ msg }: { msg: Message }) {
       {fire.scope && fire.scope !== "self" && (
         <span className="asv-event-fire-scope">{`(${fire.scope})`}</span>
       )}
-      <span className="asv-event-fire-arrow">{"→"}</span>
-      <span className="asv-event-fire-chips">
-        {ideaIds.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className="asv-event-fire-chip"
-            onClick={() => entityId && goEntity(entityId, "ideas", id)}
-          >
-            {nameFor(id)}
-          </button>
-        ))}
-      </span>
       {msg.timestamp && <span className="asv-event-fire-time">{formatTime(msg.timestamp)}</span>}
     </div>
   );

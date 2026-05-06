@@ -83,12 +83,6 @@ pub struct SeedEventSpec {
     #[serde(default)]
     pub cooldown_secs: u64,
     #[serde(default)]
-    pub query_template: Option<String>,
-    #[serde(default)]
-    pub query_top_k: Option<u32>,
-    #[serde(default)]
-    pub query_tag_filter: Option<Vec<String>>,
-    #[serde(default)]
     pub tool_calls: Vec<ToolCallSpec>,
 }
 
@@ -488,10 +482,6 @@ pub async fn spawn_blueprint(
                 scope: aeqi_core::Scope::SelfScope,
                 name: ev.name.clone(),
                 pattern: ev.pattern.clone(),
-                idea_ids: Vec::new(),
-                query_template: ev.query_template.clone(),
-                query_top_k: ev.query_top_k,
-                query_tag_filter: ev.query_tag_filter.clone(),
                 tool_calls,
                 cooldown_secs: ev.cooldown_secs,
                 system: false,
@@ -1209,9 +1199,6 @@ mod tests {
                     name: "weekly".to_string(),
                     pattern: "session:start".to_string(),
                     cooldown_secs: 0,
-                    query_template: Some("weekly".to_string()),
-                    query_top_k: Some(5),
-                    query_tag_filter: Some(vec!["cadence".to_string()]),
                     tool_calls: Vec::new(),
                 },
                 SeedEventSpec {
@@ -1219,9 +1206,6 @@ mod tests {
                     name: "on_draft".to_string(),
                     pattern: "session:quest_start".to_string(),
                     cooldown_secs: 60,
-                    query_template: None,
-                    query_top_k: None,
-                    query_tag_filter: None,
                     tool_calls: Vec::new(),
                 },
             ],
@@ -1407,9 +1391,6 @@ mod tests {
             name: "orphan".to_string(),
             pattern: "session:start".to_string(),
             cooldown_secs: 0,
-            query_template: None,
-            query_top_k: None,
-            query_tag_filter: None,
             tool_calls: Vec::new(),
         });
 

@@ -284,7 +284,7 @@ impl Middleware for ShellHookMiddleware {
 
     async fn after_step(
         &self,
-        ctx: &mut WorkerContext,
+        _ctx: &mut WorkerContext,
         _response_text: &str,
         _stop_reason: &str,
     ) -> MiddlewareAction {
@@ -293,32 +293,13 @@ impl Middleware for ShellHookMiddleware {
             return MiddlewareAction::Continue;
         }
 
-        // For each failure, fire the shell:command_failed pattern.
-        for (command, output, _timeout_ms) in failures {
-            if let Some(ref registry) = ctx.registry {
-                let ectx = ctx.as_execution_context();
-                let trigger_args = serde_json::json!({
-                    "command": command,
-                    "output": output,
-                });
-                let reg = registry.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = reg
-                        .invoke_pattern("shell:command_failed", &ectx, &trigger_args)
-                        .await
-                    {
-                        warn!(error = %e, "shell_hooks: invoke_pattern failed");
-                    }
-                });
-            } else {
-                // No registry — log directly as fallback.
-                warn!(
-                    command = %command,
-                    output = %output,
-                    "[Shell Hook] Command failed: `{}`\nOutput:\n{}",
-                    command, output
-                );
-            }
+        // Log each failure. Response (event tool_calls) is dispatched via
+        // PatternDetector::detect at the after-step slot.
+        for (command, _output, _timeout_ms) in failures {
+            tracing::debug!(
+                command = %command,
+                "shell_hooks: command failed (pattern dispatched via detector)",
+            );
         }
 
         MiddlewareAction::Continue

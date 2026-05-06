@@ -102,6 +102,12 @@ fn default_max_concurrent() -> u32 {
     1
 }
 
+/// Embedded migration 0002 — drops the legacy event columns
+/// (`idea_ids`, `query_template`, `query_top_k`, `query_tag_filter`).
+/// `tool_calls` is the canonical pattern shape now.
+const MIGRATION_0002_DROP_LEGACY_EVENT_COLUMNS: &str =
+    include_str!("../migrations/0002_drop_legacy_event_columns.sql");
+
 fn ensure_event_columns(conn: &Connection) -> rusqlite::Result<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(events)")?;
     let columns: Vec<(String, i64)> = stmt
@@ -112,33 +118,22 @@ fn ensure_event_columns(conn: &Connection) -> rusqlite::Result<()> {
         .collect();
     let existing: std::collections::HashSet<String> =
         columns.iter().map(|(n, _)| n.clone()).collect();
-    for (col, ddl) in [
-        (
-            "query_template",
-            "ALTER TABLE events ADD COLUMN query_template TEXT",
-        ),
-        (
-            "query_top_k",
-            "ALTER TABLE events ADD COLUMN query_top_k INTEGER",
-        ),
-        (
-            "query_tag_filter",
-            "ALTER TABLE events ADD COLUMN query_tag_filter TEXT",
-        ),
-        (
-            "tool_calls",
+
+    // Forward-only columns that may be missing on legacy DBs. tool_calls is
+    // the canonical pattern shape; legacy idea_ids/query_* columns are
+    // dropped by migration 0002 below.
+    if !existing.contains("tool_calls") {
+        conn.execute(
             "ALTER TABLE events ADD COLUMN tool_calls TEXT NOT NULL DEFAULT '[]'",
-        ),
-    ] {
-        if !existing.contains(col) {
-            conn.execute(ddl, [])?;
-        }
+            [],
+        )?;
     }
 
     // Heal pre-baseline installs where `agent_id` was NOT NULL. The current
     // schema makes it nullable (NULL = global event). SQLite can't drop a
     // NOT NULL constraint in place, so rebuild the table when we detect the
-    // old shape.
+    // old shape — and take the opportunity to land the canonical column set
+    // (no legacy columns) so migration 0002 doesn't have to drop them.
     let agent_id_notnull = columns
         .iter()
         .find(|(n, _)| n == "agent_id")
@@ -153,9 +148,7 @@ fn ensure_event_columns(conn: &Connection) -> rusqlite::Result<()> {
                  name TEXT NOT NULL,
                  pattern TEXT NOT NULL,
                  scope TEXT NOT NULL DEFAULT 'self',
-                 idea_ids TEXT NOT NULL DEFAULT '[]',
-                 query_template TEXT,
-                 query_top_k INTEGER,
+                 tool_calls TEXT NOT NULL DEFAULT '[]',
                  enabled INTEGER NOT NULL DEFAULT 1,
                  cooldown_secs INTEGER NOT NULL DEFAULT 0,
                  last_fired TEXT,
@@ -165,12 +158,13 @@ fn ensure_event_columns(conn: &Connection) -> rusqlite::Result<()> {
                  created_at TEXT NOT NULL
              );
              INSERT INTO events_new
-                 (id, agent_id, name, pattern, scope, idea_ids,
-                  query_template, query_top_k, enabled, cooldown_secs,
-                  last_fired, fire_count, total_cost_usd, system, created_at)
-                 SELECT id, agent_id, name, pattern, scope, idea_ids,
-                        query_template, query_top_k, enabled, cooldown_secs,
-                        last_fired, fire_count, total_cost_usd, system, created_at
+                 (id, agent_id, name, pattern, scope, tool_calls, enabled,
+                  cooldown_secs, last_fired, fire_count, total_cost_usd,
+                  system, created_at)
+                 SELECT id, agent_id, name, pattern, scope,
+                        COALESCE(tool_calls, '[]') AS tool_calls,
+                        enabled, cooldown_secs, last_fired, fire_count,
+                        total_cost_usd, system, created_at
                    FROM events;
              DROP TABLE events;
              ALTER TABLE events_new RENAME TO events;
@@ -182,6 +176,29 @@ fn ensure_event_columns(conn: &Connection) -> rusqlite::Result<()> {
              COMMIT;",
         )?;
     }
+
+    // Migration 0002 — idempotent drop of the four legacy columns.
+    // The unconditional ALTER TABLE DROP COLUMN errors on already-dropped
+    // columns, so gate each statement on the column being present.
+    let post_columns: std::collections::HashSet<String> = {
+        let mut s = conn.prepare("PRAGMA table_info(events)")?;
+        s.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    for legacy_col in [
+        "idea_ids",
+        "query_template",
+        "query_top_k",
+        "query_tag_filter",
+    ] {
+        if post_columns.contains(legacy_col) {
+            conn.execute(&format!("ALTER TABLE events DROP COLUMN {legacy_col}"), [])?;
+        }
+    }
+    // Reference the embedded SQL so it stays in the binary alongside the
+    // executed code path (single source of truth for documentation).
+    let _ = MIGRATION_0002_DROP_LEGACY_EVENT_COLUMNS;
 
     Ok(())
 }
@@ -1213,9 +1230,6 @@ impl AgentRegistry {
                  name TEXT NOT NULL,
                  pattern TEXT NOT NULL,
                  scope TEXT NOT NULL DEFAULT 'self',
-                 idea_ids TEXT NOT NULL DEFAULT '[]',
-                 query_template TEXT,
-                 query_top_k INTEGER,
                  tool_calls TEXT NOT NULL DEFAULT '[]',
                  enabled INTEGER NOT NULL DEFAULT 1,
                  cooldown_secs INTEGER NOT NULL DEFAULT 0,
@@ -1849,10 +1863,9 @@ impl AgentRegistry {
             let event_id = uuid::Uuid::new_v4().to_string();
             db.execute(
                 "INSERT OR IGNORE INTO events (
-                     id, agent_id, name, pattern, scope, idea_ids,
-                     query_template, query_top_k, tool_calls,
+                     id, agent_id, name, pattern, scope, tool_calls,
                      enabled, cooldown_secs, system, created_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, '[]', NULL, NULL, ?6, 1, 0, 0, ?7)",
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, 0, 0, ?7)",
                 params![
                     event_id,
                     agent_id,
@@ -5412,10 +5425,10 @@ mod tests {
             let db = reg.db.lock().await;
             db.execute(
                 "INSERT INTO events (
-                     id, agent_id, name, pattern, scope, idea_ids,
-                     tool_calls, enabled, cooldown_secs, system, created_at
+                     id, agent_id, name, pattern, scope, tool_calls,
+                     enabled, cooldown_secs, system, created_at
                  ) VALUES ('global-1', NULL, 'session:start', 'session:start',
-                          'global', '[]', '[]', 1, 0, 1, '2026-01-01T00:00:00Z')",
+                          'global', '[]', 1, 0, 1, '2026-01-01T00:00:00Z')",
                 [],
             )
             .unwrap();

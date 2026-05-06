@@ -325,9 +325,9 @@ pub trait IdeaStore: Send + Sync {
 
     /// Hierarchical search with a tag filter. When `tags` is non-empty, only
     /// ideas that match at least one of the tags are returned (OR semantics).
-    /// Callers: `on_quest_start` uses this to restrict `query_template`
-    /// retrieval to `[promoted]` so candidate/rejected ideas cannot leak into
-    /// the assembled prompt purely on semantic similarity.
+    /// Callers: `on_quest_start`'s `ideas.search` tool_call uses this to
+    /// restrict retrieval to `[promoted]` so candidate/rejected ideas cannot
+    /// leak into the assembled prompt purely on semantic similarity.
     async fn hierarchical_search_with_tags(
         &self,
         query: &str,

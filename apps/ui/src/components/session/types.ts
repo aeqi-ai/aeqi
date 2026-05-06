@@ -32,7 +32,6 @@ export interface EventFire {
   eventId: string;
   eventName: string;
   pattern: string;
-  ideaIds: string[];
   scope: string;
 }
 

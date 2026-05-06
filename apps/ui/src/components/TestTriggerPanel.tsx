@@ -18,10 +18,14 @@ export default function TestTriggerPanel({ event, agentId, onClose }: Props) {
   const isGlobal = event.agent_id == null;
   const [pickedAgentId, setPickedAgentId] = useState(agentId ?? "");
 
-  const template = event.query_template ?? "";
-  const needsQuestDescription = template.includes("{quest_description}");
-  const needsUserPrompt = template.includes("{user_prompt}");
-  const needsToolOutput = template.includes("{tool_output}");
+  // Scan tool_calls JSON for known runtime placeholders so the operator can
+  // fill them before triggering. Any tool_call args string that mentions
+  // `{quest_description}` / `{user_prompt}` / `{tool_output}` opts that
+  // input field in.
+  const callsJson = JSON.stringify(event.tool_calls ?? []);
+  const needsQuestDescription = callsJson.includes("{quest_description}");
+  const needsUserPrompt = callsJson.includes("{user_prompt}");
+  const needsToolOutput = callsJson.includes("{tool_output}");
   const [questDescription, setQuestDescription] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
   const [toolOutput, setToolOutput] = useState("");

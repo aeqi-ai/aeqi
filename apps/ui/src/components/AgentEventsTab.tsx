@@ -237,7 +237,6 @@ export default function AgentEventsTab({ agentId }: { agentId: string }) {
         name: newName.trim(),
         pattern: newPattern.trim(),
         scope: newScope,
-        idea_ids: [],
         enabled: true,
         tool_calls: [],
       };

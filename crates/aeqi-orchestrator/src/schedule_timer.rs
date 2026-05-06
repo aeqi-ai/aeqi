@@ -340,29 +340,4 @@ mod tests {
     fn unknown_pattern_not_due() {
         assert!(!is_schedule_due("garbage", None));
     }
-
-    #[test]
-    fn event_idea_ids_deduplicates() {
-        let event = crate::event_handler::Event {
-            id: "e1".into(),
-            agent_id: Some("a1".into()),
-            scope: aeqi_core::Scope::SelfScope,
-            name: "test".into(),
-            pattern: "schedule:every 60s".into(),
-            idea_ids: vec!["a".into(), "b".into(), "a".into(), "".into()],
-            query_template: None,
-            query_top_k: None,
-            query_tag_filter: None,
-            tool_calls: Vec::new(),
-            enabled: true,
-            cooldown_secs: 0,
-            last_fired: None,
-            fire_count: 0,
-            total_cost_usd: 0.0,
-            system: false,
-            created_at: Utc::now(),
-        };
-        let ids = crate::event_matcher::event_idea_ids(&event);
-        assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
-    }
 }
