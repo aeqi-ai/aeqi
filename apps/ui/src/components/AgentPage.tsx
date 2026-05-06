@@ -167,7 +167,12 @@ export default function AgentPage({
 
         {activeTab === "channels" && <AgentChannelsTab agentId={resolvedAgentId} />}
 
-        {activeTab === "treasury" && <TreasuryPage entityId={resolvedAgentId} />}
+        {activeTab === "treasury" && (
+          <TreasuryPage
+            entityId={resolvedEntityId}
+            agentId={isDrilledAgent ? resolvedAgentId : undefined}
+          />
+        )}
 
         {activeTab === "tools" && (
           <ToolsDetail agent={agent} resolvedAgentId={resolvedAgentId} showToast={showToast} />

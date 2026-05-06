@@ -39,6 +39,14 @@ export interface Agent {
   last_active?: string;
   session_count?: number;
   total_tokens?: number;
+  /**
+   * Running USD cost across every inference call attributed to this
+   * agent. Denormalized from the `inference_calls` audit table by
+   * `record_inference_call` at the end of each turn. Surfaced in the
+   * agents-list Spend column and the agent Treasury tab's Lifetime
+   * Spend stat.
+   */
+  lifetime_cost_usd?: number;
   budget_usd?: number;
   execution_mode?: string;
   workdir?: string;
@@ -52,6 +60,24 @@ export interface AgentRef {
   id: string;
   name: string;
   model?: string;
+}
+
+/**
+ * One row from the runtime's `inference_calls` audit table — returned
+ * by `GET /api/agents/{id}/inference-calls`. Powers the per-agent
+ * Treasury tab's recent-calls ledger.
+ */
+export interface InferenceCallRow {
+  id: string;
+  agent_id: string;
+  session_id: string | null;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+  stop_reason: string | null;
+  correlation_id: string | null;
+  created_at: string;
 }
 
 export interface Checkpoint {

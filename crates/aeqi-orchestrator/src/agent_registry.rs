@@ -1051,6 +1051,25 @@ impl std::fmt::Display for AgentStatus {
     }
 }
 
+/// One row from the `inference_calls` audit table — emitted by
+/// `record_inference_call`, consumed by `recent_inference_calls`.
+/// Mirrors the table schema 1:1 with the `created_at` left as a
+/// pre-formatted RFC-3339 string so downstream IPC payloads can pass
+/// it through untouched.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InferenceCall {
+    pub id: String,
+    pub agent_id: String,
+    pub session_id: Option<String>,
+    pub model: String,
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub cost_usd: f64,
+    pub stop_reason: Option<String>,
+    pub correlation_id: Option<String>,
+    pub created_at: String,
+}
+
 /// A single execution record tracked in the `runs` table.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RunRecord {
@@ -2398,6 +2417,50 @@ impl AgentRegistry {
                 Err(e.into())
             }
         }
+    }
+
+    /// Read the last `limit` inference calls attributed to `agent_id`,
+    /// ordered most-recent first. Pure-read consumer of the
+    /// `inference_calls` audit table; surfaced via the
+    /// `agents_recent_inference_calls` IPC verb so the UI's
+    /// agent-Treasury tab can render a per-call ledger without joining
+    /// across tables on the client. `limit` is clamped to [1, 500] to
+    /// keep payloads bounded.
+    pub async fn recent_inference_calls(
+        &self,
+        agent_id: &str,
+        limit: u32,
+    ) -> Result<Vec<InferenceCall>> {
+        let limit = limit.clamp(1, 500) as i64;
+        let db = self.db.lock().await;
+        let mut stmt = db.prepare(
+            "SELECT id, agent_id, session_id, model, prompt_tokens,
+                    completion_tokens, cost_usd, stop_reason,
+                    correlation_id, created_at
+             FROM inference_calls
+             WHERE agent_id = ?1
+             ORDER BY datetime(created_at) DESC, id DESC
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![agent_id, limit], |row| {
+            Ok(InferenceCall {
+                id: row.get::<_, String>(0)?,
+                agent_id: row.get::<_, String>(1)?,
+                session_id: row.get::<_, Option<String>>(2)?,
+                model: row.get::<_, String>(3)?,
+                prompt_tokens: row.get::<_, i64>(4)? as u32,
+                completion_tokens: row.get::<_, i64>(5)? as u32,
+                cost_usd: row.get::<_, f64>(6)?,
+                stop_reason: row.get::<_, Option<String>>(7)?,
+                correlation_id: row.get::<_, Option<String>>(8)?,
+                created_at: row.get::<_, String>(9)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     /// Change agent status.

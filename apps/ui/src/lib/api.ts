@@ -5,6 +5,7 @@ import type {
   Blueprint,
   EventInvocationRow,
   Idea,
+  InferenceCallRow,
   InvitationDetail,
   InvocationStepRow,
   OccupantKind,
@@ -357,6 +358,13 @@ export const api = {
 
   getAgents: (params?: { root?: boolean }) =>
     request<Record<string, unknown>>(params?.root ? "/agents?root=true" : "/agents"),
+
+  getAgentRecentInferenceCalls: (agentId: string, limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : "";
+    return request<{ ok: boolean; calls?: InferenceCallRow[]; error?: string }>(
+      `/agents/${encodeURIComponent(agentId)}/inference-calls${qs}`,
+    );
+  },
 
   getActivityStream: (params?: { last?: number; root?: string }) => {
     const query = new URLSearchParams();

@@ -12,6 +12,8 @@ import { indexerEnabled } from "@/lib/indexer";
 import { COMPANY_MONTHLY, formatCents, RESOURCE_PACK } from "@/lib/pricing";
 import { useTreasury, type TreasuryTransfer, type TokenBalance } from "@/hooks/useTreasury";
 import { useDaemonStore } from "@/store/daemon";
+import type { InferenceCallRow } from "@/lib/types";
+import { formatSpendUsd } from "@/lib/spend";
 
 // ── Chain config ──────────────────────────────────────────────────────────────
 
@@ -24,6 +26,13 @@ const CHAIN_EXPLORER = (import.meta.env.VITE_CHAIN_EXPLORER as string | undefine
 
 interface TreasuryPageProps {
   entityId: string;
+  /**
+   * When set, the page renders an "Inference" zone at the top: a
+   * Lifetime Spend stat card + a recent-calls table sourced from
+   * `inference_calls`. Drives the per-agent Treasury tab. Omitted on
+   * Company / Personal Treasury.
+   */
+  agentId?: string;
 }
 
 interface CompanyBillingRow {
@@ -62,7 +71,7 @@ const STATUS_LABEL: Record<CompanyBillingRow["status"], string> = {
  *   4. Subscription card — Stripe billing state.
  *   5. Resource pack — plan limits.
  */
-export default function TreasuryPage({ entityId }: TreasuryPageProps) {
+export default function TreasuryPage({ entityId, agentId }: TreasuryPageProps) {
   const location = useLocation();
   const entity = useDaemonStore((s) => s.entities.find((e) => e.id === entityId));
   const trustAddress = entity?.trust_address;
@@ -132,9 +141,13 @@ export default function TreasuryPage({ entityId }: TreasuryPageProps) {
       <header style={{ marginBottom: "var(--space-lg)" }}>
         <h2 style={{ margin: 0 }}>Treasury</h2>
         <p style={{ color: "var(--color-text-muted)", margin: "var(--space-xs) 0 0 0" }}>
-          Subscription, resources, and on-chain balances for this {entityTerm}.
+          {agentId
+            ? "Lifetime inference spend and recent calls for this agent."
+            : `Subscription, resources, and on-chain balances for this ${entityTerm}.`}
         </p>
       </header>
+
+      {agentId && <InferenceZone agentId={agentId} />}
 
       {trustAddress && indexerEnabled() && <ContractInfoRow trustAddress={trustAddress} />}
 
@@ -728,6 +741,304 @@ function ResourcePack() {
       </div>
     </section>
   );
+}
+
+// ── Inference zone (per-agent) ────────────────────────────────────────────────
+
+/**
+ * Per-agent inference accounting block: a Lifetime Spend stat sourced
+ * from `agent.lifetime_cost_usd` (denormalized rollup) plus the last 30
+ * `inference_calls` rows in a tabular ledger. Lazy-loads more on demand.
+ *
+ * The lifetime number is read from the daemon store rather than computed
+ * client-side from the calls list — the runtime maintains the rollup
+ * atomically alongside the audit-row INSERT, so it's the source of truth
+ * even for agents whose call history exceeds the visible window.
+ */
+function InferenceZone({ agentId }: { agentId: string }) {
+  const agent = useDaemonStore((s) => s.agents.find((a) => a.id === agentId));
+  const [calls, setCalls] = useState<InferenceCallRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [limit, setLimit] = useState(30);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCalls(null);
+    setError(null);
+    api
+      .getAgentRecentInferenceCalls(agentId, limit)
+      .then((resp) => {
+        if (cancelled) return;
+        if (resp.ok && resp.calls) setCalls(resp.calls);
+        else setError(resp.error || "Could not load inference history.");
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setError(e.message || "Could not load inference history.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMore(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, limit]);
+
+  const lifetime = agent?.lifetime_cost_usd ?? 0;
+  const totalTokens = agent?.total_tokens ?? 0;
+
+  return (
+    <section style={{ marginBottom: "var(--space-lg)" }}>
+      <SectionLabel>Inference</SectionLabel>
+
+      {/* Lifetime stat card */}
+      <div
+        style={{
+          background: "var(--color-card)",
+          borderRadius: "var(--radius-md)",
+          padding: "var(--space-md)",
+          marginBottom: "var(--space-md)",
+          display: "flex",
+          alignItems: "baseline",
+          gap: "var(--space-md)",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              color: "var(--color-text-muted)",
+              fontSize: "var(--font-size-sm)",
+              marginBottom: "var(--space-xs)",
+            }}
+          >
+            Lifetime spend
+          </div>
+          <div
+            style={{
+              fontSize: "var(--font-size-2xl, 24px)",
+              fontWeight: 600,
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            {formatSpendUsd(lifetime)}
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <div
+            style={{
+              color: "var(--color-text-muted)",
+              fontSize: "var(--font-size-sm)",
+              marginBottom: "var(--space-xs)",
+            }}
+          >
+            Tokens
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--font-size-base)",
+            }}
+          >
+            {totalTokens.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent calls table */}
+      <div
+        style={{
+          background: "var(--color-card)",
+          borderRadius: "var(--radius-md)",
+          overflow: "hidden",
+        }}
+      >
+        {error ? (
+          <div
+            style={{
+              padding: "var(--space-lg) var(--space-md)",
+              color: "var(--color-text-muted)",
+              fontSize: "var(--font-size-sm)",
+              textAlign: "center",
+            }}
+          >
+            {error}
+          </div>
+        ) : calls === null ? (
+          <>
+            <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
+            <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
+            <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
+          </>
+        ) : calls.length === 0 ? (
+          <div
+            style={{
+              padding: "var(--space-lg) var(--space-md)",
+              color: "var(--color-text-muted)",
+              fontSize: "var(--font-size-sm)",
+              textAlign: "center",
+            }}
+          >
+            No inference calls yet.
+          </div>
+        ) : (
+          <>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "var(--font-size-sm)",
+              }}
+            >
+              <thead>
+                <tr style={{ color: "var(--color-text-muted)" }}>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Model
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Tokens (in / out)
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Cost
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Stop
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "var(--space-xs) var(--space-md)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    When
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {calls.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    style={{
+                      background: i % 2 === 1 ? "var(--bg-subtle)" : undefined,
+                    }}
+                  >
+                    <td style={{ padding: "var(--space-xs) var(--space-md)", fontWeight: 500 }}>
+                      {c.model}
+                    </td>
+                    <td
+                      style={{
+                        padding: "var(--space-xs) var(--space-md)",
+                        textAlign: "right",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--font-size-xs)",
+                      }}
+                    >
+                      {c.prompt_tokens.toLocaleString()} / {c.completion_tokens.toLocaleString()}
+                    </td>
+                    <td
+                      style={{
+                        padding: "var(--space-xs) var(--space-md)",
+                        textAlign: "right",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--font-size-xs)",
+                      }}
+                    >
+                      {formatSpendUsd(c.cost_usd)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "var(--space-xs) var(--space-md)",
+                        color: "var(--color-text-muted)",
+                        fontSize: "var(--font-size-xs)",
+                      }}
+                    >
+                      {formatStopReason(c.stop_reason)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "var(--space-xs) var(--space-md)",
+                        textAlign: "right",
+                        color: "var(--color-text-muted)",
+                        fontSize: "var(--font-size-xs)",
+                      }}
+                    >
+                      {formatRelativeTime(c.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {calls.length === limit && limit < 500 && (
+              <div
+                style={{
+                  padding: "var(--space-sm) var(--space-md)",
+                  textAlign: "center",
+                  borderTop: "0",
+                }}
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => {
+                    setLoadingMore(true);
+                    setLimit((l) => Math.min(l + 30, 500));
+                  }}
+                >
+                  {loadingMore ? "Loading…" : "Load more"}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatStopReason(raw: string | null): string {
+  if (!raw) return "—";
+  // Rust emits `format!("{:?}", result.stop_reason)` — strip enum-debug
+  // wrapping like `Some("end_turn")` → `end_turn`.
+  const m = raw.match(/^Some\("?([^")]+)"?\)$/);
+  if (m) return m[1];
+  return raw;
+}
+
+function formatRelativeTime(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "—";
+  const diff = Date.now() - t;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1641,6 +1641,14 @@ impl Daemon {
                 "agent_children" => {
                     crate::ipc::agents::handle_agent_children(&ctx, &request, &allowed_roots).await
                 }
+                "agent_recent_inference_calls" => {
+                    crate::ipc::agents::handle_agent_recent_inference_calls(
+                        &ctx,
+                        &request,
+                        &allowed_roots,
+                    )
+                    .await
+                }
                 "agent_spawn" => {
                     crate::ipc::agents::handle_agent_spawn(&ctx, &request, &allowed_roots).await
                 }

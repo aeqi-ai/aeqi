@@ -452,3 +452,56 @@ pub async fn handle_set_can_ask_director(
         Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
     }
 }
+
+/// Read the last `limit` inference calls attributed to `agent_id`,
+/// most-recent first. Powers the per-agent Treasury tab's recent-calls
+/// table. Tenancy: agent must be reachable from the caller's allowed
+/// scope. `limit` defaults to 30; the registry clamps it to [1, 500].
+pub async fn handle_agent_recent_inference_calls(
+    ctx: &super::CommandContext,
+    request: &serde_json::Value,
+    allowed: &Option<Vec<String>>,
+) -> serde_json::Value {
+    let agent_id = request
+        .get("agent_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if agent_id.is_empty() {
+        return serde_json::json!({"ok": false, "error": "agent_id required"});
+    }
+    if !check_agent_access(&ctx.agent_registry, allowed, agent_id).await {
+        return serde_json::json!({"ok": false, "error": "access denied"});
+    }
+    let limit = request
+        .get("limit")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32)
+        .unwrap_or(30);
+    match ctx
+        .agent_registry
+        .recent_inference_calls(agent_id, limit)
+        .await
+    {
+        Ok(calls) => {
+            let items: Vec<serde_json::Value> = calls
+                .iter()
+                .map(|c| {
+                    serde_json::json!({
+                        "id": c.id,
+                        "agent_id": c.agent_id,
+                        "session_id": c.session_id,
+                        "model": c.model,
+                        "prompt_tokens": c.prompt_tokens,
+                        "completion_tokens": c.completion_tokens,
+                        "cost_usd": c.cost_usd,
+                        "stop_reason": c.stop_reason,
+                        "correlation_id": c.correlation_id,
+                        "created_at": c.created_at,
+                    })
+                })
+                .collect();
+            serde_json::json!({"ok": true, "calls": items})
+        }
+        Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
+    }
+}

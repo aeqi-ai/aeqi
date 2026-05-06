@@ -8,9 +8,10 @@ import AgentAvatar from "./AgentAvatar";
 import { BlueprintPickerModal } from "@/components/blueprints/BlueprintPickerModal";
 import { relativeTime } from "./ideas/types";
 import { layoutChart, reRootEdges, NODE_W, NODE_H } from "@/components/roles/layout";
+import { formatSpendUsd } from "@/lib/spend";
 
 type ViewMode = "list" | "chart";
-type SortMode = "recent" | "alpha-asc" | "alpha-desc" | "active";
+type SortMode = "recent" | "alpha-asc" | "alpha-desc" | "active" | "spend";
 type StatusFilter = "all" | "active" | "stopped" | "inactive";
 
 const VIEW_LABELS: Record<ViewMode, string> = {
@@ -25,8 +26,9 @@ const SORT_LABELS: Record<SortMode, string> = {
   "alpha-asc": "Name (A→Z)",
   "alpha-desc": "Name (Z→A)",
   active: "Activity",
+  spend: "Spend (high → low)",
 };
-const SORT_ORDER: SortMode[] = ["recent", "alpha-asc", "alpha-desc", "active"];
+const SORT_ORDER: SortMode[] = ["recent", "alpha-asc", "alpha-desc", "active", "spend"];
 const SORT_VALUES = new Set<SortMode>(SORT_ORDER);
 
 const STATUS_LABELS: Record<StatusFilter, string> = {
@@ -361,6 +363,11 @@ function compareAgents(a: Agent, b: Agent, mode: SortMode): number {
       const tb = b.last_active ? Date.parse(b.last_active) : 0;
       return tb - ta;
     }
+    case "spend": {
+      const ca = a.lifetime_cost_usd ?? 0;
+      const cb = b.lifetime_cost_usd ?? 0;
+      return cb - ca;
+    }
     case "recent":
     default: {
       const ta = a.created_at ? Date.parse(a.created_at) : 0;
@@ -541,6 +548,7 @@ function AgentRow({
   depth: number;
   onSelect: (id: string) => void;
 }) {
+  const spend = a.lifetime_cost_usd ?? 0;
   return (
     <button
       type="button"
@@ -565,6 +573,19 @@ function AgentRow({
           {a.status || "unknown"}
         </span>
         <span className="ideas-list-row-time">{relativeTime(a.last_active) || "—"}</span>
+        <span
+          className="ideas-list-row-time"
+          title={`Lifetime inference spend: ${formatSpendUsd(spend)}`}
+          style={{
+            fontFamily: "var(--font-mono)",
+            color: spend > 0 ? "var(--color-text-primary)" : "var(--color-text-muted)",
+            fontVariantNumeric: "tabular-nums",
+            minWidth: 72,
+            textAlign: "right",
+          }}
+        >
+          {formatSpendUsd(spend)}
+        </span>
       </div>
     </button>
   );
