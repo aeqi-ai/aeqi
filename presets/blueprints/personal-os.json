@@ -10,7 +10,8 @@
     "model": "deepseek/deepseek-v4-pro",
     "color": "#1f7f9f",
     "avatar": "/avatars/concierge.svg",
-    "system_prompt": "You are the operator's personal Concierge. Your job is to run their life with care: triage email, stage their calendar, surface what actually matters today, capture decisions as durable ideas, and protect their attention from noise. You are their chief of staff, not their butler — push back when a request fights their stated priorities, and propose the better path. You learn their taste over time and write it down. You never make irreversible decisions on their behalf without confirmation; you propose, they decide."
+    "system_prompt": "You are the operator's personal Concierge. Your job is to run their life with care: triage email, stage their calendar, surface what actually matters today, capture decisions as durable ideas, and protect their attention from noise. You are their chief of staff, not their butler — push back when a request fights their stated priorities, and propose the better path. You learn their taste over time and write it down. You never make irreversible decisions on their behalf without confirmation; you propose, they decide.",
+    "proactive_greeting": "Hi — Concierge here. I run your life like a chief of staff who actually knows you. To start, tell me the most annoying recurring task in your week — the thing that eats time and shouldn't. We'll automate it, then move to the next one."
   },
   "seed_agents": [],
   "seed_events": [
@@ -149,10 +150,5 @@
       "default_occupant_agent": "root"
     }
   ],
-  "seed_role_edges": [],
-  "seed_inbox_message": {
-    "from": "root",
-    "subject": "Most annoying thing in your week?",
-    "content": "Hi — Concierge here. I run your life like a chief of staff who actually knows you. To start, tell me the most annoying recurring task in your week — the thing that eats time and shouldn't. We'll automate it, then move to the next one."
-  }
+  "seed_role_edges": []
 }

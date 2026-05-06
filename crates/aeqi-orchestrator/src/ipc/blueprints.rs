@@ -36,6 +36,16 @@ pub struct RootAgentSpec {
     /// session:start without any new plumbing.
     #[serde(default)]
     pub system_prompt: Option<String>,
+    /// Optional spawn-time greeting. When present, the blueprint
+    /// provisioner creates an agent-bound DM session between this agent
+    /// and the founder, posts the greeting as an `assistant` turn, and
+    /// stamps `awaiting_at` so it surfaces in the inbox immediately.
+    /// Each agent introduces itself ("Hi — I'm your CFO. I track
+    /// runway and plan funding rounds. Try asking me what your runway
+    /// is.") so a freshly-blueprinted Company arrives populated with
+    /// one inbox row per operationally-relevant agent.
+    #[serde(default)]
+    pub proactive_greeting: Option<String>,
 }
 
 /// Child agent. `owner` is always "root" for seed_agents — they sit directly
@@ -54,6 +64,9 @@ pub struct SeedAgentSpec {
     pub avatar: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+    /// Optional spawn-time greeting — see [`RootAgentSpec::proactive_greeting`].
+    #[serde(default)]
+    pub proactive_greeting: Option<String>,
 }
 
 fn default_owner_root() -> String {
@@ -144,21 +157,6 @@ pub struct SeedRoleEdgeSpec {
     pub child: String,
 }
 
-/// Spawn-time inbox greeting. When present, the root agent (or a named
-/// seed_agent) posts this message to a DM session with the creator user
-/// immediately after the Company spawns. The user lands on /inbox with
-/// an active conversation instead of an empty list.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SeedInboxMessageSpec {
-    /// Which agent posts the greeting. Use `"root"` for the blueprint's
-    /// root agent, or the `name` of an entry in `seed_agents`.
-    pub from: String,
-    /// Subject line shown in the inbox awaiting-row.
-    pub subject: String,
-    /// Body of the greeting message.
-    pub content: String,
-}
-
 /// Operator-time override of a declared role's default occupant.
 /// Sent in the spawn payload; applied during position installation.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -213,11 +211,6 @@ pub struct Blueprint {
     pub seed_roles: Vec<SeedRoleSpec>,
     #[serde(default)]
     pub seed_role_edges: Vec<SeedRoleEdgeSpec>,
-    /// Optional spawn-time inbox greeting. When present, the named agent
-    /// posts this to a DM session with the creator immediately after spawn.
-    /// Absent on older Blueprints — `#[serde(default)]` ensures they parse.
-    #[serde(default)]
-    pub seed_inbox_message: Option<SeedInboxMessageSpec>,
 }
 
 // ---------------------------------------------------------------------------
@@ -742,83 +735,140 @@ async fn store_identity_idea(
     }
 }
 
-/// Post the spawn-time inbox greeting declared in the Blueprint. Best-effort:
-/// every failure is warn-logged and the spawn proceeds regardless. Only called
-/// from `handle_spawn_blueprint` (fresh Company spawn); import/into-entity
-/// paths intentionally skip this.
-async fn seed_inbox_greeting(
+/// Post each operationally-relevant agent's spawn-time greeting into a fresh
+/// DM session with the founder. One inbox row per agent that declares a
+/// `proactive_greeting` — so a freshly-blueprinted Company arrives populated
+/// instead of empty. Best-effort: every failure is warn-logged and the spawn
+/// proceeds regardless. Only called from `handle_spawn_blueprint` (fresh
+/// Company spawn); import/into-entity paths intentionally skip this.
+///
+/// Each greeting introduces the agent — who they are, what they do, what to
+/// ask them — so the founder lands in a workspace that already feels alive.
+///
+/// The DM session is created via `create_session` (not
+/// `find_or_create_dm_session`) so the row carries `agent_id` directly. That's
+/// load-bearing for the `answer_inbox` reply path: `handle_answer_inbox`
+/// rejects the founder's reply with `"session has no agent binding"` when the
+/// session row's `agent_id` is empty. The participant table holds the same
+/// information for multi-participant queries; the column on the row keeps
+/// single-agent reply routing simple.
+async fn seed_proactive_greetings(
     session_store: &crate::session_store::SessionStore,
     blueprint: &Blueprint,
     outcome: &SpawnOutcome,
     creator_user_id: &str,
 ) {
-    let Some(ref greeting) = blueprint.seed_inbox_message else {
-        return;
-    };
+    // Walk every agent the blueprint declares — root + seeds — and pair its
+    // declared greeting with the just-spawned agent_id by name. The root's
+    // id is on the outcome under `root_agent_id`; seed agent ids land in
+    // `outcome.spawned_agents` keyed by name.
+    let mut greetings: Vec<(String, String, String)> = Vec::new();
+    if let Some(ref content) = blueprint.root.proactive_greeting {
+        greetings.push((
+            outcome.root_agent_id.clone(),
+            blueprint.root.name.clone(),
+            content.clone(),
+        ));
+    }
+    for seed in &blueprint.seed_agents {
+        let Some(ref content) = seed.proactive_greeting else {
+            continue;
+        };
+        match outcome.spawned_agents.iter().find(|a| a.name == seed.name) {
+            Some(spawned) => {
+                greetings.push((spawned.id.clone(), seed.name.clone(), content.clone()))
+            }
+            None => tracing::warn!(
+                seed = %seed.name,
+                "proactive greeting: seed agent not present in spawn outcome; skipping",
+            ),
+        }
+    }
 
-    // Resolve "from" to an agent_id. "root" → the just-spawned root agent.
-    // Anything else → look up by name in the spawned agents list.
-    let from_agent_id = if greeting.from == "root" {
-        Some(outcome.root_agent_id.clone())
-    } else {
-        outcome
-            .spawned_agents
-            .iter()
-            .find(|a| a.name == greeting.from)
-            .map(|a| a.id.clone())
-    };
+    for (agent_id, agent_name, content) in greetings {
+        seed_one_greeting(
+            session_store,
+            &agent_id,
+            &agent_name,
+            &content,
+            creator_user_id,
+        )
+        .await;
+    }
+}
 
-    let Some(agent_id) = from_agent_id else {
-        tracing::warn!(
-            from = %greeting.from,
-            "spawn-time inbox greeting: 'from' agent not found in spawned agents; skipping",
-        );
-        return;
-    };
+async fn seed_one_greeting(
+    session_store: &crate::session_store::SessionStore,
+    agent_id: &str,
+    agent_name: &str,
+    content: &str,
+    creator_user_id: &str,
+) {
+    // Subject is the agent's name — the inbox row reads "<Agent Name>:
+    // <preview>". One row per agent keeps the inbox legible at a glance.
+    let subject = agent_name.to_string();
+    let dm_name = format!("DM — {agent_name}");
 
-    // 1. Find or create the DM session between agent and creator.
-    let dm_name = format!("DM — {}", outcome.root_agent_name);
-    let (session_id, _created) = match session_store
-        .find_or_create_dm_session("dm", &dm_name, "agent", &agent_id, "user", creator_user_id)
+    // 1. Mint an agent-bound DM session. `create_session` writes
+    //    `agent_id` on the row so `handle_answer_inbox` can route the
+    //    founder's reply back through this agent's queue.
+    let session_id = match session_store
+        .create_session(agent_id, "dm", &dm_name, None, None)
         .await
     {
-        Ok(pair) => pair,
+        Ok(id) => id,
         Err(e) => {
-            tracing::warn!(error = %e, agent_id, "spawn-time inbox greeting: failed to create DM session");
+            tracing::warn!(error = %e, agent_id, "proactive greeting: failed to create DM session");
             return;
         }
     };
 
-    // 2. Append the greeting message as an agent turn.
+    // 2. Add both participants. Idempotent — `INSERT OR IGNORE` so a
+    //    re-run on the same session is safe.
+    if let Err(e) = session_store
+        .add_session_participant(&session_id, "agent", agent_id, None)
+        .await
+    {
+        tracing::warn!(error = %e, session_id, "proactive greeting: failed to add agent participant");
+    }
+    if let Err(e) = session_store
+        .add_session_participant(&session_id, "user", creator_user_id, None)
+        .await
+    {
+        tracing::warn!(error = %e, session_id, "proactive greeting: failed to add user participant");
+    }
+
+    // 3. Append the greeting as an `assistant` turn from this agent.
     if let Err(e) = session_store
         .append_message_from(
             &session_id,
             "assistant",
-            &greeting.content,
+            content,
             "agent",
-            Some(&agent_id),
+            Some(agent_id),
             None,
         )
         .await
     {
-        tracing::warn!(error = %e, session_id, "spawn-time inbox greeting: failed to append message");
+        tracing::warn!(error = %e, session_id, "proactive greeting: failed to append message");
         return;
     }
 
-    // 3. Stamp awaiting so list_awaiting() picks it up in the inbox query.
-    if let Err(e) = session_store
-        .set_awaiting(&session_id, &greeting.subject)
-        .await
-    {
-        tracing::warn!(error = %e, session_id, "spawn-time inbox greeting: failed to set awaiting");
+    // 4. Stamp `awaiting_at` so the row surfaces in the founder's inbox
+    //    immediately. The first reply will clear awaiting via
+    //    `clear_awaiting` (in `session_send`) or `answer_awaiting` (in
+    //    `handle_answer_inbox`).
+    if let Err(e) = session_store.set_awaiting(&session_id, &subject).await {
+        tracing::warn!(error = %e, session_id, "proactive greeting: failed to set awaiting");
         return;
     }
 
     tracing::info!(
         session_id,
         agent_id,
+        agent_name,
         creator_user_id,
-        "spawn-time inbox greeting seeded",
+        "proactive greeting seeded",
     );
 }
 
@@ -976,9 +1026,11 @@ pub async fn handle_spawn_blueprint(
                     ),
                 }
 
-                // Spawn-time inbox greeting — best-effort, never blocks spawn.
+                // Spawn-time proactive greetings — one DM per agent that
+                // declares a `proactive_greeting`. Best-effort, never
+                // blocks spawn.
                 if let Some(ref ss) = ctx.session_store {
-                    seed_inbox_greeting(ss.as_ref(), &blueprint, &outcome, uid).await;
+                    seed_proactive_greetings(ss.as_ref(), &blueprint, &outcome, uid).await;
                 }
             }
             serde_json::json!({
@@ -1122,6 +1174,7 @@ mod tests {
                 color: Some("#3fae8c".to_string()),
                 avatar: None,
                 system_prompt: Some("You are the director.".to_string()),
+                proactive_greeting: None,
             },
             seed_agents: vec![
                 SeedAgentSpec {
@@ -1131,6 +1184,7 @@ mod tests {
                     color: None,
                     avatar: None,
                     system_prompt: Some("You are the editor.".to_string()),
+                    proactive_greeting: None,
                 },
                 SeedAgentSpec {
                     owner: "root".to_string(),
@@ -1139,6 +1193,7 @@ mod tests {
                     color: None,
                     avatar: None,
                     system_prompt: None,
+                    proactive_greeting: None,
                 },
             ],
             seed_events: vec![
@@ -1193,7 +1248,6 @@ mod tests {
             ],
             seed_roles: Vec::new(),
             seed_role_edges: Vec::new(),
-            seed_inbox_message: None,
         }
     }
 
@@ -1450,6 +1504,7 @@ mod tests {
                 color: None,
                 avatar: None,
                 system_prompt: None,
+                proactive_greeting: None,
             },
             seed_agents: vec![SeedAgentSpec {
                 owner: "root".to_string(),
@@ -1458,13 +1513,13 @@ mod tests {
                 color: None,
                 avatar: None,
                 system_prompt: None,
+                proactive_greeting: None,
             }],
             seed_events: Vec::new(),
             seed_ideas: Vec::new(),
             seed_quests: Vec::new(),
             seed_roles: Vec::new(),
             seed_role_edges: Vec::new(),
-            seed_inbox_message: None,
         };
         let imported = spawn_blueprint(
             &imported_blueprint,
