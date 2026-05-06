@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AgentPage from "@/components/AgentPage";
 import OwnershipPage from "@/pages/OwnershipPage";
@@ -8,6 +8,11 @@ import MeInboxPage from "@/pages/MeInboxPage";
 import ChannelsListPage from "@/pages/ChannelsListPage";
 import ChannelDetailPage from "@/pages/ChannelDetailPage";
 import { useCurrentCompany } from "@/hooks/useCurrentCompany";
+
+// EntityOverviewTab is the canonical bare-`/c/<id>/` landing — renders
+// EntityHeroStrip + roles / quests / activity. Lazy-loaded to keep this
+// dispatch shell light. Mirrors the lazy pattern used in AgentPage.
+const EntityOverviewTab = lazy(() => import("@/components/EntityOverviewTab"));
 
 const TAB_TITLES: Record<string, string> = {
   overview: "overview",
@@ -94,7 +99,24 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     );
   }
 
-  // Overview, Roles, and any other primitive tab (agents, events,
-  // quests, ideas) render through AgentPage on the entity's root agent.
+  // Bare `/c/<id>/` Overview renders EntityOverviewTab directly — the
+  // canonical entity cockpit (EntityHeroStrip + roles / quests / activity).
+  // Routing through AgentPage's `isDrilledAgent` branch was wrong for
+  // root agents whose `entity_id` is populated and differs from
+  // `agent.id` (the post-2026-04-29 schema): the branch flagged the
+  // root agent as "drilled" and rendered AgentOverviewTab instead, so
+  // EntityHeroStrip never mounted. CompanyPage already knows it's the
+  // bare entity URL (drilled URLs bypass CompanyPage entirely in
+  // AppLayout) — render the entity surface explicitly.
+  if (tab === "overview") {
+    return (
+      <Suspense>
+        <EntityOverviewTab entityId={entityId} />
+      </Suspense>
+    );
+  }
+
+  // Roles, and any other primitive tab (agents, events, quests, ideas)
+  // render through AgentPage on the entity's root agent.
   return <AgentPage agentId={agentId} tab={tab} itemId={itemId} />;
 }
