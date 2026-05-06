@@ -7,6 +7,7 @@ pub mod agents;
 pub mod blueprints;
 pub mod channels;
 pub mod chat;
+pub mod credentials;
 pub mod entities;
 pub mod events;
 pub mod files;

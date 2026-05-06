@@ -1573,6 +1573,15 @@ impl Daemon {
                     .await
                 }
 
+                "credentials_ingest" => {
+                    crate::ipc::credentials::handle_credentials_ingest(
+                        &ctx,
+                        &request,
+                        &allowed_roots,
+                    )
+                    .await
+                }
+
                 "quests" => crate::ipc::quests::handle_quests(&ctx, &request, &allowed_roots).await,
                 "create_quest" => {
                     crate::ipc::quests::handle_create_quest(&ctx, &request, &allowed_roots).await

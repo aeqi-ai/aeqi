@@ -250,6 +250,14 @@ pub fn routes() -> Router<AppState> {
             "/credentials/bootstrap/{handle}",
             get(bootstrap_status_handler),
         )
+        // Server-to-server ingest path used by the platform's per-agent
+        // OAuth flow (Path B). The platform exchanges the authorization
+        // code for tokens and POSTs the bootstrapped row here. Auth is
+        // the platform-runtime scope-token (carried by the same
+        // x-aeqi-scope-token header that gates every cross-process IPC
+        // call); the daemon verifies the agent_id is in the caller's
+        // allowed roots before persisting.
+        .route("/integrations/credentials/ingest", post(ingest_credential))
         .route("/credentials/{id}/refresh", post(refresh_credential))
         .route("/credentials/{id}", delete(delete_credential))
 }
@@ -258,6 +266,58 @@ async fn list_integrations() -> impl IntoResponse {
     Json(IntegrationListResponse {
         integrations: catalog(),
     })
+}
+
+// ── Server-to-server credential ingest ───────────────────────────────────
+//
+// The platform's per-agent Google OAuth flow (Path B) exchanges the
+// authorization code for tokens server-side and POSTs the bootstrapped
+// row here. Tenancy is enforced by the daemon's `check_agent_access`
+// using the `x-aeqi-allowed-roots` headers the platform stamped on the
+// internal call.
+
+#[derive(Debug, Deserialize)]
+struct IngestCredentialBody {
+    /// One of `agent` (per-agent OAuth scope is the only supported
+    /// shape today). Defaults to `agent` when absent.
+    #[serde(default = "default_agent_scope")]
+    scope_kind: String,
+    scope_id: String,
+    provider: String,
+    name: String,
+    #[serde(default = "default_lifecycle_kind")]
+    lifecycle_kind: String,
+    plaintext_blob_json: serde_json::Value,
+    #[serde(default)]
+    metadata: serde_json::Value,
+    #[serde(default)]
+    expires_at: Option<String>,
+}
+
+fn default_agent_scope() -> String {
+    "agent".to_string()
+}
+
+fn default_lifecycle_kind() -> String {
+    "oauth2".to_string()
+}
+
+async fn ingest_credential(
+    State(state): State<AppState>,
+    scope: crate::extractors::Scope,
+    Json(body): Json<IngestCredentialBody>,
+) -> impl IntoResponse {
+    let params = serde_json::json!({
+        "scope_kind": body.scope_kind,
+        "scope_id": body.scope_id,
+        "provider": body.provider,
+        "name": body.name,
+        "lifecycle_kind": body.lifecycle_kind,
+        "plaintext_blob_json": body.plaintext_blob_json,
+        "metadata": body.metadata,
+        "expires_at": body.expires_at,
+    });
+    super::helpers::ipc_proxy(state, scope.as_ref(), "credentials_ingest", params).await
 }
 
 async fn list_credentials(
