@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.38.0 — 2026-05-07
+
+**Headline:** Quiet Director apex + chart drag/text-selection fix + AA-stack smoke test CLI.
+
+- **Quiet Director apex (chart):** dropped the tinted board zone, the band-divider, and the "Director" eyebrow caps per founder direction ("casual hierarchy feeling, not overwhelming top-down"). The Director seat now renders as a calm peer at the apex — same node size, same edges, no zone tint. Honest about hierarchy (Director is at the top of governance), quiet about presentation. `b8d1a518`.
+- **Chart drag fix:** `e.preventDefault()` in the canvas pointerdown handler + `user-select: none` on the viewport CSS. Stops the canvas pan gesture from accidentally triggering text selection (which then broke subsequent pan attempts). Founder report: "drag and drop on the canvas bugs sometimes it randomly selects some text and then I can't drag and drop anymore." `b8d1a518`.
+- **AA smoke CLI:** `cargo run -p aeqi-paymaster --bin aa-smoke --release` exercises the full ERC-4337 path end-to-end (deploys SimpleAccount + Paymaster, submits no-op UserOp, polls for receipt). Exit 0 = stack healthy. `SMOKE_JSON=1` for structured output. Diagnostic / monitoring foundation. `f75674d5`.
+
+**Architecture notes:** Memory `architecture_board_vs_org_chart.md` is canonical — board (Director tier) is governance, NOT in the operational reporting chain. The chart now reflects this without imposing a heavy visual hierarchy.
+
+**Known limitations / next:** AEIQ Company now has 4 advisor agents (Legal, AI, Blockchain, SaaS) bound as `role_type='advisor'`. They render as a parallel bottom row in the chart per the existing layout. CEO seat now occupied by Luca (human) — "human-CEO with agent reports" pattern locked. Telegram bot for cofounder group still pending founder BOT_TOKEN.
+
 ## v0.37.0 — 2026-05-07
 
 **Headline:** Real avatars + cleaner chart edges + board-org tinted band + cross-tab indented tree.
