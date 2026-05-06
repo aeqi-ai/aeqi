@@ -834,3 +834,34 @@ parent's color instead of reading as demoted/muted text. Fix: `--text-tertiary` 
 `--color-text-muted`. Cost (2026-05-06): discovered mid-sweep when grep found 14
 occurrences in blueprints-store.css, blueprint-launch-picker.css, and pages.css with
 no matching definition anywhere in the token files.
+
+## Auth pages — skip link pattern
+
+**Auth pages render outside `AppLayout` and need their own skip link.** `AppLayout`
+injects `.skip-link` as its first child, so every in-shell route gets it for free.
+`LoginPage` and `SignupPage` both render a bare `<main className="signup-split">`
+with no shell wrapper — they must include the link themselves.
+
+Canonical placement (two required lines, always together):
+
+```tsx
+<main className="signup-split">
+  <a className="skip-link" href="#main-content">
+    Skip to main content
+  </a>
+  <div className="signup-form-side" id="main-content">
+    {/* form content */}
+  </div>
+  <div className="signup-pitch-side">...</div>
+</main>
+```
+
+Key points:
+
+- Skip link is the **first DOM child** of `<main>`, before any focusable element.
+- `id="main-content"` goes on `signup-form-side` (the form column), NOT on `<main>`.
+  `<main>` is the two-column split wrapper — landing there skips nothing visible.
+- `LoginPage` has **two render branches** (secret mode + accounts mode). Both need
+  the skip link. Don't fix one branch and miss the other.
+- **P2 gap as of 2026-05-06:** `SignupPage` (`src/pages/SignupPage.tsx`) still lacks
+  the skip link. Apply the same pattern there.
