@@ -107,6 +107,8 @@ function OverviewRow({
       <button
         type="button"
         className="events-overview-row-btn"
+        data-testid="event-row"
+        data-event-id={event.id}
         onClick={() => onSelect(event.id)}
         aria-label={`Open ${event.name}`}
       >

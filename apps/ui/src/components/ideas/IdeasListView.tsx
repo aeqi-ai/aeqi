@@ -616,6 +616,8 @@ export default function IdeasListView({
                           }}
                           type="button"
                           className="ideas-list-row"
+                          data-testid="idea-row"
+                          data-idea-id={idea.id}
                           onClick={() => goEntity(entityId, "ideas", idea.id)}
                           onKeyDown={(e) => {
                             if (e.key === "ArrowDown") {

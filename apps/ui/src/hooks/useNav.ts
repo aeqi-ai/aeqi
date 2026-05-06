@@ -79,7 +79,19 @@ export function useNav() {
     [navigate, entityPath],
   );
 
-  const resolvedEntityId = entityId || "";
+  // Resolve a stable `entityId` regardless of which route shape is active.
+  // On `/trust/<addr>/...` `useParams.entityId` is undefined — fall back to
+  // the entity matching the trustAddress so callers like `goEntity(entityId,
+  // "ideas", id)` always pass a real id. Without this, IdeaListView /
+  // EventsList click handlers built `/c//ideas/<id>` which the URL bar
+  // normalises to `/c/ideas/<id>`, AppLayout fails to resolve "ideas" as
+  // an entity id, and the user lands on `/` (P0 row-click regression).
+  const trustEntityId = useMemo(() => {
+    if (entityId) return entityId;
+    if (!trustAddress) return "";
+    const lower = trustAddress.toLowerCase();
+    return entities.find((e) => e.trust_address?.toLowerCase() === lower)?.id ?? "";
+  }, [entityId, trustAddress, entities]);
 
-  return { go, href, entityPath, goEntity, entityId: resolvedEntityId, base };
+  return { go, href, entityPath, goEntity, entityId: trustEntityId, base };
 }
