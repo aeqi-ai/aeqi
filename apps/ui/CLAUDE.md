@@ -244,6 +244,40 @@ Cost (2026-05-07): UX P0 hotfix brief asserted Luca had no personal entity
   host, one sandbox) — the bug was purely the frontend resolution path. ~5
   min triangulation across three files saved by a single SQL query.
 
+### `isDrilledAgent` is dead — bare `/c/<id>/` Overview routes through CompanyPage, not AgentPage
+
+**Don't use `agent.id !== agent.entity_id` to detect "drilled into a specific
+agent"** — root agents post-2026-04-29 have `entity_id` populated (the entity
+they own), so the check returns `true` for them and silently routes the bare
+`/c/<id>/` URL into AgentOverviewTab instead of EntityOverviewTab. The
+EntityHeroStrip never mounts. URL semantics are the only reliable signal:
+`/c/<id>/` (bare) means entity-scope; `/c/<id>/agents/<aid>/` means drilled.
+
+The canonical dispatch already encodes this — AppLayout routes bare URLs
+through CompanyPage, drilled URLs go straight to AgentPage. CompanyPage
+handles `tab="overview"` directly with `<EntityOverviewTab entityId={…} />`,
+no agent-scope detection needed. Don't reintroduce `isDrilledAgent` checks
+in the entity-overview path. Cost (2026-05-08): UX walk v16 P0 #2/#3 —
+EntityHeroStrip in the bundle but never rendering on AEIQ or Personal
+overviews. Fixed in CompanyPage.tsx; AgentPage's stale `isDrilledAgent`
+branch is now only reached from drilled URLs where the heuristic doesn't
+matter (drilled URLs always have a non-root agent).
+
+### Brief asserts UI hardcodes a string — grep before assuming
+
+When a brief or walk report says "the apps/ui IntegrationCard might be
+reading a hardcoded string instead of the runtime catalog. Fix to read
+from runtime, OR update the hardcoded string to match" — grep first.
+The default architecture for catalog-shaped data is "UI reads from API"
+and the brief's hedge usually exists because the writer didn't verify.
+If `grep -rn "<canonical-substring>" apps/` returns empty, the UI is
+already correct and the symptom (stale copy in prod) is a backend deploy
+issue, not a UI fix. Don't manufacture a fix to satisfy the brief. Cost
+(2026-05-08): walk v16 Fix 2 (Drive scopes / fourteen tools); UI was
+already reading `entry.description` from `/integrations`. The visible
+stale copy was caused by the platform binary being two days stale —
+out of UI scope.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5
