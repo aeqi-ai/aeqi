@@ -5,6 +5,7 @@ import { useDaemonStore } from "@/store/daemon";
 import { useInboxStore } from "@/store/inbox";
 import type { Role, Quest } from "@/lib/types";
 import { sessionDeepUrl } from "@/lib/sessionUrl";
+import EntityHeroStrip from "./EntityHeroStrip";
 
 /**
  * `/c/<entity>/overview` — the company cockpit. Lands on every visit
@@ -44,7 +45,6 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
     () => agents.filter((a) => a.entity_id === entityId || a.id === entityId),
     [agents, entityId],
   );
-  const entity = subtreeAgents[0] ?? agents.find((a) => a.id === entityId);
   const subtreeIds = useMemo(
     () => new Set<string>(subtreeAgents.map((a) => a.id)),
     [subtreeAgents],
@@ -138,8 +138,8 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
 
   return (
     <div className="dashboard">
+      <EntityHeroStrip entityId={entityId} />
       <header className="dashboard-header">
-        <h1 className="dashboard-heading">{entity?.name || entityId}.</h1>
         <p className="dashboard-sub">{subtitle}</p>
       </header>
 

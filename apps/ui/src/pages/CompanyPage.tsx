@@ -4,7 +4,6 @@ import AgentPage from "@/components/AgentPage";
 import OwnershipPage from "@/pages/OwnershipPage";
 import TreasuryPage from "@/pages/TreasuryPage";
 import GovernancePage from "@/pages/GovernancePage";
-import CompanySettingsPage from "@/pages/CompanySettingsPage";
 import MeInboxPage from "@/pages/MeInboxPage";
 import ChannelsListPage from "@/pages/ChannelsListPage";
 import ChannelDetailPage from "@/pages/ChannelDetailPage";
@@ -18,7 +17,6 @@ const TAB_TITLES: Record<string, string> = {
   treasury: "treasury",
   governance: "governance",
   channels: "channels",
-  settings: "settings",
 };
 
 interface CompanyPageProps {
@@ -42,7 +40,10 @@ interface CompanyPageProps {
  *   /c/:entityId/ownership     → OwnershipPage
  *   /c/:entityId/treasury      → TreasuryPage
  *   /c/:entityId/governance    → GovernancePage
- *   /c/:entityId/settings      → CompanySettingsPage
+ *
+ * The former `/c/:entityId/settings` tab was retired — workspace label,
+ * tagline, public toggle, and plan link now live in the EntityHeroStrip
+ * on Overview. Workspace billing remains at `/me/billing`.
  *
  * Every other tab name (agents, events, quests, ideas, sessions, …)
  * falls through to AgentPage, which is the canonical primitive surface.
@@ -92,7 +93,6 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
       <ChannelsListPage entityId={entityId} />
     );
   }
-  if (tab === "settings") return <CompanySettingsPage agentId={agentId} />;
 
   // Overview, Roles, and any other primitive tab (agents, events,
   // quests, ideas) render through AgentPage on the entity's root agent.

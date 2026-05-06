@@ -139,14 +139,6 @@ const RolesIcon = () => (
   </svg>
 );
 
-// Settings — gear simplified.
-const SettingsIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="2.25" />
-    <path d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M12.6 12.6l-1.4-1.4M4.8 4.8L3.4 3.4" />
-  </svg>
-);
-
 // Admin — shield silhouette.
 const AdminIcon = () => (
   <svg {...iconProps}>
@@ -443,10 +435,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
                   }),
                 })}
               {isPersonal && navItem("treasury", "Treasury", <TreasuryIcon />)}
-            </nav>
-
-            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Company settings">
-              {navItem("settings", "Settings", <SettingsIcon />)}
             </nav>
           </>
         )}

@@ -99,6 +99,8 @@ pub async fn handle_entities(
             "slug": entity.slug,
             "parent_entity_id": entity.parent_entity_id,
             "owner_user_id": entity.owner_user_id,
+            "tagline": entity.tagline,
+            "public": entity.public,
         }));
     }
     serde_json::json!({"ok": true, "roots": result})
@@ -227,16 +229,42 @@ pub async fn handle_update_entity(
         .and_then(|v| v.as_str())
         .map(str::trim)
         .filter(|s| !s.is_empty());
+    // Tagline accepts empty string to clear; absent key = no change.
+    let tagline_change = request.get("tagline").and_then(|v| v.as_str());
+    let public_change = request.get("public").and_then(|v| v.as_bool());
 
-    if new_name.is_none() && new_slug.is_none() {
-        return serde_json::json!({"ok": false, "error": "new_name or new_slug is required"});
+    if new_name.is_none()
+        && new_slug.is_none()
+        && tagline_change.is_none()
+        && public_change.is_none()
+    {
+        return serde_json::json!({
+            "ok": false,
+            "error": "new_name, new_slug, tagline, or public is required",
+        });
     }
 
     // Update the entity row.
-    if let Err(e) = ctx
-        .entity_registry
-        .update(&entity.id, new_name, new_slug)
-        .await
+    if (new_name.is_some() || new_slug.is_some())
+        && let Err(e) = ctx
+            .entity_registry
+            .update(&entity.id, new_name, new_slug)
+            .await
+    {
+        return serde_json::json!({"ok": false, "error": e.to_string()});
+    }
+
+    if let Some(tagline) = tagline_change
+        && let Err(e) = ctx
+            .entity_registry
+            .set_tagline(&entity.id, Some(tagline.trim()))
+            .await
+    {
+        return serde_json::json!({"ok": false, "error": e.to_string()});
+    }
+
+    if let Some(public) = public_change
+        && let Err(e) = ctx.entity_registry.set_public(&entity.id, public).await
     {
         return serde_json::json!({"ok": false, "error": e.to_string()});
     }

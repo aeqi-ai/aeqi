@@ -226,7 +226,15 @@ export const api = {
   getEntities: () => request<Record<string, unknown>>("/entities"),
   createEntity: (data: { name: string; tagline?: string; prefix?: string }) =>
     request<Record<string, unknown>>("/entities", { method: "POST", body: JSON.stringify(data) }),
-  updateEntity: (name: string, data: { name?: string; tagline?: string; logo_url?: string }) =>
+  updateEntity: (
+    name: string,
+    data: {
+      name?: string;
+      tagline?: string;
+      logo_url?: string;
+      public?: boolean;
+    },
+  ) =>
     request<{ ok: boolean }>(`/entities/${encodeURIComponent(name)}`, {
       method: "PUT",
       body: JSON.stringify({

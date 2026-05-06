@@ -28,6 +28,14 @@ describe("entity API normalization", () => {
         budget_usd: 100,
         created_at: "2026-01-01T00:00:00Z",
         last_active: undefined,
+        trust_id: undefined,
+        trust_address: undefined,
+        creator_address: undefined,
+        agent_id: undefined,
+        placement_type: undefined,
+        tagline: undefined,
+        public: false,
+        plan: undefined,
       },
     ]);
   });

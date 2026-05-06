@@ -1727,28 +1727,16 @@ impl Daemon {
                 // crate scaffold + IPC plumbing with a stub generator;
                 // Phase 2 wires inference into `architect.draft`.
                 "architect.draft" => {
-                    crate::ipc::architect::handle_architect_draft(
-                        &ctx,
-                        &request,
-                        &allowed_roots,
-                    )
-                    .await
+                    crate::ipc::architect::handle_architect_draft(&ctx, &request, &allowed_roots)
+                        .await
                 }
                 "architect.refine" => {
-                    crate::ipc::architect::handle_architect_refine(
-                        &ctx,
-                        &request,
-                        &allowed_roots,
-                    )
-                    .await
+                    crate::ipc::architect::handle_architect_refine(&ctx, &request, &allowed_roots)
+                        .await
                 }
                 "architect.deploy" => {
-                    crate::ipc::architect::handle_architect_deploy(
-                        &ctx,
-                        &request,
-                        &allowed_roots,
-                    )
-                    .await
+                    crate::ipc::architect::handle_architect_deploy(&ctx, &request, &allowed_roots)
+                        .await
                 }
 
                 "list_blueprints" => {

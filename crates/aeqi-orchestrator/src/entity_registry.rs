@@ -75,6 +75,11 @@ pub struct Entity {
     pub metadata: String,
     pub created_at: String,
     pub updated_at: Option<String>,
+    /// One-line description shown in the entity hero strip on Overview.
+    pub tagline: Option<String>,
+    /// When true, `app.aeqi.ai/<slug>` returns a public profile page;
+    /// when false, returns 404 to non-members. Defaults to false.
+    pub public: bool,
 }
 
 fn row_to_entity(row: &rusqlite::Row<'_>) -> rusqlite::Result<Entity> {
@@ -93,6 +98,8 @@ fn row_to_entity(row: &rusqlite::Row<'_>) -> rusqlite::Result<Entity> {
             .unwrap_or_else(|| "{}".to_string()),
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
+        tagline: row.get::<_, Option<String>>(9)?,
+        public: row.get::<_, i64>(10)? != 0,
     })
 }
 
@@ -112,7 +119,7 @@ impl EntityRegistry {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT id, type, name, slug, parent_entity_id, owner_user_id,
-                    metadata, created_at, updated_at
+                    metadata, created_at, updated_at, tagline, public
              FROM entities
              ORDER BY created_at ASC",
         )?;
@@ -139,7 +146,7 @@ impl EntityRegistry {
             .join(",");
         let sql = format!(
             "SELECT id, type, name, slug, parent_entity_id, owner_user_id,
-                    metadata, created_at, updated_at
+                    metadata, created_at, updated_at, tagline, public
              FROM entities
              WHERE id IN ({})
              ORDER BY created_at ASC",
@@ -161,7 +168,7 @@ impl EntityRegistry {
         let result = db
             .query_row(
                 "SELECT id, type, name, slug, parent_entity_id, owner_user_id,
-                        metadata, created_at, updated_at
+                        metadata, created_at, updated_at, tagline, public
                  FROM entities WHERE id = ?1",
                 params![id],
                 row_to_entity,
@@ -176,7 +183,7 @@ impl EntityRegistry {
         let result = db
             .query_row(
                 "SELECT id, type, name, slug, parent_entity_id, owner_user_id,
-                        metadata, created_at, updated_at
+                        metadata, created_at, updated_at, tagline, public
                  FROM entities WHERE slug = ?1",
                 params![slug],
                 row_to_entity,
@@ -214,7 +221,7 @@ impl EntityRegistry {
         let entity = db
             .query_row(
                 "SELECT id, type, name, slug, parent_entity_id, owner_user_id,
-                        metadata, created_at, updated_at
+                        metadata, created_at, updated_at, tagline, public
                  FROM entities WHERE id = ?1",
                 params![id],
                 row_to_entity,
@@ -288,6 +295,33 @@ impl EntityRegistry {
             }
             (None, None) => {}
         }
+        Ok(())
+    }
+
+    /// Set the public-profile tagline. `None` is ignored — pass an empty
+    /// string to clear (stored as NULL).
+    pub async fn set_tagline(&self, id: &str, tagline: Option<&str>) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        let db = self.db.lock().await;
+        // Treat empty-string as clear; non-empty keeps the value.
+        let stored: Option<&str> = tagline.and_then(|t| if t.is_empty() { None } else { Some(t) });
+        db.execute(
+            "UPDATE entities SET tagline = ?1, updated_at = ?2 WHERE id = ?3",
+            params![stored, now, id],
+        )?;
+        Ok(())
+    }
+
+    /// Toggle the public-profile flag. When true, `app.aeqi.ai/<slug>`
+    /// returns a public profile; when false, returns 404 to non-members.
+    pub async fn set_public(&self, id: &str, public: bool) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        let db = self.db.lock().await;
+        let flag: i64 = if public { 1 } else { 0 };
+        db.execute(
+            "UPDATE entities SET public = ?1, updated_at = ?2 WHERE id = ?3",
+            params![flag, now, id],
+        )?;
         Ok(())
     }
 

@@ -635,6 +635,26 @@ fn ensure_inference_calls_table(conn: &Connection) -> rusqlite::Result<()> {
 ///
 /// Run order: called from `AgentRegistry::open` after `ensure_agent_columns`
 /// and after the legacy entity-row backfill so the FK target rows exist.
+/// Phase-1 public-profile columns on `entities`. Two fields, both
+/// idempotent: `tagline` (one-line description) and `public` (boolean
+/// flag — when 1, the workspace exposes a public profile at
+/// `app.aeqi.ai/<slug>`; when 0, returns 404 to non-members).
+fn ensure_entity_public_columns(conn: &Connection) -> rusqlite::Result<()> {
+    let cols: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(entities)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    if !cols.iter().any(|c| c == "tagline") {
+        conn.execute_batch("ALTER TABLE entities ADD COLUMN tagline TEXT;")?;
+    }
+    if !cols.iter().any(|c| c == "public") {
+        conn.execute_batch("ALTER TABLE entities ADD COLUMN public INTEGER NOT NULL DEFAULT 0;")?;
+    }
+    Ok(())
+}
+
 fn ensure_agent_entity_id_column(conn: &Connection) -> rusqlite::Result<()> {
     let cols: Vec<String> = {
         let mut stmt = conn.prepare("PRAGMA table_info(agents)")?;
@@ -1353,6 +1373,11 @@ impl AgentRegistry {
              CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
              CREATE INDEX IF NOT EXISTS idx_entities_parent ON entities(parent_entity_id);",
         )?;
+
+        // 1b. Public-profile columns (tagline + public flag). Phase 1 of
+        //     the public-profiles ship — Settings tab killed, hero strip
+        //     on Overview owns these. Idempotent ALTER guarded by PRAGMA.
+        ensure_entity_public_columns(&conn)?;
 
         // 2. Add agents.entity_id column (guarded by PRAGMA table_info check).
         ensure_agent_entity_id_column(&conn)?;

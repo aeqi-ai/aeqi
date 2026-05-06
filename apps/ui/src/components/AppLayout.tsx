@@ -55,7 +55,6 @@ const COMPANY_PAGE_TABS = new Set([
   "treasury",
   "governance",
   "channels",
-  "settings",
 ]);
 
 export default function AppLayout() {
