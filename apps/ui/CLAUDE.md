@@ -862,6 +862,37 @@ need a wider modal, add a `size` prop to `Modal.tsx` + `Modal.module.css`
 officially, or use `className` to override width on the call site.
 Cost (2026-05-05): one tsc error caught during Wave 33 StackWizard work.
 
+## Wiring keyboard shortcuts to existing popovers — controlled-open opt-in
+
+When a parent surface needs to open a popover via keyboard (Linear-style
+`S` / `P` / `A` / `D` shortcuts on the Quest detail), the standard
+project popovers (`QuestStatusPopover`, `QuestPriorityPopover`,
+`AssigneePicker`, `IdeasScopePopover`, etc.) own their own
+`useState(false)` — there's no way for a parent to flip them open
+without forking the component.
+
+Canonical extension pattern: add **optional** `open?: boolean` +
+`onOpenChange?: (next: boolean) => void` props that override the
+internal state when present. Internal state is the default; controlled
+state is opt-in. Every existing call site keeps working unchanged.
+
+```tsx
+const [openState, setOpenState] = useState(false);
+const open = openProp ?? openState;
+const setOpen = (next: boolean) => {
+  if (openProp === undefined) setOpenState(next);
+  onOpenChangeProp?.(next);
+};
+```
+
+Then thread the controlled props through any wrapping toolbar to the
+parent that owns the keyboard handler. The handler closes its siblings
+when opening one popover (only one open at a time) and skips when
+focus is in an editable element — same conventions as `j`/`k`
+navigation. Cost (2026-05-07): `S`/`P`/`A` shortcut wiring on the
+Quest detail page; pattern is generalisable to any popover that gains
+a single-key shortcut.
+
 ## `import type` cannot import runtime values
 
 `import type { Foo }` is erased at compile time — it works for interfaces
