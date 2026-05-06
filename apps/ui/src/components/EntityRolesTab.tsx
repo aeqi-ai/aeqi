@@ -19,6 +19,14 @@ import {
   parseView,
 } from "./roles/types";
 
+import type { RoleType } from "@/lib/types";
+
+const ROLE_TYPE_ORDER: RoleType[] = ["director", "operational", "advisor"];
+const ROLE_TYPE_LABEL: Record<RoleType, string> = {
+  director: "Directors",
+  operational: "Operational",
+  advisor: "Advisors",
+};
 const OCCUPANT_RANK: Record<string, number> = { agent: 0, human: 1, vacant: 2 };
 
 /**
@@ -271,12 +279,39 @@ export default function EntityRolesTab({ entityId }: { entityId: string }) {
         )}
         {!loading && !error && filtered.length > 0 && view === "list" && (
           <div style={{ flex: 1, overflow: "auto" }}>
-            <RolesList
-              roles={filtered}
-              edges={filteredEdges}
-              agentNames={agentNames}
-              onSelectRole={handleSelectRole}
-            />
+            {ROLE_TYPE_ORDER.map((rt) => {
+              const group = filtered.filter((r) => r.role_type === rt);
+              if (group.length === 0) return null;
+              // Pass all filteredEdges so cross-type edges (e.g. CEO reports to
+              // a Director) resolve correctly. RolesList uses allRoles for the
+              // parent-title lookup so out-of-group parents are found.
+              const groupEdges = filteredEdges.filter((e) =>
+                group.some((r) => r.id === e.child_role_id),
+              );
+              return (
+                <div key={rt}>
+                  <div
+                    style={{
+                      padding: "12px 24px 4px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--color-text-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    {ROLE_TYPE_LABEL[rt]} ({group.length})
+                  </div>
+                  <RolesList
+                    roles={group}
+                    edges={groupEdges}
+                    allRoles={filtered}
+                    agentNames={agentNames}
+                    onSelectRole={handleSelectRole}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

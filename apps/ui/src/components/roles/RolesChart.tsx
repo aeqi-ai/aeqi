@@ -57,16 +57,27 @@ export default function RolesChart({ roles, edges, agentNames, onSelectRole }: R
     <OrgZoomViewport>
       <div className="roles-chart-stack">
         {directors.length > 0 && (
-          <RolesBand
-            label="Board"
-            roles={directors}
-            agentNames={agentNames}
-            onSelect={onSelectRole}
-          />
+          <section className="roles-chart-zone roles-chart-zone--board" aria-label="Director">
+            <div className="roles-chart-zone-eyebrow">Director</div>
+            <div className="roles-chart-roster">
+              {directors.map((r) => (
+                <RoleNode
+                  key={r.id}
+                  role={r}
+                  agentName={r.occupant_id ? agentNames.get(r.occupant_id) : undefined}
+                  onClick={() => onSelectRole(r)}
+                  style={{ width: NODE_W, height: NODE_H }}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+        {directors.length > 0 && operational.length > 0 && (
+          <div className="roles-chart-band-divider" role="separator" aria-hidden={true} />
         )}
         {operational.length > 0 && (
-          <section className="roles-chart-zone" aria-label="Org">
-            <div className="roles-chart-zone-eyebrow">Org</div>
+          <section className="roles-chart-zone" aria-label="Operational">
+            <div className="roles-chart-zone-eyebrow">Operational</div>
             <div
               className="roles-chart-canvas"
               style={{ width: treeLayout.width, height: treeLayout.height }}
@@ -110,12 +121,20 @@ export default function RolesChart({ roles, edges, agentNames, onSelectRole }: R
           </section>
         )}
         {advisors.length > 0 && (
-          <RolesBand
-            label="Advisors"
-            roles={advisors}
-            agentNames={agentNames}
-            onSelect={onSelectRole}
-          />
+          <section className="roles-chart-zone" aria-label="Advisor">
+            <div className="roles-chart-zone-eyebrow">Advisor</div>
+            <div className="roles-chart-roster">
+              {advisors.map((r) => (
+                <RoleNode
+                  key={r.id}
+                  role={r}
+                  agentName={r.occupant_id ? agentNames.get(r.occupant_id) : undefined}
+                  onClick={() => onSelectRole(r)}
+                  style={{ width: NODE_W, height: NODE_H }}
+                />
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </OrgZoomViewport>
@@ -356,31 +375,5 @@ function OrgZoomViewport({ children }: { children: React.ReactNode }) {
         </IconButton>
       </div>
     </div>
-  );
-}
-
-interface RolesBandProps {
-  label: string;
-  roles: Role[];
-  agentNames: Map<string, string>;
-  onSelect: (role: Role) => void;
-}
-
-function RolesBand({ label, roles, agentNames, onSelect }: RolesBandProps) {
-  return (
-    <section className="roles-chart-zone" aria-label={label}>
-      <div className="roles-chart-zone-eyebrow">{label}</div>
-      <div className="roles-chart-roster">
-        {roles.map((r) => (
-          <RoleNode
-            key={r.id}
-            role={r}
-            agentName={r.occupant_id ? agentNames.get(r.occupant_id) : undefined}
-            onClick={() => onSelect(r)}
-            style={{ width: NODE_W, height: NODE_H }}
-          />
-        ))}
-      </div>
-    </section>
   );
 }

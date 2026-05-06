@@ -4,6 +4,8 @@ import type { Role, RoleEdge } from "@/lib/types";
 export interface RolesListProps {
   roles: Role[];
   edges: RoleEdge[];
+  /** Full role set for parent-title lookups. Defaults to `roles` when omitted. */
+  allRoles?: Role[];
   agentNames: Map<string, string>;
   onSelectRole: (role: Role) => void;
 }
@@ -64,7 +66,13 @@ function preorder(roles: Role[], edges: RoleEdge[]): RoleWithDepth[] {
 
 const INDENT = 24; // px per depth level
 
-export default function RolesList({ roles, edges, agentNames, onSelectRole }: RolesListProps) {
+export default function RolesList({
+  roles,
+  edges,
+  allRoles,
+  agentNames,
+  onSelectRole,
+}: RolesListProps) {
   const ordered = useMemo(() => preorder(roles, edges), [roles, edges]);
 
   return (
@@ -92,7 +100,7 @@ export default function RolesList({ roles, edges, agentNames, onSelectRole }: Ro
             <OccupantInline role={role} agentName={agentNames.get(role.occupant_id ?? "")} />
           </span>
           <span className="roles-list-cell-parents">
-            <ParentsCell roleId={role.id} roles={roles} edges={edges} />
+            <ParentsCell roleId={role.id} allRoles={allRoles ?? roles} edges={edges} />
           </span>
           <span className="roles-list-cell-meta">{role.created_at.slice(0, 10)}</span>
         </button>
@@ -103,19 +111,21 @@ export default function RolesList({ roles, edges, agentNames, onSelectRole }: Ro
 
 function ParentsCell({
   roleId,
-  roles,
+  allRoles,
   edges,
 }: {
   roleId: string;
-  roles: Role[];
+  allRoles: Role[];
   edges: RoleEdge[];
 }) {
   const parents = useMemo(() => {
-    const titleById = new Map(roles.map((r) => [r.id, r.title || "(untitled)"]));
+    // Use allRoles for title lookups so cross-type edges (e.g. CEO reports
+    // to a Director) resolve correctly when only a type-group is passed as roles.
+    const titleById = new Map(allRoles.map((r) => [r.id, r.title || "(untitled)"]));
     return edges
       .filter((e) => e.child_role_id === roleId && titleById.has(e.parent_role_id))
       .map((e) => titleById.get(e.parent_role_id)!);
-  }, [roleId, roles, edges]);
+  }, [roleId, allRoles, edges]);
 
   if (parents.length === 0) return <span className="roles-list-cell-muted">—</span>;
   return <>{parents.join(", ")}</>;
