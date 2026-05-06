@@ -189,6 +189,61 @@ The two recurring contract bugs the audit catches:
   `/c/:entityId/agents` shipped without the filter and showed every
   agent on the page.
 
+### Personal entity resolution — read `entity.agent_id`, not `agents.find()`
+
+When `/me/{agents,quests,ideas,events,treasury}` needs a root agent for the
+user's personal entity, do NOT use `agents.find(a => a.entity_id === pid)`
+on the daemon store. The daemon's `agents` array is filtered by the active
+X-Entity scope — when the user is currently scoped to a company, the personal
+entity's root agent is absent from the array and the lookup returns null.
+
+The right shape is `entity.agent_id` directly off the `/api/entities`
+payload. The platform serialises `agent_id` on every placement; the entities
+normaliser at `apps/ui/src/api/entities.ts` exposes it on the Entity type
+(added 2026-05-07). Resolution order for the personal entity is now:
+(1) first `placement_type === "host"` entity, (2) first matching `user.roots`
+entry, (3) `entities[0]`. Then read `personalEntity.agent_id` directly.
+Cost (2026-05-07): MePage rendered "No personal entity found." for every
+account that DID have a personal placement, because the `agents.find()`
+lookup returned null on company-scoped pageviews.
+
+### `User.roots` is dead — `/api/auth/me` returns `entities`, not `roots`
+
+The `User` type in `src/store/auth.ts` declares `roots?: string[]`, but the
+platform's `/api/auth/me` handler returns `entities: <ids>`. The `roots`
+field is ALWAYS `undefined` in production. Code that reads `user.roots`
+silently falls through to a fallback path; new code must NOT depend on
+`user.roots`. Read `useDaemonStore(s => s.entities)` instead. The
+`needsOnboarding()` check on line 388-391 (currently `!user.roots ||
+user.roots.length === 0`) is similarly a permanent `true` for verified
+users — flag the next session that touches it; this needs a contract fix.
+
+### Persona-walk briefs — verify against raw.json + DB before implementing
+
+When a persona-walk brief asserts a root cause (e.g. "Luca has no personal
+entity"), confirm against ground truth BEFORE building a fix:
+
+1. **Console errors / network failures**: read
+   `.observations/persona-walk-<date>/raw.json` directly; only fix what
+   appears in `consoleErrors` / `networkFailures` arrays. The brief's
+   page-level audit text can describe symptoms that don't appear in the
+   actual capture (different walk run, manual annotation, etc.).
+2. **Data assertions**: hit the DB directly. `sudo sqlite3
+/var/lib/aeqi/platform.db "SELECT ... FROM runtime_placements WHERE
+user_id = '<uid>'"` is one query and ~5 seconds — versus 5+ minutes
+   reading auth.rs / start.rs / account.rs to triangulate.
+3. **Architectural memory items**: code intent and current code can drift.
+   The `architecture_user_account_is_company.md` memory said signups
+   auto-create personal Companies; the live `signup_handler` says
+   "No auto-spawn of a personal sandbox here." Trust the code over the
+   memory when they disagree.
+
+Cost (2026-05-07): UX P0 hotfix brief asserted Luca had no personal entity
+
+- called for a Rust backfill migration. SQL showed two placements (one
+  host, one sandbox) — the bug was purely the frontend resolution path. ~5
+  min triangulation across three files saved by a single SQL query.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5
