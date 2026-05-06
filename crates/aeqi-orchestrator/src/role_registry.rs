@@ -307,6 +307,42 @@ impl RoleRegistry {
         Ok(Some(role))
     }
 
+    /// Look up the first role for a given occupant within an entity.
+    ///
+    /// Used by `handle_create_role` to detect an existing spawn-time role and
+    /// avoid minting a duplicate when the caller only wants to set the title,
+    /// role_type, and org-chart edge.
+    pub async fn get_by_occupant(
+        &self,
+        entity_id: &str,
+        occupant_id: &str,
+    ) -> Result<Option<Role>> {
+        let db = self.db.lock().await;
+        let result = db
+            .query_row(
+                "SELECT id, entity_id, title, occupant_kind, occupant_id,
+                        role_type, founder, created_at, updated_at
+                 FROM roles
+                 WHERE entity_id = ?1 AND occupant_id = ?2
+                 ORDER BY created_at ASC
+                 LIMIT 1",
+                params![entity_id, occupant_id],
+                row_to_role,
+            )
+            .optional()?;
+        let Some(mut role) = result else {
+            return Ok(None);
+        };
+        let role_id = role.id.clone();
+        let mut stmt =
+            db.prepare("SELECT grant FROM role_grants WHERE role_id = ?1 ORDER BY grant")?;
+        role.grants = stmt
+            .query_map(params![role_id], |row| row.get::<_, String>(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(Some(role))
+    }
+
     // ── Grant queries ─────────────────────────────────────────────────────────
 
     /// Return the union of grants across all roles a given user holds at `entity_id`.

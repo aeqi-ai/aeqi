@@ -216,21 +216,64 @@ pub async fn handle_create_role(
 
     let parent_role_id = super::request_field(request, "parent_role_id").map(str::to_string);
 
-    let role = match ctx
-        .role_registry
-        .create_with_type(
-            &entity_id,
-            &title,
-            kind,
-            occupant_id.as_deref(),
-            role_type,
-            founder,
-            grants,
-        )
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+    // Pre-check: if the occupant already has a role in this entity (e.g. a
+    // spawn-time row created by `spawn_with_entity_id`), adopt that row instead
+    // of minting a second one.  Update its title, role_type, and grants so the
+    // caller's intent wins, then wire the edge as normal.
+    let role = if let Some(occ_id) = occupant_id.as_deref() {
+        match ctx.role_registry.get_by_occupant(&entity_id, occ_id).await {
+            Ok(Some(existing)) => {
+                let effective_grants = match grants {
+                    Some(ref g) if !g.is_empty() => g.clone(),
+                    _ => crate::role_registry::default_grants_for_type(role_type),
+                };
+                if let Err(e) = ctx
+                    .role_registry
+                    .update_role(
+                        &existing.id,
+                        Some(&title),
+                        Some(role_type),
+                        Some(effective_grants),
+                    )
+                    .await
+                {
+                    return serde_json::json!({"ok": false, "error": e.to_string()});
+                }
+                match ctx.role_registry.get(&existing.id).await {
+                    Ok(Some(r)) => r,
+                    Ok(None) => {
+                        return serde_json::json!({"ok": false, "error": "role vanished after update"});
+                    }
+                    Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+                }
+            }
+            Ok(None) => match ctx
+                .role_registry
+                .create_with_type(
+                    &entity_id,
+                    &title,
+                    kind,
+                    Some(occ_id),
+                    role_type,
+                    founder,
+                    grants,
+                )
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+            },
+            Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+        }
+    } else {
+        match ctx
+            .role_registry
+            .create_with_type(&entity_id, &title, kind, None, role_type, founder, grants)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+        }
     };
 
     if let Some(parent_id) = parent_role_id.as_deref()
