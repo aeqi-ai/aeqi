@@ -316,13 +316,22 @@ async fn approve_user_op(
             ApprovalError::Internal
         })?;
 
-    // Build paymasterAndData: paymaster_contract_address(20) ++ validUntil(6) ++ validAfter(6) ++ signature(65).
+    // Build paymasterAndData per ERC-4337 v0.7:
+    //   [0:20]    paymaster_contract_address
+    //   [20:36]   paymasterVerificationGasLimit (uint128, BE) — set by bundler/wallet, zero here
+    //   [36:52]   paymasterPostOpGasLimit (uint128, BE)        — set by bundler/wallet, zero here
+    //   [52:58]   validUntil (uint48, 6 bytes BE)
+    //   [58:64]   validAfter (uint48, 6 bytes BE)
+    //   [64:129]  65-byte secp256k1 signature
+    //
     // The first 20 bytes MUST be the Paymaster.sol contract address (what the EntryPoint reads),
-    // NOT the signer hot-key address.
+    // NOT the signer hot-key address. The two gas-limit fields are encoded as zero here because
+    // the bundler / wallet client owns them — Paymaster.sol does not consume those bytes.
     let contract_addr_bytes =
         hex::decode(state.paymaster_contract_address.trim_start_matches("0x")).unwrap_or_default();
-    let mut pad = Vec::with_capacity(97);
-    pad.extend_from_slice(&contract_addr_bytes);
+    let mut pad = Vec::with_capacity(129);
+    pad.extend_from_slice(&contract_addr_bytes); // 20 bytes
+    pad.extend_from_slice(&[0u8; 32]); // 16 + 16 bytes paymasterVerifGasLimit + paymasterPostOpGasLimit
     pad.extend_from_slice(&valid_until.to_be_bytes()[2..]); // uint48 = 6 bytes
     pad.extend_from_slice(&valid_after.to_be_bytes()[2..]);
     let sig_bytes = hex::decode(signature.trim_start_matches("0x")).unwrap_or_default();

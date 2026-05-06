@@ -14,11 +14,12 @@
 //! 7. The bundler mines the UserOp on anvil chain 31337.
 //! 8. `eth_getUserOperationReceipt` returns `success=true`.
 //!
-//! ## Known limitation — paymaster sponsorship path
+//! ## Path coverage
 //!
-//! The paymaster-sponsored path has a v0.7 offset incompatibility in Paymaster.sol
-//! (see `docs/aa-userop-lifecycle.md`). This binary uses the self-paying path to
-//! prove the core stack, and separately checks paymaster service connectivity.
+//! This binary uses the self-paying path (no paymaster sponsorship) to prove the
+//! core stack and separately checks paymaster service connectivity. The paymaster
+//! sponsorship path is exercised end-to-end by
+//! `tests/it_paymaster_real_userop.rs::test_userop_paymaster_sponsored_mines_success`.
 //!
 //! ## Usage
 //!

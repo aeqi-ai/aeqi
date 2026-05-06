@@ -28,22 +28,21 @@
 //! 4. The bundler mines the UserOp on anvil chain 31337.
 //! 5. `eth_getUserOperationReceipt` returns `success=true`.
 //!
-//! ## Known limitation: paymaster sponsorship path
+//! ## Paymaster sponsorship path
 //!
-//! The paymaster-sponsored path (using aeqi-paymaster service + Paymaster.sol) has
-//! a layout incompatibility with ERC-4337 v0.7:
+//! The paymaster-sponsored path uses aeqi-paymaster + Paymaster.sol on the
+//! ERC-4337 v0.7 wire format:
 //!
-//! Paymaster.sol reads paymasterAndData at offsets [20:26] for validUntil, [26:32]
-//! for validAfter, [32:97] for sig. But v0.7 EntryPoint packs:
-//!   paymasterAndData = addr(20) + paymasterVerifGasLimit(16) + paymasterPostOpGasLimit(16) + paymasterData
+//!   paymasterAndData = addr(20) + verifGasLimit(16) + postOpGasLimit(16)
+//!                    + validUntil(6) + validAfter(6) + sig(65)  =  129 bytes
 //!
-//! So our custom paymasterData starts at offset [52], not [20]. Paymaster.sol parses
-//! the wrong bytes — it reads into the gas limit fields instead of our time bounds.
+//! Paymaster.sol reads validUntil/validAfter at offsets 52/58 and the signature
+//! at 64..129. The Rust signer's digest commits:
+//!   keccak256(userOpHash ++ validUntil ++ validAfter ++ paymaster_addr)
 //!
-//! This test uses the self-paying path (no paymaster) to prove the core stack,
-//! and separately asserts the paymaster service returns syntactically correct
-//! responses. Fixing the v0.7 offset incompatibility in Paymaster.sol is tracked
-//! as a follow-up item in docs/aa-userop-lifecycle.md.
+//! The self-paying test proves the core stack without a paymaster. The
+//! `*_returns_valid_paymaster_and_data` test asserts the paymaster service
+//! returns a 129-byte v0.7 paymasterAndData blob.
 //!
 //! ## Running
 //!
@@ -54,8 +53,15 @@
 
 const ANVIL_URL: &str = "http://127.0.0.1:8545";
 const BUNDLER_URL: &str = "http://127.0.0.1:3000";
-const PAYMASTER_URL: &str = "http://127.0.0.1:3001";
+const DEFAULT_PAYMASTER_URL: &str = "http://127.0.0.1:3001";
 const EP_V07: &str = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+
+/// Resolve the paymaster service URL — `PAYMASTER_URL` env override wins, then default.
+/// Lets the operator point the test at a sandbox paymaster (e.g. :3002) without
+/// disturbing the live service on :3001.
+fn paymaster_url() -> String {
+    std::env::var("PAYMASTER_URL").unwrap_or_else(|_| DEFAULT_PAYMASTER_URL.to_string())
+}
 
 /// Hardhat/anvil account #0 — used as deployer, account owner, and paymaster signer in tests.
 /// Never use in production.
@@ -149,8 +155,9 @@ async fn is_up(client: &reqwest::Client, url: &str) -> bool {
 
 /// Returns true if the paymaster HTTP service is reachable.
 async fn paymaster_is_up(client: &reqwest::Client) -> bool {
+    let url = paymaster_url();
     client
-        .get(format!("{PAYMASTER_URL}/health"))
+        .get(format!("{url}/health"))
         .timeout(std::time::Duration::from_secs(2))
         .send()
         .await
@@ -199,9 +206,9 @@ async fn test_userop_selfpay_mines_success() {
     // shell argument length limits and quoting issues.
 
     let paymaster_bytecode = sh(
-        "cat /home/claudedev/projects/aeqi-core/out/Paymaster.sol/Paymaster.json \
-         2>/dev/null | python3 -c \
-         \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
+        "cat ${AEQI_CORE_OUT:-/home/claudedev/projects/aeqi-core/out}/Paymaster.sol/Paymaster.json \
+             2>/dev/null | python3 -c \
+             \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
     );
     assert!(
         !paymaster_bytecode.is_empty() && paymaster_bytecode.starts_with("0x"),
@@ -436,19 +443,171 @@ async fn test_userop_selfpay_mines_success() {
     eprintln!("  success:        {success}");
 }
 
+// ── Test: on-chain Paymaster.sol accepts v0.7 paymasterAndData layout ────────
+
+/// Proves the deployed Paymaster.sol parses the ERC-4337 v0.7 paymasterAndData
+/// layout (offsets 52/58 for validUntil/validAfter, 64..129 for the signature)
+/// by deploying it on anvil and calling `validatePaymasterUserOp` directly from
+/// the EntryPoint address (via `cast send` impersonation).
+///
+/// End-to-end through the bundler is gated on `compute_user_op_hash_stub` being
+/// replaced with a real `EP.getUserOpHash` call (`api.rs` Phase-2). Until then
+/// this on-chain probe is the canonical proof that the offset fix lands.
+#[tokio::test]
+#[ignore = "requires anvil running; invoke with --ignored"]
+async fn test_paymaster_sol_accepts_v07_layout_onchain() {
+    use alloy::primitives::{B256, keccak256};
+    use alloy::signers::Signer;
+    use alloy::signers::local::PrivateKeySigner;
+
+    let client = reqwest::Client::new();
+
+    assert!(
+        is_up(&client, ANVIL_URL).await,
+        "SKIP: anvil not reachable at {ANVIL_URL}"
+    );
+
+    // ── Deploy Paymaster.sol with the test key as signer ─────────────────────
+    let paymaster_bytecode = sh(
+        "cat ${AEQI_CORE_OUT:-/home/claudedev/projects/aeqi-core/out}/Paymaster.sol/Paymaster.json \
+             2>/dev/null | python3 -c \
+             \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
+    );
+    assert!(
+        !paymaster_bytecode.is_empty() && paymaster_bytecode.starts_with("0x"),
+        "Paymaster.sol not compiled; run `forge build` in /home/claudedev/projects/aeqi-core"
+    );
+
+    let paymaster_addr = cast_deploy(
+        &paymaster_bytecode,
+        "constructor(address,address)",
+        &[EP_V07, DEPLOYER_ADDR],
+    );
+    assert!(
+        paymaster_addr.starts_with("0x") && paymaster_addr.len() == 42,
+        "Paymaster.sol deploy failed; got: {paymaster_addr}"
+    );
+    eprintln!("Paymaster.sol deployed at: {paymaster_addr}");
+
+    // ── Build a v0.7 paymasterAndData blob and sign the digest ───────────────
+    let valid_until: u64 = 0xffff_ffff_ffffu64; // type(uint48).max — no expiry
+    let valid_after: u64 = 0;
+    let pm_addr_bytes = hex::decode(paymaster_addr.trim_start_matches("0x")).unwrap();
+
+    // Use a deterministic userOpHash for this on-chain probe (the EP enforces
+    // userOpHash matches the packed UserOp on full-flow validation; here we
+    // call validatePaymasterUserOp directly with this hash, so any 32-byte
+    // value is fine — the contract trusts the EP-supplied userOpHash).
+    let user_op_hash: B256 = keccak256(b"v07-onchain-probe-hash-for-paymaster");
+
+    // digest = keccak256(userOpHash ++ validUntil(uint48 BE) ++ validAfter(uint48 BE) ++ paymaster_addr)
+    let mut digest_input: Vec<u8> = Vec::with_capacity(64);
+    digest_input.extend_from_slice(user_op_hash.as_slice()); // 32
+    digest_input.extend_from_slice(&valid_until.to_be_bytes()[2..]); // 6
+    digest_input.extend_from_slice(&valid_after.to_be_bytes()[2..]); // 6
+    digest_input.extend_from_slice(&pm_addr_bytes); // 20
+    let digest: B256 = keccak256(&digest_input);
+
+    let signer: PrivateKeySigner = DEPLOYER_PK.parse().expect("test signer parse");
+    let pm_sig = signer.sign_hash(&digest).await.expect("paymaster sig sign");
+    let pm_sig_bytes = pm_sig.as_bytes();
+
+    // Build paymasterAndData per ERC-4337 v0.7 (must match Paymaster.sol offsets):
+    //   [0:20] addr | [20:36] verifGas | [36:52] postOpGas | [52:58] validUntil
+    //   [58:64] validAfter | [64:129] sig
+    let mut pad: Vec<u8> = Vec::with_capacity(129);
+    pad.extend_from_slice(&pm_addr_bytes); // 20
+    pad.extend_from_slice(&[0u8; 32]); // verifGas + postOpGas — irrelevant to Paymaster.sol
+    pad.extend_from_slice(&valid_until.to_be_bytes()[2..]); // 6
+    pad.extend_from_slice(&valid_after.to_be_bytes()[2..]); // 6
+    pad.extend_from_slice(&pm_sig_bytes); // 65
+    assert_eq!(pad.len(), 129, "v0.7 paymasterAndData must be 129 bytes");
+    let pad_hex = format!("0x{}", hex::encode(&pad));
+
+    // ── Impersonate the EntryPoint and call validatePaymasterUserOp ──────────
+    // anvil_impersonateAccount lets us send tx as the EP without holding its key.
+    rpc(
+        &client,
+        ANVIL_URL,
+        "anvil_impersonateAccount",
+        serde_json::json!([EP_V07]),
+    )
+    .await;
+    rpc(
+        &client,
+        ANVIL_URL,
+        "anvil_setBalance",
+        serde_json::json!([EP_V07, "0xde0b6b3a7640000"]), // 1 ETH for gas
+    )
+    .await;
+
+    // PackedUserOperation tuple: (sender, nonce, initCode, callData, accountGasLimits,
+    //   preVerificationGas, gasFees, paymasterAndData, signature)
+    // We use the SimpleAccount-shaped placeholder values; only paymasterAndData
+    // is meaningful for this probe. Note the address must be checksummed.
+    let userop_tuple = format!(
+        "({DEPLOYER_ADDR},0,0x,0x,0x{:0>64},0,0x{:0>64},{pad_hex},0x)",
+        "0", "0"
+    );
+    let user_op_hash_hex = format!("0x{}", hex::encode(user_op_hash.as_slice()));
+
+    // Static-call validatePaymasterUserOp from the EP. Use eth_call with `from = EP`
+    // (anvil honors the impersonation for state-modifying calls; for validatePaymasterUserOp
+    // the only state mutation is event emission, which is fine for an eth_call).
+    let validate_resp = sh(&format!(
+        "cast call --rpc-url {ANVIL_URL} \
+         --from {EP_V07} \
+         '{paymaster_addr}' \
+         'validatePaymasterUserOp((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),bytes32,uint256)(bytes,uint256)' \
+         '{userop_tuple}' '{user_op_hash_hex}' '0' 2>&1"
+    ));
+    eprintln!("validatePaymasterUserOp response: {validate_resp}");
+
+    // The returned (context, validationData) is two-line ABI-decoded. validationData
+    // is on the second line. sigFail bit 0 == 0 means signature accepted.
+    assert!(
+        !validate_resp.contains("Error") && !validate_resp.contains("revert"),
+        "validatePaymasterUserOp reverted: {validate_resp}"
+    );
+
+    let lines: Vec<&str> = validate_resp.lines().collect();
+    let validation_data_str = lines
+        .last()
+        .expect("response must have a validationData line");
+    // validationData is a uint256; sigFail = lowest bit of the low 160 bits.
+    // Cast renders uint256 as plain decimal. Parse as U256 (use string-prefix check).
+    let vd_clean = validation_data_str.trim();
+    eprintln!("validationData (decimal): {vd_clean}");
+
+    // Lowest bit must be 0 (sigFail=0 means valid signature).
+    // For type(uint48).max validUntil, validationData = (validUntil << 160), which is even.
+    // For ANY non-zero validUntil shifted by 160 with sigFail bit clear, last hex digit is even.
+    let last_char = vd_clean.chars().last().unwrap_or('0');
+    let last_digit = last_char.to_digit(10).unwrap_or(0);
+    assert_eq!(
+        last_digit % 2,
+        0,
+        "sigFail bit must be 0 (validationData LSB must be even); got {vd_clean}"
+    );
+
+    eprintln!("v0.7 layout accepted on-chain by deployed Paymaster.sol:");
+    eprintln!("  paymaster_addr: {paymaster_addr}");
+    eprintln!("  pad_length:     {} bytes", pad.len());
+    eprintln!("  validationData: {vd_clean}");
+}
+
 // ── Test: paymaster service connectivity and sponsorship response ─────────────
 
 /// Verify the paymaster service responds to pm_sponsorUserOperation with
 /// syntactically correct paymasterAndData.
-///
-/// Does NOT verify on-chain validation (see module docs for the v0.7 offset gap).
 #[tokio::test]
 #[ignore = "requires anvil + bundler + aeqi-paymaster running; invoke with --ignored"]
 async fn test_paymaster_service_returns_valid_paymaster_and_data() {
     let client = reqwest::Client::new();
+    let url = paymaster_url();
 
     if !paymaster_is_up(&client).await {
-        eprintln!("SKIP: aeqi-paymaster not reachable at {PAYMASTER_URL}");
+        eprintln!("SKIP: aeqi-paymaster not reachable at {url}");
         return;
     }
 
@@ -457,7 +616,7 @@ async fn test_paymaster_service_returns_valid_paymaster_and_data() {
 
     let resp = rpc(
         &client,
-        PAYMASTER_URL,
+        &url,
         "pm_sponsorUserOperation",
         serde_json::json!([
             {
@@ -485,7 +644,8 @@ async fn test_paymaster_service_returns_valid_paymaster_and_data() {
 
     let result = &resp["result"];
 
-    // paymasterAndData must be 0x-prefixed hex, exactly 97 bytes (194 hex chars + 0x prefix).
+    // paymasterAndData must be 0x-prefixed hex, exactly 129 bytes per ERC-4337 v0.7
+    // (20 addr + 16 verifGasLimit + 16 postOpGasLimit + 6 validUntil + 6 validAfter + 65 sig).
     let pad = result["paymasterAndData"].as_str().unwrap_or("");
     assert!(
         pad.starts_with("0x"),
@@ -493,8 +653,8 @@ async fn test_paymaster_service_returns_valid_paymaster_and_data() {
     );
     assert_eq!(
         (pad.len() - 2) / 2,
-        97,
-        "paymasterAndData must be exactly 97 bytes; got {} bytes ({})",
+        129,
+        "paymasterAndData must be exactly 129 bytes (v0.7 layout); got {} bytes ({})",
         (pad.len() - 2) / 2,
         pad
     );
@@ -532,9 +692,9 @@ async fn test_paymaster_sol_deploy_and_fund() {
 
     // Check Paymaster.sol bytecode is available.
     let bytecode = sh(
-        "cat /home/claudedev/projects/aeqi-core/out/Paymaster.sol/Paymaster.json \
-         2>/dev/null | python3 -c \
-         \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
+        "cat ${AEQI_CORE_OUT:-/home/claudedev/projects/aeqi-core/out}/Paymaster.sol/Paymaster.json \
+             2>/dev/null | python3 -c \
+             \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
     );
     if !bytecode.starts_with("0x") || bytecode.len() < 10 {
         eprintln!(
