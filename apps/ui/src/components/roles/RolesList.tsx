@@ -8,19 +8,64 @@ export interface RolesListProps {
   onSelectRole: (role: Role) => void;
 }
 
-export default function RolesList({ roles, edges, agentNames, onSelectRole }: RolesListProps) {
-  const parentTitleByChild = useMemo(() => {
-    const titleById = new Map(roles.map((r) => [r.id, r.title || "(untitled)"]));
-    const map = new Map<string, string[]>();
-    for (const e of edges) {
-      const parentTitle = titleById.get(e.parent_role_id);
-      if (!parentTitle) continue;
-      const list = map.get(e.child_role_id) ?? [];
-      list.push(parentTitle);
-      map.set(e.child_role_id, list);
+interface RoleWithDepth {
+  role: Role;
+  depth: number;
+}
+
+/**
+ * Compute pre-order traversal of the role DAG.
+ *
+ * Roots are roles with no parent in the provided edge set. For each root
+ * we DFS children in stable (insertion) order. Depth drives the indent
+ * applied to each row's title cell. Diamond edges (role with two parents)
+ * are handled by the visited set — the first-encountered position wins.
+ */
+function preorder(roles: Role[], edges: RoleEdge[]): RoleWithDepth[] {
+  const byId = new Map(roles.map((r) => [r.id, r]));
+  const children = new Map<string, string[]>();
+  const parentCount = new Map<string, number>();
+
+  for (const r of roles) {
+    children.set(r.id, []);
+    parentCount.set(r.id, 0);
+  }
+  for (const e of edges) {
+    if (!byId.has(e.parent_role_id) || !byId.has(e.child_role_id)) continue;
+    children.get(e.parent_role_id)!.push(e.child_role_id);
+    parentCount.set(e.child_role_id, (parentCount.get(e.child_role_id) ?? 0) + 1);
+  }
+
+  const roots = roles.filter((r) => (parentCount.get(r.id) ?? 0) === 0);
+  const result: RoleWithDepth[] = [];
+  const visited = new Set<string>();
+
+  function visit(id: string, depth: number): void {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const role = byId.get(id);
+    if (role) result.push({ role, depth });
+    for (const childId of children.get(id) ?? []) {
+      visit(childId, depth + 1);
     }
-    return map;
-  }, [roles, edges]);
+  }
+
+  for (const root of roots) {
+    visit(root.id, 0);
+  }
+
+  // Append any disconnected roles (not reachable from roots) at depth 0.
+  for (const role of roles) {
+    if (!visited.has(role.id)) result.push({ role, depth: 0 });
+  }
+
+  return result;
+}
+
+const INDENT = 24; // px per depth level
+
+export default function RolesList({ roles, edges, agentNames, onSelectRole }: RolesListProps) {
+  const ordered = useMemo(() => preorder(roles, edges), [roles, edges]);
 
   return (
     <div className="roles-list">
@@ -30,32 +75,50 @@ export default function RolesList({ roles, edges, agentNames, onSelectRole }: Ro
         <span>Reports to</span>
         <span>Created</span>
       </div>
-      {roles.map((role) => {
-        const parents = parentTitleByChild.get(role.id) ?? [];
-        return (
-          <button
-            key={role.id}
-            type="button"
-            className="roles-list-row"
-            onClick={() => onSelectRole(role)}
+      {ordered.map(({ role, depth }) => (
+        <button
+          key={role.id}
+          type="button"
+          className="roles-list-row"
+          onClick={() => onSelectRole(role)}
+        >
+          <span
+            className="roles-list-cell-title"
+            style={depth > 0 ? { paddingLeft: depth * INDENT } : undefined}
           >
-            <span className="roles-list-cell-title">{role.title || <em>(untitled)</em>}</span>
-            <span className="roles-list-cell-occupant">
-              <OccupantInline role={role} agentName={agentNames.get(role.occupant_id ?? "")} />
-            </span>
-            <span className="roles-list-cell-parents">
-              {parents.length === 0 ? (
-                <span className="roles-list-cell-muted">—</span>
-              ) : (
-                parents.join(", ")
-              )}
-            </span>
-            <span className="roles-list-cell-meta">{role.created_at.slice(0, 10)}</span>
-          </button>
-        );
-      })}
+            {role.title || <em>(untitled)</em>}
+          </span>
+          <span className="roles-list-cell-occupant">
+            <OccupantInline role={role} agentName={agentNames.get(role.occupant_id ?? "")} />
+          </span>
+          <span className="roles-list-cell-parents">
+            <ParentsCell roleId={role.id} roles={roles} edges={edges} />
+          </span>
+          <span className="roles-list-cell-meta">{role.created_at.slice(0, 10)}</span>
+        </button>
+      ))}
     </div>
   );
+}
+
+function ParentsCell({
+  roleId,
+  roles,
+  edges,
+}: {
+  roleId: string;
+  roles: Role[];
+  edges: RoleEdge[];
+}) {
+  const parents = useMemo(() => {
+    const titleById = new Map(roles.map((r) => [r.id, r.title || "(untitled)"]));
+    return edges
+      .filter((e) => e.child_role_id === roleId && titleById.has(e.parent_role_id))
+      .map((e) => titleById.get(e.parent_role_id)!);
+  }, [roleId, roles, edges]);
+
+  if (parents.length === 0) return <span className="roles-list-cell-muted">—</span>;
+  return <>{parents.join(", ")}</>;
 }
 
 function OccupantInline({ role, agentName }: { role: Role; agentName?: string }) {
