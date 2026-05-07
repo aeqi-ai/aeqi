@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useInboxStore } from "@/store/inbox";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { api } from "@/lib/api";
+import { sessionDeepUrl } from "@/lib/sessionUrl";
+import { useInboxStore, probeDismissEndpoint } from "@/store/inbox";
 import { useDaemonStore } from "@/store/daemon";
 import InboxToolbar from "@/components/inbox/InboxToolbar";
-import InboxDetail from "@/components/inbox/InboxDetail";
 import SessionRail, { type SessionRailRow } from "@/components/sessions/SessionRail";
-import { Spinner } from "@/components/ui";
+import SessionDetail from "@/components/sessions/SessionDetail";
+import { Spinner, Tooltip } from "@/components/ui";
 import { toInboxRow, DEFAULT_FILTER } from "@/components/inbox/types";
 import type { InboxFilterState, InboxRow, InboxSort } from "@/components/inbox/types";
+import type { Message } from "@/components/session/types";
 import { recencyBucket, timeShort } from "@/lib/format";
 
 const KIND_LABEL: Record<string, string> = {
@@ -15,15 +18,76 @@ const KIND_LABEL: Record<string, string> = {
   system: "System",
 };
 
+interface RawApiMessage {
+  role?: string;
+  content?: string;
+  created_at?: string;
+}
+
 /**
- * `/` — the canonical daily-driver Inbox surface.
+ * Map the inbox API's raw message shape to the canonical session `Message`
+ * type so the SessionDetail/MessageItem render path is identical to the
+ * agent surface. Keeps `from_kind` aligned: assistant rows surface as
+ * `agent`, user rows as `user`.
+ */
+function inboxMessagesAdapter(raw: Record<string, unknown>, agentName?: string): Message[] {
+  const items = Array.isArray(raw.messages) ? (raw.messages as RawApiMessage[]) : [];
+  const result: Message[] = [];
+  for (const m of items) {
+    const role = typeof m.role === "string" ? m.role.toLowerCase() : "";
+    if (role !== "user" && role !== "assistant") continue;
+    const content = typeof m.content === "string" ? m.content : "";
+    if (!content.trim()) continue;
+    const ts = m.created_at ? new Date(String(m.created_at)).getTime() : Date.now();
+    result.push({
+      role,
+      from_kind: role === "user" ? "user" : "agent",
+      content,
+      timestamp: ts,
+      // Synthetic key — agent rows benefit from agent_name fallback in
+      // resolveAuthor when agentNames doesn't carry the agent yet.
+      ...(role === "assistant" && agentName ? { askSubject: agentName } : {}),
+    });
+  }
+  return result;
+}
+
+// Archive icon — matches the prior InboxComposer icon shape.
+function ArchiveIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 13 13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="1" y="2" width="11" height="2.5" rx="0.5" />
+      <path d="M2 4.5v5.5a1 1 0 001 1h7a1 1 0 001-1V4.5" />
+      <path d="M4.5 7.5h4" />
+    </svg>
+  );
+}
+
+/**
+ * `/me/inbox`, `/c/<eid>/inbox`, `/trust/<addr>/inbox` —
+ * the canonical daily-driver Inbox surface.
  *
- * Two-pane layout: toolbar + time-grouped list (left) + detail/composer (right).
- * Keyboard: j/k traverse, r focus composer, / focus search, Esc clear/unfocus.
- * Real-time pulse on new WS-pushed items. Composer via answerItem (POST).
+ * Two-pane layout: toolbar + time-grouped list (left) + SessionDetail
+ * (right). Keyboard: j/k traverse, r focus composer, / focus search,
+ * Esc clear/unfocus. Real-time pulse on new WS-pushed items.
+ *
+ * Detail pane is the universal `<SessionDetail>` primitive; this page
+ * adapts the inbox transport (per-row `getSessionMessages` fetch + store
+ * `answerItem` POST) into its prop contract.
  */
 export default function MeInboxPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // Store subscriptions — field-level to avoid selector churn
   const allItems = useInboxStore((s) => s.items);
@@ -191,6 +255,81 @@ export default function MeInboxPage() {
     document.title = "inbox · æiq";
   }, []);
 
+  // ── Per-selection message fetch ──────────────────────────────────────
+  // Loads the trailing N messages for the selected session. Was inlined
+  // in the prior InboxDetail; lifted here so the visual primitive stays
+  // transport-agnostic.
+  const [contextMessages, setContextMessages] = useState<Message[]>([]);
+  const [contextLoading, setContextLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedRow) {
+      setContextMessages([]);
+      return;
+    }
+    let cancelled = false;
+    setContextLoading(true);
+    api
+      .getSessionMessages(selectedRow.id, 10)
+      .then((raw: Record<string, unknown>) => {
+        if (cancelled) return;
+        setContextMessages(inboxMessagesAdapter(raw, selectedRow.from.name));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setContextMessages([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setContextLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRow]);
+
+  // ── Dismiss / archive endpoint probe ─────────────────────────────────
+  // Same lifecycle as the prior InboxComposer probe — fired once at
+  // page mount, surfaces availability to the Archive button below.
+  const [dismissAvailable, setDismissAvailable] = useState<boolean | null>(null);
+  const probedRef = useRef(false);
+  useEffect(() => {
+    if (probedRef.current) return;
+    probedRef.current = true;
+    void probeDismissEndpoint().then(setDismissAvailable);
+  }, []);
+
+  // ── Composer adapters ─────────────────────────────────────────────────
+  const [sendError, setSendError] = useState<string | null>(null);
+  // Reset error when selection changes.
+  useEffect(() => {
+    setSendError(null);
+  }, [selectedRow?.id]);
+
+  const handleSend = useCallback(
+    async (body: string) => {
+      if (!selectedRow) return;
+      setSendError(null);
+      const result = await answerItem(selectedRow.id, body);
+      if (!result.ok) {
+        setSendError(result.error ?? "Failed to send.");
+      }
+    },
+    [selectedRow, answerItem],
+  );
+
+  const [dismissing, setDismissing] = useState(false);
+  const handleDismiss = useCallback(async () => {
+    if (!selectedRow || dismissing || dismissAvailable === false) return;
+    setDismissing(true);
+    setSendError(null);
+    const result = await dismissItem(selectedRow.id);
+    setDismissing(false);
+    if (!result.ok) {
+      setSendError(result.error ?? "Failed to archive.");
+    }
+  }, [selectedRow, dismissing, dismissAvailable, dismissItem]);
+
   // Active filter chips — kind and entity filters, mirroring IdeasListView pattern
   const activeChips: { key: string; label: string; onRemove: () => void }[] = [];
   if (filter.kind !== "all") {
@@ -208,6 +347,114 @@ export default function MeInboxPage() {
       onRemove: () => patchFilter({ entityId: null }),
     });
   }
+
+  // ── Right-pane render shape (only when a row is selected) ────────────
+  const renderDetail = () => {
+    if (!selectedRow) {
+      return (
+        <div className="session-detail session-detail--empty">
+          <span className="session-detail-placeholder">Nothing selected.</span>
+        </div>
+      );
+    }
+
+    const deepUrl = sessionDeepUrl(selectedRow.entity_id, selectedRow.agent_id, selectedRow.id);
+
+    const headerExtras = (
+      <>
+        <button
+          type="button"
+          className="inbox-detail-back"
+          onClick={() => setSelectedId(null)}
+          aria-label="Back to inbox list"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M7.5 2L3 6l4.5 4" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="inbox-detail-header-open"
+          onClick={() => navigate(deepUrl)}
+          title="Open full session"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M2 10 L10 2M6 2h4v4" />
+          </svg>
+          Open
+        </button>
+      </>
+    );
+
+    const archiveButton = (
+      <Tooltip content={dismissAvailable === false ? "Coming soon" : "Archive"}>
+        <button
+          type="button"
+          className="sidebar-row-action-btn inbox-archive-btn"
+          onClick={() => void handleDismiss()}
+          disabled={dismissing || dismissAvailable === false || dismissAvailable === null}
+          aria-label={dismissAvailable === false ? "Archive (coming soon)" : "Archive"}
+        >
+          <ArchiveIcon />
+        </button>
+      </Tooltip>
+    );
+
+    const preThread =
+      selectedRow.kind === "decision_request" ? (
+        <div className="inbox-detail-decision-tag" aria-label="Awaiting your decision">
+          Awaiting your decision
+        </div>
+      ) : null;
+
+    // The subject line is informationally redundant with the rail row's
+    // primary, but reading it large in the detail pane is part of the
+    // shipped reading rhythm. Keep it as `subtitle` on the header.
+    const subtitle =
+      selectedRow.subject && selectedRow.subject !== selectedRow.from.name
+        ? selectedRow.subject
+        : undefined;
+
+    return (
+      <SessionDetail
+        sessionId={selectedRow.id}
+        entityId={selectedRow.entity_id ?? undefined}
+        agentId={selectedRow.agent_id ?? undefined}
+        title={selectedRow.from.name}
+        subtitle={subtitle}
+        headerExtras={headerExtras}
+        preThreadSlot={preThread}
+        messages={contextMessages}
+        onSend={handleSend}
+        composerRef={composerRef}
+        composerExtraActions={archiveButton}
+        attachmentTypes={["idea", "quest", "file"]}
+        composerPlaceholder={`Message ${selectedRow.from.name}…`}
+        composerDisabled={!selectedRow.replyable}
+        emptyTitle={contextLoading ? "Loading context…" : "No prior messages."}
+        errorMessage={sendError}
+      />
+    );
+  };
 
   return (
     <div className={["inbox-shell", selectedId ? "has-selection" : ""].filter(Boolean).join(" ")}>
@@ -293,16 +540,8 @@ export default function MeInboxPage() {
         </div>
       </div>
 
-      {/* Right pane: detail + composer */}
-      <div className="inbox-pane-detail">
-        <InboxDetail
-          row={selectedRow}
-          onAnswer={answerItem}
-          onDismiss={dismissItem}
-          onBack={() => setSelectedId(null)}
-          composerRef={composerRef}
-        />
-      </div>
+      {/* Right pane: SessionDetail (universal primitive) */}
+      <div className="inbox-pane-detail">{renderDetail()}</div>
     </div>
   );
 }

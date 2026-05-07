@@ -62,7 +62,7 @@
 /* Scroll-fade above the floating composer — last lines of thread
    dissolve into paper as they pass behind the card. Mirrors
    `.content-main-col:has(.composer-row)::after` from layout.css.
-   Height tracks --inbox-composer-height (published by InboxComposer's
+   Height tracks --inbox-composer-height (published by SessionDetail's
    ResizeObserver) so the fade grows with the draft. */
 .inbox-pane-detail:has(.inbox-composer-wrap)::after {
   content: "";
@@ -90,55 +90,112 @@
    gate during the first fetch.                                   */
 
 /* ── Detail pane ─────────────────────────────────────────────── */
+/*
+ * `<SessionDetail>` (`components/sessions/SessionDetail.tsx`) is the
+ * universal session-pane primitive. It renders inside `.inbox-pane-detail`
+ * on the inbox surface; the same primitive will adopt onto channels +
+ * agent-session surfaces in subsequent ships. All `.session-detail-*`
+ * rules below describe its shipped shape — the inbox-detail-* names
+ * survived only on classes the page composes itself (back / open / decision
+ * tag), which are now used as `headerExtras` / `preThreadSlot` content.
+ */
 
-.inbox-detail {
+.session-detail {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
 
-.inbox-detail--empty {
+.session-detail--empty {
   align-items: center;
   justify-content: center;
 }
 
-.inbox-detail-placeholder {
+.session-detail-placeholder {
   font-size: var(--font-size-sm);
   color: var(--color-ink-muted);
 }
 
 /* Detail header */
-.inbox-detail-header {
+.session-detail-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
   flex-shrink: 0;
   background: var(--color-card-subtle);
 }
 
-.inbox-detail-header-from {
+.session-detail-header-from {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
   overflow: hidden;
 }
 
-.inbox-detail-header-agent {
+.session-detail-header-title {
   font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--color-ink-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
-.inbox-detail-header-sep {
+.session-detail-header-subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.session-detail-header-extras {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* Thread — bottom padding tracks the floating composer's measured height
+   (--inbox-composer-height, published by SessionDetail's ResizeObserver)
+   so the final message clears the card when scrolled into view. Falls
+   back to 140px (matches the chat surface's --composer-height default)
+   if the observer hasn't fired yet. */
+.session-detail-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-5) calc(var(--inbox-composer-height, 140px) + var(--space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Empty state */
+.session-detail-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  font-size: var(--font-size-xs);
   color: var(--color-ink-muted);
 }
 
+.session-detail-empty-title {
+  font-weight: 500;
+}
+
+.session-detail-empty-hint {
+  font-size: var(--font-size-2xs);
+}
+
+/* Open-button + back-button (composed by MeInboxPage as headerExtras).
+   Same visual shape they had on the prior `.inbox-detail-header`. */
 .inbox-detail-header-open {
   appearance: none;
   border: none;
@@ -162,7 +219,8 @@
   background: var(--state-hover);
 }
 
-/* Decision-request urgency tag — quiet accent strip above subject */
+/* Decision-request urgency tag — quiet accent strip below the header,
+   composed by MeInboxPage as preThreadSlot. */
 .inbox-detail-decision-tag {
   padding: var(--space-2) var(--space-5) 0;
   font-size: var(--font-size-xs);
@@ -170,73 +228,6 @@
   color: var(--color-accent);
   letter-spacing: 0.01em;
   flex-shrink: 0;
-}
-
-/* Subject / question line */
-.inbox-detail-subject {
-  padding: var(--space-4) var(--space-5) var(--space-3);
-  font-size: var(--font-size-base);
-  font-weight: 500;
-  color: var(--color-ink-primary);
-  line-height: 1.45;
-  flex-shrink: 0;
-}
-
-/* When decision-tag precedes subject, reduce subject's top padding */
-.inbox-detail-decision-tag + .inbox-detail-subject {
-  padding-top: var(--space-2);
-}
-
-/* Thread context — last bit of bottom padding tracks the floating
-   composer's measured height so the final message clears the card
-   when scrolled into view. Falls back to 140px (matches the chat
-   surface's --composer-height default) if the observer hasn't fired. */
-.inbox-detail-thread {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-2) var(--space-5) calc(var(--inbox-composer-height, 140px) + var(--space-4));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.inbox-detail-loading,
-.inbox-detail-no-context {
-  font-size: var(--font-size-xs);
-  color: var(--color-ink-muted);
-  padding: var(--space-2) 0;
-}
-
-.inbox-thread-msg {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.inbox-thread-msg-role {
-  font-size: var(--font-size-2xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-ink-muted);
-}
-
-/* Author header alignment — incoming on the left, outgoing on the right.
-   Mirrors the .asv-msg-author convention on the agent session surface. */
-.inbox-thread-msg--assistant .inbox-thread-msg-role {
-  color: var(--color-ink-secondary);
-  text-align: left;
-}
-.inbox-thread-msg--user .inbox-thread-msg-role {
-  text-align: right;
-}
-
-.inbox-thread-msg-content {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-ink-text);
-  line-height: 1.55;
-  white-space: pre-wrap;
 }
 
 /* ── Composer wrapper ──────────────────────────────────────────

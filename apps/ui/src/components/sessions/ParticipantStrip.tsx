@@ -9,7 +9,8 @@ import AddParticipantModal from "./AddParticipantModal";
  * there are more than 5, and a "+ Add" button that opens the picker modal.
  *
  * Mounted by both the agent session surface (`AgentSessionView`) and the
- * inbox detail pane (`InboxDetail`). One primitive, one canonical shape.
+ * universal `<SessionDetail>` primitive (which the inbox surface adopts).
+ * One primitive, one canonical shape.
  */
 
 export interface Participant {

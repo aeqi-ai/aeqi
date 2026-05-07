@@ -1,0 +1,241 @@
+/**
+ * SessionDetail — universal session-pane primitive.
+ *
+ * Per `architecture_session_primitive.md`: Session is the universal
+ * conversation primitive (chat / inbox / comments / activity / channels /
+ * mentions). This primitive collapses the right-pane render path into one
+ * component. Each surface adapts its data layer (Zustand inbox-store
+ * polling, WebSocket streaming, react-query polling, …) into the same
+ * prop contract; the primitive renders identically across them.
+ *
+ * Layout, top-to-bottom:
+ *   1. ParticipantStrip      — multi-participant avatars (always-on).
+ *   2. Header row            — title + subtitle + headerExtras slot.
+ *   3. Messages list         — MessageItem stream, auto-scroll, empty state.
+ *   4. Composer              — full <Composer> primitive at the bottom.
+ *
+ * Transport-agnostic. The primitive does not own:
+ *   - Where messages come from (inbox-store, WS dispatcher, react-query, …).
+ *   - How `onSend` posts (inbox.answerItem, WS dispatchMessage, …).
+ *   - Streaming state (caller passes isStreaming if relevant).
+ *
+ * Visual variant matches the inbox + agent surfaces' shipped state:
+ *   composer-wrap + persistent-composer + Composer variant="shell".
+ */
+
+import { useEffect, useRef, useState } from "react";
+import Composer from "@/components/composer/Composer";
+import MessageItem from "@/components/session/MessageItem";
+import ParticipantStrip from "@/components/sessions/ParticipantStrip";
+import type { Message } from "@/components/session/types";
+import type { ComposerAttachmentKind, ComposerFile } from "@/components/composer/Composer";
+
+export interface SessionDetailProps {
+  // Session identity — drives ParticipantStrip, MessageItem author resolution.
+  sessionId: string | null;
+  /** When provided, scoped to this entity (proxy injects authed
+   * X-Entity for participant lookups). */
+  entityId?: string;
+  /** Agent ID for the session — used by MessageItem's resolveAuthor for
+   * legacy fallback when from_kind is not set on the row. Optional. */
+  agentId?: string;
+
+  // Header.
+  title?: string;
+  subtitle?: string;
+  /** Right-aligned slot in the header row (e.g. "Open" / "Back" buttons). */
+  headerExtras?: React.ReactNode;
+
+  // Stream.
+  messages: Message[];
+  isStreaming?: boolean;
+
+  // Composer.
+  onSend: (body: string) => void | Promise<void>;
+  onStop?: () => void;
+  composerRef?: React.RefObject<HTMLTextAreaElement | null>;
+  composerExtraActions?: React.ReactNode;
+  attachmentTypes?: ComposerAttachmentKind[];
+  historySource?: string[];
+  composerPlaceholder?: string;
+  /** Disable input + send (renders chrome but locks composer). */
+  composerDisabled?: boolean;
+  /** Idea/quest picker chips above the input (parent-managed state). */
+  attachedIdeas?: string[];
+  setAttachedIdeas?: React.Dispatch<React.SetStateAction<string[]>>;
+  attachedQuest?: { id: string; name: string } | null;
+  setAttachedQuest?: (next: { id: string; name: string } | null) => void;
+  attachedFiles?: ComposerFile[];
+  setAttachedFiles?: React.Dispatch<React.SetStateAction<ComposerFile[]>>;
+  onAttachClick?: (kind: "idea" | "quest") => void;
+  onReadFiles?: (files: FileList | File[]) => void;
+
+  // Empty state — shown when messages.length === 0.
+  emptyTitle?: string;
+  emptyHint?: string;
+
+  /** Full-width slot rendered between the header row and the thread — for
+   * urgency strips (decision-request tag, awaiting banner, etc.). */
+  preThreadSlot?: React.ReactNode;
+
+  // Inline error banner — rendered above the composer.
+  errorMessage?: string | null;
+
+  /** Hide the composer chrome entirely (e.g. when an external chrome owns it).
+   * Default: composer renders inside the primitive. */
+  hideComposer?: boolean;
+}
+
+export default function SessionDetail({
+  sessionId,
+  entityId,
+  agentId,
+  title,
+  subtitle,
+  headerExtras,
+  messages,
+  isStreaming = false,
+  onSend,
+  onStop,
+  composerRef,
+  composerExtraActions,
+  attachmentTypes,
+  historySource,
+  composerPlaceholder = "Message…",
+  composerDisabled = false,
+  attachedIdeas,
+  setAttachedIdeas,
+  attachedQuest,
+  setAttachedQuest,
+  attachedFiles,
+  setAttachedFiles,
+  onAttachClick,
+  onReadFiles,
+  emptyTitle,
+  emptyHint,
+  preThreadSlot,
+  errorMessage,
+  hideComposer = false,
+}: SessionDetailProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const lastHeightRef = useRef<number>(0);
+  const [body, setBody] = useState("");
+
+  // Reset per-session draft when selection changes.
+  useEffect(() => {
+    setBody("");
+  }, [sessionId]);
+
+  // Scroll thread to bottom when messages update — same idiom as the
+  // shipped agent surface, scoped to the primitive's own scroll element.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, sessionId]);
+
+  // Publish the composer's live height as `--inbox-composer-height` on
+  // the enclosing `.inbox-pane-detail` so the thread's bottom padding
+  // and the fade-gradient grow with the draft. Mirrors the prior
+  // InboxComposer ResizeObserver — same idiom, scoped variable, same
+  // CSS consumer (the inbox.css `.inbox-pane-detail::after` rule).
+  useEffect(() => {
+    if (hideComposer) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const detail = el.closest<HTMLElement>(".inbox-pane-detail");
+    if (!detail) return;
+
+    const apply = () => {
+      const newHeight = Math.ceil(el.offsetHeight);
+      if (newHeight !== lastHeightRef.current) {
+        lastHeightRef.current = newHeight;
+        detail.style.setProperty("--inbox-composer-height", `${newHeight}px`);
+      }
+    };
+
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+      detail.style.removeProperty("--inbox-composer-height");
+    };
+  }, [hideComposer]);
+
+  const handleSend = async () => {
+    const trimmed = body.trim();
+    if (!trimmed || composerDisabled) return;
+    setBody("");
+    await onSend(trimmed);
+  };
+
+  return (
+    <div className="session-detail">
+      {sessionId && <ParticipantStrip sessionId={sessionId} entityId={entityId} />}
+
+      {(title || headerExtras) && (
+        <div className="session-detail-header">
+          <div className="session-detail-header-from">
+            {title && <span className="session-detail-header-title">{title}</span>}
+            {subtitle && <span className="session-detail-header-subtitle">{subtitle}</span>}
+          </div>
+          {headerExtras && <div className="session-detail-header-extras">{headerExtras}</div>}
+        </div>
+      )}
+
+      {preThreadSlot}
+
+      <div className="session-detail-thread" ref={scrollRef}>
+        {messages.length === 0 ? (
+          <div className="session-detail-empty">
+            {emptyTitle && <div className="session-detail-empty-title">{emptyTitle}</div>}
+            {emptyHint && <div className="session-detail-empty-hint">{emptyHint}</div>}
+          </div>
+        ) : (
+          messages.map((msg, i) => (
+            <MessageItem key={msg.messageId ?? i} msg={msg} sessionAgentId={agentId} />
+          ))
+        )}
+      </div>
+
+      {!hideComposer && (
+        <div className="inbox-composer-wrap" ref={wrapRef}>
+          {errorMessage && (
+            <div className="inbox-composer-error" role="alert">
+              {errorMessage}
+            </div>
+          )}
+          <div className="composer-wrap">
+            <div className="persistent-composer">
+              <Composer
+                variant="shell"
+                value={body}
+                onChange={setBody}
+                onSend={() => void handleSend()}
+                onStop={onStop}
+                streaming={isStreaming}
+                placeholder={composerPlaceholder}
+                composerRef={composerRef}
+                disabled={composerDisabled}
+                attachmentTypes={attachmentTypes}
+                attachedIdeas={attachedIdeas}
+                setAttachedIdeas={setAttachedIdeas}
+                attachedQuest={attachedQuest}
+                setAttachedQuest={setAttachedQuest}
+                attachedFiles={attachedFiles}
+                setAttachedFiles={setAttachedFiles}
+                onAttachClick={onAttachClick}
+                onReadFiles={onReadFiles}
+                historySource={historySource}
+                extraActions={composerExtraActions}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

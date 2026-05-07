@@ -333,10 +333,10 @@ export default function AppLayout() {
   // The chat composer + sessions rail belong on the drilled-agent chat
   // surface only (`/c/<entity>/agents/<id>/inbox[/<sid>]`). The
   // entity-scope inbox (`/c/<entity>/inbox`) and personal inbox
-  // (`/me/inbox`) ship their own InboxComposer inline against the
-  // inbox-store POST path — they must not also mount the AppLayout
-  // chat composer or it stacks visually over the inbox detail. Same
-  // applies to other top-level non-chat routes.
+  // (`/me/inbox`) embed `<SessionDetail>` (which mounts its own
+  // composer against the inbox-store POST path) — they must not also
+  // mount the AppLayout chat composer or it stacks visually over the
+  // inbox detail. Same applies to other top-level non-chat routes.
   const sessionsMounted =
     !isNotFound &&
     !isDrive &&
