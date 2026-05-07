@@ -1,5 +1,12 @@
 # Release Notes
 
+## v0.62.0 — 2026-05-09
+
+**Headline:** Inbox: scroll unblocked, user-id threaded, cron sessions filtered.
+
+- **Inbox scroll unblocked end-to-end** (`apps/ui/src/styles/layout.css` + `apps/ui/src/styles/inbox.css` + `apps/ui/src/components/shell/SessionsRail.tsx`): two coupled CSS bugs were freezing the `/me/inbox` and agent-rail session lists. (a) `.content-scroll` carried a latent `overflow-y: auto` that captured wheel events at narrow viewports / on routes where the right pane drove the shell taller, swallowing the rail's own scroll even though `.sessions-rail-list` was correctly configured. Inner surfaces (inbox-shell, session-detail-thread, ideas-canvas) own their own scroll exclusively; the outer wrapper must be a pass-through. Drop the `overflow-y` on `.content-scroll`. (b) `.inbox-pane-list-scroll` was set `overflow-y: auto` WITHOUT being a flex container, which collapsed the inner `SessionRail`'s `flex: 1; min-height: 0` chain. Restructure into a pass-through flex column so the rail's inner `.sessions-rail-list` is the canonical scroller. Agent rail click on `/trust/<addr>/...` routes also no-op'd because `useParams` only read `entityId`; trust shape exposes `trustAddress`. Resolve back to entityId via daemon entities so the URL builder gets a concrete id and the early-return stops swallowing every click. `ac761c3e`, `8f8efc29`.
+- **`user_id` threaded through platform → runtime so `/api/inbox` filters to participant-only** (`crates/aeqi-web/src/auth.rs` + `crates/aeqi-orchestrator/src/ipc/inbox.rs` + `crates/aeqi-orchestrator/src/session_store.rs` + `apps/ui/src/store/inbox.ts`): `/api/inbox` was returning every session in the user's tenant scope rather than only sessions where the caller is a participant. Root cause: the runtime had no way to learn the platform-side user_id — `UserScope` carried only entity_id. Wired a new `x-aeqi-caller-user-id` header from aeqi-platform's authed proxy (gated on the existing scope-token presence — transitive trust); `proxy_scope_from_headers` reads the header and binds it into `UserScope.user_id`; `list_awaiting_for_user` now actually parameterises the participant-gate query with `?1`. UI fallback in `inbox.ts` filters client-side until every host runtime picks up the new binary. End-to-end: `/me/inbox` now shows only the conversations the founder is a participant in. `8f8efc29`.
+
 ## v0.61.0 — 2026-05-09
 
 **Headline:** Event detail aligns with idea/quest chrome; cron attribution corrected; full-height canvas.
