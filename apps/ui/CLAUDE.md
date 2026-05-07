@@ -307,6 +307,34 @@ already reading `entry.description` from `/integrations`. The visible
 stale copy was caused by the platform binary being two days stale —
 out of UI scope.
 
+### Brief asserts file paths — many `/me/*` routes have no dedicated page file
+
+Sister pattern to the "hardcoded string" trap. When a brief or audit
+report says "fix X likely in `apps/ui/src/pages/MeQuestsPage.tsx`,
+`apps/ui/src/pages/MeIdeasPage.tsx`, or sibling components" — the named
+files often don't exist. The `/me/quests` and `/me/ideas` routes are
+served by `MePage.tsx` dispatching to shared tab components
+(`AgentQuestsTab`, `IdeasListView`); the same components serve
+`/c/<id>/agents/<aid>/quests` and `/c/<id>/ideas`. The bug usually
+lives in the SHARED component, not in a route-specific page file.
+
+Recipe before reading the brief's named files:
+
+```bash
+# Does the named page file exist?
+ls apps/ui/src/pages/MeQuestsPage.tsx 2>/dev/null
+# If no — find what renders the route. MePage.tsx dispatches by tab.
+grep -rn "MePage\|/me/quests\|/me/ideas" apps/ui/src/AppLayout.tsx apps/ui/src/pages/MePage.tsx
+# Find the shared tab/list component, then grep for the buggy element.
+```
+
+Cost (2026-05-07): import-button-secondary ship — brief named two
+non-existent files (MeQuestsPage / MeIdeasPage); first grep returned
+empty, second grep found `ImportMenu.tsx` (the shared trigger
+component) which is the canonical fix site for both routes. Brief
+hedge "or sibling components" was correct; reading it as the primary
+target instead of the named files saves one wasted grep.
+
 ### Brief asserts UI duplication — grep + read transports before refactoring
 
 Sister pattern to the "hardcoded string" trap. When a brief asserts that
