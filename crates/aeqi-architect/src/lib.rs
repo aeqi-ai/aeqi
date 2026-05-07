@@ -1,12 +1,20 @@
 //! AEQI Architect — meta-agent that turns a free-text brief into a deployable
 //! [`Blueprint`].
 //!
-//! # Phase 1 scope
+//! # Generators
 //!
-//! Phase 1 is **scaffolding only**. The [`generate`](generator::generate) entry
-//! point currently returns a hard-coded foundation-shaped blueprint with the
-//! caller's brief interpolated into its identity ideas. Phase 2 will swap the
-//! stub for an LLM-powered generator routed through `aeqi-inference`.
+//! Two generators ship side by side:
+//!
+//! - [`generate`](generator::generate) — deterministic stub. Hard-coded
+//!   foundation-shaped blueprint with the brief interpolated into the
+//!   identity idea, description, and kickoff quest. No network. Used as
+//!   the IPC fallback when the LLM path errors so the user always gets
+//!   a draft.
+//! - [`generate_via_llm`](llm::generate_via_llm) — Phase 2. Calls an LLM
+//!   through the [`LlmCaller`](llm::LlmCaller) trait (production: an
+//!   `aeqi_inference::InferenceRouter` wired to a `DeepInfraProvider`).
+//!   The model picks template / agents / roles / ideas from the brief
+//!   itself.
 //!
 //! The output schema is the canonical [`Blueprint`] type defined in
 //! `aeqi-orchestrator::ipc::blueprints`. We do NOT redeclare it here — the
@@ -20,7 +28,11 @@
 //! the design brief that this crate implements.
 
 pub mod generator;
+pub mod llm;
 pub mod types;
 
 pub use generator::{ArchitectError, generate, refine};
+pub use llm::{
+    LlmCaller, LlmGenerationOptions, OpenRouterLlm, build_default_llm, generate_via_llm,
+};
 pub use types::{Brief, GeneratedBlueprint};

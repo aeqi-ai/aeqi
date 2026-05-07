@@ -85,4 +85,14 @@ impl GeneratorProvenance {
             version: "phase-1".to_string(),
         }
     }
+
+    /// Provenance tag for the Phase-2 LLM-powered generator. The IPC
+    /// layer reads this to surface "drafted by LLM" vs "drafted by stub
+    /// fallback" in the Studio UI.
+    pub fn llm_v1() -> Self {
+        Self {
+            kind: "llm".to_string(),
+            version: "phase-2".to_string(),
+        }
+    }
 }

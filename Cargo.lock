@@ -68,9 +68,13 @@ dependencies = [
 name = "aeqi-architect"
 version = "0.15.0"
 dependencies = [
+ "aeqi-inference",
+ "async-trait",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

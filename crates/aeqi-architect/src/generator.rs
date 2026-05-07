@@ -1,12 +1,14 @@
-//! Phase-1 stub generator.
+//! Stub Blueprint generator.
 //!
 //! Takes a [`Brief`] and returns a [`GeneratedBlueprint`] by interpolating
 //! the brief into a hard-coded foundation-shaped template. No LLM calls —
 //! the function is fully deterministic, network-free, and runs in
 //! microseconds.
 //!
-//! Phase 2 will keep this signature and replace the body with a router
-//! call into `aeqi-inference`.
+//! In Phase 2 the stub is the fallback path: when the LLM call (see
+//! [`crate::llm`]) fails or its output can't be parsed into a valid
+//! Blueprint, the IPC layer calls [`generate`] so the user always gets
+//! a draft.
 
 use serde_json::json;
 use thiserror::Error;
@@ -14,8 +16,7 @@ use tracing::debug;
 
 use crate::types::{Brief, GeneratedBlueprint, GeneratorProvenance};
 
-/// Errors the generator can return. Phase 1 only has input-validation
-/// errors; Phase 2 will add inference and JSON-validation variants.
+/// Errors the generator can return.
 #[derive(Debug, Error)]
 pub enum ArchitectError {
     /// The brief was empty or whitespace-only after trimming.
@@ -24,6 +25,11 @@ pub enum ArchitectError {
     /// The brief exceeded the hard 8 KB cap.
     #[error("brief text exceeds 8000-char cap (got {0})")]
     BriefTooLong(usize),
+    /// The LLM call failed (network, timeout, rate limit) or its output
+    /// was not parseable into a valid Blueprint. The IPC layer should
+    /// fall back to the stub so the user always sees a draft.
+    #[error("LLM generation failed: {0}")]
+    LlmFailure(String),
 }
 
 /// Slug emitted by the Phase-1 stub. Stable so the IPC test can pin it.
@@ -54,17 +60,20 @@ pub fn generate(brief: &Brief) -> Result<GeneratedBlueprint, ArchitectError> {
         return Err(ArchitectError::BriefTooLong(trimmed.len()));
     }
 
-    debug!(brief_len = trimmed.len(), "architect.stub: generating blueprint");
+    debug!(
+        brief_len = trimmed.len(),
+        "architect.stub: generating blueprint"
+    );
 
     let blueprint = build_foundation_blueprint(trimmed);
-    let rationale = format!(
-        "Phase-1 stub. Picked the `foundation` on-chain template — minimal cap-table \
+    let rationale =
+        "Stub generator. Picked the `foundation` on-chain template — minimal cap-table \
          machinery, role-graph friendly, no token model assumptions. The brief is \
          interpolated into the root agent's identity idea and a kickoff quest so the \
          operator's first session has the founder's stated intent ready in context. \
-         Phase 2 will route this through inference and pick template/agents/roles \
-         from the brief itself."
-    );
+         Used as a fallback when the LLM path is unavailable; the LLM path picks \
+         template/agents/roles from the brief itself."
+            .to_string();
 
     Ok(GeneratedBlueprint {
         kind: "single".to_string(),
@@ -83,6 +92,20 @@ pub fn refine(
 ) -> Result<GeneratedBlueprint, ArchitectError> {
     debug!("architect.stub: refine returns input unchanged (Phase 1)");
     Ok(draft)
+}
+
+/// The on-chain template the stub falls back to when the LLM didn't
+/// emit a usable `template` field. Foundation is the safest default —
+/// no token model, minimal cap-table machinery.
+pub fn choose_template_default() -> &'static str {
+    STUB_TEMPLATE
+}
+
+/// Build a stub-shaped Blueprint JSON value with the brief interpolated.
+/// Exposed so [`crate::llm`] can fall back to it when the model returns
+/// non-object JSON.
+pub fn build_minimal_foundation_blueprint(brief: &str) -> serde_json::Value {
+    build_foundation_blueprint(brief)
 }
 
 fn build_foundation_blueprint(brief: &str) -> serde_json::Value {
@@ -197,8 +220,10 @@ mod tests {
 
     #[test]
     fn stub_emits_foundation_template() {
-        let out = generate(&brief("I want to build a foundation focused on open-source AI"))
-            .expect("generate succeeds");
+        let out = generate(&brief(
+            "I want to build a foundation focused on open-source AI",
+        ))
+        .expect("generate succeeds");
         assert_eq!(out.kind, "single");
         assert_eq!(out.generator.kind, "stub");
         let bp = &out.blueprint;

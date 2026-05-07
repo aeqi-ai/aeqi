@@ -6,7 +6,14 @@ license.workspace = true
 description = "AEQI Architect — meta-agent that turns a free-text brief into a deployable Blueprint"
 
 [dependencies]
+aeqi-inference = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

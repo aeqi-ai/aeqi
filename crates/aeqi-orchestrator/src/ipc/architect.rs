@@ -1,26 +1,34 @@
 //! Architect IPC handlers.
 //!
-//! Wraps the `aeqi-architect` crate's pure-Rust generator behind three IPC
-//! verbs:
+//! Wraps the `aeqi-architect` crate's generator behind three IPC verbs:
 //!
-//! - `architect.draft` — turn a free-text brief into a generated blueprint
+//! - `architect.draft` — turn a free-text brief into a generated blueprint.
+//!   Phase 2: real LLM call via `aeqi_architect::generate_via_llm`,
+//!   falling back to the stub when no API key is set or the LLM call
+//!   fails. Provenance is recorded on the draft so the UI can show
+//!   "drafted by LLM" vs "drafted by stub fallback".
 //! - `architect.refine` — apply an instruction to an existing draft (Phase 1
-//!   stub: returns input unchanged)
+//!   stub: returns input unchanged).
 //! - `architect.deploy` — provision a Company from a generated blueprint by
-//!   piping it through the existing `spawn_blueprint` provisioner
+//!   piping it through the existing `spawn_blueprint` provisioner.
 //!
-//! Phase 1 is request/response; there is no LLM streaming, no draft
-//! persistence, and no refinement diff. Phase 2 wires inference into
-//! `architect.draft` and adds an `architect_drafts` table; Phase 3 ships a
-//! stream-of-thought UI.
+//! Phase 2 is still request/response; there is no LLM streaming, no draft
+//! persistence, and no refinement diff. Phase 3 will ship a stream-of-thought
+//! UI.
 //!
-//! All draft IDs in Phase 1 are minted ad-hoc and are NOT stored — clients
+//! All draft IDs in Phase 2 are minted ad-hoc and are NOT stored — clients
 //! must round-trip the full `draft` JSON object on `architect.refine` /
 //! `architect.deploy`. This keeps the orchestrator stateless during the
 //! scaffolding phase.
 
-use aeqi_architect::{ArchitectError, Brief, GeneratedBlueprint, generate, refine};
+use std::time::Instant;
+
+use aeqi_architect::{
+    ArchitectError, Brief, GeneratedBlueprint, build_default_llm, generate, generate_via_llm,
+    refine,
+};
 use serde_json::{Value, json};
+use tracing::{info, warn};
 
 use crate::ipc::blueprints::{Blueprint, BlueprintPart, spawn_blueprint};
 
@@ -73,17 +81,46 @@ pub async fn handle_architect_draft(
         notes: None,
     };
 
-    match generate(&brief) {
-        Ok(draft) => {
-            let draft_id = synthetic_draft_id(&draft);
-            json!({
-                "ok": true,
-                "draft_id": draft_id,
-                "draft": draft,
-            })
+    let started = Instant::now();
+    let draft = match build_default_llm() {
+        Some((llm, opts)) => match generate_via_llm(&brief, llm.as_ref(), &opts).await {
+            Ok(d) => {
+                info!(
+                    latency_ms = started.elapsed().as_millis() as u64,
+                    "architect.draft: LLM path succeeded"
+                );
+                d
+            }
+            Err(err) if matches!(err, ArchitectError::LlmFailure(_)) => {
+                warn!(error = %err, "architect.draft: LLM path failed; falling back to stub");
+                match generate(&brief) {
+                    Ok(d) => d,
+                    Err(stub_err) => return architect_error_response(stub_err),
+                }
+            }
+            Err(err) => {
+                // EmptyBrief / BriefTooLong should already be caught
+                // above, but bubble them up cleanly if they slip through.
+                return architect_error_response(err);
+            }
+        },
+        None => {
+            warn!(
+                "architect.draft: no LLM credentials in env (DEEPINFRA_API_KEY / OPENROUTER_API_KEY); using stub generator"
+            );
+            match generate(&brief) {
+                Ok(d) => d,
+                Err(err) => return architect_error_response(err),
+            }
         }
-        Err(err) => architect_error_response(err),
-    }
+    };
+
+    let draft_id = synthetic_draft_id(&draft);
+    json!({
+        "ok": true,
+        "draft_id": draft_id,
+        "draft": draft,
+    })
 }
 
 /// `architect.refine` — apply an instruction to a draft.
@@ -254,6 +291,7 @@ fn architect_error_response(err: ArchitectError) -> Value {
     let code = match err {
         ArchitectError::EmptyBrief => "invalid_request",
         ArchitectError::BriefTooLong(_) => "too_long",
+        ArchitectError::LlmFailure(_) => "llm_failure",
     };
     json!({"ok": false, "error": err.to_string(), "code": code})
 }
