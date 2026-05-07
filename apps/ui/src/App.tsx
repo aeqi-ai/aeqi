@@ -207,6 +207,9 @@ export default function App() {
             <Route index element={null} />
             <Route path="agents/:agentId" element={null}>
               <Route index element={null} />
+              <Route path="settings" element={null} />
+              <Route path="settings/:settingsTab" element={null} />
+              <Route path="settings/:settingsTab/:itemId" element={null} />
               <Route path=":tab" element={null} />
               <Route path=":tab/:itemId" element={null} />
             </Route>
@@ -221,6 +224,9 @@ export default function App() {
             <Route index element={null} />
             <Route path="agents/:agentId" element={null}>
               <Route index element={null} />
+              <Route path="settings" element={null} />
+              <Route path="settings/:settingsTab" element={null} />
+              <Route path="settings/:settingsTab/:itemId" element={null} />
               <Route path=":tab" element={null} />
               <Route path=":tab/:itemId" element={null} />
             </Route>

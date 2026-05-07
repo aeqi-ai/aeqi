@@ -35,6 +35,23 @@ const RoleNewPage = lazy(() => import("@/pages/RoleNewPage"));
 const RoleDetailPage = lazy(() => import("@/pages/RoleDetailPage"));
 const RoleEditPage = lazy(() => import("@/pages/RoleEditPage"));
 const RoleInvitePage = lazy(() => import("@/pages/RoleInvitePage"));
+const AgentSettingsPage = lazy(() => import("@/pages/AgentSettingsPage"));
+
+// Tab segments that used to live at `/c/<eid>/agents/<aid>/<tab>`
+// and are now relocated under `/c/<eid>/agents/<aid>/settings/<tab>`.
+// These trigger a SPA replace-navigate (the closest equivalent to a
+// 308) so existing bookmarks survive the relocation.
+const RELOCATED_AGENT_TABS = new Set([
+  "overview",
+  "personality",
+  "quests",
+  "events",
+  "ideas",
+  "channels",
+  "treasury",
+  "tools",
+  "integrations",
+]);
 
 // Top-level segments under /blueprints that are catalog-kind tabs, not
 // blueprint slugs. Anything else after /blueprints/ is treated as a slug
@@ -68,12 +85,14 @@ export default function AppLayout() {
     agentId: routeAgentId = "",
     tab,
     itemId,
+    settingsTab,
   } = useParams<{
     entityId?: string;
     trustAddress?: string;
     agentId?: string;
     tab?: string;
     itemId?: string;
+    settingsTab?: string;
   }>();
   const path = location.pathname;
 
@@ -253,9 +272,22 @@ export default function AppLayout() {
   // No-tab default at entity scope = "overview" (the company
   // dashboard is the canonical landing). `/` is served outside this
   // shell as the public Discover page, so it never reaches AppLayout.
-  // Drilled agents also default to "overview" — clicking on an agent
-  // lands on its cockpit, not its chat. Inbox is one click off.
+  //
+  // Drilled-agent default is the inbox/chat shape (no rail) — bare
+  // `/c/<eid>/agents/<aid>/` opens the agent into the chat surface.
+  // The settings sub-surface lives at `/c/<eid>/agents/<aid>/settings`
+  // with the rail; clicking ⚙ on the agent header navigates there.
   const isEntityRoute = !!(routeEntityId || routeTrustAddress);
+  // Are we on the agent's settings sub-surface? The route shape is
+  // `agents/:agentId/settings[/:settingsTab[/:itemId]]`. We detect via
+  // the path segment so the sub-surface dispatches before any
+  // legacy-tab redirect runs.
+  const agentSettingsSegment = (() => {
+    if (!routeAgentId) return false;
+    // Path slice after `/agents/<id>` — first segment is `settings`?
+    const re = /\/agents\/[^/]+\/(settings)(?:\/|$)/;
+    return re.test(path);
+  })();
   const effectiveTab = tab || "overview";
 
   // Runtime mode has no account-level identity surface.
@@ -284,6 +316,19 @@ export default function AppLayout() {
     const suffix = itemId ? `/inbox/${encodeURIComponent(itemId)}` : "/inbox";
     const agentSeg = drilledAgent ? `/agents/${encodeURIComponent(drilledAgent.id)}` : "";
     return <Navigate to={`${base}${agentSeg}${suffix}${search}`} replace />;
+  }
+
+  // Backward-compat: the drilled-agent rail tabs (Overview, Personality,
+  // Quests, Events, Ideas, Channels, Treasury, Tools, Integrations) used
+  // to live at `/c/<entity>/agents/<agent>/<tab>`. They moved under the
+  // settings sub-surface 2026-05-08 (the agent default surface is now
+  // chat with no rail; settings owns the rail). Replace-navigate stale
+  // bookmarks to the new shape — the closest thing to a 308 in a SPA.
+  if (drilledAgent && tab && RELOCATED_AGENT_TABS.has(tab) && !agentSettingsSegment) {
+    const agentSeg = `/agents/${encodeURIComponent(drilledAgent.id)}`;
+    const sub = `/settings/${tab}`;
+    const trailing = itemId ? `/${encodeURIComponent(itemId)}` : "";
+    return <Navigate to={`${base}${agentSeg}${sub}${trailing}${search}`} replace />;
   }
 
   // Channels are an agent-rail primitive only — see
@@ -337,16 +382,29 @@ export default function AppLayout() {
         />
       );
     }
+    // Drilled-agent settings sub-surface — dedicated page that owns
+    // the PageRail. Bare `/c/<id>/agents/<aid>/settings` defaults to
+    // the Overview sub-tab.
+    if (drilledAgent && agentSettingsSegment) {
+      return <AgentSettingsPage agentId={activeAgentId} />;
+    }
+    // Default drilled-agent surface: header + chat. AgentPage renders
+    // the AgentSurfaceHeader at the top of the right pane and the
+    // AgentSessionView below; AppLayout mounts the SessionsRail and
+    // ComposerRow as siblings of the chat content column.
     return <AgentPage agentId={activeAgentId} tab={effectiveTab} itemId={itemId} />;
   })();
 
-  // The chat composer + sessions rail belong on the drilled-agent chat
-  // surface only (`/c/<entity>/agents/<id>/inbox[/<sid>]`). The
+  // The chat composer + sessions rail belong on the drilled-agent
+  // default surface (`/c/<entity>/agents/<id>/[inbox/<sid>]`). The
   // entity-scope inbox (`/c/<entity>/inbox`) and personal inbox
   // (`/me/inbox`) embed `<SessionDetail>` (which mounts its own
   // composer against the inbox-store POST path) — they must not also
   // mount the AppLayout chat composer or it stacks visually over the
-  // inbox detail. Same applies to other top-level non-chat routes.
+  // inbox detail. Same applies to other top-level non-chat routes
+  // and to the agent's settings sub-surface (rail without chat).
+  const isAgentChatDefault =
+    !!drilledAgent && !agentSettingsSegment && (tab === undefined || tab === "inbox");
   const sessionsMounted =
     !isNotFound &&
     !isDrive &&
@@ -356,19 +414,19 @@ export default function AppLayout() {
     !isEconomy &&
     !isBlueprints &&
     !isStudio &&
-    effectiveTab === "inbox";
-  const showComposer = sessionsMounted && !!drilledAgent;
-  const showSessionsRail = sessionsMounted && !!isEntityRoute && !!drilledAgent;
+    isAgentChatDefault;
+  const showComposer = sessionsMounted;
+  const showSessionsRail = sessionsMounted && !!isEntityRoute;
 
-  // Drilled-agent PageRail. Mounted at the body-row level so it sits
-  // as a sibling of the SessionsRail and the chat content column —
-  // the order reads `[ rail | sessions list | chat ]` matching the
-  // user's mental model. The rail tabs are flat — Channels, Tools,
-  // Integrations, and Settings are siblings, no nested sub-rail.
-  const showAgentRail = !!drilledAgent;
-  const agentRailCurrent = effectiveTab;
+  // Drilled-agent PageRail — only mounted on the settings sub-surface.
+  // The default agent surface (chat) shows no rail; its breadcrumbs
+  // live in the AgentSurfaceHeader at the top of the right pane.
+  const showAgentRail = !!drilledAgent && agentSettingsSegment;
+  const agentRailCurrent = settingsTab || "overview";
   const agentRailBase =
-    drilledAgent && encodedEntityId ? `${base}/agents/${encodeURIComponent(drilledAgent.id)}` : "";
+    drilledAgent && encodedEntityId
+      ? `${base}/agents/${encodeURIComponent(drilledAgent.id)}/settings`
+      : "";
 
   return (
     <>
