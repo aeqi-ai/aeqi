@@ -445,9 +445,25 @@ pub fn parse_llm_response(raw: &str, brief: &str) -> Result<GeneratedBlueprint, 
 /// See `crates/aeqi-orchestrator/src/role_registry.rs`.
 const VALID_ROLE_TYPES: &[&str] = &["director", "operational", "advisor"];
 
-/// Canonical on-chain template slugs. Anything else fails the
-/// `keccak256(template) → templateId` lookup at provision time.
-const VALID_TEMPLATES: &[&str] = &["foundation", "entity", "venture", "fund"];
+/// On-chain template slugs whose every module slot is wired to a Beacon
+/// implementation on the live anvil deploy.
+///
+/// Walk-3 dogfood (2026-05-08) reverted at `Factory._createModules` with
+/// `BeaconProxy_ImplementationNotFound()` (`0x269dea0a`) when the LLM
+/// emitted `template: "foundation"` — the foundation template's 5th
+/// module slot `keccak256("foundation")` has no `FoundationModule`
+/// implementation registered. Same trap pattern as the
+/// `keccak256("uniswap")` miss documented in `aeqi-core/CLAUDE.md` and
+/// hot-fixed 2026-05-05; here we narrow the schema-gate first rather
+/// than wait for the chain-side fix. `fund` is registered on-chain
+/// but no current blueprint maps to it (`RegisterTemplates.s.sol`:
+/// "Reserved for future fund-archetype blueprints; no current
+/// blueprint maps here"), so it stays out of the allow-list until a
+/// real walk validates it.
+///
+/// Snapping order in [`snap_template`]: known-broken / unknown →
+/// `entity` (the smallest viable fully-wired template).
+const VALID_TEMPLATES: &[&str] = &["entity", "venture"];
 
 /// Snap an arbitrary LLM-emitted role_type string to the nearest canonical
 /// variant. Returns the canonical value and whether the input needed snapping.
@@ -488,10 +504,14 @@ fn snap_template(raw: &str) -> (&'static str, bool) {
         return (v, false);
     }
     let snapped = match lower.as_str() {
-        "nonprofit" | "foundation" | "charity" | "ngo" | "mission" => "foundation",
+        // Token-economics signals → `venture` (the only fully-wired
+        // template with a Uniswap pool + UniFutures derivatives surface).
         "startup" | "vc" | "venture" | "company-vc" | "tokenized" => "venture",
-        "investment" | "lp" | "syndicate" | "fund-vehicle" => "fund",
-        // Default for unknown is `entity` — the smallest viable template.
+        // Everything else collapses to `entity` until layer-1 lands the
+        // missing module impls. `foundation` and `fund` synonyms ride
+        // along here on purpose — they're broken / unwalked on-chain.
+        // See module doc on [`VALID_TEMPLATES`] for the chain-side
+        // rationale.
         _ => "entity",
     };
     (snapped, true)
@@ -626,10 +646,8 @@ fn build_refine_messages(
 const SYSTEM_PROMPT: &str = r##"You are a Company architect for the aeqi platform. Given a founder's brief, you generate a Blueprint that aeqi will provision into a working Company.
 
 Pick `template` from these on-chain templates:
-- `foundation` — mission-driven nonprofit, minimal cap-table machinery, no token model.
-- `entity` — small operational team, light governance, no token model.
-- `venture` — VC-backed startup, on-chain cap table, token model assumed.
-- `fund` — investment vehicle, multi-LP cap table.
+- `entity` — small operational team, light governance, no derivatives surface. Default for studios, solo founders, mission-driven shells, and anything not VC-shaped.
+- `venture` — VC-backed startup, on-chain cap table, token model + Uniswap pool + UniFutures derivatives. Pick this only when the brief explicitly implies token economics or DeFi capital formation.
 
 Output STRICTLY this JSON shape, no prose, no code fences:
 
@@ -641,7 +659,7 @@ Output STRICTLY this JSON shape, no prose, no code fences:
     "tagline": "<one-line pitch, max 80 chars>",
     "description": "<2-3 sentences, max 240 chars>",
     "category": "company",
-    "template": "<foundation|entity|venture|fund>",
+    "template": "<entity|venture>",
     "root": {
       "name": "founder",
       "model": "deepseek/deepseek-v4-pro",
@@ -1242,6 +1260,9 @@ mod tests {
 
     #[test]
     fn schema_gate_snaps_unknown_template() {
+        // `nonprofit` used to snap to `foundation`; with the narrowed
+        // allow-list (foundation is broken on-chain) it falls through
+        // to the `entity` default.
         let raw = r#"{
   "blueprint": {
     "slug": "x", "name": "X", "template": "nonprofit",
@@ -1249,12 +1270,48 @@ mod tests {
   }
 }"#;
         let out = parse_llm_response(raw, "irrelevant").unwrap();
-        assert_eq!(out.blueprint["template"], "foundation");
+        assert_eq!(out.blueprint["template"], "entity");
+    }
+
+    #[test]
+    fn schema_gate_snaps_foundation_to_entity() {
+        // Walk-3 dogfood (2026-05-08) reverted because the LLM emitted
+        // `template: "foundation"` — the on-chain foundation template's
+        // 5th module slot has no Beacon implementation registered, so
+        // `Factory._createModules` reverts at module-init with
+        // `BeaconProxy_ImplementationNotFound()` (`0x269dea0a`). Walk-2
+        // got `entity` and succeeded. Until the chain-side hot-fix
+        // (RegisterTemplates.s.sol shrink + replaceTemplate) lands,
+        // schema-gate snaps the broken slug to the smallest viable
+        // fully-wired template.
+        let raw = r#"{
+  "blueprint": {
+    "slug": "x", "name": "X", "template": "foundation",
+    "root": { "name": "founder" }
+  }
+}"#;
+        let out = parse_llm_response(raw, "irrelevant").unwrap();
+        assert_eq!(out.blueprint["template"], "entity");
+    }
+
+    #[test]
+    fn schema_gate_snaps_fund_to_entity() {
+        // `fund` is registered on-chain but no current blueprint maps
+        // to it — until a real walk validates it, treat it the same
+        // as any unknown slug.
+        let raw = r#"{
+  "blueprint": {
+    "slug": "x", "name": "X", "template": "fund",
+    "root": { "name": "founder" }
+  }
+}"#;
+        let out = parse_llm_response(raw, "irrelevant").unwrap();
+        assert_eq!(out.blueprint["template"], "entity");
     }
 
     #[test]
     fn schema_gate_passes_canonical_template_unchanged() {
-        for tpl in ["foundation", "entity", "venture", "fund"] {
+        for tpl in ["entity", "venture"] {
             let raw = format!(
                 r#"{{"blueprint":{{"slug":"x","name":"X","template":"{tpl}","root":{{"name":"founder"}}}}}}"#
             );

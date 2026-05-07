@@ -35,11 +35,16 @@ pub enum ArchitectError {
 /// Slug emitted by the Phase-1 stub. Stable so the IPC test can pin it.
 pub const STUB_SLUG: &str = "architect-foundation";
 
-/// The on-chain template the stub picks. Foundation is the safest
-/// default — minimal cap-table machinery, role-graph friendly, and
-/// matches the brief's "describe what you want" framing better than a
-/// venture template that implies a token model.
-pub const STUB_TEMPLATE: &str = "foundation";
+/// The on-chain template the stub picks. `entity` is the smallest
+/// fully-wired template on the live anvil deploy (role + budget +
+/// token + vesting + funding). Foundation looks like a softer fit
+/// (no token model implied) but its 5th module slot
+/// `keccak256("foundation")` has no Beacon implementation registered
+/// — every TRUST minted under it reverts at module-init with
+/// `BeaconProxy_ImplementationNotFound()`. Stays on `entity` until
+/// the chain-side `_registerFoundation` shrink lands. Mirror of the
+/// allow-list rationale documented on `llm::VALID_TEMPLATES`.
+pub const STUB_TEMPLATE: &str = "entity";
 
 /// Hard cap on brief length. Beyond this we refuse the request — the
 /// orchestrator IPC layer should already reject before hitting us, but
@@ -48,9 +53,11 @@ pub const HARD_CHAR_CAP: usize = 8_000;
 
 /// Generate a blueprint from a brief.
 ///
-/// Phase 1: returns a hard-coded foundation template populated with
-/// the brief text in the root agent's identity idea, the description
-/// field, and a kickoff quest. Always emits `template_slug = "foundation"`.
+/// Phase 1: returns a hard-coded entity-template blueprint populated
+/// with the brief text in the root agent's identity idea, the
+/// description field, and a kickoff quest. Always emits
+/// `template = "entity"` — see [`STUB_TEMPLATE`] for why we don't
+/// pick `foundation`.
 pub fn generate(brief: &Brief) -> Result<GeneratedBlueprint, ArchitectError> {
     let trimmed = brief.text.trim();
     if trimmed.is_empty() {
@@ -66,14 +73,14 @@ pub fn generate(brief: &Brief) -> Result<GeneratedBlueprint, ArchitectError> {
     );
 
     let blueprint = build_foundation_blueprint(trimmed);
-    let rationale =
-        "Stub generator. Picked the `foundation` on-chain template — minimal cap-table \
-         machinery, role-graph friendly, no token model assumptions. The brief is \
-         interpolated into the root agent's identity idea and a kickoff quest so the \
-         operator's first session has the founder's stated intent ready in context. \
-         Used as a fallback when the LLM path is unavailable; the LLM path picks \
-         template/agents/roles from the brief itself."
-            .to_string();
+    let rationale = "Stub generator. Picked the `entity` on-chain template — the smallest \
+         fully-wired template (role + budget + token + vesting + funding), no \
+         derivatives surface. The brief is interpolated into the root agent's \
+         identity idea and a kickoff quest so the operator's first session has \
+         the founder's stated intent ready in context. Used as a fallback when \
+         the LLM path is unavailable; the LLM path picks template/agents/roles \
+         from the brief itself."
+        .to_string();
 
     Ok(GeneratedBlueprint {
         kind: "single".to_string(),
@@ -95,8 +102,9 @@ pub fn refine(
 }
 
 /// The on-chain template the stub falls back to when the LLM didn't
-/// emit a usable `template` field. Foundation is the safest default —
-/// no token model, minimal cap-table machinery.
+/// emit a usable `template` field. See [`STUB_TEMPLATE`] for the
+/// chain-side rationale (`foundation` is broken; `entity` is the
+/// smallest viable wired template).
 pub fn choose_template_default() -> &'static str {
     STUB_TEMPLATE
 }
@@ -219,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn stub_emits_foundation_template() {
+    fn stub_emits_canonical_template() {
         let out = generate(&brief(
             "I want to build a foundation focused on open-source AI",
         ))
