@@ -420,6 +420,49 @@ divergence; reading the locked SessionRail row shape rule established
 the canonical answer; the actual user complaint was composer position,
 not row primary. ~3 min triangulation prevented a regression.
 
+### Brief asserts API extension — read the existing prop signature first
+
+Sister pattern to "Brief asserts UI duplication." When a brief proposes
+extending a primitive's API to add a slot ("`SurfaceHeader` needs a
+`titleEditable?: boolean` + `onTitleChange?: (s: string) => void` prop,
+OR a `customTitle?: ReactNode` slot"), open the primitive's source
+BEFORE writing the API change. Most slot-shaped briefs are already
+expressible with the existing API:
+
+- A `title: ReactNode` prop already accepts an `<input>`, an avatar +
+  name composition, or any other JSX — there is no need for a parallel
+  `customTitle` slot.
+- An `actions: ReactNode` prop already accepts a fragment of buttons —
+  there is no need for a parallel `extraActions` slot.
+- Any time the brief proposes adding a typed-shape prop (`titleEditable
+
+* onTitleChange`) NEXT TO an existing free-form slot, the free-form
+  slot is the canonical answer; the typed-shape prop is the brief's
+  fallback for when the free-form slot doesn't exist yet.
+
+Recipe before extending a primitive's API:
+
+```bash
+# Read the primitive's prop signature directly.
+grep -A 20 "^export default function <Name>" apps/ui/src/components/<Name>.tsx
+
+# If you see `<slot>: ReactNode` (or `: ReactNode | string`), the slot
+# is the seam. Pass your editable input / button fragment as that prop.
+```
+
+When the existing slot IS the seam, fold the brief's content into it
+and skip the API extension. Document the decision in the commit body
+("SurfaceHeader's existing `title: ReactNode` and `actions: ReactNode`
+already accept the input + button fragment; no API change needed") so
+the next reader doesn't re-propose the extension. The brief is intent,
+not contract — same as the design-system translation rule above.
+
+Cost (2026-05-07): event-header-fold ship — brief proposed adding
+`customTitle?: ReactNode` + `extraActions?: ReactNode` to SurfaceHeader;
+existing `title` and `actions` props were already typed `ReactNode` and
+took the fold without any API change. Saved ~5 min of API-extension
+churn + a follow-up cleanup pass.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5
