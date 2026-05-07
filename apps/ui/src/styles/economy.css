@@ -50,7 +50,7 @@
 .economy-hero-lede {
   margin: 0;
   max-width: 56ch;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-base);
   line-height: 1.55;
   color: var(--color-text-secondary);
 }
