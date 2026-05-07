@@ -3403,9 +3403,16 @@
 }
 
 /* ── Channel Chat Management ── */
+/* `.content-scroll` is a layout column wrapper, not a scroller. Inner
+ * surfaces (`.inbox-shell`, `.session-detail-thread`, `.ideas-canvas`,
+ * `.agent-overview-scroll`, etc.) own their own `overflow-y: auto`. A
+ * latent outer scroller here used to compete with `.sessions-rail-list`
+ * at narrow viewports / when right-pane content grew taller than the
+ * paper, capturing wheel events and freezing the rail visually. Drop
+ * `overflow-y: auto`; let the inner surface own scroll exclusively. */
 .content-scroll {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

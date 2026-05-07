@@ -137,7 +137,19 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const resp = await api.getInbox();
-      const items = Array.isArray(resp?.items) ? resp.items : [];
+      const raw = Array.isArray(resp?.items) ? resp.items : [];
+      // Belt-and-braces presentational guard against agent-only cron
+      // sessions leaking into the user inbox. The runtime SQL gate is
+      // the canonical filter — this is a tertiary defense for if the
+      // user_id-forwarding path ever short-circuits again. Drop entries
+      // whose session_name starts with "schedule:" AND have no awaiting
+      // marker (cron fires the agent acted on alone, no human reply
+      // expected). Joined sessions that happen to be cron-attached
+      // still surface because awaiting_at is non-null when the agent
+      // has asked the user something.
+      const items = raw.filter(
+        (i) => !(i.session_name?.startsWith("schedule:") && i.awaiting_at === null),
+      );
       // Drop pendingDismissal entries the server has already cleared;
       // ones still present stay hidden until the WS clears them.
       set((s) => {
@@ -221,12 +233,17 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       return;
     }
     set((s) => {
-      const present = new Set(payload.items.map((i) => i.session_id));
+      // Apply the same belt-and-braces filter on WS-pushed snapshots so
+      // a cron-flooded snapshot doesn't bypass the fetch-time guard.
+      const items = payload.items.filter(
+        (i) => !(i.session_name?.startsWith("schedule:") && i.awaiting_at === null),
+      );
+      const present = new Set(items.map((i) => i.session_id));
       const next = new Set(s.pendingDismissal);
       for (const id of next) {
         if (!present.has(id)) next.delete(id);
       }
-      return { items: payload.items, pendingDismissal: next };
+      return { items, pendingDismissal: next };
     });
   },
 

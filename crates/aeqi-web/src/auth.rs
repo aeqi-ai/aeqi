@@ -25,6 +25,12 @@ pub struct UserScope {
 
 const PROXY_SCOPE_ROOTS_HEADER: &str = "x-aeqi-allowed-roots";
 const PROXY_SCOPE_TOKEN_HEADER: &str = "x-aeqi-scope-token";
+/// Forwarded by the platform proxy when a JWT-resolved user is on the
+/// inbound request. The runtime needs this to gate participant-only
+/// surfaces (inbox awaiting sessions) by the calling user, since
+/// `AuthMode::None` runtimes don't see the JWT directly. Trust is
+/// transitive through `PROXY_SCOPE_TOKEN_HEADER`.
+const PROXY_SCOPE_USER_HEADER: &str = "x-aeqi-caller-user-id";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -118,10 +124,17 @@ pub fn proxy_scope_from_headers(state: &AppState, headers: &HeaderMap) -> Option
         return None;
     }
 
-    Some(UserScope {
-        roots,
-        user_id: None,
-    })
+    // Caller user_id is bound only when the scope-token matched above —
+    // we trust the platform's JWT validation transitively. Empty / missing
+    // header leaves user_id None (runtime-mode local operator path).
+    let user_id = headers
+        .get(PROXY_SCOPE_USER_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned);
+
+    Some(UserScope { roots, user_id })
 }
 
 /// Axum middleware — dispatches by auth mode.
