@@ -168,16 +168,17 @@ export default function InboxDetail({
         ))}
       </div>
 
-      {/* Composer — only when item is replyable */}
-      {row.replyable && (
-        <InboxComposer
-          sessionId={row.id}
-          agentName={row.from.name}
-          onSend={onAnswer}
-          onDismiss={onDismiss}
-          composerRef={composerRef}
-        />
-      )}
+      {/* Composer — always rendered for layout symmetry with the agent
+          surface. Disabled (greyed out) when the row isn't replyable so
+          the user sees the same chrome shape across both states. */}
+      <InboxComposer
+        sessionId={row.id}
+        agentName={row.from.name}
+        onSend={onAnswer}
+        onDismiss={onDismiss}
+        composerRef={composerRef}
+        disabled={!row.replyable}
+      />
     </div>
   );
 }

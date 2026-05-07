@@ -330,11 +330,13 @@ export default function AppLayout() {
     return <AgentPage agentId={activeAgentId} tab={effectiveTab} itemId={itemId} />;
   })();
 
-  // The chat composer + sessions rail only belong on the chat surface
-  // (drilled agent at /c/<entity>/agents/<id>/inbox[/<sid>]). Inbox,
-  // company overview, list pages — none of these mount the composer.
-  // The legacy flat `/sessions/<id>` URL redirects to the deep shape
-  // outside this shell, so we don't special-case it.
+  // The chat composer + sessions rail belong on the drilled-agent chat
+  // surface only (`/c/<entity>/agents/<id>/inbox[/<sid>]`). The
+  // entity-scope inbox (`/c/<entity>/inbox`) and personal inbox
+  // (`/me/inbox`) ship their own InboxComposer inline against the
+  // inbox-store POST path — they must not also mount the AppLayout
+  // chat composer or it stacks visually over the inbox detail. Same
+  // applies to other top-level non-chat routes.
   const sessionsMounted =
     !isNotFound &&
     !isDrive &&
@@ -345,7 +347,7 @@ export default function AppLayout() {
     !isBlueprints &&
     !isStudio &&
     effectiveTab === "inbox";
-  const showComposer = sessionsMounted;
+  const showComposer = sessionsMounted && !!drilledAgent;
   const showSessionsRail = sessionsMounted && !!isEntityRoute && !!drilledAgent;
 
   // Drilled-agent PageRail. Mounted at the body-row level so it sits

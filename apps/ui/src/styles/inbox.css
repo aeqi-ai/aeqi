@@ -44,7 +44,11 @@
   overflow-x: hidden;
 }
 
-/* Right pane — fills available space */
+/* Right pane — fills available space. `position: relative` anchors
+   the absolute-positioned composer wrapper at the bottom (visual
+   parity with the agent surface's `.content-main-col` + `.composer-row`
+   pattern). The fade gradient ::after sits between the scrolling
+   thread (z:0) and the floating composer (z:2). */
 .inbox-pane-detail {
   flex: 1;
   min-width: 0;
@@ -52,6 +56,24 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--color-card);
+  position: relative;
+}
+
+/* Scroll-fade above the floating composer — last lines of thread
+   dissolve into paper as they pass behind the card. Mirrors
+   `.content-main-col:has(.composer-row)::after` from layout.css.
+   Height tracks --inbox-composer-height (published by InboxComposer's
+   ResizeObserver) so the fade grows with the draft. */
+.inbox-pane-detail:has(.inbox-composer-wrap)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--inbox-composer-height, 140px) + 44px);
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 0%, var(--color-card) 72%);
+  z-index: 1;
 }
 
 /* Loading state — shown when first fetch is in-flight and list is empty */
@@ -165,11 +187,14 @@
   padding-top: var(--space-2);
 }
 
-/* Thread context */
+/* Thread context — last bit of bottom padding tracks the floating
+   composer's measured height so the final message clears the card
+   when scrolled into view. Falls back to 140px (matches the chat
+   surface's --composer-height default) if the observer hasn't fired. */
 .inbox-detail-thread {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-5) var(--space-4);
+  padding: var(--space-2) var(--space-5) calc(var(--inbox-composer-height, 140px) + var(--space-4));
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -215,19 +240,31 @@
 }
 
 /* ── Composer wrapper ──────────────────────────────────────────
- * Mirrors the agent surface's `.composer-row` padding so the
- * `.composer-wrap` dark card sits the same distance from the
- * paper edges. The shell chrome itself (`.composer-wrap` +
- * `.persistent-composer` + `variant="shell"`) lives in
- * `layout.css` and `composer.css`; this wrapper only contributes
- * outer padding + the inline error banner above it. */
+ * Floating absolute-positioned composer card — visual parity with
+ * the agent surface (`.composer-row` + `.composer-wrap` pattern in
+ * layout.css). Sits at the bottom of `.inbox-pane-detail` (which is
+ * `position: relative`) with the fade-gradient ::after between the
+ * scrolling thread and the card. Shell chrome itself
+ * (`.composer-wrap` + `.persistent-composer` + `variant="shell"`)
+ * inherits its dark palette from layout.css; this wrapper contributes
+ * the absolute placement + horizontal centering + inline error banner. */
 
 .inbox-composer-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
   align-items: center;
   padding: var(--space-3) var(--space-5) var(--space-4);
+  background: transparent;
+  pointer-events: none;
+}
+
+.inbox-composer-wrap > * {
+  pointer-events: auto;
 }
 
 .inbox-composer-wrap > .composer-wrap {

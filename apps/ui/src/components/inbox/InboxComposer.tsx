@@ -12,6 +12,10 @@ export interface InboxComposerProps {
   onSend: (sessionId: string, body: string) => Promise<{ ok: boolean; error?: string }>;
   onDismiss: (sessionId: string) => Promise<{ ok: boolean; error?: string }>;
   composerRef: React.RefObject<HTMLTextAreaElement | null>;
+  /** When true, render the composer chrome but disable input + send. Keeps
+   * layout symmetric with the agent surface across replyable / read-only
+   * rows so the bottom of the detail pane reads identically. */
+  disabled?: boolean;
 }
 
 // Archive icon — box with tray + horizontal bar inside
@@ -48,6 +52,7 @@ export default function InboxComposer({
   onSend,
   onDismiss,
   composerRef,
+  disabled = false,
 }: InboxComposerProps) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -88,6 +93,36 @@ export default function InboxComposer({
     if (probeRef.current) return;
     probeRef.current = true;
     void probeDismissEndpoint().then(setDismissAvailable);
+  }, []);
+
+  // Publish the composer's live height as `--inbox-composer-height` on
+  // the enclosing `.inbox-pane-detail` so the thread's bottom padding
+  // and the fade-gradient grow with the draft. Mirrors the agent
+  // surface's ComposerRow ResizeObserver — same idiom, scoped variable.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const lastHeightRef = useRef<number>(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const detail = el.closest<HTMLElement>(".inbox-pane-detail");
+    if (!detail) return;
+
+    const apply = () => {
+      const newHeight = Math.ceil(el.offsetHeight);
+      if (newHeight !== lastHeightRef.current) {
+        lastHeightRef.current = newHeight;
+        detail.style.setProperty("--inbox-composer-height", `${newHeight}px`);
+      }
+    };
+
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+      detail.style.removeProperty("--inbox-composer-height");
+    };
   }, []);
 
   // Reset state when the selected session changes
@@ -144,7 +179,7 @@ export default function InboxComposer({
   );
 
   return (
-    <div className="inbox-composer-wrap">
+    <div className="inbox-composer-wrap" ref={wrapRef}>
       {error && (
         <div className="inbox-composer-error" role="alert">
           {error}
@@ -164,7 +199,7 @@ export default function InboxComposer({
             onSend={() => void send()}
             placeholder={`Message ${agentName || "agent"}…`}
             composerRef={composerRef}
-            disabled={sending}
+            disabled={sending || disabled}
             attachmentTypes={["idea", "quest", "file"]}
             attachedIdeas={attachedIdeas}
             setAttachedIdeas={setAttachedIdeas}
