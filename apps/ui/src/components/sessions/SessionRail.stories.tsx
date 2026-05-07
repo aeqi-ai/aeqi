@@ -10,7 +10,7 @@ const meta: Meta<typeof SessionRail> = {
     docs: {
       description: {
         component:
-          "Universal session rail — the left-adjacent index column for every conversation surface (inbox, agent sessions, future channels). Owns its own search input + filter + recencyBucket grouping + j/k traversal bridge. Adopters pass row data; the rail renders, filters, and selects.",
+          "Universal session rail — the left-adjacent index column for every conversation surface (inbox, agent sessions, future channels). Owns row grouping + memoization + j/k traversal bridge. Search / sort / filter live ABOVE the rail in `<SessionsToolbar>`; the rail itself is pure presentation over the rows the parent passes in.",
       },
     },
   },
@@ -63,7 +63,7 @@ const SAMPLE_ROWS: SessionRailRow[] = [
   },
 ];
 
-/* ── Default — full row list, search empty ── */
+/* ── Default — full row list ── */
 export const Default: Story = {
   name: "Default",
   args: {
@@ -79,18 +79,11 @@ export const Default: Story = {
   ),
 };
 
-/* ── Active query — rows filtered by case-insensitive substring match ──
- * The "with-search-active" canonical story: query in input, rows
- * narrowed to the matching subset. Storybook Controls cannot pre-seed
- * the rail's internal `query` state, so this story documents the shape
- * via a smaller pre-filtered row set + typed-in placeholder. The
- * runtime behaviour is verified in the Default story by typing into
- * the input.
- */
+/* ── Filtered — caller has narrowed rows via `<SessionsToolbar>` query ── */
 const SEARCH_NARROWED = SAMPLE_ROWS.filter((r) => r.primary.toLowerCase().includes("aeiq"));
 
-export const WithSearchActive: Story = {
-  name: "with-search-active",
+export const Filtered: Story = {
+  name: "Filtered by toolbar query",
   args: {
     rows: SEARCH_NARROWED,
     selectedId: "s-1",
@@ -101,32 +94,7 @@ export const WithSearchActive: Story = {
     docs: {
       description: {
         story:
-          "Rows filtered to a single match — emulates the post-query state by passing only the matching row. The live primitive narrows internally on every keystroke against `row.primary` (and `row.secondary` if present); empty matches render a `no matches` empty state.",
-      },
-    },
-  },
-  render: (args) => (
-    <div style={{ width: 360, height: 480, background: "var(--color-card-subtle)" }}>
-      <SessionRail {...args} />
-    </div>
-  ),
-};
-
-/* ── Search disabled — opt-out via enableSearch prop ── */
-export const SearchDisabled: Story = {
-  name: "Search disabled",
-  args: {
-    rows: SAMPLE_ROWS,
-    selectedId: "s-2",
-    onSelect: () => {},
-    emptyTitle: "no sessions yet",
-    enableSearch: false,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          "Adopter opt-out via `enableSearch={false}`. The search input is suppressed; the rail renders the row list directly. Both shipping adopters (MeInboxPage, shell/SessionsRail) keep the default `true`.",
+          "Caller (MeInboxPage / shell SessionsRail) has filtered the row list down before passing it in. The rail renders the narrowed set verbatim. Search lives in `<SessionsToolbar>` mounted above; this story documents the post-filter shape.",
       },
     },
   },

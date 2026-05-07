@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useChatStore } from "@/store/chat";
 import { useInboxStore } from "@/store/inbox";
@@ -6,22 +6,26 @@ import { sessionLabel, type SessionInfo } from "@/components/session/types";
 import { recencyBucket, timeShort } from "@/lib/format";
 import { sessionDeepUrl } from "@/lib/sessionUrl";
 import SessionRail, { type SessionRailRow } from "@/components/sessions/SessionRail";
+import SessionsToolbar from "@/components/sessions/SessionsToolbar";
 
 const NO_SESSIONS: SessionInfo[] = [];
 
 /**
  * Sessions rail — the left-adjacent index column for the drilled-agent
- * chat surface. Adapts the chat-store sessions list into the canonical
- * `SessionRailRow` shape, then defers to the universal `<SessionRail>`
- * primitive at `components/sessions/SessionRail.tsx`. Awaiting rows are
- * flagged via the inbox store. The user-scope inbox lives at `/me/inbox`
- * (MeInboxPage) — that surface adopts the same primitive directly.
+ * chat surface. Renders the canonical `<SessionsToolbar>` (search +
+ * sort/filter slots) above the universal `<SessionRail>` primitive.
+ * Adapts the chat-store sessions list into `SessionRailRow`s; awaiting
+ * rows are flagged via the inbox store. The user-scope inbox lives at
+ * `/me/inbox` (MeInboxPage) and mounts the same primitive pair.
  *
- * Row shape is single-line h=32 across both adopters — the agent surface
- * and the inbox render visually identical rails. Origin (telegram /
- * whatsapp / web) was previously surfaced as a wrapped second line on
- * agent-side rows; that information now lives on the session detail
- * header where it doesn't compete with the row primary.
+ * Sort / filter slots are intentionally empty here — agent-rail
+ * sessions sort by recency only, no decision-vs-system kind split, no
+ * cross-entity filter. The shared toolbar shell still gives both
+ * surfaces one search field at the top of the rail; matching is
+ * client-side substring against `primary` and `secondary`.
+ *
+ * Row shape is single-line h=32 across both adopters — visual parity
+ * with the inbox.
  */
 export default function SessionsRail() {
   // Mounted only under `/c/<entity>/agents/<agent>/sessions[/...]` per
@@ -42,7 +46,9 @@ export default function SessionsRail() {
     [inboxItems],
   );
 
-  const rows = useMemo<SessionRailRow[]>(() => {
+  const [query, setQuery] = useState("");
+
+  const allRows = useMemo<SessionRailRow[]>(() => {
     return sessions
       .filter((s) => s.session_type !== "task")
       .map((s) => {
@@ -61,6 +67,12 @@ export default function SessionsRail() {
       .sort((a, b) => b.sortKey - a.sortKey);
   }, [sessions, awaitingSessionIds]);
 
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allRows;
+    return allRows.filter((r) => r.primary.toLowerCase().includes(q));
+  }, [allRows, query]);
+
   const navigate = useNavigate();
   const handleSelect = useCallback(
     (id: string) => {
@@ -70,14 +82,23 @@ export default function SessionsRail() {
     [entityId, agentId, navigate],
   );
 
+  // Empty-state copy distinguishes "no sessions yet" from "no matches"
+  // so the surface speaks accurately in both shapes.
+  const isFilteringEmpty = allRows.length > 0 && rows.length === 0;
+  const emptyTitle = isFilteringEmpty ? "no matches" : "inbox is clear";
+  const emptyHint = isFilteringEmpty ? "try a different search term." : "type below to start one";
+
   return (
-    <SessionRail
-      rows={rows}
-      selectedId={itemId ?? null}
-      onSelect={handleSelect}
-      streamingIds={streamingSessions}
-      emptyTitle="inbox is clear"
-      emptyHint="type below to start one"
-    />
+    <>
+      <SessionsToolbar query={query} onQuery={setQuery} searchPlaceholder="Search sessions" />
+      <SessionRail
+        rows={rows}
+        selectedId={itemId ?? null}
+        onSelect={handleSelect}
+        streamingIds={streamingSessions}
+        emptyTitle={emptyTitle}
+        emptyHint={emptyHint}
+      />
+    </>
   );
 }
