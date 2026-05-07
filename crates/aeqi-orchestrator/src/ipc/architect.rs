@@ -30,6 +30,46 @@ use aeqi_architect::{
 use serde_json::{Value, json};
 use tracing::{info, warn};
 
+/// Resolve the architect's LLM credential. Checks the process env vars
+/// first (DEEPINFRA_API_KEY, OPENROUTER_API_KEY); when both are absent
+/// (the host runtime case — only `aeqi-platform.service` loads
+/// `/etc/aeqi/secrets.env`, the per-tenant host services don't), falls
+/// back to the credentials substrate at `~/.aeqi/aeqi.db` where the
+/// orchestrator's own startup migration parks the same OPENROUTER key.
+/// This sets the env var in-process so [`build_default_llm`] sees it.
+///
+/// Idempotent — once the env var is populated, subsequent calls no-op.
+fn ensure_llm_env_resolved() {
+    let have_env = std::env::var("DEEPINFRA_API_KEY")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .is_some()
+        || std::env::var("OPENROUTER_API_KEY")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .is_some();
+    if have_env {
+        return;
+    }
+
+    // Resolve the runtime's data dir. Mirrors `aeqi-core` config-default.
+    let data_dir = match std::env::var("HOME") {
+        Ok(home) => std::path::PathBuf::from(home).join(".aeqi"),
+        Err(_) => return,
+    };
+
+    if let Ok(Some(key)) =
+        aeqi_core::credentials::read_global_legacy_blob_sync(&data_dir, "OPENROUTER_API_KEY")
+        && !key.is_empty()
+    {
+        // SAFETY: single-process IPC handler boot path; no concurrent env reads
+        // are racing this write. The flag is set once and remains set for the
+        // lifetime of the runtime process.
+        unsafe { std::env::set_var("OPENROUTER_API_KEY", &key) };
+        info!("architect.draft: resolved OPENROUTER_API_KEY from credentials substrate");
+    }
+}
+
 use crate::ipc::blueprints::{Blueprint, BlueprintPart, spawn_blueprint};
 
 /// Maximum allowed brief length, hard-enforced at the IPC boundary so the
@@ -80,6 +120,8 @@ pub async fn handle_architect_draft(
         target_kind,
         notes: None,
     };
+
+    ensure_llm_env_resolved();
 
     let started = Instant::now();
     let draft = match build_default_llm() {
