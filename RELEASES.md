@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.45.0 — 2026-05-08
+
+**Headline:** Ideas become a database.
+
+- **Ideas-as-database — Phase 2 substrate** (`crates/aeqi-orchestrator/src/ideas/` + `apps/ui/src/components/ideas/`): Ideas gain `parent_idea_id` (self-FK, nullable, ON DELETE SET NULL) and a schemaless `properties` JSONB column. Migration v15 (idempotent additive ALTER + partial index `idx_ideas_parent_idea_id`); legacy DBs catch up on next start. `IdeaStore` trait gains `set_parent` / `set_properties` / `merge_properties` (deep-merge) / `list_children` — defaulted no-op for non-SQLite backends, overridden by `SqliteIdeas`. `store_idea` / `update_idea` IPC verbs accept the new fields end-to-end; new verbs `list_idea_children` (`GET /api/ideas/:id/children`) and `set_idea_properties` (`PUT /api/ideas/:id/properties`, deep-merge). `idea_to_json` round-trips both new fields; agent_registry visibility queries hydrate them. Migration tests updated (REQUIRED_IDEAS_COLUMNS, REQUIRED_INDEXES, schema_version assertion); 6 migration tests + 570 orchestrator lib tests green. `140c1357`.
+- **Three views of every Idea — List / Table / Kanban** (`apps/ui/src/components/ideas/IdeasViewPopover.tsx` + `IdeasTableView.tsx` + `IdeasKanbanView.tsx`): the IdeasViewPopover gains `table` and `kanban` modes alongside the existing `list`; selection is URL-persisted (`?view=table` | `?view=kanban`), default stays `list`. Table view promotes the top-6 most-frequent property keys to columns from the visible set; row click opens detail. Kanban groups by `properties.status` with default lanes `todo` / `in_progress` / `done`; Phase 2.0 cut uses click-to-cycle status (drag-drop deferred to Phase 2.5 per the brief). Notion-shaped Ideas, with the substrate to back it. `140c1357`.
+- **`apiRequest` double-`/api/` prefix trap on Architect's three verbs** (`apps/ui/src/pages/StudioPage.tsx`): `apiRequest` from `@/api/client` already prepends `API_BASE_URL` (`/api`); `apiRequest("/api/architect/draft")` emitted `/api/api/architect/draft` and 404'd. All three architect verbs (`draft`, `refine`, `deploy`) carried the doubled prefix; same root cause as `01aae710`'s UX P0 hotfix on `GoogleConnectCard`. Live curl now returns a real LLM-generated blueprint via DeepSeek/openrouter, not the stub fallback. Pattern codified in CLAUDE.md (`c7418f27`) since it hit twice in two days. `9f607ce2`.
+
 ## v0.44.0 — 2026-05-08
 
 **Headline:** Brief → Blueprint, then refine.
