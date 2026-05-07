@@ -725,6 +725,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             updated_at: Some(chrono::Utc::now()),
             closed_at: Some(chrono::Utc::now()),
+            due_at: None,
             outcome: None,
             worktree_branch: None,
             worktree_path: None,

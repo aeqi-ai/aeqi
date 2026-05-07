@@ -219,6 +219,13 @@ pub struct Quest {
     pub updated_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub closed_at: Option<DateTime<Utc>>,
+    /// Optional due date — Linear-style soft deadline. Persisted as a
+    /// Unix-second timestamp on the SQL row (`due_at INTEGER`) and
+    /// hydrated into a UTC `DateTime` here. None = no deadline. The UI
+    /// renders relative time (`3d`, `in 1h`, `overdue 2d`) and tints
+    /// the chip red when `due_at < now`.
+    #[serde(default)]
+    pub due_at: Option<DateTime<Utc>>,
     /// Structured outcome record — replaces closed_reason and metadata.aeqi.task_outcome.
     #[serde(default)]
     pub outcome: Option<QuestOutcomeRecord>,
@@ -265,6 +272,7 @@ impl Quest {
             created_at: Utc::now(),
             updated_at: None,
             closed_at: None,
+            due_at: None,
             outcome: None,
             worktree_branch: None,
             worktree_path: None,

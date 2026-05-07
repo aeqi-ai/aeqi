@@ -103,6 +103,7 @@ pub async fn handle_quests(
                         "created_at": quest.created_at.to_rfc3339(),
                         "updated_at": quest.updated_at.map(|t| t.to_rfc3339()),
                         "closed_at": quest.closed_at.map(|t| t.to_rfc3339()),
+                        "due_at": quest.due_at.map(|t| t.to_rfc3339()),
                         "outcome": quest.quest_outcome(),
                         "runtime": quest.runtime(),
                     })
@@ -520,6 +521,7 @@ pub async fn handle_get_quest(
                     "created_at": quest.created_at.to_rfc3339(),
                     "updated_at": quest.updated_at.map(|t| t.to_rfc3339()),
                     "closed_at": quest.closed_at.map(|t| t.to_rfc3339()),
+                    "due_at": quest.due_at.map(|t| t.to_rfc3339()),
                     "outcome": quest.quest_outcome(),
                     "runtime": quest.runtime(),
                     "depends_on": quest.depends_on.iter().map(|d| &d.0).collect::<Vec<_>>(),
@@ -580,6 +582,26 @@ pub async fn handle_update_quest(
         Some(serde_json::Value::Null) => Some(None),
         Some(serde_json::Value::String(s)) if s.is_empty() => Some(None),
         Some(serde_json::Value::String(s)) => Some(Some(s.clone())),
+        _ => None,
+    };
+
+    // `due_at` mirrors the assignee three-state pattern: absent → leave
+    // alone, JSON null → clear, RFC3339 string OR unix-second number →
+    // set. Accept both wire shapes so the UI can stay flexible (the
+    // current frontend sends RFC3339 from `Date.toISOString()`).
+    let due_at_update: Option<Option<chrono::DateTime<chrono::Utc>>> = match request.get("due_at") {
+        None => None,
+        Some(serde_json::Value::Null) => Some(None),
+        Some(serde_json::Value::String(s)) if s.is_empty() => Some(None),
+        Some(serde_json::Value::String(s)) => chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|d| Some(Some(d.with_timezone(&chrono::Utc))))
+            .unwrap_or(None),
+        Some(serde_json::Value::Number(n)) => n
+            .as_i64()
+            .and_then(|secs| chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0))
+            .map(|d| Some(Some(d)))
+            .unwrap_or(None),
         _ => None,
     };
 
@@ -647,6 +669,9 @@ pub async fn handle_update_quest(
             if let Some(next) = assignee_update {
                 quest.assignee = next;
             }
+            if let Some(next) = due_at_update {
+                quest.due_at = next;
+            }
         })
         .await
     {
@@ -671,6 +696,7 @@ pub async fn handle_update_quest(
                     "agent_id": quest.agent_id,
                     "assignee": quest.assignee,
                     "scope": quest.scope.as_str(),
+                    "due_at": quest.due_at.map(|t| t.to_rfc3339()),
                 },
                 "idea": idea.as_ref().map(idea_to_json),
             })
@@ -1076,6 +1102,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             updated_at: Some(chrono::Utc::now()),
             closed_at: Some(chrono::Utc::now()),
+            due_at: None,
             outcome: None,
             worktree_branch: None,
             worktree_path: None,

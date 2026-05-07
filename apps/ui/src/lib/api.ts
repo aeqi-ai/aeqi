@@ -593,6 +593,9 @@ export const api = {
       /** Polymorphic. `agent:<id>` / `user:<id>` / `null` (unassign). */
       assignee?: string | null;
       scope?: string;
+      /** RFC3339 UTC string to set, or `null` to clear the due-date. Omit
+       * to leave unchanged. Phase-2 due_at column. */
+      due_at?: string | null;
     },
   ) =>
     request<{ ok: boolean }>(`/quests/${encodeURIComponent(id)}`, {

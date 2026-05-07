@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/auth";
 import { Button, Popover, Spinner } from "./ui";
 import QuestCanvas from "./QuestCanvas";
 import type { Quest, QuestStatus, QuestPriority, ScopeValue, User } from "@/lib/types";
-import { timeAgo } from "@/lib/format";
+import { dueLabel, isOverdue, timeAgo } from "@/lib/format";
 import { asStringArray, parseFrontmatter } from "@/lib/frontmatter";
 import { ImportMenu } from "./blueprints/ImportMenu";
 import QuestsViewPopover, { type QuestsView } from "./quests/QuestsViewPopover";
@@ -37,6 +37,16 @@ function sortQuests(arr: Quest[], mode: QuestSort): Quest[] {
       return sorted.sort(
         (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || byUpdatedDesc(a, b),
       );
+    case "due":
+      // Soonest due first; quests without a due-date sink to the
+      // bottom (Linear convention). Same-day ties fall back to recent
+      // update.
+      return sorted.sort((a, b) => {
+        const da = a.due_at ? new Date(a.due_at).getTime() : Number.POSITIVE_INFINITY;
+        const db = b.due_at ? new Date(b.due_at).getTime() : Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+        return byUpdatedDesc(a, b);
+      });
     case "subject":
       return sorted.sort(
         (a, b) => (a.idea?.name ?? "").localeCompare(b.idea?.name ?? "") || byUpdatedDesc(a, b),
@@ -896,6 +906,16 @@ function QuestBoard({
                               )}
                             />
                           </span>
+                          {q.due_at && (
+                            <span
+                              className={`quest-due-chip${
+                                isOverdue(q.due_at) ? " quest-due-chip--overdue" : ""
+                              }`}
+                              title={`Due ${new Date(q.due_at).toLocaleString()}`}
+                            >
+                              {dueLabel(q.due_at)}
+                            </span>
+                          )}
                           {q.updated_at && (
                             <span className="quest-card-time">{timeAgo(q.updated_at)}</span>
                           )}
@@ -1098,6 +1118,16 @@ function QuestList({
                             )}
                           />
                         </span>
+                        {q.due_at && (
+                          <span
+                            className={`quest-due-chip${
+                              isOverdue(q.due_at) ? " quest-due-chip--overdue" : ""
+                            }`}
+                            title={`Due ${new Date(q.due_at).toLocaleString()}`}
+                          >
+                            {dueLabel(q.due_at)}
+                          </span>
+                        )}
                         {q.updated_at && (
                           <span className="ideas-list-row-time">{timeAgo(q.updated_at)}</span>
                         )}

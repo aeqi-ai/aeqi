@@ -137,6 +137,10 @@ export interface Quest {
   created_at: string;
   updated_at?: string;
   closed_at?: string;
+  /** Linear-style soft deadline. RFC3339 UTC string when set, null/absent
+   * when no deadline. Phase-2 schema column. UI renders relative time
+   * ("3d", "in 1h", "overdue 2d") and tints the chip red when past. */
+  due_at?: string | null;
   checkpoints?: Checkpoint[];
   depends_on?: string[];
   retry_count?: number;

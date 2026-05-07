@@ -1,14 +1,15 @@
 import { type ReactElement, useState } from "react";
 import { Popover } from "../ui/Popover";
 
-export type QuestSort = "updated" | "created" | "priority" | "subject";
+export type QuestSort = "updated" | "created" | "priority" | "subject" | "due";
 
-export const QUEST_SORT_MODES: QuestSort[] = ["updated", "created", "priority", "subject"];
+export const QUEST_SORT_MODES: QuestSort[] = ["updated", "created", "priority", "due", "subject"];
 
 export const QUEST_SORT_LABELS: Record<QuestSort, string> = {
   updated: "recent",
   created: "created",
   priority: "priority",
+  due: "due",
   subject: "A → Z",
 };
 
@@ -38,6 +39,14 @@ const SORT_GLYPH: Record<QuestSort, ReactElement> = {
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
       <path d="M3.5 9.5 L6.5 4 L9.5 9.5" strokeWidth="1.2" strokeLinejoin="round" />
       <path d="M5 7.5 H8" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+  due: (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
+      <rect x="2.5" y="3" width="8" height="7.5" rx="1" strokeWidth="1.2" />
+      <path d="M2.5 5.5 H10.5" strokeWidth="1.2" />
+      <path d="M5 2 V4 M8 2 V4" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="6.5" cy="8" r="0.8" fill="currentColor" />
     </svg>
   ),
   subject: (

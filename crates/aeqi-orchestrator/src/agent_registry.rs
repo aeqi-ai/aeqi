@@ -310,6 +310,26 @@ fn ensure_quest_assignee_column(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Idempotent: add the `due_at` column on legacy DBs that pre-date
+/// the Phase-2 due-date feature. Stored as a Unix-second integer (no
+/// timezone games — UTC). NULL = no deadline. Fresh DBs include the
+/// column from the CREATE TABLE; this is the catch-up for upgraded
+/// ones. The companion index supports the toolbar's "sort by due"
+/// option without scanning the whole table.
+fn ensure_quest_due_at_column(conn: &Connection) -> rusqlite::Result<()> {
+    let cols: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(quests)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    if !cols.iter().any(|c| c == "due_at") {
+        conn.execute_batch("ALTER TABLE quests ADD COLUMN due_at INTEGER")?;
+    }
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_quests_due_at ON quests(due_at)")?;
+    Ok(())
+}
+
 /// Phase 3 cleanup (WS-8a): drop the legacy editorial columns and flip
 /// `idea_id` to NOT NULL. SQLite's pre-3.35 `ALTER TABLE` lacks
 /// `DROP COLUMN`, so we do the canonical rebuild dance — create the new
@@ -1446,7 +1466,8 @@ impl AgentRegistry {
                  closed_at TEXT,
                  closed_reason TEXT,
                  creator_session_id TEXT,
-                 assignee TEXT
+                 assignee TEXT,
+                 due_at INTEGER
              );
              CREATE INDEX IF NOT EXISTS idx_quests_status ON quests(status);
              CREATE INDEX IF NOT EXISTS idx_quests_agent ON quests(agent_id);
@@ -1501,6 +1522,13 @@ impl AgentRegistry {
         // upgrade-path DBs; fresh DBs already carry it from CREATE
         // TABLE and this is a short-circuit no-op.
         ensure_quest_assignee_column(&sconn)?;
+
+        // ── Phase-2 due-date column (idempotent) ────────────────────────────
+        // `due_at INTEGER` (Unix-second timestamp; nullable). Linear-style
+        // soft deadline. Fresh DBs already carry it from CREATE TABLE; this
+        // is the catch-up path for upgraded ones, registered after the
+        // legacy-cleanup table rebuild so the column survives that dance.
+        ensure_quest_due_at_column(&sconn)?;
 
         // ── v5.2 status rename (idempotent) ────────────────────────────────
         // Rewrites the two legacy status strings to the canonical 5-status
@@ -3602,8 +3630,9 @@ impl AgentRegistry {
                 agent_id = ?4, assignee = ?5, scope = ?6,
                 retry_count = ?7, checkpoints = ?8, metadata = ?9,
                 depends_on = ?10,
-                updated_at = ?11, closed_at = ?12, outcome = ?13
-             WHERE id = ?14",
+                updated_at = ?11, closed_at = ?12, outcome = ?13,
+                due_at = ?14
+             WHERE id = ?15",
             params![
                 quest.idea_id,
                 quest.status.to_string(),
@@ -3618,6 +3647,7 @@ impl AgentRegistry {
                 now,
                 quest.closed_at.map(|d| d.to_rfc3339()),
                 outcome_json,
+                quest.due_at.map(|d| d.timestamp()),
                 quest.id.0,
             ],
         )?;
@@ -4220,6 +4250,14 @@ fn row_to_task(row: &rusqlite::Row) -> aeqi_quests::Quest {
             .ok()
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
             .map(|d| d.with_timezone(&chrono::Utc)),
+        // due_at is stored as a Unix-second integer (Phase-2 column).
+        // Legacy rows that pre-date the column read NULL via `get().ok()`
+        // and decode to None.
+        due_at: row
+            .get::<_, Option<i64>>("due_at")
+            .ok()
+            .flatten()
+            .and_then(|s| chrono::DateTime::<chrono::Utc>::from_timestamp(s, 0)),
         outcome,
         worktree_branch: row.get("worktree_branch").ok(),
         worktree_path: row.get("worktree_path").ok(),

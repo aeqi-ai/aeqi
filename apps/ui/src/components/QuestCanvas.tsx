@@ -11,6 +11,7 @@ import { Events, useTrack } from "@/lib/analytics";
 import IdeaCanvas, { type IdeaCanvasHandle } from "./IdeaCanvas";
 import QuestStatusPopover from "./quests/QuestStatusPopover";
 import QuestPriorityPopover from "./quests/QuestPriorityPopover";
+import QuestDueDatePopover from "./quests/QuestDueDatePopover";
 import IdeasScopePopover from "./ideas/IdeasScopePopover";
 import AssigneeAvatar from "./quests/AssigneeAvatar";
 import AssigneePicker from "./quests/AssigneePicker";
@@ -59,6 +60,7 @@ function QuestToolbar({
   priority,
   assignee,
   scope,
+  due_at,
   saving,
   cancelLabel,
   cancelTitle,
@@ -70,6 +72,7 @@ function QuestToolbar({
   onPriorityChange,
   onAssigneeChange,
   onScopeChange,
+  onDueChange,
   onBack,
   onNew,
   onCancel,
@@ -82,6 +85,8 @@ function QuestToolbar({
   onPriorityOpenChange,
   assigneeOpen,
   onAssigneeOpenChange,
+  dueOpen,
+  onDueOpenChange,
 }: {
   agentId: string;
   agents: { id: string; name: string }[];
@@ -90,6 +95,7 @@ function QuestToolbar({
   priority: QuestPriority;
   assignee: string | null;
   scope: ScopeValue;
+  due_at: string | null;
   saving: boolean;
   cancelLabel: string;
   cancelTitle: string;
@@ -101,6 +107,7 @@ function QuestToolbar({
   onPriorityChange: (next: QuestPriority) => void;
   onAssigneeChange: (next: string | null) => void;
   onScopeChange: (next: ScopeValue) => void;
+  onDueChange: (next: string | null) => void;
   onBack: () => void;
   onNew?: () => void;
   onCancel: () => void;
@@ -108,7 +115,7 @@ function QuestToolbar({
   linkedIdeaSlot?: React.ReactNode;
   trailingSlot?: React.ReactNode;
   /** Controlled-open hooks. Threaded so the parent (ViewCanvas) can pop
-   * the popovers via the S / P / A keyboard shortcuts. Optional —
+   * the popovers via the S / P / A / D keyboard shortcuts. Optional —
    * uncontrolled by default so ComposeCanvas keeps its existing UX. */
   statusOpen?: boolean;
   onStatusOpenChange?: (next: boolean) => void;
@@ -116,6 +123,8 @@ function QuestToolbar({
   onPriorityOpenChange?: (next: boolean) => void;
   assigneeOpen?: boolean;
   onAssigneeOpenChange?: (next: boolean) => void;
+  dueOpen?: boolean;
+  onDueOpenChange?: (next: boolean) => void;
 }) {
   void agentId;
   return (
@@ -205,6 +214,12 @@ function QuestToolbar({
           </Button>
         )}
       />
+      <QuestDueDatePopover
+        due_at={due_at}
+        onChange={onDueChange}
+        open={dueOpen}
+        onOpenChange={onDueOpenChange}
+      />
       <IdeasScopePopover scope={scope} onChange={onScopeChange} />
       {trailingSlot}
       <div className="ideas-toolbar-spacer" aria-hidden />
@@ -292,6 +307,7 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
   const [priority, setPriority] = useState<QuestPriority>("normal");
   const [assignee, setAssignee] = useState<string | null>(null);
   const [scope, setScope] = useState<ScopeValue>("self");
+  const [dueAt, setDueAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [canSave, setCanSave] = useState(false);
@@ -335,7 +351,13 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
       // before navigation completes.
       if (newId) {
         try {
-          await api.updateQuest(newId, { status, priority, scope, assignee });
+          await api.updateQuest(newId, {
+            status,
+            priority,
+            scope,
+            assignee,
+            due_at: dueAt,
+          });
         } catch {
           /* non-fatal — quest exists, just sits at IPC defaults */
         }
@@ -352,6 +374,7 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
     priority,
     assignee,
     scope,
+    dueAt,
     resolvedAgentId,
     fetchQuests,
     goEntity,
@@ -399,6 +422,7 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
           priority={priority}
           assignee={assignee}
           scope={scope}
+          due_at={dueAt}
           saving={busy}
           cancelLabel="Cancel"
           cancelTitle="Discard new quest"
@@ -410,6 +434,7 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
           onPriorityChange={setPriority}
           onAssigneeChange={setAssignee}
           onScopeChange={setScope}
+          onDueChange={setDueAt}
           onBack={cancel}
           onCancel={cancel}
           onSave={submit}
@@ -466,22 +491,22 @@ function ViewCanvas({
   const [priority, setPriority] = useState<QuestPriority>(quest.priority);
   const [assignee, setAssignee] = useState<string | null>(quest.assignee ?? null);
   const [scope, setScope] = useState<ScopeValue>(quest.scope ?? "self");
+  const [dueAt, setDueAt] = useState<string | null>(quest.due_at ?? null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [bodyDirty, setBodyDirty] = useState(false);
 
   // Linear-style single-key shortcuts on the detail page open the
   // matching popover. Owning the open state up here is what lets `S`,
-  // `P`, `A` flip the controlled `open` props on the children. `D`
-  // (due-date) is intentionally omitted — Quests have no due-date
-  // schema yet (Phase 2 lands the field + picker together).
+  // `P`, `A`, `D` flip the controlled `open` props on the children.
   const [statusOpen, setStatusOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [dueOpen, setDueOpen] = useState(false);
 
   const debounceRef = useRef<number | null>(null);
   const canvasRef = useRef<IdeaCanvasHandle | null>(null);
-  const lifecycleRef = useRef({ status, priority, assignee, scope });
-  lifecycleRef.current = { status, priority, assignee, scope };
+  const lifecycleRef = useRef({ status, priority, assignee, scope, dueAt });
+  lifecycleRef.current = { status, priority, assignee, scope, dueAt };
 
   // Re-sync on quest swap (navigation between quests reuses this
   // component) so popovers reflect the new row's persisted values.
@@ -490,19 +515,21 @@ function ViewCanvas({
     setPriority(quest.priority);
     setAssignee(quest.assignee ?? null);
     setScope(quest.scope ?? "self");
+    setDueAt(quest.due_at ?? null);
     setSaveState("idle");
-  }, [quest.id, quest.status, quest.priority, quest.assignee, quest.scope]);
+  }, [quest.id, quest.status, quest.priority, quest.assignee, quest.scope, quest.due_at]);
 
   const persistLifecycle = useCallback(async () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setSaveState("saving");
     try {
-      const { status: s, priority: p, assignee: a, scope: sc } = lifecycleRef.current;
+      const { status: s, priority: p, assignee: a, scope: sc, dueAt: du } = lifecycleRef.current;
       await api.updateQuest(quest.id, {
         status: s,
         priority: p,
         assignee: a,
         scope: sc,
+        due_at: du,
       });
       await fetchQuests();
       setSaveState("idle");
@@ -547,6 +574,7 @@ function ViewCanvas({
         setStatusOpen((prev) => !prev);
         setPriorityOpen(false);
         setAssigneeOpen(false);
+        setDueOpen(false);
         return;
       }
       if (e.key === "p" || e.key === "P") {
@@ -554,6 +582,7 @@ function ViewCanvas({
         setPriorityOpen((prev) => !prev);
         setStatusOpen(false);
         setAssigneeOpen(false);
+        setDueOpen(false);
         return;
       }
       if (e.key === "a" || e.key === "A") {
@@ -561,6 +590,15 @@ function ViewCanvas({
         setAssigneeOpen((prev) => !prev);
         setStatusOpen(false);
         setPriorityOpen(false);
+        setDueOpen(false);
+        return;
+      }
+      if (e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        setDueOpen((prev) => !prev);
+        setStatusOpen(false);
+        setPriorityOpen(false);
+        setAssigneeOpen(false);
         return;
       }
     };
@@ -596,6 +634,7 @@ function ViewCanvas({
           priority={priority}
           assignee={assignee}
           scope={scope}
+          due_at={dueAt}
           saving={saveState === "saving"}
           cancelLabel="Cancel"
           cancelTitle="Revert unsaved changes"
@@ -619,6 +658,10 @@ function ViewCanvas({
             setScope(next);
             scheduleLifecycleSave();
           }}
+          onDueChange={(next) => {
+            setDueAt(next);
+            scheduleLifecycleSave();
+          }}
           onBack={() => goEntity(entityId, "quests", undefined, { replace: true })}
           onNew={() => goEntity(entityId, "quests", "new", { replace: false })}
           onCancel={handleRevertBody}
@@ -629,6 +672,8 @@ function ViewCanvas({
           onPriorityOpenChange={setPriorityOpen}
           assigneeOpen={assigneeOpen}
           onAssigneeOpenChange={setAssigneeOpen}
+          dueOpen={dueOpen}
+          onDueOpenChange={setDueOpen}
           trailingSlot={
             quest.sibling_quest_ids && quest.sibling_quest_ids.length > 0 ? (
               <span
