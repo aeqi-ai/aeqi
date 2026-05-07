@@ -62,8 +62,14 @@ const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ide
 // row in the Phase-1 lock — CompanyPage is a thin per-tab dispatcher.
 // Inbox is the company-scoped action queue; Overview is the cockpit;
 // the rest map 1:1 to the sidebar's Organization + Settings groups.
-// Workspace tabs (agents/events/quests/ideas) bypass CompanyPage and
-// render directly through AgentPage on the entity's root agent.
+//
+// The four primitive tabs (agents/events/quests/ideas) ALSO route through
+// CompanyPage at the entity scope. Without this, `/c/<eid>/agents` falls
+// through to AgentPage(rootAgent) — which ignores its `tab` prop and
+// renders the root agent's chat surface instead of the entity-scope LIST.
+// Dispatch hole fix: 2026-05-09. The drilled-agent route
+// `/c/<eid>/agents/<aid>/...` is unaffected — that path has a non-null
+// `routeAgentId` and bypasses CompanyPage entirely upstream.
 const COMPANY_PAGE_TABS = new Set([
   "overview",
   "inbox",
@@ -71,6 +77,10 @@ const COMPANY_PAGE_TABS = new Set([
   "ownership",
   "treasury",
   "governance",
+  "agents",
+  "events",
+  "quests",
+  "ideas",
 ]);
 
 export default function AppLayout() {

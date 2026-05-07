@@ -11,6 +11,16 @@ import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 // EntityHeroStrip + roles / quests / activity. Lazy-loaded to keep this
 // dispatch shell light. Mirrors the lazy pattern used in AgentPage.
 const EntityOverviewTab = lazy(() => import("@/components/EntityOverviewTab"));
+// Entity-scope primitive tabs. `EntityAgentsTab` is entity-typed (takes
+// entityId, filters the directory). The remaining three render the
+// agent-scoped tab against the entity's ROOT agent — same pattern MePage
+// uses for `/me/{events,quests,ideas}`. Without these explicit branches,
+// the fallthrough to `<AgentPage tab=...>` rendered the root agent's chat
+// surface (AgentPage ignores `tab`) — see "Dispatch hole fix 2026-05-09".
+const EntityAgentsTab = lazy(() => import("@/components/EntityAgentsTab"));
+const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
+const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
+const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
 
 const TAB_TITLES: Record<string, string> = {
   overview: "overview",
@@ -19,6 +29,10 @@ const TAB_TITLES: Record<string, string> = {
   ownership: "ownership",
   treasury: "treasury",
   governance: "governance",
+  agents: "agents",
+  events: "events",
+  quests: "quests",
+  ideas: "ideas",
 };
 
 interface CompanyPageProps {
@@ -36,19 +50,20 @@ interface CompanyPageProps {
  * dispatches the right component per tab.
  *
  * Routes:
- *   /c/:entityId               → AgentPage tab="overview" (cockpit)
+ *   /c/:entityId               → EntityOverviewTab (cockpit)
  *   /c/:entityId/inbox         → MeInboxPage
- *   /c/:entityId/roles         → AgentPage tab="roles" (EntityRolesTab)
+ *   /c/:entityId/roles         → AgentPage(rootAgent, tab="roles")
  *   /c/:entityId/ownership     → OwnershipPage
  *   /c/:entityId/treasury      → TreasuryPage
  *   /c/:entityId/governance    → GovernancePage
+ *   /c/:entityId/agents        → EntityAgentsTab (LIST)
+ *   /c/:entityId/events        → AgentEventsTab(rootAgent)
+ *   /c/:entityId/quests        → AgentQuestsTab(rootAgent)
+ *   /c/:entityId/ideas         → AgentIdeasTab(rootAgent)
  *
  * The former `/c/:entityId/settings` tab was retired — workspace label,
  * tagline, public toggle, and plan link now live in the EntityHeroStrip
  * on Overview. Workspace billing remains at `/me/billing`.
- *
- * Every other tab name (agents, events, quests, ideas, sessions, …)
- * falls through to AgentPage, which is the canonical primitive surface.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
   const navigate = useNavigate();
@@ -112,7 +127,43 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     );
   }
 
-  // Roles, and any other primitive tab (agents, events, quests, ideas)
-  // render through AgentPage on the entity's root agent.
+  // Entity-scope primitive tabs. Without these explicit branches the
+  // fallthrough to AgentPage rendered the root agent's chat surface
+  // (AgentPage's `tab` prop has been a no-op since 2026-05-08), which
+  // is why `/c/<id>/agents` and siblings landed on a header with no
+  // body. Dispatch hole fix 2026-05-09.
+  if (tab === "agents") {
+    return (
+      <Suspense>
+        <EntityAgentsTab entityId={entityId} />
+      </Suspense>
+    );
+  }
+  if (tab === "events") {
+    return (
+      <Suspense>
+        <AgentEventsTab agentId={agentId} />
+      </Suspense>
+    );
+  }
+  if (tab === "quests") {
+    return (
+      <Suspense>
+        <AgentQuestsTab agentId={agentId} />
+      </Suspense>
+    );
+  }
+  if (tab === "ideas") {
+    return (
+      <Suspense>
+        <AgentIdeasTab agentId={agentId} />
+      </Suspense>
+    );
+  }
+
+  // Roles falls through to AgentPage on the entity's root agent —
+  // legacy path; AgentPage's tab prop is a no-op so this currently
+  // renders the root chat surface. Out of scope for the dispatch hole
+  // fix; tracked separately if it's broken.
   return <AgentPage agentId={agentId} tab={tab} itemId={itemId} />;
 }
