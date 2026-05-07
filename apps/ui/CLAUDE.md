@@ -1080,6 +1080,42 @@ a fifth in `EmptyState.tsx` ("Sessions stay on Home") — extending the
 scope was the right call but had to be made consciously rather than
 caught by the brief. The grep takes 2 seconds; do it before commit.
 
+**Tab `id` and `label` must rename together — half-renames ship a
+misleading URL.** When a tab is renamed in user-facing copy (Sessions →
+Inbox), the canonical move is to rename BOTH the `id` (which becomes
+the URL segment) and the `label` (which renders in the rail). A common
+shortcut is to rename only the label and leave the id stale — the rail
+reads "Inbox" but clicking it navigates to `/c/<eid>/agents/<aid>/sessions`
+and `tab === "sessions"` checks across the codebase keep working
+unchanged. Looks fine in code review; ships a URL the user can't
+explain. Caught by founder twice now (Position→Role 2026-05-02,
+Sessions→Inbox 2026-05-07).
+
+Rule: when renaming a tab, rename id AND label in the same commit, and
+update every URL builder, redirect, document.title fallback, and the
+specific routes test that mounts the path. The full sweep:
+
+```bash
+OLD_ID="sessions"
+NEW_ID="inbox"
+# tab definitions
+grep -rn "id: \"$OLD_ID\"\|id:\"$OLD_ID\"" apps/ui/src/components/
+# tab branching
+grep -rn "tab === \"$OLD_ID\"\|=== \"$OLD_ID\"" apps/ui/src/
+# URL builders + redirects
+grep -rn "/$OLD_ID\b" apps/ui/src/lib/ apps/ui/src/components/
+# default-tab fallbacks
+grep -rn "|| \"$OLD_ID\"\|tab || \"$OLD_ID\"" apps/ui/src/
+# tests pinning the path
+grep -rn "/$OLD_ID" apps/ui/src/test/
+```
+
+Backward-compat: register a SPA replace-navigate from the OLD URL
+shape to the new one (the closest thing to a 308 in a SPA) so any
+existing bookmarks / shared links survive. Sessions→inbox kept
+`tab === "sessions"` as a redirect handler in AppLayout that builds
+the new URL and `<Navigate replace>`s to it.
+
 ## Test store-state coupling — update `initialLoaded` when adding a loading gate
 
 Smoke tests that call `useDaemonStore.setState({ ..., initialLoaded: false })` in
