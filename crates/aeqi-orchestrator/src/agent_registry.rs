@@ -2283,8 +2283,17 @@ impl AgentRegistry {
 
         // Hydrate tags per idea (secondary query; tag set tends to be tiny).
         let mut out = Vec::with_capacity(rows.len());
-        for (id, name, content, aid, session_id, created_at, scope_str, parent_idea_id, props_json)
-            in rows
+        for (
+            id,
+            name,
+            content,
+            aid,
+            session_id,
+            created_at,
+            scope_str,
+            parent_idea_id,
+            props_json,
+        ) in rows
         {
             let properties: Option<serde_json::Value> = props_json
                 .as_deref()

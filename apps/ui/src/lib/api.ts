@@ -998,9 +998,16 @@ export const api = {
     }),
 };
 
-/// One row of the director-inbox query — see `crates/aeqi-orchestrator/src/ipc/inbox.rs`.
+/// One row of the inbox query — see `crates/aeqi-orchestrator/src/ipc/inbox.rs`.
+///
+/// 2026-05-07: the inbox returns every session in the user's scope, not
+/// just decision-requests. `awaiting_at` is `string` when the session is
+/// waiting on a human reply, `null` otherwise — drives the awaiting-dot
+/// indicator only, no longer used for filtering. `last_active` is the
+/// recency anchor used for sort.
+///
 /// `agent_name` and `entity_id` are joined server-side; `last_agent_message`
-/// is the truncated assistant message that immediately precedes the ask.
+/// is the truncated assistant message body.
 export interface InboxItem {
   session_id: string;
   agent_id: string | null;
@@ -1008,8 +1015,9 @@ export interface InboxItem {
   entity_id: string | null;
   session_name: string;
   awaiting_subject: string | null;
-  awaiting_at: string;
+  awaiting_at: string | null;
   last_agent_message: string | null;
+  last_active: string;
 }
 
 export { ApiError };

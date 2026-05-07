@@ -324,13 +324,9 @@ fn parse_store_request(request: &serde_json::Value) -> std::result::Result<Store
     let (links, link_errors) = parse_links(request);
 
     let parent_idea_id = request_field(request, "parent_idea_id").map(|s| s.to_string());
-    let properties: Option<serde_json::Value> = request.get("properties").and_then(|v| {
-        if v.is_object() {
-            Some(v.clone())
-        } else {
-            None
-        }
-    });
+    let properties: Option<serde_json::Value> = request
+        .get("properties")
+        .and_then(|v| if v.is_object() { Some(v.clone()) } else { None });
 
     Ok(StoreRequest {
         name: name.to_string(),
@@ -1168,7 +1164,8 @@ pub async fn handle_update_idea(
     // absent key is a no-op. Properties takes a full object (use the dedicated
     // `set_idea_properties` verb for deep-merge semantics).
     let parent_provided = request.get("parent_idea_id").is_some();
-    let parent_idea_id: Option<String> = request_field(request, "parent_idea_id").map(str::to_string);
+    let parent_idea_id: Option<String> =
+        request_field(request, "parent_idea_id").map(str::to_string);
     let properties_provided = request.get("properties").is_some();
     let properties_value: Option<serde_json::Value> = request
         .get("properties")
@@ -1193,16 +1190,12 @@ pub async fn handle_update_idea(
     // least one of name/content/tags. For a parent-only or properties-only
     // edit, route straight to the new SqliteIdeas methods.
     let core_change = name.is_some() || content.is_some() || tags.is_some();
-    if core_change
-        && let Err(e) = idea_store.update(id, name, content, tags.as_deref()).await
-    {
+    if core_change && let Err(e) = idea_store.update(id, name, content, tags.as_deref()).await {
         return serde_json::json!({"ok": false, "error": e.to_string()});
     }
 
     if parent_provided {
-        let _ = idea_store
-            .set_parent(id, parent_idea_id.as_deref())
-            .await;
+        let _ = idea_store.set_parent(id, parent_idea_id.as_deref()).await;
     }
     if properties_provided {
         let _ = idea_store

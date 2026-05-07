@@ -1,8 +1,12 @@
 //! Director-inbox IPC handlers.
 //!
-//! `handle_inbox` returns the list of sessions currently awaiting a human
-//! reply, joined with agent name and root agent id. The HTTP `/api/inbox`
-//! route proxies through here and returns the items array.
+//! `handle_inbox` returns every session in the user's scope — joined
+//! with agent name and owning entity id — sorted newest-first by recency.
+//! The `awaiting_at IS NOT NULL` filter that used to gate this list was
+//! dropped 2026-05-07 by founder direction: the inbox is the user's
+//! full conversation history, not just decision-requests. Items that ARE
+//! awaiting a human reply still expose `awaiting_at` so the rail can
+//! paint the awaiting-dot indicator.
 //!
 //! `handle_answer_inbox` is the atomic answer-from-inbox path. It clears
 //! `awaiting_at` and inserts a `user_reply` pending message in a single
@@ -22,12 +26,12 @@ use super::tenancy;
 use crate::queue_executor::QueuedMessage;
 use crate::session_store::AwaitingSessionRow;
 
-/// `inbox` command: list awaiting sessions.
+/// `inbox` command: list every session in the user's scope, recent first.
 ///
 /// Returns `{ ok: true, items: [InboxItem] }` where each item is enriched
-/// with the agent name and the root agent id (walked via the agent registry
-/// because the raw query in `SessionStore::list_awaiting` only knows the
-/// session-level fields).
+/// with the agent name and the owning entity id (looked up via the agent
+/// registry because the raw query in `SessionStore::list_awaiting` only
+/// knows the session-level fields).
 pub async fn handle_inbox(
     ctx: &super::CommandContext,
     _request: &Value,
@@ -75,6 +79,7 @@ async fn enrich_row(
         "awaiting_subject": row.awaiting_subject,
         "awaiting_at": row.awaiting_at,
         "last_agent_message": row.last_agent_message,
+        "last_active": row.last_active,
     })
 }
 
@@ -313,11 +318,17 @@ mod tests {
         assert_eq!(resp["ok"], true, "response: {resp}");
         assert_eq!(resp["dismissed"], true);
 
-        // Verify awaiting_at is cleared (session should no longer appear in inbox).
+        // Verify awaiting_at is cleared. The broadened inbox query keeps
+        // the session in the list (it's still a session the user can see);
+        // we assert the awaiting bit specifically.
         let awaiting = ss.list_awaiting(None).await.unwrap();
+        let row = awaiting
+            .iter()
+            .find(|r| r.session_id == session_id)
+            .expect("session row stays in inbox after dismiss");
         assert!(
-            awaiting.iter().all(|r| r.session_id != session_id),
-            "session must not appear in inbox after dismiss"
+            row.awaiting_at.is_none(),
+            "awaiting_at must be cleared after dismiss"
         );
     }
 

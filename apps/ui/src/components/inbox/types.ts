@@ -1,9 +1,10 @@
 /**
- * Client-side model for inbox — maps legacy InboxItem to a richer shape
- * that's forward-compatible with the unified Session primitive.
+ * Client-side model for inbox — maps the wire `InboxItem` to a richer
+ * shape that's forward-compatible with the unified Session primitive.
  *
- * Backend contract stays on the existing awaiting_at/answer_inbox path.
- * This adapter layer lives 100% in the UI so no schema migrations are needed.
+ * 2026-05-07: backend now returns every session in scope (not just
+ * decision-requests). `unread` / `replyable` track the awaiting bit;
+ * `created_at` is the session's `last_active` recency anchor.
  */
 import type { InboxItem } from "@/lib/api";
 
@@ -15,12 +16,12 @@ export interface InboxRow {
   id: string; // session_id
   kind: InboxKind;
   from: { kind: "agent"; id: string; name: string };
-  subject: string; // awaiting_subject or last_agent_message
+  subject: string; // awaiting_subject, last_agent_message, or session_name
   entity_id: string | null;
   agent_id: string | null;
-  created_at: string; // awaiting_at
-  unread: boolean; // always true for now — server only sends awaiting items
-  replyable: boolean; // true while awaiting_at is set
+  created_at: string; // last_active — recency anchor for sort/grouping
+  unread: boolean; // sessions awaiting a human reply
+  replyable: boolean; // true when awaiting_at is set
 }
 
 export interface InboxFilterState {
@@ -37,9 +38,10 @@ export const DEFAULT_FILTER: InboxFilterState = {
 
 /** Map a raw InboxItem to the client InboxRow model. */
 export function toInboxRow(item: InboxItem): InboxRow {
+  const awaiting = !!item.awaiting_at;
   return {
     id: item.session_id,
-    kind: "decision_request",
+    kind: awaiting ? "decision_request" : "system",
     from: {
       kind: "agent",
       id: item.agent_id ?? item.session_id,
@@ -48,9 +50,9 @@ export function toInboxRow(item: InboxItem): InboxRow {
     subject: item.awaiting_subject ?? item.last_agent_message ?? item.session_name,
     entity_id: item.entity_id ?? null,
     agent_id: item.agent_id ?? null,
-    created_at: item.awaiting_at,
-    unread: true,
-    replyable: true,
+    created_at: item.last_active,
+    unread: awaiting,
+    replyable: awaiting,
   };
 }
 

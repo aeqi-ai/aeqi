@@ -24,19 +24,39 @@ pub struct SessionMessage {
     pub source: Option<String>,
 }
 
-/// One row of the director-inbox query — a session that has fired
-/// `question.ask` and is currently waiting on a human reply. Returned raw
-/// from `SessionStore::list_awaiting`; the IPC layer joins the agent name
-/// and walks the parent chain to the root agent before serializing for
-/// the wire.
+/// One row of the inbox query — every session the user can see in their
+/// scope, regardless of `awaiting_at`. The "awaiting reply" filter that
+/// used to gate this list was dropped 2026-05-07 by founder direction:
+/// the inbox is the user's full conversation history, sorted by recency.
+///
+/// `awaiting_at` is still emitted on each row so the rail can paint the
+/// awaiting-dot indicator on rows that need a human reply — we just don't
+/// FILTER by it anymore.
+///
+/// `last_active` is the recency anchor: the most recent
+/// `session_messages.timestamp` in the session, falling back to
+/// `sessions.created_at` for empty sessions. The list is sorted
+/// `ORDER BY last_active DESC`.
+///
+/// The struct keeps its legacy `AwaitingSessionRow` name because the IPC
+/// command + UI contract (`api.getInbox`) shipped against it; renaming
+/// here would churn unrelated call sites. The semantics are now
+/// "session-row visible in inbox," not "session awaiting a reply."
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwaitingSessionRow {
     pub session_id: String,
     pub agent_id: Option<String>,
     pub session_name: String,
     pub awaiting_subject: Option<String>,
-    pub awaiting_at: String,
+    /// ISO-8601 timestamp the agent fired `question.ask`, or `None` when
+    /// the session has never asked for a human reply. Drives the
+    /// awaiting-dot indicator on the rail.
+    pub awaiting_at: Option<String>,
     pub last_agent_message: Option<String>,
+    /// Recency anchor — the most recent `session_messages.timestamp` in
+    /// the session, falling back to `sessions.created_at` for sessions
+    /// with no messages. ISO-8601.
+    pub last_active: String,
 }
 
 /// A session with UUID addressing.
@@ -1721,30 +1741,61 @@ impl SessionStore {
         Ok(())
     }
 
-    /// List every session currently awaiting a human reply, optionally
-    /// filtered to a specific allow-set of agent ids (platform mode), or
-    /// unfiltered (runtime mode).
+    /// List every session the user can see, sorted newest-first by
+    /// recency. Optionally filtered to a specific allow-set of agent ids
+    /// (platform mode), or unfiltered (runtime mode).
     ///
-    /// Returns raw rows — joining agent name and walking the parent chain to
-    /// the root happens at the IPC layer where `AgentRegistry` is in scope.
-    /// `last_agent_message` is the most recent assistant message body (or
-    /// `None` if the agent fired the ask without ever speaking, which is
-    /// possible but rare). Sorted newest-first by `awaiting_at`.
+    /// 2026-05-07 founder direction: the inbox is the user's full
+    /// conversation history, not just decision-requests. The
+    /// `awaiting_at IS NOT NULL` filter that used to gate this query was
+    /// dropped — every session bound to an in-scope agent surfaces here.
+    /// `awaiting_at` stays on the row so the rail can paint the
+    /// awaiting-dot indicator on rows that need a human reply.
+    ///
+    /// The agent_id surfaced on each row is `COALESCE(s.agent_id, first
+    /// agent participant)`. Newer DMs (post-2026-05-06) populate
+    /// `sessions.agent_id` directly via `create_session`; legacy DMs
+    /// minted through `find_or_create_dm_session` leave that column NULL
+    /// and rely on `session_participants` for the agent identity. Both
+    /// surface here. Sessions with no agent at all (in either column or
+    /// participants) are excluded — they're orphan rows with no routing
+    /// target.
+    ///
+    /// Returns raw rows — joining agent name and entity id happens at the
+    /// IPC layer where `AgentRegistry` is in scope. `last_agent_message`
+    /// is the most recent assistant message body. `last_active` is the
+    /// most recent message timestamp, falling back to `sessions.created_at`
+    /// for empty sessions.
     pub async fn list_awaiting(
         &self,
         allowed_agent_ids: Option<&std::collections::HashSet<String>>,
     ) -> Result<Vec<AwaitingSessionRow>> {
         let db = self.db.lock().await;
-        // The partial index on `awaiting_at IS NOT NULL` makes this scan
-        // bound by the (small) inbox size, not the full session table.
         let mut stmt = db.prepare(
-            "SELECT s.id, s.agent_id, s.name, s.awaiting_subject, s.awaiting_at,
+            "SELECT s.id,
+                    COALESCE(
+                        s.agent_id,
+                        (SELECT identity_id FROM session_participants
+                         WHERE session_id = s.id AND identity_kind = 'agent'
+                         ORDER BY joined_at LIMIT 1)
+                    ) AS resolved_agent_id,
+                    s.name, s.awaiting_subject, s.awaiting_at,
                     (SELECT content FROM session_messages
                      WHERE session_id = s.id AND role = 'assistant'
-                     ORDER BY id DESC LIMIT 1) AS last_msg
+                     ORDER BY id DESC LIMIT 1) AS last_msg,
+                    COALESCE(
+                        (SELECT MAX(timestamp) FROM session_messages
+                         WHERE session_id = s.id),
+                        s.created_at
+                    ) AS last_active
              FROM sessions s
-             WHERE s.awaiting_at IS NOT NULL
-             ORDER BY s.awaiting_at DESC",
+             WHERE COALESCE(
+                       s.agent_id,
+                       (SELECT identity_id FROM session_participants
+                        WHERE session_id = s.id AND identity_kind = 'agent'
+                        LIMIT 1)
+                   ) IS NOT NULL
+             ORDER BY last_active DESC",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(AwaitingSessionRow {
@@ -1752,8 +1803,9 @@ impl SessionStore {
                 agent_id: row.get::<_, Option<String>>(1)?,
                 session_name: row.get(2)?,
                 awaiting_subject: row.get(3)?,
-                awaiting_at: row.get(4)?,
+                awaiting_at: row.get::<_, Option<String>>(4)?,
                 last_agent_message: row.get(5)?,
+                last_active: row.get(6)?,
             })
         })?;
         let mut out: Vec<AwaitingSessionRow> = rows.filter_map(|r| r.ok()).collect();
@@ -4020,6 +4072,11 @@ mod tests {
 
     /// `set_awaiting` / `clear_awaiting` round-trip writes and reads via the
     /// inbox query.
+    ///
+    /// The 2026-05-07 broadening of `list_awaiting` (return every session,
+    /// not just awaiting ones) means the row is always present here — what
+    /// changes is `awaiting_at` flipping `Some` → `None` across the
+    /// round-trip.
     #[tokio::test]
     async fn set_and_clear_awaiting_round_trip() {
         let store = test_store().await;
@@ -4028,9 +4085,13 @@ mod tests {
             .await
             .unwrap();
 
-        // Pre-condition: nothing in the inbox.
+        // Pre-condition: row exists, no awaiting bit.
         let pre = store.list_awaiting(None).await.unwrap();
-        assert!(pre.iter().all(|r| r.session_id != session_id));
+        let pre_row = pre
+            .iter()
+            .find(|r| r.session_id == session_id)
+            .expect("session must appear in inbox once created");
+        assert!(pre_row.awaiting_at.is_none());
 
         store
             .set_awaiting(&session_id, "Approve $200 budget?")
@@ -4040,16 +4101,21 @@ mod tests {
         let row = listed
             .iter()
             .find(|r| r.session_id == session_id)
-            .expect("session must appear in inbox after set_awaiting");
+            .expect("session must remain in inbox after set_awaiting");
         assert_eq!(
             row.awaiting_subject.as_deref(),
             Some("Approve $200 budget?")
         );
-        assert!(!row.awaiting_at.is_empty());
+        assert!(row.awaiting_at.is_some());
 
         store.clear_awaiting(&session_id).await.unwrap();
         let post = store.list_awaiting(None).await.unwrap();
-        assert!(post.iter().all(|r| r.session_id != session_id));
+        let post_row = post
+            .iter()
+            .find(|r| r.session_id == session_id)
+            .expect("session stays in inbox after clear_awaiting");
+        assert!(post_row.awaiting_at.is_none());
+        assert!(post_row.awaiting_subject.is_none());
     }
 
     /// `list_awaiting` filters to the supplied agent allow-set when given
@@ -4096,9 +4162,14 @@ mod tests {
             .unwrap();
         assert!(won);
 
-        // Bit cleared.
+        // Bit cleared — the row still surfaces in the broadened inbox,
+        // but `awaiting_at` is now `None`.
         let post = store.list_awaiting(None).await.unwrap();
-        assert!(post.iter().all(|r| r.session_id != session_id));
+        let post_row = post
+            .iter()
+            .find(|r| r.session_id == session_id)
+            .expect("session stays in inbox after answer_awaiting");
+        assert!(post_row.awaiting_at.is_none());
 
         // Pending row visible to the next claim.
         let claimed = store
@@ -4157,8 +4228,12 @@ mod tests {
         store.enqueue_pending(&session_id, &payload).await.unwrap();
 
         let listed = store.list_awaiting(None).await.unwrap();
+        let row = listed
+            .iter()
+            .find(|r| r.session_id == session_id)
+            .expect("session stays in inbox; broadened query returns all sessions");
         assert!(
-            listed.iter().all(|r| r.session_id != session_id),
+            row.awaiting_at.is_none(),
             "user-originated enqueue must clear awaiting_at"
         );
     }
@@ -4185,8 +4260,12 @@ mod tests {
         store.enqueue_pending(&session_id, &payload).await.unwrap();
 
         let listed = store.list_awaiting(None).await.unwrap();
+        let row = listed
+            .iter()
+            .find(|r| r.session_id == session_id)
+            .expect("session must still appear");
         assert!(
-            listed.iter().any(|r| r.session_id == session_id),
+            row.awaiting_at.is_some(),
             "quest enqueue must NOT clear awaiting_at — only human replies do"
         );
     }

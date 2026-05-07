@@ -49,8 +49,15 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
   // breaks `useSyncExternalStore`'s identity check (React error #185).
   const inboxAllItems = useInboxStore((s) => s.items);
   const inboxPending = useInboxStore((s) => s.pendingDismissal);
+  // The overview's "Awaiting decisions" card surfaces decision-requests
+  // only — filter to rows with `awaiting_at` set. The broadened inbox
+  // query (2026-05-07) returns every session in scope; this card stays
+  // narrow to its purpose.
   const entityInbox = useMemo(
-    () => inboxAllItems.filter((i) => i.entity_id === entityId && !inboxPending.has(i.session_id)),
+    () =>
+      inboxAllItems.filter(
+        (i) => i.entity_id === entityId && !!i.awaiting_at && !inboxPending.has(i.session_id),
+      ),
     [inboxAllItems, inboxPending, entityId],
   );
 
@@ -265,7 +272,7 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
                         </span>
                         {fromName}
                         <span className="entity-overview-pulse-time">
-                          {relativeTime(item.awaiting_at)}
+                          {relativeTime(item.awaiting_at ?? item.last_active)}
                         </span>
                       </span>
                       <span className="entity-overview-pulse-text">{preview}</span>

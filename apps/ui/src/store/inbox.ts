@@ -262,4 +262,11 @@ export const useInboxStore = create<InboxState>((set, get) => ({
 export const selectVisibleItems = (s: InboxState): InboxItem[] =>
   s.items.filter((i) => !s.pendingDismissal.has(i.session_id));
 
-export const selectInboxCount = (s: InboxState): number => s.items.length - s.pendingDismissal.size;
+/**
+ * Count of sessions awaiting a human reply — the badge value the rail
+ * surfaces to indicate "X things need you." After 2026-05-07 the inbox
+ * stream returns every session in scope (history); this selector stays
+ * narrow to awaiting items so the badge keeps its prior meaning.
+ */
+export const selectInboxCount = (s: InboxState): number =>
+  s.items.filter((i) => !!i.awaiting_at && !s.pendingDismissal.has(i.session_id)).length;

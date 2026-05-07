@@ -445,11 +445,17 @@ mod tests {
             .expect("DM session must exist");
         assert_eq!(session.session_type, "agent_user_dm");
 
-        // The inbox query must find the session (awaiting_at is set).
+        // The inbox query must find the session AND surface the awaiting
+        // bit. The 2026-05-07 broadening means presence alone isn't proof
+        // the question.ask path fired — assert `awaiting_at` is set too.
         let inbox = ss.list_awaiting(None).await.unwrap();
+        let row = inbox
+            .iter()
+            .find(|row| row.session_id == dm_sid)
+            .expect("DM session must appear in the director inbox after question.ask");
         assert!(
-            inbox.iter().any(|row| row.session_id == dm_sid),
-            "DM session must appear in the director inbox after question.ask"
+            row.awaiting_at.is_some(),
+            "question.ask must set awaiting_at on the DM session"
         );
 
         // The message was appended with decision_request payload_kind.

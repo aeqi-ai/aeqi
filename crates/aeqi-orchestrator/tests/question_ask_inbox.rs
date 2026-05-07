@@ -29,16 +29,32 @@ async fn seed_agent_and_session(h: &TestHarness, agent_name: &str) -> (String, S
     (agent_id, session_id)
 }
 
-/// `handle_inbox` returns nothing when no session is awaiting.
+/// `handle_inbox` returns every session in the user's scope, sorted
+/// newest-first by recency. The 2026-05-07 broadening dropped the
+/// `awaiting_at IS NOT NULL` filter — sessions surface here regardless
+/// of whether they're awaiting a reply.
 #[tokio::test]
-async fn inbox_empty_when_no_awaiting_sessions() {
+async fn inbox_lists_all_sessions_for_user() {
     let h = TestHarness::build().await.unwrap();
-    let _ = seed_agent_and_session(&h, "alpha").await;
+    let (_, session_id) = seed_agent_and_session(&h, "alpha").await;
 
     let resp = handle_inbox(&h.ctx(), &serde_json::json!({}), &None).await;
     assert_eq!(resp["ok"], serde_json::json!(true));
     let items = resp["items"].as_array().unwrap();
-    assert!(items.is_empty(), "no awaiting sessions yet → empty list");
+    assert_eq!(
+        items.len(),
+        1,
+        "every session shows up — not just awaiting ones"
+    );
+    assert_eq!(items[0]["session_id"], serde_json::json!(session_id));
+    assert!(
+        items[0]["awaiting_at"].is_null(),
+        "non-awaiting session must surface with awaiting_at = null"
+    );
+    assert!(
+        items[0]["last_active"].is_string(),
+        "every row carries last_active for recency sort"
+    );
 }
 
 /// `handle_inbox` surfaces sessions whose `awaiting_at` is set, with the
@@ -83,9 +99,18 @@ async fn answer_inbox_clears_awaiting_and_enqueues_reply() {
     .await;
     assert_eq!(resp["ok"], serde_json::json!(true));
 
-    // Inbox is now empty — the answer cleared the bit.
+    // The session still appears in the inbox (broadened query returns
+    // every session in scope), but its `awaiting_at` is now null.
     let post = handle_inbox(&h.ctx(), &serde_json::json!({}), &None).await;
-    assert!(post["items"].as_array().unwrap().is_empty());
+    let items = post["items"].as_array().unwrap();
+    let row = items
+        .iter()
+        .find(|i| i["session_id"] == serde_json::json!(session_id))
+        .expect("session row stays in inbox after answer");
+    assert!(
+        row["awaiting_at"].is_null(),
+        "answer must clear awaiting_at"
+    );
 
     // And exactly one pending row exists, carrying the user's text.
     let claimed = ss
@@ -342,9 +367,18 @@ async fn parallel_awaiting_sessions_are_independent() {
     .await;
     assert_eq!(resp["ok"], serde_json::json!(true));
 
-    // B still in the inbox; A is gone.
+    // Both rows surface in the broadened inbox; B keeps its awaiting bit,
+    // A's bit is cleared.
     let listed = handle_inbox(&h.ctx(), &serde_json::json!({}), &None).await;
     let items = listed["items"].as_array().unwrap();
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["session_id"], serde_json::json!(sid_b));
+    let row_a = items
+        .iter()
+        .find(|i| i["session_id"] == serde_json::json!(sid_a))
+        .expect("session A stays in inbox after answer");
+    let row_b = items
+        .iter()
+        .find(|i| i["session_id"] == serde_json::json!(sid_b))
+        .expect("session B stays in inbox");
+    assert!(row_a["awaiting_at"].is_null(), "A's awaiting_at cleared");
+    assert!(!row_b["awaiting_at"].is_null(), "B still awaiting");
 }

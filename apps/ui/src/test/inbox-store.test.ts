@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { selectInboxCount, selectVisibleItems, useInboxStore } from "@/store/inbox";
 import type { InboxItem } from "@/lib/api";
 
-function makeItem(sessionId: string, awaitingAt = "2026-04-25T10:00:00Z"): InboxItem {
+function makeItem(
+  sessionId: string,
+  awaitingAt: string | null = "2026-04-25T10:00:00Z",
+): InboxItem {
   return {
     session_id: sessionId,
     agent_id: `agent-${sessionId}`,
@@ -12,6 +15,7 @@ function makeItem(sessionId: string, awaitingAt = "2026-04-25T10:00:00Z"): Inbox
     awaiting_subject: "subject",
     awaiting_at: awaitingAt,
     last_agent_message: "thinking aloud",
+    last_active: awaitingAt ?? "2026-04-25T10:00:00Z",
   };
 }
 
@@ -113,6 +117,22 @@ describe("inbox store", () => {
         pendingDismissal: new Set<string>(["b"]),
       });
       expect(selectInboxCount(useInboxStore.getState())).toBe(2);
+    });
+
+    // After 2026-05-07 the inbox surfaces every session in scope, not
+    // just decision-requests. The badge value must stay narrow to
+    // awaiting items so the rail's "X things need you" indicator keeps
+    // its prior meaning.
+    it("counts only awaiting items (awaiting_at non-null)", () => {
+      useInboxStore.setState({
+        items: [
+          makeItem("a"), // awaiting (default)
+          makeItem("b", null), // history, no awaiting bit
+          makeItem("c", null), // history, no awaiting bit
+        ],
+        pendingDismissal: new Set<string>(),
+      });
+      expect(selectInboxCount(useInboxStore.getState())).toBe(1);
     });
   });
 
