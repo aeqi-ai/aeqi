@@ -1256,3 +1256,59 @@ not in headers.
 CSS classes that are gone and must NOT be added back:
 `.roles-chart-dept-cluster`, `.roles-chart-dept-root`, `.roles-chart-ceo-row`,
 `.roles-chart-dept-row`, `.roles-chart-dept-label`.
+
+## New view component — every className must have CSS, not just compile
+
+**A new view component (Table view, Kanban view, Graph view, etc.) is not
+"done" when tsc passes — it's done when every className it references has a
+matching rule in `src/styles/`.** TypeScript and prettier do not catch
+missing CSS: a `<table className="ideas-table">` with no `.ideas-table { … }`
+rule renders as a bare HTML table that collapses to its content's natural
+height (~250px), even though the surrounding container is full-bleed. The
+component compiles, the build is green, the surface ships looking broken.
+
+Cost (2026-05-08): Tables-in-Ideas Phase 2 (`140c1357`) shipped 14
+`.ideas-table-*` selectors with zero CSS. UX walk v24 caught it; one extra
+ship cycle to add the wrap + table + header + cell + row rules.
+
+Rule: after writing any new view component, grep every className it
+references against `src/styles/`:
+
+```bash
+# Extract classNames from the new component
+grep -oE 'className="[^"]+"' src/components/<NewView>.tsx \
+  | sed 's/className="//; s/"$//' | tr ' ' '\n' | sort -u > /tmp/new-classes.txt
+
+# Confirm each one resolves to a CSS rule somewhere
+for c in $(cat /tmp/new-classes.txt); do
+  count=$(grep -c "\\.$c" src/styles/*.css | awk -F: '{s+=$2} END {print s}')
+  [ "$count" = "0" ] && echo "MISSING: .$c"
+done
+```
+
+Any line printing `MISSING:` means the rule is absent and the surface
+will render broken. Fix BEFORE tsc — not after a UX walk catches it.
+
+## Public routes mount `<GatedAppShell />` directly — never `<Navigate>` to `/`
+
+**Routes that should resolve as the in-shell app for both unauth AND authed
+users (e.g. `/economy`, `/blueprints`, future public surfaces) must mount
+`<GatedAppShell />` directly. Do NOT redirect them to `/` via `<Navigate>`
+expecting AppLayout to dispatch the right surface.** The `/` root is also
+the auth-mode dispatch point: `RootRouteSwitch` redirects authed users to
+`/me/inbox` (their daily-action surface). A `<Navigate from="/economy"
+to="/" />` collapses through that dispatch and lands authed users on the
+inbox — the public surface they asked for never renders.
+
+Cost (2026-05-08): UX walk v24 — `/economy` was wired with `<Navigate to="/"
+replace />` "to keep one canonical URL". Authed visitors hit `/economy`,
+got bounced to `/`, then bounced again to `/me/inbox`. Fixed by mounting
+`/economy` and `/economy/*` as `<GatedAppShell />` (same pattern as
+`/blueprints`); AppLayout's `useShellSurface` already treats `/` and
+`/economy` as the same `isEconomy` flag, so EconomyPage renders in both
+auth states.
+
+Rule: if a route is meant to be a public-surface alias of `/`, mount it
+through `<GatedAppShell />` (or `<RootRouteSwitch />` if it should also
+honor the authed inbox-redirect). Never via `<Navigate to="/" />` — that
+short-circuits the auth dispatch.
