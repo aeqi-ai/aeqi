@@ -538,6 +538,28 @@ affect vite build, tsc, or prettier. The UI builds and ships correctly without
 them. Cost (2026-05-05): 3 deploy retries on governance ship cycle when 4
 sibling agents were running simultaneously.
 
+**`--ignore-scripts` does NOT restore @types/\* — second pass with full `npm install` required.**
+After an ELOOP recovery via `npm install --ignore-scripts`, `node_modules/typescript/`
+is present and `.bin/tsc` runs, but the `@types/react`, `@types/react-dom`, etc.
+packages are absent or partial. Symptom: tsc explodes with hundreds of `Cannot find
+module 'react'` / `Cannot find namespace 'React'` / `JSX element implicitly has type 'any'`
+errors across every `.tsx` file in the tree (worktree AND main). Errors look like
+your diff broke the type system, but they're really upstream — a one-liner sanity
+check confirms: `cd /home/claudedev/aeqi/apps/ui && node node_modules/typescript/bin/tsc
+--noEmit 2>&1 | head -3`. If main itself is broken, your worktree is fine — the
+parent state is degraded.
+
+Recovery: run `npm install --silent` (no `--ignore-scripts`) once. The native-addon
+ELOOP only fires when sibling worktrees hold symlinks open at install time — in the
+post-rebase phase of /ship the worktree's symlink is already resolved cleanly, so a
+plain `npm install` proceeds without ELOOP and fully populates `@types/*`. Skip the
+detective work; the recipe is two installs, in order.
+
+Cost (2026-05-07): mid-ship rebase verify on multi-participant ship cycle hit this —
+~60s confusion reading the tsc error wall before realising main also showed the
+same errors. Pattern: any `--ignore-scripts` install used as ELOOP recovery MUST be
+followed by a plain `npm install` before declaring node_modules healthy.
+
 **Verify before merging:**
 
 ```bash
@@ -1401,6 +1423,33 @@ scope. Use this URL for any chat-shape / composer / row-shape verification
 probe until /me/inbox has a default seeded message. Cost (2026-05-07):
 one probe iteration on inbox-visual-parity ship returned all-null because
 /me/inbox was empty — wasted ~30s before re-scoping to `/trust/<aeiq>/inbox`.
+
+**Same rule for verifying message-bubble shape: target a session known to
+contain the bubble kind you're verifying.** When a probe needs to confirm
+user-bubble layout (avatar + name on right) OR agent-bubble layout
+(avatar + name on left), opening any agent's first session is not enough —
+many AEIQ sessions are agent-only (`schedule:daily-digest`, `Permanent
+Session`, fresh-spawn DM with no user reply yet). The probe will report
+`userBubble=0` or `agentBubble=0` even though the surface is rendering
+correctly; the data simply isn't there.
+
+Recipe to find a session with both bubble kinds:
+
+```bash
+sudo -n sqlite3 /var/lib/aeqi/containers/<entity_id>/sessions.db \
+  "SELECT s.id, s.name, COUNT(m.id) as msgs
+   FROM sessions s JOIN session_messages m ON m.session_id=s.id
+   WHERE m.role='user' OR m.from_kind='user'
+   GROUP BY s.id ORDER BY msgs DESC LIMIT 5;"
+```
+
+Pick a session with `msgs >= 1`. Known-good seed for the AEIQ EA agent on
+the platform host (entity `59bc9fd3-956a-4104-aaf8-83253fde840c`):
+session `cedd5876-ba0e-4d94-b720-6b8f608aa5ba` ("aeiq EA") had 4 user
+messages as of 2026-05-07. Cost (2026-05-07): first verify run for the
+multi-participant ship picked `Permanent Session` (zero user messages);
+detector reported `userBubble=0` and the verify looked broken — required
+a second probe scoped to `cedd5876…` to capture the user bubble.
 
 ## Probe scripts at narrow viewports — `force: true` on offscreen master rows
 
