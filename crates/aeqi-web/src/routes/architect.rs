@@ -26,9 +26,11 @@ use crate::extractors::Scope;
 use crate::server::AppState;
 
 /// Architect verbs front an LLM call; the default 10s IPC timeout is
-/// too aggressive. Allow up to 60s — covers the architect's own 30s
-/// internal timeout plus IPC overhead and slow OpenRouter routes.
-const ARCHITECT_IPC_TIMEOUT_SECS: u64 = 60;
+/// too aggressive. Refine has an inner 90s deadline to absorb slow
+/// OpenRouter shards (the body-decode failure mode that hit Wave 35
+/// multi-turn); the IPC timeout sits above that with a small overhead
+/// allowance so the IPC layer never wins the race.
+const ARCHITECT_IPC_TIMEOUT_SECS: u64 = 100;
 
 pub fn routes() -> Router<AppState> {
     Router::new()

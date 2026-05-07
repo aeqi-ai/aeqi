@@ -46,6 +46,14 @@ pub const DEFAULT_MODEL: &str = "meta-llama/Meta-Llama-3.3-70B-Instruct";
 /// layer falls back to the stub generator.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Refine takes a system-prompt + brief + serialized prior blueprint
+/// (~1 KB+) + instruction, so the model has more tokens to read and emit
+/// than the draft path. OpenRouter routes to different upstreams under
+/// load; tail latency on the slow shards crosses 30 s mid-body-stream
+/// and reqwest's `resp.json()` fails with `error decoding response body`.
+/// Give refine a longer ceiling so the body has time to land cleanly.
+pub const REFINE_TIMEOUT: Duration = Duration::from_secs(90);
+
 /// Generation knobs. Defaults are sensible for the draft path.
 #[derive(Debug, Clone)]
 pub struct LlmGenerationOptions {
@@ -111,11 +119,16 @@ pub struct OpenRouterLlm {
 
 impl OpenRouterLlm {
     /// Construct from an explicit API key.
+    ///
+    /// The reqwest client timeout is set to [`REFINE_TIMEOUT`] (the wider
+    /// of the two architect deadlines) so body streaming has headroom on
+    /// the slowest OpenRouter upstream shards. The actual per-call
+    /// deadline is enforced by the caller via `tokio::time::timeout`.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             api_key: api_key.into(),
             client: reqwest::Client::builder()
-                .timeout(DEFAULT_TIMEOUT)
+                .timeout(REFINE_TIMEOUT)
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
             base_url: "https://openrouter.ai/api/v1".to_string(),
@@ -170,10 +183,23 @@ impl LlmCaller for OpenRouterLlm {
             return Err(format!("openrouter {status}: {text}"));
         }
 
-        let raw: serde_json::Value = resp
-            .json()
+        // Read body as text first, then parse. `resp.json()` fails opaquely
+        // with `error decoding response body` when the body stream is
+        // truncated (slow upstream + reqwest timeout) or the upstream
+        // returned malformed JSON. Reading text-first gives a diagnostic
+        // body in the error message and surfaces the real failure mode.
+        let body = resp
+            .text()
             .await
-            .map_err(|e| format!("openrouter response parse: {e}"))?;
+            .map_err(|e| format!("openrouter body read: {e}"))?;
+
+        let raw: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            let preview: String = body.chars().take(500).collect();
+            format!(
+                "openrouter response parse: {e} (body_len={}, preview={preview:?})",
+                body.len()
+            )
+        })?;
 
         raw.pointer("/choices/0/message/content")
             .and_then(|v| v.as_str())
@@ -339,7 +365,7 @@ pub async fn refine_via_llm(
         "architect.llm: dispatching refine chat_completion"
     );
 
-    let raw = match tokio::time::timeout(DEFAULT_TIMEOUT, llm.complete(req)).await {
+    let raw = match tokio::time::timeout(REFINE_TIMEOUT, llm.complete(req)).await {
         Ok(Ok(text)) => text,
         Ok(Err(err)) => {
             warn!(error = %err, "architect.llm: refine upstream call failed");
@@ -348,7 +374,7 @@ pub async fn refine_via_llm(
         Err(_) => {
             warn!("architect.llm: refine timed out");
             return Err(ArchitectError::LlmFailure(format!(
-                "LLM call exceeded {DEFAULT_TIMEOUT:?}"
+                "LLM call exceeded {REFINE_TIMEOUT:?}"
             )));
         }
     };
