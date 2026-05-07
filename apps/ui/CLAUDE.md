@@ -1378,3 +1378,72 @@ Rule: if a route is meant to be a public-surface alias of `/`, mount it
 through `<GatedAppShell />` (or `<RootRouteSwitch />` if it should also
 honor the authed inbox-redirect). Never via `<Navigate to="/" />` — that
 short-circuits the auth dispatch.
+
+## Probe scripts on inbox surfaces — scope to a populated inbox, not `/me/inbox`
+
+When writing a playwright probe to verify the inbox composer / detail
+shape, do NOT default to `/me/inbox`. The personal entity's inbox is
+empty in dev for most users (no agent has seeded it), so `SessionRail`
+renders the empty state, no row exists to click, no detail mounts, no
+composer enters the DOM, and every probe returning `hasComposer: false`
+looks like a regression when it's just "nothing to verify against."
+
+The canonical "populated" inbox in dev is the AEIQ company's trust inbox,
+where the EA has seeded a "AEIQ is live on aeqi" decision-request:
+
+```js
+const AEIQ_TRUST = "0x4a9221095d6863f068d1543fc7995c25347b4edc";
+// Probe URL: `/trust/${AEIQ_TRUST}/inbox`
+```
+
+Same primitive (`MeInboxPage`/`InboxComposer`/`SessionRail`), different
+scope. Use this URL for any chat-shape / composer / row-shape verification
+probe until /me/inbox has a default seeded message. Cost (2026-05-07):
+one probe iteration on inbox-visual-parity ship returned all-null because
+/me/inbox was empty — wasted ~30s before re-scoping to `/trust/<aeiq>/inbox`.
+
+## Probe scripts at narrow viewports — `force: true` on offscreen master rows
+
+At <=1024px the inbox + agent surfaces collapse from master/detail to
+single-pane: the rail is laid out under the detail pane and is technically
+in the DOM but `getBoundingClientRect` reports it offscreen. Plain
+`page.locator(".sessions-rail-row").click()` waits 30s for visibility,
+then throws `TimeoutError: element is not visible`. Use `{ force: true,
+timeout: 5000 }` on probe scripts that need to traverse the rail at
+narrow viewports — the probe is verifying DOM shape, not user-driven
+visibility.
+
+```js
+await firstRow.click({ force: true, timeout: 5000 }).catch(() => {});
+await page.waitForTimeout(1500);
+```
+
+Wraps in `.catch(() => {})` so the probe continues even if the click
+fails for a reason that's irrelevant to the verification (e.g. rail
+empty, layout race). Cost (2026-05-07): one 30s timeout pass on
+inbox-visual-parity probe before switching to force-click.
+
+## SessionRail row shape — adopters drive `wrapPrimary`, not the primitive
+
+`<SessionRail>` (`components/sessions/SessionRail.tsx`) accepts both
+single-line (h=32) and wrap-to-2-lines (h=51) row shapes via the
+`wrapPrimary?: boolean` prop on each `SessionRailRow`. Adopters decide
+the shape per-row when mapping their data; the primitive renders both
+without preference.
+
+Two adopters today:
+
+- **`shell/SessionsRail.tsx`** (drilled-agent surface) — sets
+  `wrapPrimary: !!origin` so origin-bearing rows (telegram/whatsapp) wrap,
+  the rest stay single-line.
+- **`pages/MeInboxPage.tsx`** (inbox surface) — does NOT set `wrapPrimary`
+  or `secondary`. All rows render single-line h=32 to match the agent
+  surface (locked direction "render the user inbox like the agent
+  session"). Sender name lives in the right-pane detail header, not
+  duplicated in the rail.
+
+Rule: if a future adopter (channels, mentions, etc.) needs a different
+row shape, add the prop to its row mapping. Don't change the primitive's
+default. The two existing adopters' divergence is a feature, not drift —
+agent-surface rail can wrap when origin is informative; inbox cannot
+wrap because the subject IS the row identity.
