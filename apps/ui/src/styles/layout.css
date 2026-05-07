@@ -4043,17 +4043,16 @@
   font-size: 10px;
   color: var(--color-text-muted);
   background: transparent;
-  border: 1px dashed var(--border-hover);
+  border: 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     color 0.15s,
-    border-color 0.15s;
+    background 0.15s;
 }
 .ideas-list-tag-more:hover {
   color: var(--accent);
-  border-color: var(--accent-dim);
-  border-style: solid;
+  background: var(--state-hover);
 }
 
 /* ------------------------------------------------------------------
@@ -4486,7 +4485,7 @@
   background: var(--bg-base);
 }
 .ideas-list-chip-clear {
-  padding: 2px 0;
+  padding: 2px 4px;
   margin-left: 4px;
   font-family: var(--font-sans);
   font-size: 10px;
@@ -4494,12 +4493,15 @@
   color: var(--color-text-muted);
   background: transparent;
   border: 0;
-  border-bottom: 1px dashed var(--border-hover);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 .ideas-list-chip-clear:hover {
   color: var(--accent);
+  background: var(--state-hover);
 }
 
 /* Slim toolbar above the graph canvas — holds the filter button when
@@ -5068,9 +5070,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px 22px;
-  margin: 14px 0 0;
-  padding: 12px 0 0;
-  border-top: 1px dashed var(--border-faint);
+  /* Spacing carries the boundary between body copy and syntax legend —
+     no dashed hairline rule (per feedback_no_hairlines.md). */
+  margin: 22px 0 0;
+  padding: 0;
 }
 .empty-state-hero-syntax > div {
   display: inline-flex;
