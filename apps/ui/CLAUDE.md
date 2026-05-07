@@ -1842,6 +1842,29 @@ contract (move chrome → flip prop). Cost (2026-05-07): SessionDetail
 extract — ~5 min upfront figuring out the opt-out vs slot vs
 divergent-path tradeoff before settling on opt-out.
 
+**Per-message handlers extend the same way: optional callback props,
+not a render-prop slot.** When the migration ship of an
+externally-mounted adopter (e.g. `AgentSessionView` adopting
+`SessionDetail`) needs surface-specific per-message affordances
+(fork / edit / resend on chat bubbles, archive on inbox rows), the
+canonical seam is OPTIONAL callback props on the primitive that get
+threaded into the existing per-row component (e.g. `MessageItem`):
+`onFork?: (messageId: number) => void`, `onEdit?: (messageId: number,
+text: string) => void`, `onResend?: (text: string) => void`. Adopters
+that need the affordance pass the handler; adopters that don't omit
+the prop and the bubble silently renders without it (the inbox surface
+doesn't expose fork/edit/resend, agent surface does — same `MessageItem`,
+different prop set). Same pattern for "render this extra block at the
+end of the thread" concerns (StreamingMessage, queued drafts):
+`threadTrailingSlot?: React.ReactNode` is the canonical name. Do NOT
+ship a `renderMessage?: (msg) => ReactNode` render-prop — that's the
+divergent render path under a different name. The prop set should always
+be data-shaped (callbacks + named slots), not behaviour-shaped (render
+props). Cost (2026-05-07): AgentSessionView migration ship — initial
+draft considered a `renderMessage` render-prop; the named callbacks +
+trailing slot kept the primitive's contract narrow and was strictly
+cheaper to verify.
+
 ## Probe scripts must seed the canonical localStorage triple — not just the JWT
 
 Auth-seeding probe scripts (the `_<name>.mjs` family) set localStorage
