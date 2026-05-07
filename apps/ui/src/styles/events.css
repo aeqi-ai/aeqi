@@ -718,21 +718,39 @@
   padding-top: 8px;
 }
 
-/* ── Detail title slot — inline editable name + chips inside SurfaceHeader ── */
-.events-detail-title {
-  display: inline-flex;
+/* ── Detail sub-header — editable name + chips + actions inside body ──
+   Mirrors IdeaCanvas: SurfaceHeader is a bare back link; the title
+   input + scope chips + enabled toggle + save/delete actions live in
+   one thin row inside `.events-detail` so the canvas below can claim
+   full available height. */
+.events-detail-subhead {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  min-height: 44px;
+}
+.events-detail-subhead-left {
+  display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
   flex: 1;
 }
-.events-detail-title-name {
+.events-detail-subhead-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.events-detail-name-input {
   flex: 1;
   min-width: 0;
   padding: var(--space-1) var(--space-2);
   font-family: var(--font-sans);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: 600;
   color: var(--color-text-primary);
   background: transparent;
   border: 0;
@@ -740,11 +758,11 @@
   outline: none;
   transition: background 0.12s ease;
 }
-.events-detail-title-name:hover:not(:disabled),
-.events-detail-title-name:focus {
+.events-detail-name-input:hover:not(:disabled),
+.events-detail-name-input:focus {
   background: var(--color-card-elevated);
 }
-.events-detail-title-name:disabled {
+.events-detail-name-input:disabled {
   color: var(--color-text-secondary);
   cursor: default;
   background: transparent;
@@ -790,9 +808,14 @@
   border-radius: var(--radius-sm);
 }
 
-/* Push the canvas to fill the surface inside the detail view. */
+/* Inside the detail view, the canvas fills the remaining height —
+   no constrained scroll box. Mirrors the BlockEditor inside IdeaCanvas:
+   full-width, full-height, immediately interactive. */
 .events-detail .event-canvas {
-  margin: 8px 28px 16px;
+  flex: 1;
+  min-height: 0;
+  margin: 0 var(--space-6) var(--space-4);
+  overflow: auto;
 }
 
 /* ── Fires panel — per-event invocation log inside the detail view ── */

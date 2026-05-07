@@ -390,23 +390,26 @@ export default function AgentEventsTab({ agentId }: { agentId: string }) {
   }
 
   if (selected) {
+    // Detail mounts directly under `.asv-main events-surface` (a flex
+    // column with `min-height:0; overflow:hidden`) so the canvas inside
+    // EventDetail can claim full available height — mirrors the
+    // IdeaCanvas shape. The `.events-surface-body` auto-scroll wrapper
+    // only fits the list/compose branches.
     return (
       <div className="asv-main events-surface">
-        <div className="events-surface-body">
-          <EventDetail
-            event={selected}
-            agentId={agentId}
-            onSave={async (fields) => {
-              await eventsApi.updateEvent(selected.id, fields as Record<string, unknown>);
-              patchEvent(selected.id, fields);
-            }}
-            onDelete={async () => {
-              await eventsApi.deleteEvent(selected.id);
-              removeEvent(selected.id);
-              goEntity(entityId, "events", undefined, { replace: true });
-            }}
-          />
-        </div>
+        <EventDetail
+          event={selected}
+          agentId={agentId}
+          onSave={async (fields) => {
+            await eventsApi.updateEvent(selected.id, fields as Record<string, unknown>);
+            patchEvent(selected.id, fields);
+          }}
+          onDelete={async () => {
+            await eventsApi.deleteEvent(selected.id);
+            removeEvent(selected.id);
+            goEntity(entityId, "events", undefined, { replace: true });
+          }}
+        />
       </div>
     );
   }

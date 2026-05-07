@@ -30,8 +30,12 @@ export default function SurfaceHeader({
    * Title slot. Plain string renders muted/bold inside the breadcrumb;
    * a ReactNode (e.g. an editable input or avatar+name composition)
    * is mounted verbatim. Editable adopters pass an `<input>` here.
+   * Optional — adopters that want a bare back-only header (e.g. event
+   * detail, mirroring the idea-canvas shape where title + actions live
+   * in a body sub-header) omit the slot entirely; the breadcrumb
+   * separator is suppressed.
    */
-  title: ReactNode;
+  title?: ReactNode;
   crumbSuffix?: ReactNode;
   /** Right-aligned actions slot (toggles, buttons, save/delete, etc.). */
   actions?: ReactNode;
@@ -57,10 +61,14 @@ export default function SurfaceHeader({
             {backLabel}
           </Link>
         </Tooltip>
-        <span className="agent-surface-header-sep" aria-hidden>
-          /
-        </span>
-        {title}
+        {title != null && (
+          <>
+            <span className="agent-surface-header-sep" aria-hidden>
+              /
+            </span>
+            {title}
+          </>
+        )}
         {crumbSuffix}
       </div>
       {actions && <div className="agent-surface-header-actions">{actions}</div>}

@@ -100,83 +100,82 @@ export default function EventDetail({ event, agentId, onSave, onDelete }: EventD
     setErr(null);
   };
 
-  // Title slot: editable name input + scope chips inline. Mirrors the
-  // breadcrumb shape of other surface adopters; the whole row is one
-  // SurfaceHeader instead of header + strip stacked.
-  const titleSlot = (
-    <span className="events-detail-title">
-      <input
-        className="events-detail-title-name"
-        type="text"
-        value={name}
-        readOnly={readOnly}
-        disabled={readOnly}
-        placeholder="event name"
-        onChange={(e) => setName(e.target.value)}
-        aria-label="Event name"
-      />
-      {isGlobal && (
-        <span className="events-detail-title-badge" title="Global event — every agent">
-          global
-        </span>
-      )}
-      {event.scope && event.scope !== "self" && (
-        <span className={`scope-chip scope-chip--${event.scope}`}>{event.scope}</span>
-      )}
-    </span>
-  );
-
-  const actionsSlot = (
-    <>
-      <label className="events-detail-toggle" title="Enabled">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={readOnly}
-          onChange={(e) => setEnabled(e.target.checked)}
-        />
-        enabled
-      </label>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setShowTrigger((v) => !v)}
-        disabled={readOnly}
-      >
-        {showTrigger ? "hide test" : "test trigger"}
-      </Button>
-      {!readOnly && !event.pattern.startsWith("session:") && (
-        <Button variant="secondary" size="sm" className="channel-disconnect-btn" onClick={onDelete}>
-          delete
-        </Button>
-      )}
-      {dirty && !readOnly && (
-        <>
-          <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
-            reset
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleSave}
-            loading={saving}
-            disabled={saving}
-          >
-            save
-          </Button>
-        </>
-      )}
-    </>
-  );
+  // Header is bare (back link only) — mirrors IdeaCanvas's chrome shape.
+  // Editable name + scope chips + toggle + actions live in a thin
+  // sub-header inside the body so the canvas can claim full available
+  // height instead of competing with a stacked header band.
 
   return (
     <div className="events-detail">
-      <SurfaceHeader
-        backHref={backHref}
-        backLabel="Events"
-        title={titleSlot}
-        actions={actionsSlot}
-      />
+      <SurfaceHeader backHref={backHref} backLabel="Events" />
+
+      <div className="events-detail-subhead">
+        <div className="events-detail-subhead-left">
+          <input
+            className="events-detail-name-input"
+            type="text"
+            value={name}
+            readOnly={readOnly}
+            disabled={readOnly}
+            placeholder="event name"
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Event name"
+          />
+          {isGlobal && (
+            <span className="events-detail-title-badge" title="Global event — every agent">
+              global
+            </span>
+          )}
+          {event.scope && event.scope !== "self" && (
+            <span className={`scope-chip scope-chip--${event.scope}`}>{event.scope}</span>
+          )}
+        </div>
+        <div className="events-detail-subhead-right">
+          <label className="events-detail-toggle" title="Enabled">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={readOnly}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            enabled
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTrigger((v) => !v)}
+            disabled={readOnly}
+          >
+            {showTrigger ? "hide test" : "test trigger"}
+          </Button>
+          {!readOnly && !event.pattern.startsWith("session:") && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="channel-disconnect-btn"
+              onClick={onDelete}
+            >
+              delete
+            </Button>
+          )}
+          {dirty && !readOnly && (
+            <>
+              <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
+                reset
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSave}
+                loading={saving}
+                disabled={saving}
+              >
+                save
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
 
       {err && <div className="events-detail-error">{err}</div>}
 

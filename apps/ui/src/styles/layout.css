@@ -3058,9 +3058,11 @@
 /* ── Channels Tab ── */
 /* ── Events tab (split layout) ── */
 .events-detail {
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  overflow-y: auto;
-  padding: 20px 28px;
+  min-height: 0;
+  overflow: hidden;
 }
 .events-detail-empty {
   padding: 40px 0;
