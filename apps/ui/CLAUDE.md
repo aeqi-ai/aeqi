@@ -2110,6 +2110,32 @@ Cost (2026-05-07): msg-author-header ship — 4 probe iterations
 should skip straight to bundle verification when `/api/entities`
 returns 400 in the network log.
 
+## Entity URLs — always go through `entityPath()`, never hand-craft `/c/<id>`
+
+**Internal links to a Company entity must resolve through
+`entityPath(entity, ...)` or `entityPathFromId(entities, id, ...)`
+from `@/lib/entityPath`.** The helpers return `/trust/<addr>` when the
+entity has a `trust_address` (post-registerTRUST canonical) and fall
+back to `/c/<id>` only when the entity is still pending. Hand-crafted
+template literals (`` `/c/${entityId}/quests` ``, `"/c/" + id`) bypass
+that resolution and ship the legacy URL even when the entity is
+on-chain.
+
+Same rule for sessions: use `sessionDeepUrl(entity, agentId, sessionId)`
+or `sessionDeepUrlFromId(entities, entityId, agentId, sessionId)` —
+never build the deep URL by string concatenation.
+
+The hygiene-check enforces this. Allowed call sites: `lib/entityPath.ts`
+(the helper itself), `lib/sessionUrl.ts`, `hooks/useNav.ts`,
+`components/AppLayout.tsx` (the canonical fallback). Tests under
+`src/test/` are exempted (they pin the URL shape on purpose).
+
+The 308 redirect from `/c/<id>` → `/trust/<addr>` stays in place
+server-side for old bookmarks. Pre-registerTRUST entities still land
+on `/c/<id>` as the transient fallback. The rule is purely about not
+GENERATING the legacy form for on-chain entities. Cost (2026-05-07):
+44 literals swept across 28 files; hygiene rule prevents recurrence.
+
 ## Adding a new sub-tree to a `:tab/:itemId` route — use a literal segment, not a third param level
 
 When extending an existing `agents/:agentId/:tab/:itemId` route shape with

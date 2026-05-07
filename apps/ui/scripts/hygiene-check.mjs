@@ -21,6 +21,13 @@
  *      class in primitives.css).
  *   3. New occurrences of `bg-black/\[?0\.0[34]\]?` are forbidden —
  *      use bg-hover / bg-divider.
+ *   4. New `apiRequest("/api/...")` calls are forbidden — apiRequest
+ *      already prepends /api; the duplicate prefix 404s.
+ *   5. Hand-crafted `/c/<id>` URL literals are forbidden outside the
+ *      canonical helpers (lib/entityPath.ts, lib/sessionUrl.ts,
+ *      hooks/useNav.ts, components/AppLayout.tsx). Use entityPath() /
+ *      entityPathFromId() so on-chain entities resolve to /trust/<addr>.
+ *      Sweep landed 2026-05-07 (44 literals across 28 files).
  *
  * Exceptions:
  *   - Heavier overrides (e.g. border-black/[0.08], /10, /15, /20) remain
@@ -65,7 +72,29 @@ const FORBIDDEN_PATTERNS = [
     message:
       'apiRequest already prepends /api — drop the /api/ prefix from the path arg (e.g. apiRequest("/architect/draft"), not apiRequest("/api/architect/draft"))',
   },
+  {
+    // Hand-crafted /c/<id> URL literals bypass the canonical entityPath()
+    // resolver, which routes on-chain entities to /trust/<addr> and
+    // pending ones to /c/<id>. Drift sweep 2026-05-07 found 44 such
+    // literals across 28 files. Catch new ones at the source.
+    // Allowed: lib/entityPath.ts (the helper itself), lib/sessionUrl.ts,
+    // hooks/useNav.ts, components/AppLayout.tsx (the canonical fallback
+    // when entity isn't yet on-chain). Test files are excluded by the
+    // diff filter (only src/**/*.{ts,tsx,css} is scanned, but tests
+    // under src/test/ still match — the FILE_ALLOWLIST below skips them).
+    pattern: /[`'"]\/c\/(?:\$\{|" ?\+|' ?\+)/g,
+    message:
+      "Hand-crafted /c/<id> URL literal — use entityPath(entity, ...) or entityPathFromId(entities, id, ...) from @/lib/entityPath so on-chain entities resolve to /trust/<addr>",
+    allowFiles: new Set([
+      "apps/ui/src/lib/entityPath.ts",
+      "apps/ui/src/lib/sessionUrl.ts",
+      "apps/ui/src/hooks/useNav.ts",
+      "apps/ui/src/components/AppLayout.tsx",
+    ]),
+    skipDirs: ["apps/ui/src/test/"],
+  },
 ];
+
 
 function changedLines() {
   const cmd = STAGED
@@ -88,7 +117,9 @@ function main() {
   const violations = [];
 
   for (const { file, line } of added) {
-    for (const { pattern, message } of FORBIDDEN_PATTERNS) {
+    for (const { pattern, message, allowFiles, skipDirs } of FORBIDDEN_PATTERNS) {
+      if (allowFiles && allowFiles.has(file)) continue;
+      if (skipDirs && skipDirs.some((d) => file.startsWith(d))) continue;
       const matches = line.match(pattern);
       if (matches) {
         for (const m of matches) {
