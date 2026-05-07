@@ -1,0 +1,246 @@
+/* Company Overview — pulse band + slim numbers row.
+   Founder-locked direction: Overview answers "what's happening now" in three blocks.
+   Hero strip → pulse band (active quests, awaiting decisions, last 24h activity) →
+   slim numbers row (treasury balance, 7d delta, trustsCount, active agents).
+   Treasury owns the financial home; this is a pulse, not a P&L. */
+
+/* ── Block layout ─────────────────────────────────────────────────────── */
+
+.entity-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Pulse band — three side-by-side cards ────────────────────────────── */
+
+.entity-overview-pulse {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.entity-overview-pulse-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  min-height: 200px;
+}
+
+.entity-overview-pulse-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.entity-overview-pulse-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-transform: lowercase;
+  letter-spacing: 0;
+}
+
+.entity-overview-pulse-meta,
+.entity-overview-pulse-link {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: lowercase;
+}
+
+.entity-overview-pulse-link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.entity-overview-pulse-link:hover {
+  color: var(--color-text-primary);
+}
+
+.entity-overview-pulse-empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.entity-overview-pulse-empty-link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.entity-overview-pulse-empty-link:hover {
+  color: var(--color-text-primary);
+}
+
+.entity-overview-pulse-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.entity-overview-pulse-row {
+  margin: 0;
+}
+
+.entity-overview-pulse-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.entity-overview-pulse-btn:hover {
+  background: var(--state-hover);
+}
+
+.entity-overview-pulse-from {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-transform: lowercase;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.entity-overview-pulse-time {
+  margin-left: auto;
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.entity-overview-pulse-text {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Slim numbers row — 4 stat tiles ──────────────────────────────────── */
+
+.entity-overview-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.entity-overview-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s ease;
+  min-width: 0;
+}
+
+.entity-overview-stat:hover {
+  background: var(--color-card-elevated);
+}
+
+.entity-overview-stat-label {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0;
+}
+
+.entity-overview-stat-value {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entity-overview-stat-delta {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.entity-overview-stat-delta.is-positive {
+  color: var(--color-success);
+}
+
+.entity-overview-stat-delta.is-negative {
+  color: var(--color-error);
+}
+
+/* ── Avatar dot in pulse rows ─────────────────────────────────────────── */
+
+.entity-overview-pulse-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.entity-overview-pulse-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Mobile / tablet ──────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .entity-overview-pulse {
+    grid-template-columns: 1fr;
+  }
+
+  .entity-overview-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .entity-overview-numbers {
+    grid-template-columns: 1fr;
+  }
+}
