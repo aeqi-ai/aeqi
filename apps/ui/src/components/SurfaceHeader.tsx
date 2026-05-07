@@ -26,8 +26,14 @@ export default function SurfaceHeader({
 }: {
   backHref: string;
   backLabel: string;
+  /**
+   * Title slot. Plain string renders muted/bold inside the breadcrumb;
+   * a ReactNode (e.g. an editable input or avatar+name composition)
+   * is mounted verbatim. Editable adopters pass an `<input>` here.
+   */
   title: ReactNode;
   crumbSuffix?: ReactNode;
+  /** Right-aligned actions slot (toggles, buttons, save/delete, etc.). */
   actions?: ReactNode;
 }) {
   return (

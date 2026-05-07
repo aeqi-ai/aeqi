@@ -718,51 +718,38 @@
   padding-top: 8px;
 }
 
-/* ── Detail strip — header above the canvas-as-editor ───────────────── */
-.events-detail-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 14px 28px 8px;
-  flex-wrap: wrap;
-}
-.events-detail-strip-lead {
-  display: flex;
+/* ── Detail title slot — inline editable name + chips inside SurfaceHeader ── */
+.events-detail-title {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  flex: 1;
   min-width: 0;
+  flex: 1;
 }
-.events-detail-strip-name {
+.events-detail-title-name {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  padding: var(--space-1) var(--space-2);
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--color-text-primary);
   background: transparent;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--radius-sm);
   outline: none;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+  transition: background 0.12s ease;
 }
-.events-detail-strip-name:hover:not(:disabled),
-.events-detail-strip-name:focus {
-  background: var(--bg-surface);
-  border-color: var(--border);
+.events-detail-title-name:hover:not(:disabled),
+.events-detail-title-name:focus {
+  background: var(--color-card-elevated);
 }
-.events-detail-strip-name:focus {
-  border-color: var(--color-accent);
-}
-.events-detail-strip-name:disabled {
+.events-detail-title-name:disabled {
   color: var(--color-text-secondary);
   cursor: default;
+  background: transparent;
 }
-.events-detail-strip-badge {
+.events-detail-title-badge {
   font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 500;
@@ -773,12 +760,7 @@
   background: var(--color-accent-bg, rgba(0, 0, 0, 0.06));
   border-radius: var(--radius-sm);
 }
-.events-detail-strip-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.events-detail-strip-toggle {
+.events-detail-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -786,7 +768,7 @@
   color: var(--color-text-secondary);
   cursor: pointer;
 }
-.events-detail-strip-toggle input[type="checkbox"] {
+.events-detail-toggle input[type="checkbox"] {
   accent-color: var(--color-accent);
   cursor: pointer;
 }
@@ -797,7 +779,6 @@
   font-size: 12px;
   color: var(--error, #c44);
   background: color-mix(in srgb, var(--error, #c44) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--error, #c44) 22%, transparent);
   border-radius: var(--radius-sm);
 }
 .events-detail-notice {
@@ -807,11 +788,6 @@
   color: var(--color-text-secondary);
   background: var(--bg-row);
   border-radius: var(--radius-sm);
-}
-
-/* The detail wrapper — no padding of its own, children carry it. */
-.events-detail-strip + * {
-  margin: 0 28px;
 }
 
 /* Push the canvas to fill the surface inside the detail view. */

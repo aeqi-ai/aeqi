@@ -100,76 +100,83 @@ export default function EventDetail({ event, agentId, onSave, onDelete }: EventD
     setErr(null);
   };
 
+  // Title slot: editable name input + scope chips inline. Mirrors the
+  // breadcrumb shape of other surface adopters; the whole row is one
+  // SurfaceHeader instead of header + strip stacked.
+  const titleSlot = (
+    <span className="events-detail-title">
+      <input
+        className="events-detail-title-name"
+        type="text"
+        value={name}
+        readOnly={readOnly}
+        disabled={readOnly}
+        placeholder="event name"
+        onChange={(e) => setName(e.target.value)}
+        aria-label="Event name"
+      />
+      {isGlobal && (
+        <span className="events-detail-title-badge" title="Global event — every agent">
+          global
+        </span>
+      )}
+      {event.scope && event.scope !== "self" && (
+        <span className={`scope-chip scope-chip--${event.scope}`}>{event.scope}</span>
+      )}
+    </span>
+  );
+
+  const actionsSlot = (
+    <>
+      <label className="events-detail-toggle" title="Enabled">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={readOnly}
+          onChange={(e) => setEnabled(e.target.checked)}
+        />
+        enabled
+      </label>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setShowTrigger((v) => !v)}
+        disabled={readOnly}
+      >
+        {showTrigger ? "hide test" : "test trigger"}
+      </Button>
+      {!readOnly && !event.pattern.startsWith("session:") && (
+        <Button variant="secondary" size="sm" className="channel-disconnect-btn" onClick={onDelete}>
+          delete
+        </Button>
+      )}
+      {dirty && !readOnly && (
+        <>
+          <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
+            reset
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSave}
+            loading={saving}
+            disabled={saving}
+          >
+            save
+          </Button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <div className="events-detail">
-      <SurfaceHeader backHref={backHref} backLabel="Events" title={event.name || "Event"} />
-      <header className="events-detail-strip">
-        <div className="events-detail-strip-lead">
-          <input
-            className="events-detail-strip-name"
-            type="text"
-            value={name}
-            readOnly={readOnly}
-            disabled={readOnly}
-            placeholder="event name"
-            onChange={(e) => setName(e.target.value)}
-            aria-label="Event name"
-          />
-          {isGlobal && (
-            <span className="events-detail-strip-badge" title="Global event — every agent">
-              global
-            </span>
-          )}
-          {event.scope && event.scope !== "self" && (
-            <span className={`scope-chip scope-chip--${event.scope}`}>{event.scope}</span>
-          )}
-        </div>
-        <div className="events-detail-strip-actions">
-          <label className="events-detail-strip-toggle" title="Enabled">
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={readOnly}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            enabled
-          </label>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowTrigger((v) => !v)}
-            disabled={readOnly}
-          >
-            {showTrigger ? "hide test" : "test trigger"}
-          </Button>
-          {!readOnly && !event.pattern.startsWith("session:") && (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="channel-disconnect-btn"
-              onClick={onDelete}
-            >
-              delete
-            </Button>
-          )}
-          {dirty && !readOnly && (
-            <>
-              <Button variant="ghost" size="sm" onClick={handleReset} disabled={saving}>
-                reset
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSave}
-                loading={saving}
-                disabled={saving}
-              >
-                save
-              </Button>
-            </>
-          )}
-        </div>
-      </header>
+      <SurfaceHeader
+        backHref={backHref}
+        backLabel="Events"
+        title={titleSlot}
+        actions={actionsSlot}
+      />
 
       {err && <div className="events-detail-error">{err}</div>}
 
