@@ -714,6 +714,30 @@ Cost (2026-05-07): mid-ship rebase verify on multi-participant ship cycle hit th
 same errors. Pattern: any `--ignore-scripts` install used as ELOOP recovery MUST be
 followed by a plain `npm install` before declaring node_modules healthy.
 
+**Plain `npm install --silent` returning 0 does NOT prove `.bin/` is populated.**
+A separate failure mode from the partial-install / ELOOP cases above: the parent
+can have every package directory present and `npm install --silent` exit 0 with
+no output, yet `.bin/` is empty (zero bin symlinks). Subsequent `npm run verify`
+fails with `prettier: not found` / `tsc: not found`. Repeating `npm install`
+doesn't repair it; only `npm install --ignore-scripts` consistently rebuilds the
+bin links. Likely sibling-worktree contention on lifecycle scripts during the
+postinstall step — `--ignore-scripts` skips that phase and lets npm finish
+wiring `.bin/` symlinks. Diagnostic: count entries in `.bin/`:
+
+```bash
+ls /home/claudedev/aeqi/apps/ui/node_modules/.bin/ | wc -l   # should be 600+
+ls /home/claudedev/aeqi/apps/ui/node_modules/.bin/prettier   # canary file
+```
+
+If `.bin/` has <50 entries OR `.bin/prettier` is absent while `node_modules/`
+has 600+ packages, the bin-link state is degraded. Recovery:
+`cd /home/claudedev/aeqi/apps/ui && npm install --ignore-scripts`. The /ship
+Step 0 pre-flight now checks `.bin/prettier` (not just the typescript package
+file) for this reason — typescript's `bin/tsc` is the package's own file, NOT
+a `.bin/` symlink, so checking it alone doesn't tell you whether `.bin/` is
+populated. Cost (2026-05-07): 3 install passes on event-detail-canvas-bigger
+ship before `--ignore-scripts` repaired bins.
+
 **Verify before merging:**
 
 ```bash
