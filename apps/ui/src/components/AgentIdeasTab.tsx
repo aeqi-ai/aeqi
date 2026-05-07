@@ -172,6 +172,23 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
     return scoped.filter((idea) => (idea.tags || []).some((t) => wanted.has(t)));
   }, [scoped, filter.tags]);
 
+  // Mirror IdeasListView's needsReview count so the shared toolbar can
+  // render the popover badge with real volume — scoped to the agent's
+  // full idea set, not the currently-filtered slice.
+  const needsReviewCount = useMemo(
+    () =>
+      ideas.filter((i) => {
+        const t = i.tags ?? [];
+        return (
+          t.includes("skill") &&
+          t.includes("candidate") &&
+          !t.includes("promoted") &&
+          !t.includes("rejected")
+        );
+      }).length,
+    [ideas],
+  );
+
   const scopeCounts = useMemo(() => {
     const counts = Object.fromEntries(IDEA_FILTER_VALUES.map((f) => [f, 0])) as Record<
       IdeasFilter,
@@ -313,6 +330,10 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
       <IdeasTableView
         agentId={agentId}
         ideas={filtered}
+        filter={filter}
+        scopeCounts={scopeCounts}
+        needsReviewCount={needsReviewCount}
+        onFilter={setFilter}
         view={view}
         onViewChange={setView}
         onNew={() => fireNewIdea()}
@@ -326,6 +347,10 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
       <IdeasKanbanView
         agentId={agentId}
         ideas={filtered}
+        filter={filter}
+        scopeCounts={scopeCounts}
+        needsReviewCount={needsReviewCount}
+        onFilter={setFilter}
         view={view}
         onViewChange={setView}
         onNew={() => fireNewIdea()}

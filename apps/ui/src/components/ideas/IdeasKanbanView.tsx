@@ -1,11 +1,12 @@
 import type React from "react";
 import { useMemo, useState } from "react";
-import { Button, Tooltip } from "../ui";
-import IdeasViewPopover, { type IdeasView } from "./IdeasViewPopover";
+import IdeasToolbar from "./IdeasToolbar";
+import { type IdeasView } from "./IdeasViewPopover";
 import { setIdeaProperties } from "@/api/ideas";
 import { useQueryClient } from "@tanstack/react-query";
 import { ideaKeys } from "@/queries/keys";
 import type { Idea } from "@/lib/types";
+import type { FilterState, IdeasFilter } from "./types";
 
 /**
  * Tables-in-Ideas Phase 2 — Kanban view.
@@ -21,6 +22,10 @@ import type { Idea } from "@/lib/types";
 export interface IdeasKanbanViewProps {
   agentId: string;
   ideas: Idea[];
+  filter: FilterState;
+  scopeCounts: Record<IdeasFilter, number>;
+  needsReviewCount: number;
+  onFilter: (patch: Partial<FilterState>) => void;
   view: IdeasView;
   onViewChange: (next: IdeasView) => void;
   onNew: () => void;
@@ -67,6 +72,10 @@ function nextLaneFor(current: string | undefined, lanes: Lane[]): string | null 
 
 export default function IdeasKanbanView({
   ideas,
+  filter,
+  scopeCounts,
+  needsReviewCount,
+  onFilter,
   view,
   onViewChange,
   onNew,
@@ -149,31 +158,15 @@ export default function IdeasKanbanView({
 
   return (
     <div className="ideas-list-body">
-      <div className="ideas-list-toolbar">
-        <span className="ideas-toolbar-search ideas-toolbar-search--readonly" aria-hidden>
-          {ideas.length} {ideas.length === 1 ? "idea" : "ideas"} · grouped by status
-        </span>
-        <div className="ideas-toolbar-actions">
-          <IdeasViewPopover view={view} onChange={onViewChange} />
-          <Tooltip content="New idea (N)">
-            <Button variant="primary" size="sm" onClick={onNew}>
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 13 13"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                aria-hidden
-              >
-                <path d="M6.5 2.5v8M2.5 6.5h8" />
-              </svg>
-              New
-            </Button>
-          </Tooltip>
-        </div>
-      </div>
+      <IdeasToolbar
+        filter={filter}
+        scopeCounts={scopeCounts}
+        needsReviewCount={needsReviewCount}
+        onFilter={onFilter}
+        view={view}
+        onViewChange={onViewChange}
+        onNew={onNew}
+      />
       <div className="ideas-kanban" role="region" aria-label="Ideas kanban">
         {lanes.map((lane) => {
           const cards = grouped.get(lane) ?? [];

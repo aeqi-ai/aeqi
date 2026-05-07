@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { Button, Tooltip } from "../ui";
-import IdeasViewPopover, { type IdeasView } from "./IdeasViewPopover";
+import IdeasToolbar from "./IdeasToolbar";
+import { type IdeasView } from "./IdeasViewPopover";
 import { blockTreeToPlainText } from "../editor/blockEditorContent";
 import type { Idea } from "@/lib/types";
+import type { FilterState, IdeasFilter } from "./types";
 
 /**
  * Tables-in-Ideas Phase 2 — Table view.
@@ -16,6 +17,10 @@ import type { Idea } from "@/lib/types";
 export interface IdeasTableViewProps {
   agentId: string;
   ideas: Idea[];
+  filter: FilterState;
+  scopeCounts: Record<IdeasFilter, number>;
+  needsReviewCount: number;
+  onFilter: (patch: Partial<FilterState>) => void;
   view: IdeasView;
   onViewChange: (next: IdeasView) => void;
   onNew: () => void;
@@ -37,6 +42,10 @@ function formatCell(value: unknown): string {
 
 export default function IdeasTableView({
   ideas,
+  filter,
+  scopeCounts,
+  needsReviewCount,
+  onFilter,
   view,
   onViewChange,
   onNew,
@@ -57,31 +66,15 @@ export default function IdeasTableView({
 
   return (
     <div className="ideas-list-body">
-      <div className="ideas-list-toolbar">
-        <span className="ideas-toolbar-search ideas-toolbar-search--readonly" aria-hidden>
-          {ideas.length} {ideas.length === 1 ? "idea" : "ideas"}
-        </span>
-        <div className="ideas-toolbar-actions">
-          <IdeasViewPopover view={view} onChange={onViewChange} />
-          <Tooltip content="New idea (N)">
-            <Button variant="primary" size="sm" onClick={onNew}>
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 13 13"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                aria-hidden
-              >
-                <path d="M6.5 2.5v8M2.5 6.5h8" />
-              </svg>
-              New
-            </Button>
-          </Tooltip>
-        </div>
-      </div>
+      <IdeasToolbar
+        filter={filter}
+        scopeCounts={scopeCounts}
+        needsReviewCount={needsReviewCount}
+        onFilter={onFilter}
+        view={view}
+        onViewChange={onViewChange}
+        onNew={onNew}
+      />
       <div className="ideas-table-wrap" role="region" aria-label="Ideas table">
         <table className="ideas-table">
           <thead>
