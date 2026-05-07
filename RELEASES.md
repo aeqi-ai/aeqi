@@ -1,5 +1,12 @@
 # Release Notes
 
+## v0.61.0 — 2026-05-09
+
+**Headline:** Event detail aligns with idea/quest chrome; cron attribution corrected; full-height canvas.
+
+- **Event detail mounts the canonical `.ideas-toolbar` shape — byte-identical with idea + quest detail** (`apps/ui/src/pages/EventDetailPage.tsx`): the final asymmetry in the detail-surface header pattern. v0.60.0 standardized the SurfaceHeader extraction (`d4ced2a5`) and folded the strip in (`0930fcd1`); this ship matches event detail to the same shape idea-canvas / quest-canvas wear — back-only header + canvas full-height — so all four primitive detail surfaces render identical chrome regardless of entry point. `9480dee8`, `53f10100`.
+- **Cron-fired session rows render as system, not founder** (`crates/aeqi-orchestrator/src/sessions.rs` + tenant DB sweep): scheduler-fired session messages were attributed to the founder's `from_kind`, so cron-driven activity rows in the inbox read as if the user had typed them. Backfilled across host `~/.aeqi/sessions.db` + every per-tenant `/var/lib/aeqi/containers/<entity_id>/sessions.db` (5 host rows + 35 tenant rows across 5 of 14 containers, including 27 in the AEIQ dogfood company). Inbox now distinguishes system-emitted rows from human-authored ones at a glance. `a4612073`.
+
 ## v0.60.0 — 2026-05-09
 
 **Headline:** Personality folded into Ideas; event detail gets the canonical header.
