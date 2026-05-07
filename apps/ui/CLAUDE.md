@@ -2341,6 +2341,42 @@ on `/c/<id>` as the transient fallback. The rule is purely about not
 GENERATING the legacy form for on-chain entities. Cost (2026-05-07):
 44 literals swept across 28 files; hygiene rule prevents recurrence.
 
+## Agent-scoped navigation needs both entity AND agent — `goEntity` only resolves entity-scope
+
+**`goEntity(entityId, tab, itemId)` from `useNav` builds `/c/<eid>/<tab>/<itemId>`
+— two URL levels, ENTITY-scope only.** It cannot express agent-scoped URLs like
+`/c/<eid>/agents/<aid>/inbox/<sid>` (four levels). When a hook or component is
+agent-scoped (it has `agentId` in its closure), reaching for `goEntity` to
+navigate silently strips the agent from the URL.
+
+Specifically: a `setSession(sid)` helper inside an agent-scoped session manager
+that does `goEntity(entityId, "inbox", sid)` produces `/c/<eid>/inbox/<sid>` —
+the COMPANY INBOX URL — not `/c/<eid>/agents/<aid>/inbox/<sid>`. Same shape on
+`setSession(null)` → `goEntity(entityId)` produces `/c/<eid>` (company bare),
+losing the agent context entirely. The bug compiles cleanly, type-checks, and
+runs without errors; the user just lands on a different surface than intended.
+
+Canonical helpers for agent-scoped navigation (use these, NOT `goEntity`):
+
+- Session URL: `sessionDeepUrlFromId(entities, entityId, agentId, sessionId)` →
+  `/c/<eid>/agents/<aid>/inbox/<sid>` (or `/trust/<addr>/agents/<aid>/inbox/<sid>`).
+  This is what `shell/SessionsRail.tsx` uses on row click.
+- Agent-bare URL (no session selected, chat-as-default empty state):
+  `entityPathFromId(entities, entityId, "agents", agentId)` →
+  `/c/<eid>/agents/<aid>`. The `entityPath`/`entityPathFromId` helpers accept
+  N segments via rest args, so they can express any depth.
+
+Rule: when the call site has BOTH `entityId` AND `agentId` in scope, default to
+`entityPathFromId(entities, entityId, ...segments)` or the matching purpose-
+specific helper (`sessionDeepUrlFromId` for session URLs). `goEntity` from
+`useNav` is for ENTITY-scope tabs (inbox / agents-list / quests-list / ...) —
+not for drilling INTO an agent. Cost (2026-05-07): + New button on agent
+header navigated to company inbox instead of resetting the agent's chat surface
+to empty — the `setSession(null)` helper inside `useSessionManager` was using
+`goEntity(entityId, undefined, undefined)` which strips both tab and itemId
+but ALSO has no slot for the agentId. Required reading the rail's click
+handler to discover the canonical agent-scoped helper already exists.
+
 ## Adding a new sub-tree to a `:tab/:itemId` route — use a literal segment, not a third param level
 
 When extending an existing `agents/:agentId/:tab/:itemId` route shape with
