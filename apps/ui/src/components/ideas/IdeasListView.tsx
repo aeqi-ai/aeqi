@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useNav } from "@/hooks/useNav";
 import { Button, Tooltip } from "../ui";
 import type { Idea, ScopeValue } from "@/lib/types";
@@ -56,9 +57,9 @@ export default function IdeasListView({
   view,
   onViewChange,
 }: IdeasListViewProps) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, entityPath, entityId } = useNav();
   const searchRef = useRef<HTMLInputElement>(null);
-  const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const rowRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const searchActive = filter.search.trim() !== "";
 
   // Ranked / sorted order. With a query, rows land in rank buckets 0..4
@@ -609,16 +610,15 @@ export default function IdeasListView({
                       flatIndex += 1;
                       const myIndex = flatIndex;
                       return (
-                        <button
+                        <Link
                           key={idea.id}
                           ref={(el) => {
                             rowRefs.current[myIndex] = el;
                           }}
-                          type="button"
+                          to={entityPath(entityId, "ideas", idea.id)}
                           className="ideas-list-row"
                           data-testid="idea-row"
                           data-idea-id={idea.id}
-                          onClick={() => goEntity(entityId, "ideas", idea.id)}
                           onKeyDown={(e) => {
                             if (e.key === "ArrowDown") {
                               e.preventDefault();
@@ -680,7 +680,7 @@ export default function IdeasListView({
                               {highlightMatches(snippet, filter.search)}
                             </div>
                           )}
-                        </button>
+                        </Link>
                       );
                     })}
                 </section>

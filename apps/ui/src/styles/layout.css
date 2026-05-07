@@ -7155,3 +7155,107 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   background: var(--color-card-elevated);
   border-radius: 999px;
 }
+
+/* Ideas — Kanban view (Phase 2). Lanes flow horizontally so the surface
+   reads as a board, not a stacked list. Each lane is a fixed-width column
+   that scrolls vertically inside its body; the row-level container scrolls
+   horizontally when the lane count exceeds the viewport. */
+.ideas-kanban {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-md);
+  overflow-x: auto;
+  padding: var(--space-sm) 0;
+}
+.ideas-kanban-col {
+  flex: 0 0 auto;
+  min-width: 280px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: var(--color-card-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+}
+.ideas-kanban-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: 0 var(--space-2) var(--space-2);
+}
+.ideas-kanban-col-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.ideas-kanban-col-count {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.ideas-kanban-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ideas-kanban-empty {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: var(--space-2);
+  text-align: center;
+}
+.ideas-kanban-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-sm);
+  background: var(--color-card);
+  border-radius: var(--radius-sm);
+  transition: box-shadow 0.12s ease;
+}
+.ideas-kanban-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+.ideas-kanban-card.is-pending {
+  opacity: 0.6;
+}
+.ideas-kanban-card-name {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.ideas-kanban-card-name:hover {
+  color: var(--color-accent);
+}
+.ideas-kanban-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ideas-kanban-status-pill {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  padding: 1px 8px;
+  background: var(--color-card-elevated);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.ideas-kanban-status-pill:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

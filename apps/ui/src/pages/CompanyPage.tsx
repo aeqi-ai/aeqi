@@ -79,10 +79,16 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     if (itemId) {
       targetPath += `/${encodeURIComponent(itemId)}`;
     }
+    // Preserve the query string (`?view=kanban`, `?view=table`, etc.) —
+    // a deep link like `/c/<id>/ideas?view=kanban` would otherwise drop
+    // the `view` param on redirect and land on the default list view.
+    if (location.search) {
+      targetPath += location.search;
+    }
 
     // Replace the history entry so the user doesn't pollute their back-button
     navigate(targetPath, { replace: true });
-  }, [entity?.trust_address, tab, itemId, navigate, location.pathname]);
+  }, [entity?.trust_address, tab, itemId, navigate, location.pathname, location.search]);
 
   // Inbox is the company-scoped action queue. Visually it's MeInbox
   // for now (Phase-1 cross-company aggregation lives at top-level
