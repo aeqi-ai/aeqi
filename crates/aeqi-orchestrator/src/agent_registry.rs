@@ -1633,7 +1633,7 @@ impl AgentRegistry {
         parent_agent_id: Option<&str>,
         model: Option<&str>,
     ) -> Result<Agent> {
-        self.spawn_with_entity_id(name, parent_agent_id, model, None)
+        self.spawn_with_entity_id(name, parent_agent_id, model, None, None)
             .await
     }
 
@@ -1642,12 +1642,21 @@ impl AgentRegistry {
     /// the platform mints the canonical UUID and passes it through. No-op
     /// when `parent_agent_id` is `Some` (child spawns always reuse the
     /// parent's entity_id).
+    ///
+    /// `entity_slug_override` decouples the `entities.slug` column from the
+    /// root agent's `canonical_name`. Blueprints carry their own brand slug
+    /// (`blueprint.slug` — e.g. `meridian-supply`) which is the right value
+    /// for the entity slug; the persona name (e.g. `Maya Reyes`) is an
+    /// agent-level identifier and would create confusing UNIQUE collisions
+    /// across deploys when used as the entity slug. Defaults to the
+    /// canonical name (matches pre-refactor behaviour) when `None`.
     pub async fn spawn_with_entity_id(
         &self,
         name: &str,
         parent_agent_id: Option<&str>,
         model: Option<&str>,
         entity_id_override: Option<&str>,
+        entity_slug_override: Option<&str>,
     ) -> Result<Agent> {
         let agent_id = uuid::Uuid::new_v4().to_string();
         let role_id = uuid::Uuid::new_v4().to_string();
@@ -1706,13 +1715,21 @@ impl AgentRegistry {
                 count > 0
             };
             if !already_exists {
+                // Decouple entities.slug from the root agent's canonical_name.
+                // When the caller supplied a slug override (the canonical
+                // path: blueprints carry their own brand slug), use it. The
+                // entity name still mirrors the canonical_name so existing
+                // platform code that reads it stays unaffected.
+                let entity_slug = entity_slug_override
+                    .map(str::to_string)
+                    .unwrap_or_else(|| canonical_name.clone());
                 db.execute(
                     "INSERT INTO entities (id, type, name, slug, metadata, created_at)
                          VALUES (?1, 'company', ?2, ?3, '{}', ?4)",
                     params![
                         fresh_entity_id,
                         canonical_name,
-                        canonical_name,
+                        entity_slug,
                         now.to_rfc3339(),
                     ],
                 )?;

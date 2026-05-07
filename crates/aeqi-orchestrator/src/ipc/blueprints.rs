@@ -339,12 +339,28 @@ pub async fn spawn_blueprint(
     let mut warnings: Vec<String> = Vec::new();
 
     // ---- root agent ----
+    // Pass `blueprint.slug` as the entity-slug override so the canonical
+    // marketing brand (e.g. `meridian-supply`) lands on the entity row,
+    // not the root agent's persona name. This decouples the entity
+    // identity from the agent-level canonical_name; slug collisions key
+    // off the brand, not the persona, so a founder deploying two
+    // companies with the same default persona (`founder`) but different
+    // brands no longer trips a UNIQUE error on `entities.slug`.
+    //
+    // For child spawns (`parent_agent_id = Some(_)`) the override is
+    // a no-op — children reuse the parent's entity row.
+    let entity_slug_override = if parent_agent_id.is_none() && !blueprint.slug.is_empty() {
+        Some(blueprint.slug.as_str())
+    } else {
+        None
+    };
     let root = agent_registry
         .spawn_with_entity_id(
             override_name.unwrap_or(&blueprint.root.name),
             parent_agent_id,
             blueprint.root.model.as_deref(),
             entity_id_override,
+            entity_slug_override,
         )
         .await?;
     apply_visual_identity(
@@ -926,9 +942,24 @@ pub async fn handle_spawn_blueprint(
     request: &serde_json::Value,
     _allowed: &Option<Vec<String>>,
 ) -> serde_json::Value {
+    // Two payload shapes the platform may send:
+    //
+    //   1. `blueprint` = static catalog slug (legacy + canonical seed path
+    //      used by `/start/launch`, `/api/companies/create`, etc.).
+    //   2. `inline_blueprint` = the full Blueprint JSON, sent by the
+    //      architect's deploy path which generates a one-off blueprint
+    //      that doesn't live in the static catalog.
+    //
+    // Exactly one must be present. The inline shape lets the platform
+    // ferry an architect-generated draft straight into the runtime
+    // without round-tripping through a fake catalog entry.
+    let inline_blueprint_value = request.get("inline_blueprint").cloned();
     let slug = super::request_field(request, "blueprint").unwrap_or("");
-    if slug.is_empty() {
-        return serde_json::json!({"ok": false, "error": "blueprint is required"});
+    if slug.is_empty() && inline_blueprint_value.is_none() {
+        return serde_json::json!({
+            "ok": false,
+            "error": "blueprint or inline_blueprint is required",
+        });
     }
 
     // `display_name` is the canonical override key (mirrors `/start/launch`).
@@ -942,14 +973,27 @@ pub async fn handle_spawn_blueprint(
     // role; absent for scope/proxy tokens that have no user context.
     let creator_user_id = super::request_field(request, "creator_user_id").map(str::to_string);
 
-    let blueprint = match crate::blueprints::company_blueprint(slug) {
-        Some(t) => t,
-        None => {
-            return serde_json::json!({
-                "ok": false,
-                "error": format!("blueprint not found: {slug}"),
-                "code": "not_found",
-            });
+    let blueprint = if let Some(value) = inline_blueprint_value {
+        match serde_json::from_value::<Blueprint>(value) {
+            Ok(b) => b,
+            Err(err) => {
+                return serde_json::json!({
+                    "ok": false,
+                    "error": format!("inline_blueprint is not a valid Blueprint: {err}"),
+                    "code": "invalid_blueprint",
+                });
+            }
+        }
+    } else {
+        match crate::blueprints::company_blueprint(slug) {
+            Some(t) => t,
+            None => {
+                return serde_json::json!({
+                    "ok": false,
+                    "error": format!("blueprint not found: {slug}"),
+                    "code": "not_found",
+                });
+            }
         }
     };
 

@@ -143,7 +143,7 @@ pub async fn handle_agent_spawn(
 
     let agent = match ctx
         .agent_registry
-        .spawn_with_entity_id(name, parent_agent_id, model, entity_id)
+        .spawn_with_entity_id(name, parent_agent_id, model, entity_id, None)
         .await
     {
         Ok(a) => a,

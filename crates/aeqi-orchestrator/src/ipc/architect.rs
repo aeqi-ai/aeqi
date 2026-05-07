@@ -136,7 +136,9 @@ fn ensure_llm_env_resolved() {
     }
 }
 
-use crate::ipc::blueprints::{Blueprint, BlueprintPart, spawn_blueprint};
+// blueprint imports retired alongside `architect.deploy` — the deploy
+// path lives in aeqi-platform now and dispatches through the runtime's
+// `spawn_blueprint` IPC verb with an `inline_blueprint` payload.
 
 /// Maximum allowed brief length, hard-enforced at the IPC boundary so the
 /// orchestrator doesn't allocate a multi-megabyte blob per request.
@@ -409,113 +411,16 @@ pub async fn handle_architect_refine(
     json!({"ok": true, "draft_id": draft_id, "draft": refined})
 }
 
-/// `architect.deploy` — provision a Company from a generated blueprint.
-///
-/// Phase 1: takes the inline blueprint from the draft, deserializes it
-/// into the canonical `Blueprint` shape, and routes through the existing
-/// `spawn_blueprint` provisioner — same code path the catalog uses. No
-/// new on-chain logic, no draft persistence.
-///
-/// Request shape:
-/// ```json
-/// { "draft": <GeneratedBlueprint>,
-///   "display_name": "My foundation"  // optional
-/// }
-/// ```
-pub async fn handle_architect_deploy(
-    ctx: &super::CommandContext,
-    request: &Value,
-    _allowed: &Option<Vec<String>>,
-) -> Value {
-    let Some(draft_value) = request.get("draft").cloned() else {
-        return json!({"ok": false, "error": "draft is required", "code": "invalid_request"});
-    };
-    let draft: GeneratedBlueprint = match serde_json::from_value(draft_value) {
-        Ok(d) => d,
-        Err(err) => {
-            return json!({
-                "ok": false,
-                "error": format!("draft is malformed: {err}"),
-                "code": "invalid_request",
-            });
-        }
-    };
-
-    // The architect emits the canonical Blueprint shape inline as JSON.
-    // Round-trip it through the orchestrator's deserializer so we get the
-    // full validation surface the catalog path enjoys (required fields,
-    // role-type parsing, etc.).
-    let blueprint: Blueprint = match serde_json::from_value(draft.blueprint.clone()) {
-        Ok(b) => b,
-        Err(err) => {
-            return json!({
-                "ok": false,
-                "error": format!("generated blueprint is not a valid Blueprint: {err}"),
-                "code": "invalid_blueprint",
-            });
-        }
-    };
-
-    let display_name = super::request_field(request, "display_name").map(str::to_string);
-    let entity_id_override = super::request_field(request, "entity_id").map(str::to_string);
-    let creator_user_id = super::request_field(request, "creator_user_id").map(str::to_string);
-
-    let Some(ref event_store) = ctx.event_handler_store else {
-        return json!({"ok": false, "error": "event handler store not available"});
-    };
-
-    let role_overrides = Vec::new();
-
-    match spawn_blueprint(
-        &blueprint,
-        display_name.as_deref(),
-        None,
-        entity_id_override.as_deref(),
-        &BlueprintPart::ALL,
-        &ctx.agent_registry,
-        event_store.as_ref(),
-        ctx.idea_store.as_ref(),
-        ctx.role_registry.as_ref(),
-        &role_overrides,
-    )
-    .await
-    {
-        Ok(outcome) => {
-            // Mirror the catalog deploy path: ensure a founding Director
-            // role for the creator when the IPC carried a user id.
-            if let Some(ref uid) = creator_user_id
-                && let Err(e) = ctx
-                    .role_registry
-                    .ensure_founding_director(&outcome.entity_id, uid)
-                    .await
-            {
-                tracing::error!(
-                    error = %e,
-                    entity_id = %outcome.entity_id,
-                    user_id = %uid,
-                    "architect.deploy: failed to auto-create founding Director role",
-                );
-            }
-            json!({
-                "ok": true,
-                "entity_id": outcome.entity_id,
-                "root_agent_id": outcome.root_agent_id,
-                "root_agent_name": outcome.root_agent_name,
-                "spawned_agents": outcome.spawned_agents,
-                "created_events": outcome.created_events,
-                "created_ideas": outcome.created_ideas,
-                "created_quests": outcome.created_quests,
-                "warnings": outcome.warnings,
-                "blueprint": {
-                    "slug": blueprint.slug,
-                    "name": blueprint.name,
-                },
-                "generator": draft.generator,
-            })
-        }
-        Err(err) => json!({"ok": false, "error": err.to_string()}),
-    }
-}
+// `architect.deploy` retired here; the platform now owns the deploy flow
+// (`POST /api/architect/deploy` in aeqi-platform) so it can write the
+// `runtime_placements` row, spawn the sandbox, fire on-chain TRUST
+// provisioning, and ferry the architect's inline blueprint to the new
+// runtime via `spawn_blueprint`'s `inline_blueprint` payload. The
+// runtime-only deploy was a half-shipped seam — entity + agents + roles
+// landed in the runtime DB but no platform placement existed, so the UI
+// bounced to /me/inbox and on-chain TRUST never fired. See
+// `crates/aeqi-orchestrator/src/ipc/blueprints.rs::handle_spawn_blueprint`
+// for the inline-blueprint dispatch.
 
 /// Build a stable-ish synthetic draft id from the blueprint's slug and a
 /// hash of its rationale. Phase 1 doesn't persist drafts, so this id is

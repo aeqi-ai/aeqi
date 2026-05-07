@@ -1734,11 +1734,16 @@ impl Daemon {
                     crate::ipc::architect::handle_architect_refine(&ctx, &request, &allowed_roots)
                         .await
                 }
-                "architect.deploy" => {
-                    crate::ipc::architect::handle_architect_deploy(&ctx, &request, &allowed_roots)
-                        .await
-                }
-
+                // `architect.deploy` was retired; the architect deploy path
+                // now goes through the platform's `POST /api/architect/deploy`
+                // route which writes `runtime_placements`, spawns the
+                // sandbox, fires `provision_dao`, and ferries the inline
+                // blueprint to the new runtime via `spawn_blueprint`'s
+                // `inline_blueprint` payload. The runtime-only deploy verb
+                // half-shipped (entity + agents + roles in the runtime DB,
+                // no platform placement, no on-chain TRUST, UI bounced to
+                // /me/inbox) and is explicitly removed to prevent it being
+                // re-introduced.
                 "list_blueprints" => {
                     crate::ipc::blueprints::handle_list_blueprints(&ctx, &request, &allowed_roots)
                         .await
