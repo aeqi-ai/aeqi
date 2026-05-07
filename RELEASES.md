@@ -1,5 +1,12 @@
 # Release Notes
 
+## v0.46.0 — 2026-05-08
+
+**Headline:** Ideas grow children, refine works past turn one.
+
+- **Ideas Phase 2.1 — children list + property chips on the detail page** (`apps/ui/src/components/ideas/IdeaPropertyChips.tsx` + `IdeaChildrenList.tsx` + `IdeaCanvas.tsx` + `apps/ui/src/styles/layout.css`): the substrate from v0.45 (`parent_idea_id`, schemaless `properties`) gets first-class affordances on the canvas. `IdeaPropertyChips` renders properties as inline chips on the canvas header — click to edit (text input or status dropdown for the canonical `todo` / `in_progress` / `done` enum), `+ Add property` opens a small modal, X removes a key. Writes deep-merge via `PUT /ideas/:id/properties`; explicit null removes. `IdeaChildrenList` shows children (rows where `parent_idea_id = this idea`) under the BlockEditor body as small cards with name + status chip; click navigates to the child detail; `+ Add child` creates a new Idea with `parent_idea_id` pre-filled. Section hides itself when no children exist (the dashed Add-child pill stays as a single affordance). Wired into `IdeaCanvas` only in edit mode; compose mode unaffected. React-query invalidation on every property/child write — Kanban view picks up status changes automatically. `7a3aadbd`.
+- **Architect refine — 90s timeout + raw-body diagnostics on parse failure** (`crates/aeqi-architect/src/llm.rs` + `crates/aeqi-web/src/routes/architect.rs`): Wave 35 multi-turn refine was timing out mid-body-stream against the slowest OpenRouter shards — the reqwest client and the outer `tokio::time::timeout` both held at 30s, and `resp.json()` failed opaquely with `error decoding response body` when the body landed late. Three changes in the shared LLM call layer: bump reqwest client timeout to 90s (REFINE_TIMEOUT) so the HTTP client outlives the slowest body stream while the per-call deadline stays enforced by the outer timeout; switch `resp.json()` to text-then-parse so future parse failures emit the raw body preview in the error message instead of a generic decode string; bump refine's outer deadline to 90s and the IPC proxy timeout to 100s so refine has end-to-end headroom. Draft path keeps its 30s deadline — only refine's behaviour changes. The hypothesis in the brief (missing `response_format` on refine) was wrong; both the chat shape and `response_format` were already correct. Real cause was the request-level timeout. UX walk v21 FAIL → v22 PASS. `4b88ab64`.
+
 ## v0.45.0 — 2026-05-08
 
 **Headline:** Ideas become a database.
@@ -210,7 +217,7 @@
 **Headline:** Real hairlines fix — borders replaced with spacing and tint, not box-shadow swap.
 
 - Hairlines pass-3 (4d8808fd) was cosmetic swap caught by UX-V13
-- Real fix shipped (d3fc9745): drop decorative 1px borders, use --space-* spacing and tint shifts (--color-card vs --color-bg-base) per memory feedback_no_hairlines.md
+- Real fix shipped (d3fc9745): drop decorative 1px borders, use --space-\* spacing and tint shifts (--color-card vs --color-bg-base) per memory feedback_no_hairlines.md
 - Form input borders preserved (semantic, focus indicator)
 - UX-V13 walk script extended detector (border + box-shadow inset)
 
@@ -228,7 +235,7 @@
 
 **Headline:** TRUST is the canonical primitive. /trust/<address> routing live. Config drift from pre-refactor port corrected.
 
-- aeqi-platform: 301 redirect from /c/:entityId/* to /trust/:trustAddress/* when on-chain
+- aeqi-platform: 301 redirect from /c/:entityId/_ to /trust/:trustAddress/_ when on-chain
 - aeqi-platform: venture module stub correctness (abi_encode_params + slot keys + uint16 unifutures)
 - aeqi-platform: registerTRUST gas limit 20M→28M for venture template
 - aeqi (UI): /trust/:trustAddress route group, useCurrentCompany hook, wizard polls trust_address
@@ -305,7 +312,7 @@
 **Ships across all three repos:**
 
 - **aeqi**: Treasury, Ownership, Governance tabs read indexed on-chain state; aeqi-inference Phase 1 (DeepInfra provider behind subscription auth); aeqi-paymaster ERC-7677 pm_sponsorUserOperation service; rundler bundler service deployed + smoke tested; 9 Wave-16 design fixes (pill radius, padding tokens, button variants, jade badges, AEQI lowercase, avatar color, plan name UUID, sidebar leak, spacing/typo)
-- **aeqi-platform**: WS-5 inference mount (/v1/* behind subscription lane); docs for cross-repo path dep targeting + vps.rs forwarder evolve
+- **aeqi-platform**: WS-5 inference mount (/v1/\* behind subscription lane); docs for cross-repo path dep targeting + vps.rs forwarder evolve
 - **aeqi-docs**: AA design memos; API REST reference; inference API page; transaction-governance guide; index polish surfacing AA + canonical-templates
 
 No migration required. On-chain indexing surfaces read-only mirrors of treasury/ownership/governance state via existing Platform APIs.
@@ -322,8 +329,10 @@ No migration required. On-chain indexing surfaces read-only mirrors of treasury/
 No migration required. All changes are cleanups and documentation.
 
 ### Changed
+
 - Token system audited and literal hex values removed from build artifacts.
 - TRUST contract bytecode optimized for EIP-170 compliance.
 
 ### Documentation
+
 - IPFS content-addressing patterns documented in aeqi-docs.
