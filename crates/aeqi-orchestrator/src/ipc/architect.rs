@@ -32,13 +32,28 @@ use aeqi_architect::{
 use serde_json::{Value, json};
 use tracing::{info, warn};
 
-/// Resolve the architect's LLM credential. Checks the process env vars
-/// first (DEEPINFRA_API_KEY, OPENROUTER_API_KEY); when both are absent
-/// (the host runtime case — only `aeqi-platform.service` loads
-/// `/etc/aeqi/secrets.env`, the per-tenant host services don't), falls
-/// back to the credentials substrate at `~/.aeqi/aeqi.db` where the
-/// orchestrator's own startup migration parks the same OPENROUTER key.
-/// This sets the env var in-process so [`build_default_llm`] sees it.
+/// Resolve the architect's LLM credential + base URL. Checks the process
+/// env vars first (DEEPINFRA_API_KEY, OPENROUTER_API_KEY); when both are
+/// absent (the host runtime case — only `aeqi-platform.service` loads
+/// `/etc/aeqi/secrets.env`, the per-tenant host services don't),
+/// resolves the runtime's data dir and tries two fallbacks in order:
+///
+/// 1. The credentials substrate at `<data_dir>/aeqi.db` (where the
+///    orchestrator's own startup migration parks the OPENROUTER key on
+///    host runtimes).
+/// 2. The runtime's own `aeqi.toml` config (`AEQI_CONFIG` or
+///    `<data_dir>/aeqi.toml`) — the `[providers.openrouter]` block carries
+///    `api_key` + `base_url`. Sandbox tenants ship with `api_key = "proxy"`
+///    pointed at the platform's `/api/llm/v1` endpoint, which does the
+///    real auth; the architect doesn't need the upstream key, just the
+///    proxy URL + sentinel "proxy" key.
+///
+/// Sets `OPENROUTER_API_KEY` and (when not the public OpenRouter URL)
+/// `OPENROUTER_BASE_URL` in-process so [`build_default_llm`] sees them.
+///
+/// Data-dir resolution: `AEQI_DATA_DIR` first (set on sandbox tenants by
+/// systemd), then `HOME/.aeqi` (the host-runtime default). Without either,
+/// gives up and returns — the caller falls back to the stub generator.
 ///
 /// Idempotent — once the env var is populated, subsequent calls no-op.
 fn ensure_llm_env_resolved() {
@@ -54,12 +69,21 @@ fn ensure_llm_env_resolved() {
         return;
     }
 
-    // Resolve the runtime's data dir. Mirrors `aeqi-core` config-default.
-    let data_dir = match std::env::var("HOME") {
-        Ok(home) => std::path::PathBuf::from(home).join(".aeqi"),
-        Err(_) => return,
+    // Resolve the runtime's data dir. AEQI_DATA_DIR is set explicitly on
+    // sandbox tenants (e.g. /data inside bwrap); HOME is set on host
+    // runtimes. Mirrors `aeqi-core` config-default.
+    let data_dir = if let Ok(d) = std::env::var("AEQI_DATA_DIR")
+        && !d.is_empty()
+    {
+        std::path::PathBuf::from(d)
+    } else if let Ok(home) = std::env::var("HOME") {
+        std::path::PathBuf::from(home).join(".aeqi")
+    } else {
+        return;
     };
 
+    // Fallback 1 — credentials substrate. Host runtimes have OPENROUTER_API_KEY
+    // parked here by the orchestrator's startup migration.
     if let Ok(Some(key)) =
         aeqi_core::credentials::read_global_legacy_blob_sync(&data_dir, "OPENROUTER_API_KEY")
         && !key.is_empty()
@@ -69,6 +93,46 @@ fn ensure_llm_env_resolved() {
         // lifetime of the runtime process.
         unsafe { std::env::set_var("OPENROUTER_API_KEY", &key) };
         info!("architect.draft: resolved OPENROUTER_API_KEY from credentials substrate");
+        return;
+    }
+
+    // Fallback 2 — aeqi.toml `[providers.openrouter]`. Sandbox tenants ship
+    // with `api_key = "proxy"` + `base_url = "http://127.0.0.1:8443/api/llm/v1"`
+    // so the architect routes through the platform's inference proxy, which
+    // does the real upstream auth. The substrate is empty in sandbox.
+    let config_path = std::env::var("AEQI_CONFIG")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| data_dir.join("aeqi.toml"));
+    if let Ok(content) = std::fs::read_to_string(&config_path)
+        && let Ok(toml_root) = content.parse::<toml::Value>()
+        && let Some(or_block) = toml_root.get("providers").and_then(|p| p.get("openrouter"))
+    {
+        let api_key = or_block
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let base_url = or_block
+            .get("base_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if !api_key.is_empty() {
+            // SAFETY: single-process IPC handler boot path; no concurrent env reads
+            // are racing this write. The flag is set once and remains set for the
+            // lifetime of the runtime process.
+            unsafe { std::env::set_var("OPENROUTER_API_KEY", api_key) };
+            if !base_url.is_empty() {
+                unsafe { std::env::set_var("OPENROUTER_BASE_URL", base_url) };
+            }
+            info!(
+                config_path = %config_path.display(),
+                base_url_set = !base_url.is_empty(),
+                "architect.draft: resolved OPENROUTER_API_KEY from aeqi.toml provider config",
+            );
+        }
     }
 }
 

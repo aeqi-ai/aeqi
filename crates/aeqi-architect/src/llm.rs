@@ -247,7 +247,15 @@ pub fn build_default_llm() -> Option<(Box<dyn LlmCaller>, LlmGenerationOptions)>
             model: "meta-llama/llama-3.3-70b-instruct".to_string(),
             ..Default::default()
         };
-        return Some((Box::new(OpenRouterLlm::new(key)), opts));
+        // OPENROUTER_BASE_URL lets sandbox tenants point at the platform's
+        // `/api/llm/v1` inference proxy (where the real upstream auth lives)
+        // instead of the public OpenRouter endpoint. Host runtimes leave the
+        // env var unset and hit OpenRouter directly with the parked key.
+        let llm = match std::env::var("OPENROUTER_BASE_URL") {
+            Ok(base_url) if !base_url.is_empty() => OpenRouterLlm::new(key).with_base_url(base_url),
+            _ => OpenRouterLlm::new(key),
+        };
+        return Some((Box::new(llm), opts));
     }
 
     None
