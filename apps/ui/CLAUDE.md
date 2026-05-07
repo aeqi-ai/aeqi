@@ -323,6 +323,46 @@ store+POST vs react-query+groupMessages. Reframed the ship to extract
 inbox. Detail unification deferred. ~5 min triangulation saved a multi-
 day refactor that would have broken streaming.
 
+### Brief asserts row-content divergence — confirm the data shape is divergent-by-design before "unifying"
+
+Sister pattern to "Brief asserts UI duplication." When a brief asserts
+that two surfaces feeding the same primitive produce visually different
+content ("inbox passes `r.subject` as `primary`; agent rail passes
+`sessionLabel(s)`; make them the same") — read the locked-shape rules
+first. The two surfaces may be feeding the SAME primitive with
+canonical-per-surface content semantics, where unifying would regress.
+
+Specifically for SessionRail:
+
+- `apps/ui/CLAUDE.md` "SessionRail row shape" section locks single-line
+  h=32 across both adopters. Visual TREATMENT is unified.
+- The `primary` content is canonical-per-surface: inbox shows the
+  awaiting question (most informative single string for a decision
+  request); chat rail shows the session display label (most informative
+  for an open conversation).
+- "Sender name lives in the right-pane detail header, not duplicated in
+  the rail row" — locked rule. A brief asking to "pass `from.name` as
+  primary on inbox" would REGRESS the surface.
+
+Recipe: when a brief proposes content unification, grep for the locked
+shape rule before applying:
+
+```bash
+# Find the locked-shape section for the primitive
+grep -A 20 "<PrimitiveName> row shape\|<PrimitiveName> shape — locked" \
+  apps/ui/CLAUDE.md apps/ui/.impeccable.md
+```
+
+If a locked rule exists and contradicts the brief, the brief is wrong.
+Apply the canonical surgical fix to the actual user-visible symptom
+(in this session: composer position + double-mount + replyable gate),
+not the brief's content-unification proposal. Document the decision in
+the commit body so the next reader doesn't reopen the same question.
+Cost (2026-05-07): SessionDetail-unify ship — brief asserted row primary
+divergence; reading the locked SessionRail row shape rule established
+the canonical answer; the actual user complaint was composer position,
+not row primary. ~3 min triangulation prevented a regression.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5

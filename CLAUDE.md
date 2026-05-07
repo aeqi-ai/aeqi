@@ -154,14 +154,15 @@ Cost (2026-05-05): v12 walk showed 3x P1 on landing pages; traced to CookieConse
 **UX walk — indexer GraphQL field shapes differ by query type.**
 Pre-walk probes and walk-script GraphQL queries must use the exact argument names the
 indexer schema exposes. Confirmed shapes as of v11 (2026-05-05):
+
 - `rolesForTrust(trustId: "0x...")` — works; arg is `trustId` (bytes32 hex)
 - `trustById(trustId: "0x...")` — works; arg is `trustId`
 - `treasuryBalances` — requires `trustId` arg (NOT `trustAddress`); field names differ from roles
 - `proposalsForTrust` — requires `trustId` arg (NOT `trustAddress`); status field is `status` not `state`
-Full schema: `curl -sS -X POST -H 'Content-Type: application/json' -d '{"query":"{ __schema { queryType { fields { name } } } }"}' http://localhost:8501/graphql`
-Cost (2026-05-05): v11 pre-walk probe used `trustAddress` on treasury+proposals queries
-and got GraphQL errors; the browser walk still passed (UI uses correct shapes internally)
-but the probe returned empty data and logged schema-mismatch errors. ~3 min to diagnose.
+  Full schema: `curl -sS -X POST -H 'Content-Type: application/json' -d '{"query":"{ __schema { queryType { fields { name } } } }"}' http://localhost:8501/graphql`
+  Cost (2026-05-05): v11 pre-walk probe used `trustAddress` on treasury+proposals queries
+  and got GraphQL errors; the browser walk still passed (UI uses correct shapes internally)
+  but the probe returned empty data and logged schema-mismatch errors. ~3 min to diagnose.
 
 **Playwright repro/probe scripts must live under `/home/claudedev/aeqi/scripts/` (not `/tmp`).** `playwright` is installed at `/home/claudedev/aeqi/node_modules/playwright` only — Node's ESM resolver walks up from the script's directory, so a script written to `/tmp/repro.mjs` fails with `ERR_MODULE_NOT_FOUND: Cannot find package 'playwright'`. Always write one-off browser probes into `scripts/_<name>.mjs` (the underscore prefix marks them as ad-hoc; `.gitignore` doesn't exclude them but `/ship` should `rm` them before merge). Mint JWTs via the documented recipe: `export AEQI_WEB_SECRET=...; TOKEN=$(node scripts/_mint-jwt.mjs <user_id> <email>); AEQI_TOKEN="$TOKEN" node scripts/_repro.mjs`. The `export` is required — chaining `AEQI_WEB_SECRET=... TOKEN=$(...)` only puts the var in the assignment scope, not the subprocess. Cost (2026-05-06): one move + one env-var retry on the routing-fix repro.
 
@@ -171,13 +172,14 @@ CSS source order. A CSS declaration `box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1)
 becomes `rgba(0, 0, 0, 0.1) 0px 0px 0px 1px inset` in computed style (color promoted
 to front, `inset` moved to end). Walk script regex that checks for `inset` at the
 start of the value will silently find zero results. Correct match patterns:
+
 - All-side 1px inset: `/ 0px 0px 0px 1px inset/.test(boxShadow)`
 - Top/bottom edge inset: `/ 0px [±]1px 0px 0px inset/.test(boxShadow)`
-Rule: always test regex against `window.getComputedStyle(el).boxShadow` in a live
-browser (`node -e "..."` with Playwright) — never against the CSS source string.
-Cost (2026-05-05): v13 shadow detector wrote `bs.includes("inset") && bs.includes("1px")`
-but the inset check matched while the value order made the pattern miss — shadow count
-reported 0 on routes where 22 inset shadows existed. Required a debug probe to discover.
+  Rule: always test regex against `window.getComputedStyle(el).boxShadow` in a live
+  browser (`node -e "..."` with Playwright) — never against the CSS source string.
+  Cost (2026-05-05): v13 shadow detector wrote `bs.includes("inset") && bs.includes("1px")`
+  but the inset check matched while the value order made the pattern miss — shadow count
+  reported 0 on routes where 22 inset shadows existed. Required a debug probe to discover.
 
 **UX walk — summary table regex picks first `\d+` from the code name, not the count.**
 Walk scripts that extract counts from `antiPattern.detail` strings using `parseInt(detail.match(/\d+/)?.[0])`
@@ -204,17 +206,18 @@ separate debug probe to understand — added ~5 min.
 
 **UX walk — hairline "fixed" verdict requires border count to drop, not swap to shadow.**
 When a hairline pass claims to fix borders, the walk script must confirm:
-  1. `HAIRLINE_BORDER_COUNT` drops toward zero on the targeted routes
-  2. `HAIRLINE_SHADOW_COUNT` is NOT compensating (i.e., shadow count did not rise by
-     the same amount the border count fell)
-The cosmetic-swap anti-pattern (`border: 1px solid` → `box-shadow: inset 0 0 0 1px`)
-passes the old single-detector walk, creates zero visual change, and inflates the commit
-diff with meaningless churn. The v13 extended detector (separate `HAIRLINE_BORDER_COUNT_V13`
-and `HAIRLINE_SHADOW_COUNT_V13` codes) catches this. Always require both codes in any
-future hairline-pass walk. If shadow count rises to match the border count drop → P1,
-revert, redo with spacing/tint/weight (`feedback_no_hairlines.md`).
-Cost (2026-05-05): 4d8808fd shipped as "hairline elimination", detected as swap-only by
-v13 walk. v12 score unchanged. Required P1 filing and WS-28-A remediation ticket.
+
+1. `HAIRLINE_BORDER_COUNT` drops toward zero on the targeted routes
+2. `HAIRLINE_SHADOW_COUNT` is NOT compensating (i.e., shadow count did not rise by
+   the same amount the border count fell)
+   The cosmetic-swap anti-pattern (`border: 1px solid` → `box-shadow: inset 0 0 0 1px`)
+   passes the old single-detector walk, creates zero visual change, and inflates the commit
+   diff with meaningless churn. The v13 extended detector (separate `HAIRLINE_BORDER_COUNT_V13`
+   and `HAIRLINE_SHADOW_COUNT_V13` codes) catches this. Always require both codes in any
+   future hairline-pass walk. If shadow count rises to match the border count drop → P1,
+   revert, redo with spacing/tint/weight (`feedback_no_hairlines.md`).
+   Cost (2026-05-05): 4d8808fd shipped as "hairline elimination", detected as swap-only by
+   v13 walk. v12 score unchanged. Required P1 filing and WS-28-A remediation ticket.
 
 **UI fix scoping — list view vs detail view are different components.**
 When fixing a data-display bug (e.g. "UUID shown instead of display name"), always
@@ -272,9 +275,9 @@ destructuring tuple). Cost (2026-05-04): test rewrite and second
 `cargo test` pass when adding `aeqi-paymaster`.
 
 **`#[cfg(test)]` is invisible to integration tests.** Methods or items
-gated with `#[cfg(test)]` are compiled only when the *crate itself* is
+gated with `#[cfg(test)]` are compiled only when the _crate itself_ is
 built in test mode (`cargo test -p <crate> --lib`). Integration tests
-under `tests/` compile as a *separate crate* — they have no `#[cfg(test)]`
+under `tests/` compile as a _separate crate_ — they have no `#[cfg(test)]`
 context and cannot see `#[cfg(test)]`-gated items from the library crate.
 The compiler error is `no method named '<fn>' found for struct '<T>'`.
 Fix: remove `#[cfg(test)]` from methods that integration tests need
@@ -452,6 +455,8 @@ this happened mid-rebase; the recovery pattern is now canonical to prevent repea
 
 **`IpcClient::request` has a 10s default timeout — too aggressive for LLM-fronting verbs.** `crates/aeqi-web/src/ipc.rs::request` wraps the underlying request in `tokio::time::timeout(Duration::from_secs(10), ...)`. LLM-fronting verbs (`architect.draft`, `architect.refine`, anything calling `aeqi-architect::generate_via_llm`) legitimately take 5-30s upstream. Use the per-call escape hatch: `state.ipc.cmd_with_timeout(cmd, params, 60)` or the helper `ipc_proxy_with_timeout(state, scope, cmd, body, 60)`. Production architect routes use 60s. Anything else fronting an external API (OpenRouter, Anthropic, OpenAI, IPFS uploads >1MB) should evaluate its own ceiling. Don't bump the global default — most verbs SHOULD time out at 10s. Cost (2026-05-07): one ship cycle when Phase-2 smoke tests returned "IPC request timed out after 10s" while the LLM call was 18s downstream.
 
+**`/home/claudedev/aeqi-platform/ui-dist/` can be root-owned after a webhook deploy — manual `ui-deploy.sh` rsync fails with `Permission denied`.** When a `git push origin main` fires the webhook deploy as the `aeqi-platform` service user (often root via systemd), the resulting `ui-dist/assets/` files inherit root ownership. A subsequent manual `ui-deploy.sh` (run as `claudedev`) hits `rsync: mkstemp ... Permission denied (13)` on every asset file. The deploy fails with rsync exit code 23, but the build itself succeeded — only the rsync step blocks. Fix is one command: `sudo -n chown -R claudedev:claudedev /home/claudedev/aeqi-platform/ui-dist/`, then re-run `ui-deploy.sh`. Diagnostic: `ls -la /home/claudedev/aeqi-platform/ui-dist/assets/ | head -3` shows `root root` ownership. Idempotent — the chown can be safely repeated; no harm if already correct. Cost (2026-05-07): ~30s on session-detail-unify ship before chown was applied. Consider whether `ui-deploy.sh` should pre-chown the target directory; until then, the manual chown is the one-line recovery.
+
 ## Workflow — locked
 
 **Never work on main directly.** Every non-trivial change goes through a worktree.
@@ -481,7 +486,7 @@ implementation → verify → ship.
 
 **`axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?`** — NOT `axum::serve(listener, app).await?`. Without `ConnectInfo`, `tower_governor`'s `SmartIpKeyExtractor` cannot extract the peer address from any request and throws `GovernorError::UnableToExtractKey` as HTTP 500 `Unable To Extract Key!`. This kills every rate-limited API route. `/api/health` is exempt (not rate-limited) so health checks pass while the rest 500 — making the server look healthy when it isn't.
 
-The fix is one word: `app` → `app.into_make_service_with_connect_info::<SocketAddr>()` in `crates/aeqi-web/src/server.rs`. Add `use std::net::SocketAddr;` if not already imported. Cost (2026-05-05): VPS dogfood run — health check passed at 54s, all /api/* calls 500'd, entire VPS provision marked failed.
+The fix is one word: `app` → `app.into_make_service_with_connect_info::<SocketAddr>()` in `crates/aeqi-web/src/server.rs`. Add `use std::net::SocketAddr;` if not already imported. Cost (2026-05-05): VPS dogfood run — health check passed at 54s, all /api/\* calls 500'd, entire VPS provision marked failed.
 
 ## AA bundler — known traps (2026-05-05)
 
