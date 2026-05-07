@@ -295,6 +295,8 @@ pub async fn handle_architect_refine(
             }
         };
 
+    ensure_llm_env_resolved();
+
     let started = Instant::now();
     let refined = match build_default_llm() {
         Some((llm, opts)) => {
