@@ -3,11 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { useInboxStore } from "@/store/inbox";
 import { useDaemonStore } from "@/store/daemon";
 import InboxToolbar from "@/components/inbox/InboxToolbar";
-import InboxList from "@/components/inbox/InboxList";
 import InboxDetail from "@/components/inbox/InboxDetail";
+import SessionRail, { type SessionRailRow } from "@/components/sessions/SessionRail";
 import { Spinner } from "@/components/ui";
 import { toInboxRow, DEFAULT_FILTER } from "@/components/inbox/types";
 import type { InboxFilterState, InboxRow, InboxSort } from "@/components/inbox/types";
+import { recencyBucket, timeShort } from "@/lib/format";
 
 const KIND_LABEL: Record<string, string> = {
   decision_request: "Decision requests",
@@ -259,12 +260,31 @@ export default function MeInboxPage() {
             <div className="inbox-list-loading">
               <Spinner size="sm" />
             </div>
-          ) : (
-            <InboxList
-              rows={visible}
-              selectedId={selectedId}
-              newIds={newIds}
+          ) : visible.length === 0 ? (
+            <SessionRail
+              rows={[]}
+              selectedId={null}
               onSelect={setSelectedId}
+              emptyTitle="inbox is clear"
+            />
+          ) : (
+            <SessionRail
+              rows={visible.map<SessionRailRow>((r) => ({
+                id: r.id,
+                primary: r.subject,
+                secondary: r.from.name,
+                wrapPrimary: true,
+                time: timeShort(r.created_at),
+                status: r.unread ? "active" : undefined,
+                awaiting: r.replyable,
+                group: recencyBucket(r.created_at),
+                sortKey: Date.parse(r.created_at) || 0,
+                pulseNew: newIds.has(r.id),
+              }))}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              emptyTitle="inbox is clear"
+              traversalEventName="inbox:traverse"
             />
           )}
         </div>

@@ -1698,6 +1698,27 @@
   color: var(--color-text-muted);
 }
 
+/* Real-time arrival pulse — adopters set `pulseNew` on a row when it
+   just arrived via a transport push (WS, polling delta, etc). One
+   keyframe, fade from accent-tinted into transparent. Reduced-motion
+   users get no animation. */
+@keyframes sessions-rail-pulse-in {
+  from {
+    background: var(--color-accent-bg);
+  }
+  to {
+    background: transparent;
+  }
+}
+.sessions-rail-row.is-new {
+  animation: sessions-rail-pulse-in 0.7s ease forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sessions-rail-row.is-new {
+    animation: none;
+  }
+}
+
 /* Main content column inside the body row — holds the scroll surface
    and, on chat, the floating composer. Sits alongside the sessions rail
    so the composer hovers over the chat content only, not across both
