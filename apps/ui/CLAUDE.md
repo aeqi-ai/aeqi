@@ -463,6 +463,34 @@ existing `title` and `actions` props were already typed `ReactNode` and
 took the fold without any API change. Saved ~5 min of API-extension
 churn + a follow-up cleanup pass.
 
+### "Match X's canonical shape" briefs — copy the imports too
+
+When a brief asks to make surface B render with the same chrome as
+surface A's canonical shape (e.g. "match event detail header to the
+`.ideas-toolbar.ideas-canvas-toolbar` shape that idea + quest detail
+use"), open the canonical file FIRST and copy its imports into the
+target. The imports are part of the contract: `Tooltip` is exported
+via `./ui` index in IdeaCanvas / QuestCanvas — not via individual
+file paths. Reaching for `import Tooltip from "../ui/Tooltip"` ships
+a typecheck error or a silent path desync; the canonical
+`import { Button, Tooltip } from "../ui"` is what the matched file
+already does and is what the new file should do.
+
+Recipe before writing the new shape:
+
+```bash
+# Read the canonical file's import block
+sed -n '1,20p' apps/ui/src/components/<CanonicalFile>.tsx
+```
+
+Copy the import shape verbatim; don't reinvent. Cost (2026-05-07):
+event-detail-ideas-toolbar ship — first draft used
+`import Tooltip from "../ui/Tooltip"` (default) when IdeaCanvas /
+QuestCanvas both use the named `{ Tooltip }` from `./ui`. One edit
+pass to align before tsc passed. Trivial fix; recurs every "match
+canonical shape" brief because the impulse is to import what you
+need, not what the canonical file imports.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5
