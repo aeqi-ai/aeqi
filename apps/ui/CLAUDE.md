@@ -1730,6 +1730,40 @@ divergence, parity-v2 fixed it. Verify variant + computed
 `backgroundColor` of `.composer-wrap` (or equivalent) before claiming
 done.
 
+## "Unify these surfaces" briefs — opt-out prop, not divergent render path
+
+When a brief asks to extract a primitive that some adopters compose
+differently (e.g. one adopter mounts a sub-primitive externally — like
+the agent surface mounting `<Composer>` in `AppLayout`'s chrome via
+event bridge, while the inbox surface mounts it inline), the seam is an
+**opt-out prop on the new primitive**, NOT two render paths or a
+"composer slot" abstraction. Pattern: ship `hideComposer?: boolean` (or
+`hideX?: boolean` for the externally-mounted sub-primitive); the inline
+adopters default `false` and get the canonical chrome; the externally-
+mounted adopter sets `true` and the primitive renders everything else
+identically. The migration of the externally-mounted surface (move
+chrome from AppLayout into the surface, then flip `hideX` to `false`)
+becomes a separate ship with explicit scope.
+
+Why this shape and not the inverse: the canonical state is "primitive
+owns the full chrome" — that's what the brief is collapsing to. Adopters
+that violate it carry an opt-out, not the other way around. New adopters
+get the right shape by default; legacy externally-mounted adopters carry
+a marked-deprecated flag and a clear migration path. Don't ship a
+`composerSlot?: ReactNode` prop that lets every adopter mount whatever
+chrome they want — that re-introduces the divergent render paths the
+extraction was meant to eliminate.
+
+When the brief mandates the agent half but says "don't ship a partial,"
+honor the escape clause: ship the inline-adopter half with the opt-out
+prop, write the analysis the brief asks for explaining why the
+externally-mounted half is a separate ship (specific risk: AppLayout
+chrome touches `/start` + type-anywhere + focus/set-input event bridge,
+all out of scope), and queue the migration ship with an explicit
+contract (move chrome → flip prop). Cost (2026-05-07): SessionDetail
+extract — ~5 min upfront figuring out the opt-out vs slot vs
+divergent-path tradeoff before settling on opt-out.
+
 ## Probe scripts must seed the canonical localStorage triple — not just the JWT
 
 Auth-seeding probe scripts (the `_<name>.mjs` family) set localStorage
