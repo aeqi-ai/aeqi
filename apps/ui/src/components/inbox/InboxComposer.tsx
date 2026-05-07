@@ -150,33 +150,44 @@ export default function InboxComposer({
           {error}
         </div>
       )}
-      <Composer
-        variant="card"
-        value={body}
-        onChange={setBody}
-        onSend={() => void send()}
-        placeholder={`Message ${agentName || "agent"}…`}
-        composerRef={composerRef}
-        disabled={sending}
-        attachmentTypes={["idea", "quest", "file"]}
-        attachedIdeas={attachedIdeas}
-        setAttachedIdeas={setAttachedIdeas}
-        attachedQuest={attachedQuest}
-        setAttachedQuest={setAttachedQuest}
-        attachedFiles={attachedFiles}
-        setAttachedFiles={setAttachedFiles}
-        // Picker mounts on the drilled-agent surface (AgentSessionView)
-        // and listens for `aeqi:open-attach-picker`. Inbox dispatches the
-        // same event so the visual affordance stays identical; the inbox
-        // surface itself doesn't host a picker today, so the click is a
-        // no-op here. Wired this way so a future inbox-side picker can
-        // attach without changing the composer config.
-        onAttachClick={(kind) => {
-          window.dispatchEvent(new CustomEvent("aeqi:open-attach-picker", { detail: { kind } }));
-        }}
-        onReadFiles={readFiles}
-        extraActions={archiveButton}
-      />
+      {/* Visual parity with the agent surface: same `.composer-wrap` +
+       * `.persistent-composer` chrome ComposerRow uses, same
+       * `variant="shell"` Composer underneath. The inbox surface lays
+       * out flex-inline (no `.composer-row` floating wrapper) — the
+       * shell chrome travels in via the inner classes. */}
+      <div className="composer-wrap">
+        <div className="persistent-composer">
+          <Composer
+            variant="shell"
+            value={body}
+            onChange={setBody}
+            onSend={() => void send()}
+            placeholder={`Message ${agentName || "agent"}…`}
+            composerRef={composerRef}
+            disabled={sending}
+            attachmentTypes={["idea", "quest", "file"]}
+            attachedIdeas={attachedIdeas}
+            setAttachedIdeas={setAttachedIdeas}
+            attachedQuest={attachedQuest}
+            setAttachedQuest={setAttachedQuest}
+            attachedFiles={attachedFiles}
+            setAttachedFiles={setAttachedFiles}
+            // Picker mounts on the drilled-agent surface (AgentSessionView)
+            // and listens for `aeqi:open-attach-picker`. Inbox dispatches the
+            // same event so the visual affordance stays identical; the inbox
+            // surface itself doesn't host a picker today, so the click is a
+            // no-op here. Wired this way so a future inbox-side picker can
+            // attach without changing the composer config.
+            onAttachClick={(kind) => {
+              window.dispatchEvent(
+                new CustomEvent("aeqi:open-attach-picker", { detail: { kind } }),
+              );
+            }}
+            onReadFiles={readFiles}
+            extraActions={archiveButton}
+          />
+        </div>
+      </div>
     </div>
   );
 }

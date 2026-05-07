@@ -10,28 +10,18 @@ import SessionRail, { type SessionRailRow } from "@/components/sessions/SessionR
 const NO_SESSIONS: SessionInfo[] = [];
 
 /**
- * Resolve a session's origin — the answer to "why does this session
- * exist?". Returns a short lowercase string when we can name it
- * confidently (telegram / whatsapp / web), or undefined for the
- * generic catchalls (`interactive`, `perpetual`) where the rail row
- * should stay single-line. Event- and agent-spawned origins would
- * need a richer backend signal; not surfaced today.
- */
-function deriveOrigin(s: SessionInfo): string | undefined {
-  const n = s.name?.toLowerCase() || "";
-  if (n.includes("telegram")) return "telegram";
-  if (n.includes("whatsapp")) return "whatsapp";
-  if (s.session_type === "web") return "web";
-  return undefined;
-}
-
-/**
  * Sessions rail — the left-adjacent index column for the drilled-agent
  * chat surface. Adapts the chat-store sessions list into the canonical
  * `SessionRailRow` shape, then defers to the universal `<SessionRail>`
  * primitive at `components/sessions/SessionRail.tsx`. Awaiting rows are
  * flagged via the inbox store. The user-scope inbox lives at `/me/inbox`
  * (MeInboxPage) — that surface adopts the same primitive directly.
+ *
+ * Row shape is single-line h=32 across both adopters — the agent surface
+ * and the inbox render visually identical rails. Origin (telegram /
+ * whatsapp / web) was previously surfaced as a wrapped second line on
+ * agent-side rows; that information now lives on the session detail
+ * header where it doesn't compete with the row primary.
  */
 export default function SessionsRail() {
   // Mounted only under `/c/<entity>/agents/<agent>/sessions[/...]` per
@@ -56,22 +46,11 @@ export default function SessionsRail() {
     return sessions
       .filter((s) => s.session_type !== "task")
       .map((s) => {
-        // Origin = where the session came from. Only render when
-        // it's something meaningful (real transport / event hook /
-        // sub-agent chain). Sessions started by typing into the
-        // composer leave this empty — the session label IS the row.
-        // "interactive" and "perpetual" are internal catchalls and
-        // tell the user nothing, so they're omitted.
-        const origin = deriveOrigin(s);
         const tsRaw = s.last_active || s.created_at;
         const ts = tsRaw ? new Date(tsRaw).getTime() : 0;
         return {
           id: s.id,
           primary: sessionLabel(s),
-          secondary: origin,
-          // Wrap only when there's a secondary line to balance —
-          // otherwise the row stays single-line and tight.
-          wrapPrimary: !!origin,
           time: timeShort(tsRaw ?? null),
           status: s.status,
           awaiting: awaitingSessionIds.has(s.id),

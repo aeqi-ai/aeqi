@@ -209,19 +209,32 @@
 }
 
 /* ── Composer wrapper ──────────────────────────────────────────
- * Composer body lives in `composer.css` under `.asv-composer--card`.
- * This wrapper only adds the inbox-specific error banner above it. */
+ * Mirrors the agent surface's `.composer-row` padding so the
+ * `.composer-wrap` dark card sits the same distance from the
+ * paper edges. The shell chrome itself (`.composer-wrap` +
+ * `.persistent-composer` + `variant="shell"`) lives in
+ * `layout.css` and `composer.css`; this wrapper only contributes
+ * outer padding + the inline error banner above it. */
 
 .inbox-composer-wrap {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  align-items: center;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
+.inbox-composer-wrap > .composer-wrap {
+  width: 100%;
+  max-width: 820px;
 }
 
 .inbox-composer-error {
   font-size: var(--font-size-xs);
   color: var(--color-error);
-  padding: var(--space-2) var(--space-5) 0;
+  padding: 0 0 var(--space-2);
+  width: 100%;
+  max-width: 820px;
 }
 
 /* Archive button — uses .sidebar-row-action-btn base; color override for context */
