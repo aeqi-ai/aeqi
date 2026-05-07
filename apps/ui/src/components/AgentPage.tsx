@@ -43,7 +43,7 @@ export const AGENT_RAIL_TABS = [
   // v1 spec amendment — the most-common operator action ("teach the
   // agent") is one click off Overview.
   { id: "personality", label: "Personality" },
-  { id: "sessions", label: "Sessions" },
+  { id: "sessions", label: "Inbox" },
   { id: "quests", label: "Quests" },
   { id: "events", label: "Events" },
   { id: "ideas", label: "Ideas" },
@@ -60,7 +60,7 @@ export const AGENT_RAIL_TABS = [
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "personality", label: "Personality" },
-  { id: "sessions", label: "Sessions" },
+  { id: "sessions", label: "Inbox" },
   { id: "settings", label: "Settings" },
   { id: "roles", label: "Roles" },
   { id: "agents", label: "Agents" },

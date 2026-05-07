@@ -76,7 +76,7 @@ export default function SessionsRail() {
       selectedId={itemId ?? null}
       onSelect={handleSelect}
       streamingIds={streamingSessions}
-      emptyTitle="no sessions yet"
+      emptyTitle="inbox is clear"
       emptyHint="type below to start one"
     />
   );

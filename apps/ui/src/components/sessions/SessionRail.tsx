@@ -140,7 +140,7 @@ export default function SessionRail({
         <input
           className="sessions-rail-search"
           type="text"
-          placeholder="Search sessions"
+          placeholder="Search inbox"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -152,7 +152,7 @@ export default function SessionRail({
               }
             }
           }}
-          aria-label="Search sessions"
+          aria-label="Search inbox"
         />
         {query && (
           <button
