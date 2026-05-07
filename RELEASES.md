@@ -1,5 +1,12 @@
 # Release Notes
 
+## v0.59.0 — 2026-05-09
+
+**Headline:** Roles dispatch wired; inbox shows every session you're in, sorted recent.
+
+- **Roles tab dispatch hole closed — render `EntityRolesTab` in `CompanyPage`** (`apps/ui/src/pages/CompanyPage.tsx`): `/c/<id>/roles` was added to `COMPANY_PAGE_TABS` in v0.58.0's primitives wiring (`78df6eff`), but `CompanyPage`'s tab switch had no `case "roles"` branch — the URL routed through `CompanyPage` and silently fell through to the default Overview surface. Same dispatch-hole pattern documented as a recurring trap (`feedback_dispatch_hole_pattern.md`): tabs in the route table must have an explicit case in the page-level switch. Wired `roles` → `<EntityRolesTab entityId={...} />` to match the rail's expectation. `4ab0a0a3`.
+- **`/api/inbox` broadened to all sessions in scope, sorted by recency** (`crates/aeqi-orchestrator/src/ipc/inbox.rs` + `crates/aeqi-web/src/inbox.rs`): the inbox endpoint previously returned only DM sessions where the caller was an explicit participant — multi-participant sessions, role-addressed seeds, and sessions the caller had been added to via `add_participant` were invisible. Founder mental model: the Inbox is "every conversation I'm in," not "every conversation I started." Broadened the scope query to include any session with the caller as a participant regardless of `kind`, ordered by `last_message_at DESC` so the most-recently-active conversations float to the top. `2e3bc34c`.
+
 ## v0.58.0 — 2026-05-09
 
 **Headline:** User row clicks home; entity URLs canonical; entity-tab dispatch hole closed.
