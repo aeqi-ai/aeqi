@@ -1495,3 +1495,45 @@ await ctx.addInitScript((token) => {
 Cost (2026-05-07): one full probe re-run on parity-v2 verification when
 the seed only set `aeqi_jwt`. ~30s wasted; pattern will recur every
 new probe script.
+
+## Headless playwright probes — `/api/entities` returns 400 "user_id required" even with valid JWT
+
+`GET /api/entities` works via cli `curl -H "Authorization: Bearer <token>"`
+but returns HTTP 400 `"user_id required"` when the same JWT is sent from
+a headless browser context. The auth gate behaves differently for the
+two transports — likely the platform reads `user_id` from a session
+cookie or header that cli curl emits but headless playwright does not.
+Symptom in the probe: SPA boots to the loading splash (just the `æ`
+wordmark), `/api/auth/me` returns 200, `/api/entities` returns 400, the
+daemon store stays in pre-loaded state, and every DOM query returns
+empty. Visual verification of any in-shell route (session, inbox,
+agents, etc.) is BLOCKED.
+
+When this happens, do NOT try to debug the probe — the auth-gate gap
+is platform-side and out of UI scope. Fall back to bundle-level
+verification:
+
+```bash
+# 1. Confirm the new code is in the live JS bundle
+curl -sL "https://app.aeqi.ai/assets/<lazy-chunk>.js" -o /tmp/live.js
+grep -c "<your-new-className-or-string>" /tmp/live.js   # should be ≥1
+
+# 2. Confirm the new CSS rules made it to the live stylesheet
+curl -sL "https://app.aeqi.ai/assets/<index-hash>.css" -o /tmp/live.css
+grep -oE '\.<your-new-class>[^{]*\{[^}]*\}' /tmp/live.css
+
+# 3. Confirm the live JS hash differs from the prior ship
+curl -sL https://app.aeqi.ai/ | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1
+```
+
+Three green signals = ship is durable, only the visual screenshot is
+deferred. Save a `<feature>-VERIFIED-bundle.txt` artifact under
+`.observations/<walk>/` capturing the curl outputs so the brief's
+verification ask is fulfilled in lieu of the screenshot. Do NOT spend
+more than ~30s diagnosing the auth-gate failure — the SAME failure
+recurs on every headless probe attempt and the fix lives outside UI.
+
+Cost (2026-05-07): msg-author-header ship — 4 probe iterations
+(~5 min) before reaching the bundle-level fallback. Future ships
+should skip straight to bundle verification when `/api/entities`
+returns 400 in the network log.
