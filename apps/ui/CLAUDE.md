@@ -1368,6 +1368,44 @@ only for backward compat with pages written against the v3 schema. Do NOT add ne
 of `--space-xs/sm/md/lg/xl` in new pages or components — go to `--space-{2,3,4,6,8}`
 directly. Grep for silent zeros: `grep -rn 'var(--space-[a-z]' src/`.
 
+**Token-existence audit — verify EVERY new `var(--*)` resolves before commit.**
+Sister rule to the broken-aliases findings above. When authoring new CSS,
+the natural failure mode is using a token name that "should exist by symmetry"
+but doesn't. Three classes of trap, all silent:
+
+1. **Sibling-of-an-alias hallucination.** `--bg-subtle` exists in `primitives.css`
+   line 59; `--bg-hover` does NOT. Other dashboard CSS uses `var(--bg-hover)`
+   already — but that's a long-standing silent no-op, not a license to repeat
+   it. Canonical hover-background token is `--state-hover` (line 72) or
+   `--color-hover` (tokens.css line 147).
+2. **Canonical-name mismatch.** `--color-error` exists; `--color-danger` does
+   NOT, even though "danger" is the more common React-ecosystem name. Always
+   grep before reaching for an intuitive name.
+3. **Namespace overlap.** Background aliases use `--bg-*` (`--bg-subtle`,
+   `--bg-row`, `--bg-surface`); the `--color-bg-*` namespace does NOT exist.
+   This is in the MVP charter at the top of this file but recurs anyway —
+   the unprefixed `--bg-*` is the canonical form for backgrounds.
+
+Recipe before commit: extract every `var(--*)` reference from the new CSS,
+then confirm each is defined somewhere:
+
+```bash
+TOKENS=$(grep -oE 'var\(--[a-z0-9-]+' apps/ui/src/styles/<new-file>.css | sed 's/var(//' | sort -u)
+for t in $TOKENS; do
+  if ! grep -qE "^\s*${t}:" apps/ui/src/styles/primitives.css packages/tokens/src/tokens.css; then
+    echo "MISSING: $t"
+  fi
+done
+```
+
+Any line printing `MISSING:` is either a typo, a hallucinated sibling
+(`--color-danger` instead of `--color-error`), or a namespace mistake
+(`--color-bg-subtle` instead of `--bg-subtle`). Fix BEFORE running tsc —
+prettier, tsc, eslint, and the vite build all pass on undefined tokens
+because CSS is not type-checked. Cost (2026-05-07): three edit passes
+on company-overview-redesign before catching `--bg-hover`,
+`--color-danger`, and `--color-bg-subtle` were all hallucinated.
+
 ## Hover audit — verify `.is-clickable:hover` actually changes the visual state
 
 **A hover style that sets the same property to the same value as the resting state
