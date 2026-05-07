@@ -60,6 +60,20 @@ fi
 # symlink without touching the package tree.
 npm rebuild >/dev/null 2>&1 || true
 
+# Final pre-build assertion. The vite recovery + npm rebuild above can both
+# silently fail to create `.bin/vite` when npm install hits TAR_ENTRY_ERROR
+# warnings on a few package files (e.g. date-fns esm/*.d.ts) — the install
+# exits 0, but `.bin/vite` is never linked. Without this assert, the bare
+# `./node_modules/.bin/vite build` below produces a cryptic `No such file
+# or directory` error and the deploy looks like a build failure when the
+# real cause is a partial bin-link tree. Cost (2026-05-07): one full
+# ui-deploy.sh re-run during sidebar-cleanup ship.
+if [ ! -x ./node_modules/.bin/vite ]; then
+  echo "ERROR: ./node_modules/.bin/vite still missing after recovery + rebuild."
+  echo "Run from $(pwd): npm install --silent  (then re-invoke ui-deploy.sh)"
+  exit 1
+fi
+
 ./node_modules/.bin/vite build
 
 # Post-build assertion. `vite build` has been seen to exit 0 while
