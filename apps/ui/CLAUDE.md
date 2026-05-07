@@ -729,6 +729,18 @@ any additional errors are your regression and require a fix. Don't chase the luc
 unless your change touches `Icon.tsx` or its stories. Cost (2026-05-06): ~1 min verification
 per session that sees them.
 
+**`SessionRedirect.tsx` `react-hooks/exhaustive-deps` warning is pre-existing — not your regression.**
+`src/components/SessionRedirect.tsx:29` triggers `react-hooks/exhaustive-deps`: "the
+'inboxResolved' conditional could make the dependencies of useEffect Hook (at line 81)
+change on every render. To fix this, wrap the initialization of 'inboxResolved' in its
+own useMemo() Hook." When `npm run verify` reports `✖ 1 problem (0 errors, 1 warning)`
+and the only warning points at `SessionRedirect.tsx`, it is pre-existing drift on
+main — verify is still green (warnings don't fail the gauntlet). Don't chase unless
+your change touches `SessionRedirect.tsx`. The proper fix is wrapping `inboxResolved`
+in `useMemo`, but the file is a legacy redirect shim slated for removal once the
+sessions→inbox rename canonicalises in shipped bookmarks. Cost (2026-05-07): ~30s
+triage per session that sees it.
+
 **Avatar render architecture — agent avatars are client-side, human avatars are proxy-injected.**
 The roles surfaces (`RoleNode`, `RolesList`, `RolesChart`, `RolesCards`) and agents list
 (`EntityAgentsTab`) resolve avatar URLs from two different sources:
