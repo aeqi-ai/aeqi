@@ -32,6 +32,12 @@ pub fn routes() -> Router<AppState> {
         .route("/ideas/{id}/activity", get(idea_activity))
         .route("/ideas/{id}/comments", get(idea_comments))
         .route("/ideas/{id}/subscribe", post(idea_subscribe))
+        // Tables-in-Ideas Phase 2.
+        .route("/ideas/{id}/children", get(list_idea_children))
+        .route(
+            "/ideas/{id}/properties",
+            axum::routing::put(set_idea_properties),
+        )
 }
 
 #[derive(Deserialize, Serialize, Default)]
@@ -211,6 +217,36 @@ async fn seed_ideas(
     Json(body): Json<serde_json::Value>,
 ) -> Response {
     ipc_proxy(state, scope.as_ref(), "seed_ideas", body).await
+}
+
+/// `GET /api/ideas/:id/children` — Tables-in-Ideas Phase 2.
+async fn list_idea_children(
+    State(state): State<AppState>,
+    scope: Scope,
+    Path(id): Path<String>,
+) -> Response {
+    ipc_proxy(
+        state,
+        scope.as_ref(),
+        "list_idea_children",
+        serde_json::json!({"parent_id": id}),
+    )
+    .await
+}
+
+/// `PUT /api/ideas/:id/properties` — deep-merge a JSON patch into the
+/// Idea's `properties` column. Tables-in-Ideas Phase 2.
+async fn set_idea_properties(
+    State(state): State<AppState>,
+    scope: Scope,
+    Path(id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    let payload = match body {
+        serde_json::Value::Object(_) => serde_json::json!({"id": id, "properties": body}),
+        other => serde_json::json!({"id": id, "properties": other}),
+    };
+    ipc_proxy(state, scope.as_ref(), "set_idea_properties", payload).await
 }
 
 /// `GET /api/ideas/:id/activity`

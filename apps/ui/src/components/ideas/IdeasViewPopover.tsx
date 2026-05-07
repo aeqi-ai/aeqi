@@ -1,10 +1,15 @@
 import { type ReactElement, useState } from "react";
 import { Popover } from "../ui/Popover";
 
-export type IdeasView = "list" | "graph";
+// Tables-in-Ideas Phase 2 — `table` and `kanban` join the existing
+// `list` / `graph` view modes. URL-persisted as `?view=<mode>` on the
+// Ideas tab. Default stays `list`.
+export type IdeasView = "list" | "table" | "kanban" | "graph";
 
 const VIEW_LABEL: Record<IdeasView, string> = {
   list: "List",
+  table: "Table",
+  kanban: "Kanban",
   graph: "Graph",
 };
 
@@ -12,6 +17,19 @@ const VIEW_GLYPH: Record<IdeasView, ReactElement> = {
   list: (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
       <path d="M2.5 4h8M2.5 6.5h8M2.5 9h8" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+  table: (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
+      <rect x="2" y="3" width="9" height="7" strokeWidth="1.1" />
+      <path d="M2 6.5h9M5 3v7" strokeWidth="1.1" />
+    </svg>
+  ),
+  kanban: (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
+      <rect x="2" y="3" width="2.5" height="7" strokeWidth="1.1" />
+      <rect x="5.25" y="3" width="2.5" height="5" strokeWidth="1.1" />
+      <rect x="8.5" y="3" width="2.5" height="6" strokeWidth="1.1" />
     </svg>
   ),
   graph: (
@@ -26,6 +44,13 @@ const VIEW_GLYPH: Record<IdeasView, ReactElement> = {
       />
     </svg>
   ),
+};
+
+const VIEW_KBD: Record<IdeasView, string> = {
+  list: "L",
+  table: "T",
+  kanban: "K",
+  graph: "G",
 };
 
 export interface IdeasViewPopoverProps {
@@ -57,7 +82,7 @@ export default function IdeasViewPopover({ view, onChange }: IdeasViewPopoverPro
           <span className="ideas-filter-popover-label">view as</span>
         </header>
         <div className="ideas-filter-popover-list" role="radiogroup" aria-label="View">
-          {(["list", "graph"] as IdeasView[]).map((v) => {
+          {(["list", "table", "kanban", "graph"] as IdeasView[]).map((v) => {
             const isActive = view === v;
             return (
               <button
@@ -76,7 +101,7 @@ export default function IdeasViewPopover({ view, onChange }: IdeasViewPopoverPro
                 </span>
                 <span className="ideas-filter-row-label">{VIEW_LABEL[v]}</span>
                 <kbd className="ideas-filter-row-kbd" aria-hidden>
-                  {v === "list" ? "L" : "G"}
+                  {VIEW_KBD[v]}
                 </kbd>
               </button>
             );

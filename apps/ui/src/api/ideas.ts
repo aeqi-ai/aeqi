@@ -12,6 +12,9 @@ export interface StoreIdeaRequest {
   agent_id?: string;
   scope?: ScopeValue;
   links?: string[];
+  // Tables-in-Ideas Phase 2.
+  parent_idea_id?: string | null;
+  properties?: Record<string, unknown> | null;
 }
 
 export function listIdeas(params?: {
@@ -52,5 +55,30 @@ export function deleteIdea(
   return apiRequest<{ ok: boolean; error?: string; quest_ids?: string[] }>(
     `/ideas/${encodeURIComponent(id)}`,
     { method: "DELETE" },
+  );
+}
+
+// ── Tables-in-Ideas Phase 2 ────────────────────────────────────────────
+
+/** Direct children of an Idea, newest first. */
+export function listIdeaChildren(id: string): Promise<IdeasResponse> {
+  return apiRequest<IdeasResponse>(`/ideas/${encodeURIComponent(id)}/children`);
+}
+
+/**
+ * Deep-merge a JSON patch into an Idea's `properties` column.
+ * Keys set in `patch` overwrite; keys absent are preserved; explicit
+ * `null` removes a key.
+ */
+export function setIdeaProperties(
+  id: string,
+  properties: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }> {
+  return apiRequest<{ ok: boolean; error?: string }>(
+    `/ideas/${encodeURIComponent(id)}/properties`,
+    {
+      method: "PUT",
+      body: JSON.stringify(properties),
+    },
   );
 }

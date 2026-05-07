@@ -166,6 +166,8 @@ impl SqliteIdeas {
                         inheritance: "self".to_string(),
                         tool_allow: Vec::new(),
                         tool_deny: Vec::new(),
+                        parent_idea_id: None,
+                        properties: None,
                     })
                 })?
                 .filter_map(|r| r.ok())

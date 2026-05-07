@@ -8,6 +8,9 @@ import type { GraphNode, GraphEdge } from "./IdeaGraph";
 import IdeasListView from "./ideas/IdeasListView";
 import IdeasGraphView from "./ideas/IdeasGraphView";
 import IdeasCanvasView from "./ideas/IdeasCanvasView";
+import IdeasTableView from "./ideas/IdeasTableView";
+import IdeasKanbanView from "./ideas/IdeasKanbanView";
+import type { IdeasView } from "./ideas/IdeasViewPopover";
 import { blockTreeToPlainText } from "./editor/blockEditorContent";
 import { Spinner } from "./ui";
 import {
@@ -39,7 +42,11 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
   const { itemId } = useParams<{ itemId?: string }>();
   const selectedId = itemId || null;
   const [searchParams, setSearchParams] = useSearchParams();
-  const view: "list" | "graph" = searchParams.get("view") === "graph" ? "graph" : "list";
+  const view: IdeasView = ((): IdeasView => {
+    const raw = searchParams.get("view");
+    if (raw === "graph" || raw === "table" || raw === "kanban") return raw;
+    return "list";
+  })();
   const composing = searchParams.get("compose") === "1";
 
   const filter: FilterState = {
@@ -60,10 +67,10 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
   );
 
   const setView = useCallback(
-    (next: "list" | "graph") => {
+    (next: IdeasView) => {
       patchParams((p) => {
-        if (next === "graph") p.set("view", "graph");
-        else p.delete("view");
+        if (next === "list") p.delete("view");
+        else p.set("view", next);
       });
     },
     [patchParams],
@@ -297,6 +304,32 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
         onNew={() => fireNewIdea()}
         onSelect={handleGraphSelect}
         onFilterChange={setFilter}
+      />
+    );
+  }
+
+  if (view === "table") {
+    return (
+      <IdeasTableView
+        agentId={agentId}
+        ideas={filtered}
+        view={view}
+        onViewChange={setView}
+        onNew={() => fireNewIdea()}
+        onOpen={(id) => goEntity(entityId, "ideas", id)}
+      />
+    );
+  }
+
+  if (view === "kanban") {
+    return (
+      <IdeasKanbanView
+        agentId={agentId}
+        ideas={filtered}
+        view={view}
+        onViewChange={setView}
+        onNew={() => fireNewIdea()}
+        onOpen={(id) => goEntity(entityId, "ideas", id)}
       />
     );
   }

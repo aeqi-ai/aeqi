@@ -185,6 +185,8 @@ mod tests {
             inheritance: "self".to_string(),
             tool_allow: vec![],
             tool_deny: vec![],
+            parent_idea_id: None,
+            properties: None,
         }
     }
 

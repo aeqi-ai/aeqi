@@ -221,6 +221,26 @@ pub async fn handle_store_idea(
         emit_idea_activity(ctx, idea_store.as_ref(), new_id, "created", caller_user_id).await;
     }
 
+    // Tables-in-Ideas Phase 2: persist parent_idea_id + properties on whichever
+    // id the dispatch settled on (skip / create / merge / supersede all surface
+    // an `id`). Run after the activity emit so a failure here doesn't lose the
+    // primary write — the row exists; we just couldn't tag it.
+    if response.get("ok").and_then(|v| v.as_bool()) == Some(true)
+        && let Some(target_id) = response
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    {
+        if input.parent_idea_id.is_some() {
+            let _ = idea_store
+                .set_parent(&target_id, input.parent_idea_id.as_deref())
+                .await;
+        }
+        if let Some(props) = input.properties.clone() {
+            let _ = idea_store.set_properties(&target_id, Some(props)).await;
+        }
+    }
+
     response
 }
 
@@ -253,6 +273,11 @@ struct StoreRequest {
     /// Who authored the content. Falls back to `agent_id` when the IPC
     /// doesn't carry a separate value.
     authored_by: Option<String>,
+    /// Tables-in-Ideas Phase 2: optional parent in the Idea tree.
+    parent_idea_id: Option<String>,
+    /// Tables-in-Ideas Phase 2: schema-less property bag. The IPC accepts
+    /// any JSON object; non-objects are rejected upstream.
+    properties: Option<serde_json::Value>,
 }
 
 fn parse_store_request(request: &serde_json::Value) -> std::result::Result<StoreRequest, String> {
@@ -297,6 +322,16 @@ fn parse_store_request(request: &serde_json::Value) -> std::result::Result<Store
         .or_else(|| agent_id.clone());
 
     let (links, link_errors) = parse_links(request);
+
+    let parent_idea_id = request_field(request, "parent_idea_id").map(|s| s.to_string());
+    let properties: Option<serde_json::Value> = request.get("properties").and_then(|v| {
+        if v.is_object() {
+            Some(v.clone())
+        } else {
+            None
+        }
+    });
+
     Ok(StoreRequest {
         name: name.to_string(),
         content: content.to_string(),
@@ -306,6 +341,8 @@ fn parse_store_request(request: &serde_json::Value) -> std::result::Result<Store
         links,
         link_errors,
         authored_by,
+        parent_idea_id,
+        properties,
     })
 }
 
@@ -1125,40 +1162,136 @@ pub async fn handle_update_idea(
             .collect()
     });
 
-    if name.is_none() && content.is_none() && tags.is_none() {
+    // Tables-in-Ideas Phase 2 — optional parent + wholesale-properties update.
+    // Both are partial: omitting the keys leaves the row's columns untouched.
+    // `parent_idea_id` accepts an explicit JSON `null` to detach to root; an
+    // absent key is a no-op. Properties takes a full object (use the dedicated
+    // `set_idea_properties` verb for deep-merge semantics).
+    let parent_provided = request.get("parent_idea_id").is_some();
+    let parent_idea_id: Option<String> = request_field(request, "parent_idea_id").map(str::to_string);
+    let properties_provided = request.get("properties").is_some();
+    let properties_value: Option<serde_json::Value> = request
+        .get("properties")
+        .and_then(|v| if v.is_object() { Some(v.clone()) } else { None });
+
+    if name.is_none()
+        && content.is_none()
+        && tags.is_none()
+        && !parent_provided
+        && !properties_provided
+    {
         return serde_json::json!({
             "ok": false,
-            "error": "at least one of name, content, or tags is required"
+            "error": "at least one of name, content, tags, parent_idea_id, or properties is required"
         });
     }
 
     let caller_user_id = request_field(request, "caller_user_id").map(str::to_string);
 
-    match idea_store.update(id, name, content, tags.as_deref()).await {
-        Ok(()) => {
-            // Reconcile inline edges when the body changed. We need to know
-            // which agent owns the idea to scope the resolver correctly.
-            if let Some(body) = content {
-                let agent_id = lookup_idea_agent(idea_store.as_ref(), id).await;
-                reconcile_inline_edges_in_scope(
-                    ctx,
-                    idea_store.as_ref(),
-                    id,
-                    body,
-                    agent_id.as_deref(),
-                )
-                .await;
-            }
-            ctx.recall_cache.invalidate();
-            emit_idea_activity(
-                ctx,
-                idea_store.as_ref(),
-                id,
-                "edited",
-                caller_user_id.as_deref(),
-            )
+    // Skip the rich-write path entirely when only Phase 2 columns are
+    // changing — handle_update_idea's `update` trait method requires at
+    // least one of name/content/tags. For a parent-only or properties-only
+    // edit, route straight to the new SqliteIdeas methods.
+    let core_change = name.is_some() || content.is_some() || tags.is_some();
+    if core_change
+        && let Err(e) = idea_store.update(id, name, content, tags.as_deref()).await
+    {
+        return serde_json::json!({"ok": false, "error": e.to_string()});
+    }
+
+    if parent_provided {
+        let _ = idea_store
+            .set_parent(id, parent_idea_id.as_deref())
             .await;
+    }
+    if properties_provided {
+        let _ = idea_store
+            .set_properties(id, properties_value.clone())
+            .await;
+    }
+
+    // Reconcile inline edges when the body changed. We need to know
+    // which agent owns the idea to scope the resolver correctly.
+    if let Some(body) = content {
+        let agent_id = lookup_idea_agent(idea_store.as_ref(), id).await;
+        reconcile_inline_edges_in_scope(ctx, idea_store.as_ref(), id, body, agent_id.as_deref())
+            .await;
+    }
+    ctx.recall_cache.invalidate();
+    emit_idea_activity(
+        ctx,
+        idea_store.as_ref(),
+        id,
+        "edited",
+        caller_user_id.as_deref(),
+    )
+    .await;
+    serde_json::json!({"ok": true})
+}
+
+/// IPC handler — `set_idea_properties`. Deep-merge a JSON patch into the
+/// Idea's `properties` column. Tables-in-Ideas Phase 2.
+pub async fn handle_set_idea_properties(
+    ctx: &super::CommandContext,
+    request: &serde_json::Value,
+    _allowed: &Option<Vec<String>>,
+) -> serde_json::Value {
+    let Some(ref idea_store) = ctx.idea_store else {
+        return serde_json::json!({"ok": false, "error": "idea store not available"});
+    };
+
+    let id = request_field(request, "id").unwrap_or("");
+    if id.is_empty() {
+        return serde_json::json!({"ok": false, "error": "id is required"});
+    }
+
+    let patch = match request.get("properties") {
+        Some(v) if v.is_object() => v.clone(),
+        Some(_) => {
+            return serde_json::json!({
+                "ok": false,
+                "error": "properties must be a JSON object"
+            });
+        }
+        None => {
+            return serde_json::json!({
+                "ok": false,
+                "error": "properties is required"
+            });
+        }
+    };
+
+    match idea_store.merge_properties(id, patch).await {
+        Ok(()) => {
+            ctx.recall_cache.invalidate();
             serde_json::json!({"ok": true})
+        }
+        Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
+    }
+}
+
+/// IPC handler — `list_idea_children`. Return the direct children of an
+/// Idea, newest first. Tables-in-Ideas Phase 2.
+pub async fn handle_list_idea_children(
+    ctx: &super::CommandContext,
+    request: &serde_json::Value,
+    _allowed: &Option<Vec<String>>,
+) -> serde_json::Value {
+    let Some(ref idea_store) = ctx.idea_store else {
+        return serde_json::json!({"ok": false, "error": "idea store not available"});
+    };
+
+    let parent_id = request_field(request, "parent_id")
+        .or_else(|| request_field(request, "id"))
+        .unwrap_or("");
+    if parent_id.is_empty() {
+        return serde_json::json!({"ok": false, "error": "parent_id is required"});
+    }
+
+    match idea_store.list_children(parent_id).await {
+        Ok(items) => {
+            let serialised: Vec<serde_json::Value> = items.iter().map(idea_to_json).collect();
+            serde_json::json!({"ok": true, "ideas": serialised})
         }
         Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
     }
@@ -1539,6 +1672,9 @@ fn idea_to_json(idea: &aeqi_core::traits::Idea) -> serde_json::Value {
         "inheritance": idea.inheritance,
         "tool_allow": idea.tool_allow,
         "tool_deny": idea.tool_deny,
+        // Tables-in-Ideas Phase 2.
+        "parent_idea_id": idea.parent_idea_id,
+        "properties": idea.properties,
     })
 }
 

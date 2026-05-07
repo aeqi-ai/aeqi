@@ -2220,12 +2220,15 @@ impl AgentRegistry {
             Option<String>,
             String,
             String,
+            Option<String>,
+            Option<String>,
         );
 
         let db = self.db.lock().await;
         let rows: Vec<IdeaRow> = {
             let mut stmt = db.prepare(
-                "SELECT id, name, content, agent_id, session_id, created_at, scope
+                "SELECT id, name, content, agent_id, session_id, created_at, scope, \
+                        parent_idea_id, properties
                  FROM ideas
                  WHERE agent_id IS NULL
                     OR agent_id = ?1
@@ -2254,6 +2257,8 @@ impl AgentRegistry {
                     row.get::<_, String>(5)?,
                     row.get::<_, String>(6)
                         .unwrap_or_else(|_| "self".to_string()),
+                    row.get::<_, Option<String>>(7).ok().flatten(),
+                    row.get::<_, Option<String>>(8).ok().flatten(),
                 ))
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?
@@ -2261,7 +2266,12 @@ impl AgentRegistry {
 
         // Hydrate tags per idea (secondary query; tag set tends to be tiny).
         let mut out = Vec::with_capacity(rows.len());
-        for (id, name, content, aid, session_id, created_at, scope_str) in rows {
+        for (id, name, content, aid, session_id, created_at, scope_str, parent_idea_id, props_json)
+            in rows
+        {
+            let properties: Option<serde_json::Value> = props_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok());
             let tags: Vec<String> = {
                 let mut tag_stmt =
                     db.prepare("SELECT tag FROM idea_tags WHERE idea_id = ?1 ORDER BY tag")?;
@@ -2293,6 +2303,8 @@ impl AgentRegistry {
                 inheritance: "self".to_string(),
                 tool_allow: Vec::new(),
                 tool_deny: Vec::new(),
+                parent_idea_id,
+                properties,
             });
         }
         Ok(out)
@@ -3469,6 +3481,8 @@ impl AgentRegistry {
                         inheritance: "self".to_string(),
                         tool_allow: vec![],
                         tool_deny: vec![],
+                        parent_idea_id: None,
+                        properties: None,
                         created_at,
                     })
                 },

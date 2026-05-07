@@ -283,6 +283,8 @@ mod tests {
                 inheritance: "self".to_string(),
                 tool_allow: Vec::new(),
                 tool_deny: Vec::new(),
+                parent_idea_id: None,
+                properties: None,
             });
             Self {
                 providers_idea,

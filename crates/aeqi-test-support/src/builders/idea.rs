@@ -126,6 +126,8 @@ impl IdeaBuilder {
             inheritance: self.inheritance,
             tool_allow: self.tool_allow,
             tool_deny: self.tool_deny,
+            parent_idea_id: None,
+            properties: None,
         }
     }
 }

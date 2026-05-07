@@ -86,6 +86,8 @@ impl SqliteIdeas {
                         inheritance: "self".to_string(),
                         tool_allow: Vec::new(),
                         tool_deny: Vec::new(),
+                        parent_idea_id: None,
+                        properties: None,
                     })
                 })?
                 .filter_map(|r| r.ok())
@@ -145,6 +147,8 @@ impl SqliteIdeas {
                         inheritance: "self".to_string(),
                         tool_allow: Vec::new(),
                         tool_deny: Vec::new(),
+                        parent_idea_id: None,
+                        properties: None,
                     })
                 })?
                 .filter_map(|r| r.ok())
@@ -202,6 +206,8 @@ impl SqliteIdeas {
                     inheritance: "self".to_string(),
                     tool_allow: Vec::new(),
                     tool_deny: Vec::new(),
+                    parent_idea_id: None,
+                    properties: None,
                 })
             };
             let mut entries: Vec<Idea> = match agent_id.as_deref() {
@@ -253,6 +259,159 @@ impl SqliteIdeas {
                 .filter_map(|r| r.ok())
                 .collect();
             Ok(ids)
+        })
+        .await
+    }
+
+    /// Tables-in-Ideas Phase 2: set the parent_idea_id column. `None`
+    /// detaches the row to root. The migration v15 column is SET NULL on
+    /// parent delete, so a vanished parent leaves children intact.
+    pub(super) async fn set_parent_impl(
+        &self,
+        idea_id: &str,
+        parent_id: Option<&str>,
+    ) -> Result<()> {
+        let id = idea_id.to_string();
+        let pid = parent_id.map(|s| s.to_string());
+        self.blocking(move |conn| {
+            conn.execute(
+                "UPDATE ideas SET parent_idea_id = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![pid, Utc::now().to_rfc3339(), id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Tables-in-Ideas Phase 2: replace the `properties` JSON column wholesale.
+    /// `None` clears (column NULL); `Some(value)` serialises and stores.
+    pub(super) async fn set_properties_impl(
+        &self,
+        idea_id: &str,
+        properties: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let id = idea_id.to_string();
+        let json: Option<String> = properties.as_ref().map(|v| v.to_string());
+        self.blocking(move |conn| {
+            conn.execute(
+                "UPDATE ideas SET properties = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![json, Utc::now().to_rfc3339(), id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Tables-in-Ideas Phase 2: shallow-merge `patch` into the existing
+    /// properties object. Keys set in `patch` overwrite; keys absent are
+    /// preserved; explicit `null` in `patch` deletes the key. Run inside a
+    /// single transaction so concurrent updates don't lose writes.
+    pub(super) async fn merge_properties_impl(
+        &self,
+        idea_id: &str,
+        patch: serde_json::Value,
+    ) -> Result<()> {
+        let id = idea_id.to_string();
+        self.blocking(move |conn| {
+            let tx = conn.unchecked_transaction()?;
+            let existing: Option<String> = tx
+                .query_row(
+                    "SELECT properties FROM ideas WHERE id = ?1",
+                    rusqlite::params![&id],
+                    |row| row.get::<_, Option<String>>(0),
+                )
+                .optional()?
+                .flatten();
+
+            let mut merged = existing
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+                .filter(|v| v.is_object())
+                .unwrap_or_else(|| serde_json::json!({}));
+
+            if let (Some(merged_obj), Some(patch_obj)) = (merged.as_object_mut(), patch.as_object())
+            {
+                for (k, v) in patch_obj {
+                    if v.is_null() {
+                        merged_obj.remove(k);
+                    } else {
+                        merged_obj.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+
+            let stored: Option<String> = match merged.as_object() {
+                Some(obj) if obj.is_empty() => None,
+                _ => Some(merged.to_string()),
+            };
+
+            tx.execute(
+                "UPDATE ideas SET properties = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![stored, Utc::now().to_rfc3339(), &id],
+            )?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Tables-in-Ideas Phase 2: list direct children of `parent_id`,
+    /// newest first. Tags + properties are hydrated.
+    pub(super) async fn list_children_impl(&self, parent_id: &str) -> Result<Vec<Idea>> {
+        let pid = parent_id.to_string();
+        self.blocking(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, name, content, agent_id, created_at, session_id, scope, properties
+                 FROM ideas
+                 WHERE parent_idea_id = ?1
+                 ORDER BY created_at DESC",
+            )?;
+            let mut entries: Vec<Idea> = stmt
+                .query_map(rusqlite::params![pid], |row| {
+                    let agent_id: Option<String> = row.get(3)?;
+                    let scope = row
+                        .get::<_, String>(6)
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or_else(|| {
+                            if agent_id.is_none() {
+                                aeqi_core::Scope::Global
+                            } else {
+                                aeqi_core::Scope::SelfScope
+                            }
+                        });
+                    let props = row
+                        .get::<_, Option<String>>(7)
+                        .ok()
+                        .flatten()
+                        .as_deref()
+                        .and_then(|s| serde_json::from_str(s).ok());
+                    Ok(Idea {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        content: row.get(2)?,
+                        tags: Vec::new(),
+                        agent_id,
+                        created_at: {
+                            let s: String = row.get(4)?;
+                            DateTime::parse_from_rfc3339(&s)
+                                .map(|d| d.with_timezone(&Utc))
+                                .unwrap_or_else(|_| Utc::now())
+                        },
+                        session_id: row.get(5)?,
+                        score: 1.0,
+                        scope,
+                        inheritance: "self".to_string(),
+                        tool_allow: Vec::new(),
+                        tool_deny: Vec::new(),
+                        parent_idea_id: None,
+                        properties: props,
+                    })
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
+            Self::enrich_tags(conn, &mut entries);
+            Ok(entries)
         })
         .await
     }

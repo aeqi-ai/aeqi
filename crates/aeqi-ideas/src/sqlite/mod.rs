@@ -396,6 +396,28 @@ impl IdeaStore for SqliteIdeas {
             .await
             .map_err(|e| anyhow::anyhow!("spawn_blocking join: {e}"))?
     }
+
+    // ── Tables-in-Ideas Phase 2 ─────────────────────────────────────────
+
+    async fn set_parent(&self, idea_id: &str, parent_id: Option<&str>) -> Result<()> {
+        self.set_parent_impl(idea_id, parent_id).await
+    }
+
+    async fn set_properties(
+        &self,
+        idea_id: &str,
+        properties: Option<serde_json::Value>,
+    ) -> Result<()> {
+        self.set_properties_impl(idea_id, properties).await
+    }
+
+    async fn merge_properties(&self, idea_id: &str, patch: serde_json::Value) -> Result<()> {
+        self.merge_properties_impl(idea_id, patch).await
+    }
+
+    async fn list_children(&self, parent_id: &str) -> Result<Vec<Idea>> {
+        self.list_children_impl(parent_id).await
+    }
 }
 
 #[cfg(test)]

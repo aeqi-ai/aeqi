@@ -49,9 +49,9 @@ use rusqlite::Connection;
 
 /// The version stamped on a fresh DB after `initial_schema` runs. Legacy
 /// DBs that ran the old v1..v9 chain carry rows 1..9 and are not re-stamped;
-/// they catch up via the `migrations` table below. The current head is v14
-/// (polymorphic `assignee` column on `ideas`).
-const BASELINE_VERSION: i64 = 14;
+/// they catch up via the `migrations` table below. The current head is v15
+/// (Tables-in-Ideas Phase 2: `parent_idea_id` + `properties` JSON columns).
+const BASELINE_VERSION: i64 = 15;
 
 impl SqliteIdeas {
     pub fn prepare_schema(conn: &Connection) -> Result<()> {
@@ -103,6 +103,7 @@ fn run_migrations(conn: &Connection) -> Result<()> {
         (12, migration_v12_credentials),
         (13, migration_v13_wrong_feedback_count),
         (14, migration_v14_assignee),
+        (15, migration_v15_parent_and_properties),
     ];
     for (version, f) in migrations {
         if *version > current {
@@ -161,7 +162,9 @@ fn initial_schema(conn: &Connection) -> Result<()> {
             valid_until TEXT,
             time_context TEXT NOT NULL DEFAULT 'timeless',
             wrong_feedback_count INTEGER NOT NULL DEFAULT 0,
-            assignee TEXT
+            assignee TEXT,
+            parent_idea_id TEXT REFERENCES ideas(id) ON DELETE SET NULL,
+            properties TEXT
         );",
     )?;
 
@@ -250,6 +253,8 @@ fn initial_schema(conn: &Connection) -> Result<()> {
          CREATE INDEX idx_ideas_valid_until ON ideas(valid_until);
          CREATE INDEX idx_ideas_time_context ON ideas(time_context);
          CREATE INDEX idx_ideas_assignee ON ideas(assignee);
+         CREATE INDEX idx_ideas_parent_idea_id ON ideas(parent_idea_id)
+            WHERE parent_idea_id IS NOT NULL;
          CREATE INDEX idx_idea_tags_tag ON idea_tags(tag);
          CREATE INDEX idx_entity_edges_source ON entity_edges(source_kind, source_id);
          CREATE INDEX idx_entity_edges_target ON entity_edges(target_kind, target_id);
@@ -733,6 +738,55 @@ fn migration_v14_assignee(conn: &Connection) -> Result<()> {
     }
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_ideas_assignee ON ideas(assignee)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v15 — Tables-in-Ideas Phase 2: parent_idea_id + properties JSON.
+///
+/// Two additive columns on `ideas` so an Idea can act like a Notion-style
+/// database row:
+///
+/// * `parent_idea_id TEXT` — nullable self-FK (`ON DELETE SET NULL`). Lets
+///   an Idea own children Ideas, surfacing tree views on the detail page
+///   and child-rollup queries on the list view. SET NULL (not CASCADE)
+///   because deleting a parent shouldn't silently drop a workstream of
+///   children — they detach to root and stay searchable.
+/// * `properties TEXT` — schema-less JSON object (e.g.
+///   `{"status":"in_progress","priority":"high"}`). Stored as TEXT for
+///   SQLite portability; parsing is the consumer's job. NULL means
+///   "no properties" — distinct from `{}` (explicitly empty).
+///
+/// Index on `parent_idea_id` is partial (`WHERE parent_idea_id IS NOT
+/// NULL`) — the common shape is "few Ideas have parents", so a
+/// full-table index would waste space.
+///
+/// No index on `properties`; JSON property queries are filtered in the
+/// Rust layer for now. If a single property key becomes hot (e.g.
+/// `status` for kanban grouping), promote it to a generated column with
+/// its own index in a later migration.
+fn migration_v15_parent_and_properties(conn: &Connection) -> Result<()> {
+    let cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(ideas)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !cols.iter().any(|n| n == "parent_idea_id") {
+        conn.execute(
+            "ALTER TABLE ideas ADD COLUMN parent_idea_id TEXT \
+             REFERENCES ideas(id) ON DELETE SET NULL",
+            [],
+        )?;
+    }
+    if !cols.iter().any(|n| n == "properties") {
+        conn.execute("ALTER TABLE ideas ADD COLUMN properties TEXT", [])?;
+    }
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ideas_parent_idea_id \
+         ON ideas(parent_idea_id) WHERE parent_idea_id IS NOT NULL",
         [],
     )?;
     Ok(())

@@ -40,8 +40,8 @@ export interface IdeasListViewProps {
   scopeCounts: Record<IdeasFilter, number>;
   filter: FilterState;
   onFilter: (patch: Partial<FilterState>) => void;
-  view: "list" | "graph";
-  onViewChange: (next: "list" | "graph") => void;
+  view: import("./IdeasViewPopover").IdeasView;
+  onViewChange: (next: import("./IdeasViewPopover").IdeasView) => void;
 }
 
 export default function IdeasListView({

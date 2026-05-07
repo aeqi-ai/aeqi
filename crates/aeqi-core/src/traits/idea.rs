@@ -37,6 +37,17 @@ pub struct Idea {
     /// Tool deny-list.
     #[serde(default)]
     pub tool_deny: Vec<String>,
+    /// Parent Idea id (Tables-in-Ideas Phase 2). `None` for roots; otherwise
+    /// the id of an Idea owned by the same agent (visibility constraints
+    /// flow through the parent's scope).
+    #[serde(default)]
+    pub parent_idea_id: Option<String>,
+    /// Schema-less property bag (Tables-in-Ideas Phase 2). Notion-style
+    /// `{"status": "in_progress", "priority": "high"}`. Persisted as a JSON
+    /// TEXT column; parsing is the consumer's job. `None` means "no
+    /// properties set"; an empty object is a distinct, explicit state.
+    #[serde(default)]
+    pub properties: Option<serde_json::Value>,
 }
 
 fn default_inheritance() -> String {
@@ -94,6 +105,8 @@ impl Idea {
             inheritance: "self".to_string(),
             tool_allow: Vec::new(),
             tool_deny: Vec::new(),
+            parent_idea_id: None,
+            properties: None,
         }
     }
 }
@@ -786,6 +799,53 @@ pub trait IdeaStore: Send + Sync {
     /// (Agent R).
     async fn decay_co_retrieval_older_than(&self, _days: i64) -> anyhow::Result<u64> {
         Ok(0)
+    }
+
+    // ── Tables-in-Ideas Phase 2 ─────────────────────────────────────────
+    //
+    // Two columns on `ideas` that turn the substrate into a Notion-style
+    // database: `parent_idea_id` (tree) + `properties` (schema-less JSON).
+    // The trait surface is three methods, all defaulted to no-op so non-
+    // SQLite backends stay usable. SqliteIdeas overrides with the real
+    // implementations behind v15 schema columns.
+
+    /// Set the parent for an Idea (Tables-in-Ideas Phase 2). `None`
+    /// detaches the row to root. Cycles are caller-side concerns; the
+    /// substrate doesn't enforce them on each write.
+    async fn set_parent(&self, idea_id: &str, parent_id: Option<&str>) -> anyhow::Result<()> {
+        let _ = (idea_id, parent_id);
+        Ok(())
+    }
+
+    /// Replace the entire `properties` JSON object for an Idea. Pass
+    /// `None` to clear (column NULL); pass `Some({...})` to overwrite.
+    /// For deep-merge semantics use [`merge_properties`].
+    async fn set_properties(
+        &self,
+        idea_id: &str,
+        properties: Option<serde_json::Value>,
+    ) -> anyhow::Result<()> {
+        let _ = (idea_id, properties);
+        Ok(())
+    }
+
+    /// Deep-merge `patch` into the existing `properties` object. Keys
+    /// set in `patch` overwrite; keys absent are preserved. `null` in
+    /// `patch` deletes that key. Used by `ideas.set_properties` IPC.
+    async fn merge_properties(
+        &self,
+        idea_id: &str,
+        patch: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        let _ = (idea_id, patch);
+        Ok(())
+    }
+
+    /// Return direct children of `parent_id`, newest first. Empty when
+    /// the parent has none or the substrate doesn't track parentage.
+    async fn list_children(&self, parent_id: &str) -> anyhow::Result<Vec<Idea>> {
+        let _ = parent_id;
+        Ok(Vec::new())
     }
 }
 

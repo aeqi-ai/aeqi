@@ -1786,6 +1786,15 @@ impl Daemon {
                 "walk_ideas" => {
                     crate::ipc::ideas::handle_walk_ideas(&ctx, &request, &allowed_roots).await
                 }
+                // Tables-in-Ideas Phase 2.
+                "list_idea_children" => {
+                    crate::ipc::ideas::handle_list_idea_children(&ctx, &request, &allowed_roots)
+                        .await
+                }
+                "set_idea_properties" => {
+                    crate::ipc::ideas::handle_set_idea_properties(&ctx, &request, &allowed_roots)
+                        .await
+                }
 
                 "list_events" => {
                     crate::ipc::events::handle_list_events(&ctx, &request, &allowed_roots).await

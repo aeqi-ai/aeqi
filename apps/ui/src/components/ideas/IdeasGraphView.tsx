@@ -3,7 +3,7 @@ import { Button, EmptyState, Spinner, Tooltip } from "../ui";
 import IdeaGraph, { type GraphNode, type GraphEdge } from "../IdeaGraph";
 import IdeasFilterPopover from "./IdeasFilterPopover";
 import IdeasSortPopover from "./IdeasSortPopover";
-import IdeasViewPopover from "./IdeasViewPopover";
+import IdeasViewPopover, { type IdeasView } from "./IdeasViewPopover";
 import { type FilterState } from "./types";
 import type { IdeasFilter } from "./types";
 
@@ -15,8 +15,8 @@ export interface IdeasGraphViewProps {
   filter: FilterState;
   scopeCounts: Record<IdeasFilter, number>;
   selectedId: string | null;
-  view: "list" | "graph";
-  onViewChange: (next: "list" | "graph") => void;
+  view: IdeasView;
+  onViewChange: (next: IdeasView) => void;
   onNew: () => void;
   onSelect: (node: GraphNode | null) => void;
   onFilterChange: (patch: Partial<FilterState>) => void;

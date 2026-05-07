@@ -172,6 +172,9 @@ export interface Idea {
   agent_id?: string;
   created_at?: string;
   score?: number;
+  // Tables-in-Ideas Phase 2.
+  parent_idea_id?: string | null;
+  properties?: Record<string, unknown> | null;
 }
 
 export type IdeaRelation = "mentions" | "embeds" | "adjacent";
