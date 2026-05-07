@@ -137,6 +137,35 @@ not a default. If the deployed shape is itself wrong, hard-refreshing
 just shows them the same wrong shape faster — which is the opposite of
 helpful.
 
+### Raw upstream payloads should never bleed into the UI — wrap with a parser
+
+Whenever a UI component renders a string the runtime forwards verbatim
+from an upstream service (LLM provider error envelopes, on-chain revert
+data, IPC error messages, stack traces), the canonical shape is:
+`parseFooContent(raw): { headline, detail?, hint? }` rendered as a
+three-tier block. Headline weighted, detail+hint muted. Quiet visual
+treatment (`--color-card-subtle` / `--color-text-muted`) — no
+aggressive red unless it's a real fault state. Most "errors" are
+upstream rate-limits or provider hiccups, not user-actionable faults.
+
+Example shipped 2026-05-07 in `MessageItem.tsx`: `parseErrorContent`
+recognises `OpenRouter API error (NNN ...): {...}` envelopes and
+generic `error.message` JSON, lifts a one-line headline (e.g. "Upstream
+is rate-limited"), surfaces a muted detail (provider + model + status)
+and an optional hint (e.g. "Retrying or add your own OpenRouter key in
+Settings → Integrations"). Falls through to raw content for unknown
+shapes — never loses information.
+
+Rule: any time a backend producer hands the UI a string that includes
+stringified JSON / hex revert data / "Provider returned ..." preamble,
+write the parser BEFORE rendering. The parser belongs next to the
+component that consumes it (small file-local helper); only extract to
+a shared util when ≥3 surfaces consume the same upstream shape.
+Cost-of-skipping: founder catches the raw payload in dogfood and files
+a P0. Three instances in the last week (alloy revert hex, venture
+template revert, OpenRouter 429 envelope) — recurring enough to
+canonise.
+
 ### User-facing copy & pricing — single source of truth
 
 Before quoting any plan name, price, token allowance, or feature bullet
