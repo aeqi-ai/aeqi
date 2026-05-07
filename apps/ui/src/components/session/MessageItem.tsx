@@ -1,4 +1,5 @@
 import { useMemo, useState, memo } from "react";
+import { Link } from "react-router-dom";
 import { IconButton, Tooltip } from "@/components/ui";
 import { useNav } from "@/hooks/useNav";
 import { useAgentIdeas } from "@/queries/ideas";
@@ -500,9 +501,10 @@ const MessageItem = memo(function MessageItem({
   // "this is a formal ask, not a chat reply".
   const isAsk = msg.source === "question.ask";
 
-  // Avatar: agent + position render a left-side BlockAvatar; user renders a
-  // right-side BlockAvatar (or photo when avatar_url is set on the current
-  // user). System messages have no avatar.
+  // Avatar + author header row: agent / position / user senders all render a
+  // small avatar inline with the sender name in `.asv-msg-author`. The row's
+  // direction flips for user messages so name/avatar mirror the right-aligned
+  // bubble. System messages render no avatar and no header.
   const showAvatar =
     author.kind === "agent" || author.kind === "position" || author.kind === "user";
   const avatarName =
@@ -522,10 +524,8 @@ const MessageItem = memo(function MessageItem({
       ? currentUserAvatarUrl || ""
       : "";
 
-  // Author header label — small line above the bubble that names the sender.
-  // Becomes load-bearing in 3+ participant sessions where the avatar alone
-  // doesn't disambiguate. "You" for the current user, real name for others;
-  // suppressed for system messages.
+  // Author header label — names the sender next to the avatar. "You" for
+  // the current user, real name for others; suppressed for system messages.
   const authorLabel =
     author.kind === "agent"
       ? author.name
@@ -537,10 +537,49 @@ const MessageItem = memo(function MessageItem({
             : "You"
           : null;
 
-  const isUserAuthor = author.kind === "user";
-  const avatarBlock = showAvatar ? (
-    <div className="asv-msg-avatar">
-      {avatarPhotoUrl ? (
+  // Resolve a navigation target for the avatar so clicking jumps to the
+  // sender's identity surface. Agents → /<entityBase>/agents/<id>. Positions
+  // → /<entityBase>/roles/<id>. The current user → /account. Other users
+  // have no public surface today, so leave their avatar unlinked.
+  const avatarHref = (() => {
+    if (!entityId) return undefined;
+    if (author.kind === "agent" && author.id) {
+      return `/c/${encodeURIComponent(entityId)}/agents/${encodeURIComponent(author.id)}`;
+    }
+    if (author.kind === "position" && author.id) {
+      return `/c/${encodeURIComponent(entityId)}/roles/${encodeURIComponent(author.id)}`;
+    }
+    if (author.kind === "user" && author.id && currentUserId && author.id === currentUserId) {
+      return "/account";
+    }
+    return undefined;
+  })();
+
+  const avatarEl = showAvatar ? (
+    avatarPhotoUrl ? (
+      avatarHref ? (
+        <Link
+          to={avatarHref}
+          className="block-avatar-link"
+          aria-label={avatarName}
+          title={avatarName}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <img
+            src={avatarPhotoUrl}
+            alt={avatarName}
+            width={20}
+            height={20}
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: "999px",
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        </Link>
+      ) : (
         <img
           src={avatarPhotoUrl}
           alt={avatarName}
@@ -554,21 +593,24 @@ const MessageItem = memo(function MessageItem({
             display: "block",
           }}
         />
-      ) : (
-        <BlockAvatar name={avatarName} size={20} />
-      )}
-      {author.kind === "position" && <PositionChip title={author.title} />}
-    </div>
+      )
+    ) : (
+      <BlockAvatar name={avatarName} size={20} href={avatarHref} ariaLabel={avatarName} />
+    )
   ) : null;
 
   return (
     <div
       className={`asv-msg ${bubbleClass}${msg.queued ? " asv-msg-queued" : ""}${isAsk ? " asv-msg-ask" : ""}`}
     >
-      {/* Agent / position avatar sits to the LEFT of the body. */}
-      {!isUserAuthor && avatarBlock}
       <div className="asv-msg-body">
-        {authorLabel && <div className="asv-msg-author">{authorLabel}</div>}
+        {authorLabel && (
+          <div className="asv-msg-author">
+            {avatarEl}
+            <span className="asv-msg-author-name">{authorLabel}</span>
+            {author.kind === "position" && <PositionChip title={author.title} />}
+          </div>
+        )}
         {isAsk && (
           <div className="asv-msg-ask-header" aria-label="Asking the director">
             <span className="asv-msg-ask-eyebrow">ASKING THE DIRECTOR</span>
@@ -688,10 +730,6 @@ const MessageItem = memo(function MessageItem({
           </div>
         )}
       </div>
-      {/* User avatar sits to the RIGHT of the body — mirror of the agent's
-          left-side avatar. The row's `justify-content: flex-end` packs both
-          children at the right edge with the body to the avatar's left. */}
-      {isUserAuthor && avatarBlock}
     </div>
   );
 });

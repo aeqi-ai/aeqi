@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiRequest } from "@/api/client";
 import BlockAvatar from "@/components/BlockAvatar";
 import AddParticipantModal from "./AddParticipantModal";
@@ -38,29 +39,56 @@ function normalize(raw: RawParticipant): Participant {
   return { id, name, kind, avatar_url: raw.avatar_url ?? null };
 }
 
-function ParticipantAvatar({ p }: { p: Participant }) {
+function ParticipantAvatar({ p, entityId }: { p: Participant; entityId?: string }) {
+  // Resolve a navigation target so clicking the avatar jumps to that
+  // identity's surface. Agent → /<entityBase>/agents/<id>; position
+  // → /<entityBase>/roles/<id>; user / external are unlinked (no public
+  // surface today).
+  const href =
+    entityId && p.id && p.kind === "agent"
+      ? `/c/${encodeURIComponent(entityId)}/agents/${encodeURIComponent(p.id)}`
+      : entityId && p.id && p.kind === "position"
+        ? `/c/${encodeURIComponent(entityId)}/roles/${encodeURIComponent(p.id)}`
+        : undefined;
+
   if (p.avatar_url) {
+    const img = (
+      <img
+        src={p.avatar_url}
+        alt={p.name}
+        width={24}
+        height={24}
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: "999px",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+    );
+    if (href) {
+      return (
+        <Link
+          to={href}
+          className="block-avatar-link asv-participant-avatar"
+          aria-label={p.name}
+          title={p.name}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {img}
+        </Link>
+      );
+    }
     return (
       <div className="asv-participant-avatar" title={p.name}>
-        <img
-          src={p.avatar_url}
-          alt={p.name}
-          width={24}
-          height={24}
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: "999px",
-            objectFit: "cover",
-            display: "block",
-          }}
-        />
+        {img}
       </div>
     );
   }
   return (
     <div className="asv-participant-avatar" title={p.name}>
-      <BlockAvatar name={p.name || "?"} size={24} />
+      <BlockAvatar name={p.name || "?"} size={24} href={href} ariaLabel={p.name} />
     </div>
   );
 }
@@ -113,7 +141,7 @@ export default function ParticipantStrip({
       <div className="asv-participant-strip">
         <div className="asv-participant-strip-avatars">
           {inline.map((p) => (
-            <ParticipantAvatar key={`${p.kind}:${p.id}`} p={p} />
+            <ParticipantAvatar key={`${p.kind}:${p.id}`} p={p} entityId={entityId} />
           ))}
           {overflow > 0 && (
             <div className="asv-participant-overflow" title={`${overflow} more`}>

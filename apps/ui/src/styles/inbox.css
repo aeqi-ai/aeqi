@@ -117,12 +117,15 @@
   color: var(--color-ink-muted);
 }
 
-/* Detail header */
+/* Detail header — title on a larger line; subtitle + activity stack on a
+   smaller meta line beneath. Participant strip + caller-supplied extras
+   sit on the right side. At <=1024px the right block stacks below the
+   left block so the layout collapses gracefully on tablet widths. */
 .session-detail-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-4);
   padding: var(--space-3) var(--space-5);
   flex-shrink: 0;
   background: var(--color-card-subtle);
@@ -130,36 +133,73 @@
 
 .session-detail-header-from {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-  overflow: hidden;
+  flex: 1 1 auto;
 }
 
 .session-detail-header-title {
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: 600;
   color: var(--color-ink-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
-}
-
-.session-detail-header-subtitle {
-  font-size: var(--font-size-xs);
-  color: var(--color-ink-muted);
+  letter-spacing: -0.005em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+.session-detail-header-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-ink-muted);
+  line-height: 1.3;
+}
+
+.session-detail-header-subtitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.session-detail-header-meta-sep {
+  color: var(--color-ink-muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.session-detail-header-activity {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-detail-header-activity.is-streaming {
+  color: var(--color-text-primary);
+  font-weight: 500;
 }
 
 .session-detail-header-extras {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-3);
   flex-shrink: 0;
+}
+
+@media (max-width: 1024px) {
+  .session-detail-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+  .session-detail-header-extras {
+    justify-content: space-between;
+  }
 }
 
 /* Thread — bottom padding tracks the floating composer's measured height

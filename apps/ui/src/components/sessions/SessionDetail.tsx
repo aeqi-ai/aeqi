@@ -29,6 +29,13 @@ import MessageItem from "@/components/session/MessageItem";
 import ParticipantStrip from "@/components/sessions/ParticipantStrip";
 import type { Message } from "@/components/session/types";
 import type { ComposerAttachmentKind, ComposerFile } from "@/components/composer/Composer";
+import { timeAgo } from "@/lib/format";
+
+/** Compact relative-time for the chat header — wraps `timeAgo`'s ISO API
+ *  for the millisecond timestamps message rows carry. */
+function formatRelative(ms: number): string {
+  return timeAgo(new Date(ms).toISOString());
+}
 
 export interface SessionDetailProps {
   // Session identity — drives ParticipantStrip, MessageItem author resolution.
@@ -172,17 +179,48 @@ export default function SessionDetail({
     await onSend(trimmed);
   };
 
+  // Activity meta — relative time of the last message, or "Streaming…" while
+  // a turn is in flight. Read from the last message's timestamp; if none is
+  // present we fall through to no-meta. Re-computed every render — cheap.
+  const lastTimestamp = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const ts = messages[i]?.timestamp;
+      if (typeof ts === "number" && ts > 0) return ts;
+    }
+    return null;
+  })();
+  const activityLabel = isStreaming
+    ? "Streaming…"
+    : lastTimestamp != null
+      ? `Active ${formatRelative(lastTimestamp)}`
+      : null;
+
   return (
     <div className="session-detail">
-      {sessionId && <ParticipantStrip sessionId={sessionId} entityId={entityId} />}
-
-      {(title || headerExtras) && (
+      {(title || headerExtras || sessionId) && (
         <div className="session-detail-header">
           <div className="session-detail-header-from">
             {title && <span className="session-detail-header-title">{title}</span>}
-            {subtitle && <span className="session-detail-header-subtitle">{subtitle}</span>}
+            <div className="session-detail-header-meta">
+              {subtitle && <span className="session-detail-header-subtitle">{subtitle}</span>}
+              {subtitle && activityLabel && (
+                <span className="session-detail-header-meta-sep" aria-hidden>
+                  ·
+                </span>
+              )}
+              {activityLabel && (
+                <span
+                  className={`session-detail-header-activity${isStreaming ? " is-streaming" : ""}`}
+                >
+                  {activityLabel}
+                </span>
+              )}
+            </div>
           </div>
-          {headerExtras && <div className="session-detail-header-extras">{headerExtras}</div>}
+          <div className="session-detail-header-extras">
+            {sessionId && <ParticipantStrip sessionId={sessionId} entityId={entityId} />}
+            {headerExtras}
+          </div>
         </div>
       )}
 

@@ -1,5 +1,23 @@
-// Deterministic blocky avatar — 5x5 mirrored grid, greytones
-export default function BlockAvatar({ name, size = 22 }: { name: string; size?: number }) {
+// Deterministic blocky avatar — 5x5 mirrored grid, greytones.
+//
+// When an `href` prop is passed, the SVG is wrapped in a React Router
+// <Link> so clicking the avatar navigates to the target identity (agent
+// detail, role detail, user profile, etc.). Without `href` the SVG
+// renders as a presentational element. Wrapping is opt-in so existing
+// callers (org chart node icons, sidebar identicons, etc.) keep their
+// presentational shape.
+import { Link } from "react-router-dom";
+
+export interface BlockAvatarProps {
+  name: string;
+  size?: number;
+  /** When set, wraps the avatar in a React Router Link to this path. */
+  href?: string;
+  /** Optional aria-label override for the link wrapper. */
+  ariaLabel?: string;
+}
+
+export default function BlockAvatar({ name, size = 22, href, ariaLabel }: BlockAvatarProps) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
 
@@ -44,7 +62,7 @@ export default function BlockAvatar({ name, size = 22 }: { name: string; size?: 
     }
   }
 
-  return (
+  const svg = (
     <svg
       width={size}
       height={size}
@@ -54,4 +72,20 @@ export default function BlockAvatar({ name, size = 22 }: { name: string; size?: 
       {rects}
     </svg>
   );
+
+  if (href) {
+    return (
+      <Link
+        to={href}
+        className="block-avatar-link"
+        aria-label={ariaLabel ?? name}
+        title={name}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {svg}
+      </Link>
+    );
+  }
+
+  return svg;
 }

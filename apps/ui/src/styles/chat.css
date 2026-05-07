@@ -54,15 +54,15 @@
 }
 
 /* ── Participant strip ──
-   Quiet horizontal row above the message list. Chrome zone (muted tint),
-   left side: stacked avatars + overflow count; right cap: +add ghost circle.
-   No hairlines — tint shift carries the boundary against the message area. */
+   Quiet inline row inside the session-detail header. Lives on the right
+   side of the header alongside any caller-supplied extras (back/open
+   buttons). No outer chrome — the header's own tint carries the boundary;
+   just lay out avatars + add button inline.
+   Avatars on the left, +add ghost circle on the right. */
 .asv-participant-strip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px clamp(16px, 3vw, 28px);
-  background: var(--bg-surface);
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 .asv-participant-strip-avatars {
@@ -206,21 +206,6 @@
   color: var(--color-text-muted);
 }
 
-/* ── Avatar slot in message rows ──
-   Small avatar floats next to the bubble: left for agent/position, right
-   for the user (mirrored). Position chip sits inline next to it. */
-.asv-msg-avatar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 3px;
-  flex-shrink: 0;
-}
-.asv-msg-user .asv-msg-avatar {
-  /* Flex-row already places the user avatar after the body; the row's
-     justify-content: flex-end packs both at the right edge. */
-  margin-left: 0;
-}
 .asv-position-chip {
   font-family: var(--font-sans);
   font-size: var(--font-size-2xs);
@@ -230,11 +215,16 @@
   white-space: nowrap;
 }
 
-/* ── Author header line ──
-   Small muted label above the bubble naming the sender. Becomes load-bearing
-   in 3+ participant sessions where the avatar alone doesn't disambiguate.
-   Aligns with the bubble's side: left for incoming, right for outgoing. */
+/* ── Author header row ──
+   Small avatar + sender name on the same line above the bubble. The
+   avatar is inline-with-the-name (NOT bubble-side), so the rhythm is
+   `[avatar] name` instead of `[avatar] [bubble]`. For user messages the
+   row flips via `flex-direction: row-reverse` so name+avatar mirror the
+   right-aligned bubble. */
 .asv-msg-author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-sans);
   font-size: var(--font-size-xs);
   font-weight: 500;
@@ -243,12 +233,30 @@
   margin-bottom: var(--space-1);
   letter-spacing: 0.01em;
 }
-.asv-msg-assistant .asv-msg-author,
-.asv-msg-streaming .asv-msg-author {
-  text-align: left;
+.asv-msg-author-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .asv-msg-user .asv-msg-author {
-  text-align: right;
+  flex-direction: row-reverse;
+}
+.block-avatar-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: opacity 0.12s ease;
+  flex-shrink: 0;
+}
+.block-avatar-link:hover {
+  opacity: 0.78;
+}
+.block-avatar-link:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
 }
 
 /* ── Awaiting-context banner ──
