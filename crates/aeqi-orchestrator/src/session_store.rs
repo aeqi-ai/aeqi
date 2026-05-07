@@ -87,6 +87,13 @@ pub struct ThreadEvent {
     pub metadata: Option<serde_json::Value>,
     pub sender_id: Option<String>,
     pub transport: Option<String>,
+    /// WHO sent this event — schema-aligned with `session_messages.from_kind`.
+    /// Possible values: "user" | "agent" | "role" | "system" (or NULL on
+    /// legacy rows the boot migration has not yet backfilled).
+    pub from_kind: Option<String>,
+    /// Identifier paired with `from_kind` when the row was authored by
+    /// a real principal. NULL for `from_kind = "system"`.
+    pub from_id: Option<String>,
 }
 
 /// A tool-call trace extracted from a quest's sessions — the read-side
@@ -1109,6 +1116,8 @@ impl SessionStore {
                         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok()),
                     sender_id: None,
                     transport: None,
+                    from_kind: None,
+                    from_id: None,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1270,6 +1279,13 @@ impl SessionStore {
     }
 
     /// Record a typed event with sender identity.
+    ///
+    /// `from_kind` / `from_id` are left NULL on the inserted row; the
+    /// boot migration backfills `from_kind` from `role` for legacy
+    /// rows. New runtime-originated rows (cron / schedule) should use
+    /// `record_event_by_session_with_full_identity` instead and set
+    /// `from_kind` explicitly so the inbox UI does not mis-attribute
+    /// the row to the viewing user.
     pub async fn record_event_by_session_with_sender(
         &self,
         session_id: &str,
@@ -1281,13 +1297,39 @@ impl SessionStore {
         sender_id: Option<&str>,
         transport: Option<&str>,
     ) -> Result<()> {
+        self.record_event_by_session_with_full_identity(
+            session_id, event_type, role, content, source, metadata, sender_id, transport, None,
+            None,
+        )
+        .await
+    }
+
+    /// Record a typed event with full identity columns
+    /// (`sender_id`, `transport`, `from_kind`, `from_id`). Use this
+    /// path when the producer knows the canonical `from_kind` for the
+    /// row at insert time — e.g. `schedule_timer` writes
+    /// `from_kind="system"` for cron-fired prompts so the inbox UI
+    /// does NOT render them as if the founder sent them.
+    pub async fn record_event_by_session_with_full_identity(
+        &self,
+        session_id: &str,
+        event_type: &str,
+        role: &str,
+        content: &str,
+        source: Option<&str>,
+        metadata: Option<&serde_json::Value>,
+        sender_id: Option<&str>,
+        transport: Option<&str>,
+        from_kind: Option<&str>,
+        from_id: Option<&str>,
+    ) -> Result<()> {
         let db = self.db.lock().await;
         let now = Utc::now().to_rfc3339();
         let metadata_text = metadata.map(serde_json::Value::to_string);
         db.execute(
-            "INSERT INTO session_messages (session_id, role, content, timestamp, source, event_type, metadata, sender_id, transport) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![session_id, role, content, now, source, event_type, metadata_text, sender_id, transport],
+            "INSERT INTO session_messages (session_id, role, content, timestamp, source, event_type, metadata, sender_id, transport, from_kind, from_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![session_id, role, content, now, source, event_type, metadata_text, sender_id, transport, from_kind, from_id],
         )
         .context("failed to insert session message by session_id")?;
 
@@ -1414,7 +1456,7 @@ impl SessionStore {
     ) -> Result<Vec<ThreadEvent>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
-            "SELECT id, session_id, event_type, role, content, timestamp, source, metadata, sender_id, transport \
+            "SELECT id, session_id, event_type, role, content, timestamp, source, metadata, sender_id, transport, from_kind, from_id \
              FROM session_messages \
              WHERE session_id = ?1 AND summarized = 0 \
              ORDER BY id DESC LIMIT ?2",
@@ -1439,6 +1481,8 @@ impl SessionStore {
                         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok()),
                     sender_id: row.get(8)?,
                     transport: row.get(9)?,
+                    from_kind: row.get(10)?,
+                    from_id: row.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

@@ -55,6 +55,16 @@ pub struct SpawnOptions {
     pub sender_id: Option<String>,
     /// Transport that originated this session (e.g. "web", "telegram", "ipc").
     pub transport: Option<String>,
+    /// `from_kind` for the initial message row. Default `None` keeps the
+    /// existing role-based shape (web chat, role-addressed delivery →
+    /// `from_kind` left NULL and backfilled by the boot migration as
+    /// `"user"`). Set to `"system"` for runtime-originated spawns
+    /// (cron / schedule / autonomous loops) so the inbox UI does NOT
+    /// attribute the seed prompt to the founder.
+    pub from_kind: Option<String>,
+    /// `from_id` for the initial message row. Pairs with `from_kind`.
+    /// `None` for system rows; populated for user / agent / role rows.
+    pub from_id: Option<String>,
     /// Pre-existing broadcast sender to use instead of minting a fresh one.
     /// When the queue-driven executor runs a spawn, the IPC handler has
     /// already subscribed to a `StreamRegistry` sender for this session_id;
@@ -92,6 +102,8 @@ impl Default for SpawnOptions {
             name: None,
             sender_id: None,
             transport: None,
+            from_kind: None,
+            from_id: None,
             stream_sender: None,
             task_budget_usd: None,
             extra_tools: Vec::new(),
@@ -159,6 +171,24 @@ impl SpawnOptions {
 
     pub fn with_transport(mut self, transport: impl Into<String>) -> Self {
         self.transport = Some(transport.into());
+        self
+    }
+
+    /// Override the `from_kind` written on the initial message row. Use
+    /// `"system"` for runtime-originated spawns (cron / schedule / etc.)
+    /// so the inbox UI renders them as system events rather than
+    /// attributing them to the viewing user. Default behaviour (None)
+    /// keeps every existing call site on the role-based shape.
+    pub fn with_from_kind(mut self, kind: impl Into<String>) -> Self {
+        self.from_kind = Some(kind.into());
+        self
+    }
+
+    /// Pair with `with_from_kind` when the initial message is from a
+    /// real principal (user / agent / role). Leave unset for `system`
+    /// rows.
+    pub fn with_from_id(mut self, id: impl Into<String>) -> Self {
+        self.from_id = Some(id.into());
         self
     }
 
@@ -1521,16 +1551,27 @@ impl SessionManager {
         if opts.record_initial_message
             && let Some(ref ss) = self.session_store
         {
+            // Cron / schedule / autonomous-loop spawns set
+            // `from_kind = "system"` via SpawnOptions so the row is NOT
+            // attributed to the viewing user in the inbox UI. Default
+            // remains role="user" (web chat, role-addressed, telegram,
+            // etc.).
+            let initial_role = match opts.from_kind.as_deref() {
+                Some("system") => "system",
+                _ => "user",
+            };
             let _ = ss
-                .record_event_by_session_with_sender(
+                .record_event_by_session_with_full_identity(
                     &session_id,
                     "message",
-                    "user",
+                    initial_role,
                     input,
                     Some(session_type_str),
                     None,
                     opts.sender_id.as_deref(),
                     opts.transport.as_deref(),
+                    opts.from_kind.as_deref(),
+                    opts.from_id.as_deref(),
                 )
                 .await;
         }

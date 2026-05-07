@@ -98,7 +98,13 @@ impl ScheduleTimer {
 
         let mut opts = SpawnOptions::interactive()
             .with_name(format!("schedule:{}", event.name))
-            .with_transport("schedule".to_string());
+            .with_transport("schedule".to_string())
+            // Cron-fired prompts are runtime-originated, not user-typed.
+            // `from_kind="system"` (no `from_id`) makes the inbox UI
+            // render the seed row as a system event instead of
+            // attributing it to whichever user happens to be viewing
+            // the session.
+            .with_from_kind("system".to_string());
         opts.auto_close = true;
 
         match self

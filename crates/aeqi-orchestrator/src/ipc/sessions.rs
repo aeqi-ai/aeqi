@@ -345,6 +345,8 @@ pub async fn handle_session_messages(
                             "source": e.source,
                             "event_type": e.event_type,
                             "transport": e.transport,
+                            "from_kind": e.from_kind,
+                            "from_id": e.from_id,
                         });
                         if let Some(ref meta) = e.metadata {
                             obj["metadata"] = meta.clone();
