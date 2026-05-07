@@ -85,15 +85,6 @@ const BlueprintsIcon = () => (
   </svg>
 );
 
-// Studio — drafting compass / pencil. The Architect surface lives here:
-// you describe what you want and a Blueprint is drafted from the brief.
-const StudioIcon = () => (
-  <svg {...iconProps}>
-    <path d="M11 2.5l2.5 2.5-7.5 7.5H3.5V10z" />
-    <path d="M9.5 4l2.5 2.5" />
-  </svg>
-);
-
 // Treasury — coin/safe geometry. Concentric circle reads as value/store.
 const TreasuryIcon = () => (
   <svg {...iconProps}>
@@ -118,14 +109,6 @@ const GovernanceIcon = () => (
     <path d="M3 5h10" />
     <path d="M5 5l-2 4h4z" />
     <path d="M11 5l-2 4h4z" />
-  </svg>
-);
-
-// Channels — Slack-style hash rail. Two horizontal speech lines crossed
-// by two vertical strokes, evoking the `#` channel marker.
-const ChannelsIcon = () => (
-  <svg {...iconProps}>
-    <path d="M3.5 6h9M3.5 10h9M6.5 3.5l-1 9M10.5 3.5l-1 9" />
   </svg>
 );
 
@@ -230,7 +213,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   // Top-level public rows.
   const isDiscover = path === "/";
   const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
-  const isStudio = path === "/studio" || path.startsWith("/studio/");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
 
@@ -428,12 +410,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
                   navigate(`${base}/ideas?compose=1`);
                 }),
               })}
-              {!isPersonal &&
-                navItem("channels", "Channels", <ChannelsIcon />, {
-                  action: rowAction("New channel", <PlusIcon />, () => {
-                    navigate(`${base}/channels?compose=1`);
-                  }),
-                })}
               {isPersonal && navItem("treasury", "Treasury", <TreasuryIcon />)}
             </nav>
           </>
@@ -445,7 +421,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
             redundant. Blueprints = the catalog (top-level, public). ── */}
         <div className="sidebar-bottom-group">
           <nav className="sidebar-surface-nav" aria-label="Platform">
-            {topLevelItem("/studio", "Studio", <StudioIcon />, isStudio)}
             {topLevelItem("/blueprints", "Blueprints", <BlueprintsIcon />, isBlueprints)}
             {isAdminUser && topLevelItem("/admin", "Admin", <AdminIcon />, isAdmin)}
           </nav>
