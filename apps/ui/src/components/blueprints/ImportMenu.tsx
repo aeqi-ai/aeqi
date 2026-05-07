@@ -33,9 +33,9 @@ interface ImportMenuProps {
  *   2. From a blueprint — opens `BlueprintPickerModal` with `parts`
  *      so the spawn only seeds the named primitive.
  *
- * Trigger styled as `<Button variant="primary" size="sm">` to match
- * `+ New <primitive>` in the same toolbar — the dropdown caret is the
- * only visual deviation.
+ * Trigger styled as `<Button variant="secondary" size="sm">` — Import is
+ * a secondary toolbar action; the primary slot belongs to `+ New <primitive>`.
+ * The dropdown caret is the only visual deviation from a plain secondary button.
  */
 export function ImportMenu({
   entityId,
@@ -53,7 +53,7 @@ export function ImportMenu({
       <Menu
         placement="bottom-end"
         trigger={
-          <Button variant="primary" size="sm">
+          <Button variant="secondary" size="sm">
             <span>Import</span>
             <svg
               width="9"
