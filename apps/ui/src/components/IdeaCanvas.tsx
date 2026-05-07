@@ -22,6 +22,8 @@ import RefsRow, { type RefRecord } from "./RefsRow";
 import TagsEditor from "./TagsEditor";
 import IdeasScopePopover from "./ideas/IdeasScopePopover";
 import IdeaConversationPanel from "./ideas/IdeaConversationPanel";
+import IdeaPropertyChips from "./ideas/IdeaPropertyChips";
+import IdeaChildrenList from "./ideas/IdeaChildrenList";
 
 /**
  * Imperative handle for callers that supply their own toolbar (the
@@ -763,6 +765,8 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
           </div>
         )}
 
+        {isEdit && idea && <IdeaPropertyChips ideaId={idea.id} properties={idea.properties} />}
+
         <div className="ideas-canvas-body ideas-canvas-body-block">
           <LazyBlockEditor
             initialContent={idea?.content ?? content ?? null}
@@ -776,6 +780,10 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
             autofocus={!isEdit && !!initialName && initialName.length > 0}
           />
         </div>
+
+        {isEdit && idea && (
+          <IdeaChildrenList ideaId={idea.id} agentId={agentId} scope={idea.scope} />
+        )}
       </div>
       {/* Conversation panel — only shown when viewing an existing idea */}
       {isEdit && idea && <IdeaConversationPanel ideaId={idea.id} />}

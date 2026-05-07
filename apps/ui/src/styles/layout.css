@@ -6956,3 +6956,202 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   color: var(--color-text-muted);
   margin-right: auto;
 }
+
+/* ── Tables-in-Ideas Phase 2.1 — property chips + children list ── */
+
+.idea-properties {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--space-3);
+  min-height: 22px;
+}
+
+.idea-property-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 8px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: var(--color-text-secondary);
+  background: var(--bg-subtle);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.idea-property-chip:hover {
+  color: var(--color-text-primary);
+  background: var(--color-card-elevated);
+}
+.idea-property-chip.is-editing {
+  cursor: text;
+  background: var(--color-card-elevated);
+}
+.idea-property-chip-key {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+.idea-property-chip-sep {
+  opacity: 0.6;
+}
+.idea-property-chip-val {
+  color: var(--color-text-secondary);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.idea-property-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.idea-property-chip:hover .idea-property-chip-remove {
+  opacity: 1;
+}
+.idea-property-chip-remove:hover {
+  color: var(--color-text-primary);
+}
+.idea-property-chip-input,
+.idea-property-chip-select {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  min-width: 80px;
+  max-width: 220px;
+}
+
+.idea-property-add {
+  padding: 1px 8px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.idea-property-add:hover {
+  color: var(--color-text-primary);
+  border-color: var(--border-hover);
+}
+.idea-property-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.idea-properties-error,
+.idea-children-error,
+.idea-property-add-error {
+  font-size: 11px;
+  color: var(--color-danger, #d33);
+}
+
+.idea-property-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  min-width: 320px;
+}
+.idea-property-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Children list — sits below the BlockEditor body. */
+
+.idea-children {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.idea-children--empty {
+  margin-top: var(--space-3);
+  flex-direction: row;
+  justify-content: flex-start;
+}
+.idea-children-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.idea-children-title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.idea-children-loading {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.idea-children-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+.idea-children-item {
+  margin: 0;
+}
+.idea-children-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 6px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background: var(--bg-subtle);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.idea-children-card:hover {
+  background: var(--color-card-elevated);
+}
+.idea-children-card-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.idea-children-card-status {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  padding: 1px 6px;
+  background: var(--color-card-elevated);
+  border-radius: 999px;
+}
