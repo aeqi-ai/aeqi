@@ -38,6 +38,8 @@ feature work.
 
 **`cargo fmt -p A -p B -- --check` reports diff but exits 0 when the LAST `-p` crate is clean.** The combined invocation runs fmt on each crate in order; only the LAST package's exit code propagates to the shell. If `-p aeqi-orchestrator` (clean) is listed after `-p aeqi-web` (drifty), the command prints `aeqi-web`'s diff to stderr but exits 0. To detect drift reliably, run each crate's check independently and inspect each exit code: `cargo fmt -p aeqi-orchestrator -- --check; echo "ORCH: $?"; cargo fmt -p aeqi-web -- --check; echo "WEB: $?"`. Don't trust a combined `--check` exit code as a green light. Cost (2026-05-06): ~30s doubting myself on channels-surface ship before scoping per-crate.
 
+**Standalone `rustfmt --check <file>` defaults to edition 2015 — useless on this workspace.** Reaching for `rustfmt --check crates/foo/src/bar.rs` to scope a fmt check to a single file in a worktree fails with `E0670: async fn is not permitted in Rust 2015` and `let chains are only allowed in Rust 2024 or later` on virtually every file in the workspace. Standalone `rustfmt` does NOT read `[edition]` from the crate's `Cargo.toml`. Use `cargo fmt -p <crate> -- --check` (which loads edition correctly), then narrow scope by running it on the smallest crate touching your file. To check a single specific file, pass `--edition 2024` explicitly: `rustfmt --edition 2024 --check <file>`. Cost (2026-05-07): one false-error pass during architect-refine ship cycle.
+
 **`.observations/` lives in the main working tree, not worktrees.** The
 `.observations/` directory is only present in `/home/claudedev/aeqi/` (the
 main checkout). Worktrees don't have their own copy. When autonomous
