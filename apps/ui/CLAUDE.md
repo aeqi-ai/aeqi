@@ -1117,6 +1117,27 @@ parent's color instead of reading as demoted/muted text. Fix: `--text-tertiary` 
 occurrences in blueprints-store.css, blueprint-launch-picker.css, and pages.css with
 no matching definition anywhere in the token files.
 
+**`--font-size-md` is a ghost token — not in the canonical scale.**
+The `--font-size-*` scale runs `3xs / 2xs / xs / sm / base / lg / xl / 2xl / 3xl / 4xl
+/ 5xl` (see `packages/tokens/src/tokens.css`). There is no `md` step. Pages that
+reference `var(--font-size-md)` silently inherit the parent's computed size — no
+warning, no compile error, the value just doesn't apply. Fix: pick the closest scale
+neighbour by visual intent — body/lede copy → `--font-size-base` (14px); body slightly
+larger → `--font-size-lg` (16px). Cost (2026-05-07): discovered in `economy-hero-lede`
+during route audit; one substitution, no production miss because parent inheritance
+landed on a similar size. Grep: `grep -rn 'var(--font-size-md)' src/` should return
+zero. Add to the same v3-sweep grep family.
+
+**Parallel-authored sibling pages share token drift — sweep both at once.**
+When two pages are co-authored as visual siblings (`StudioPage` + `EconomyPage`,
+both rendering the same hero strip pattern with eyebrow + display title + lede), they
+tend to carry identical hardcoded literals (10px eyebrow, 40px display title, 11px
+section-title) bypassing the token scale on the same authoring pass. A token sweep
+that targets one file should grep the sibling file too — same class-prefix family
+(`.studio-*` / `.economy-*`) with the same shape signals parallel authoring. Cost
+(2026-05-07): studio.css carried 5 hardcoded font-size literals; economy.css carried
+the same parallel set (10px / 40px / 11px). Future sweep should hit both.
+
 **`--space-{xs,sm,md,lg,xl}` v3 shorthand aliases were undefined — now bridged.**
 The v3 shorthand scale (`--space-xs` through `--space-xl`) was used extensively in
 `GovernancePage.tsx` and `TreasuryPage.tsx` but was never defined in `primitives.css`
