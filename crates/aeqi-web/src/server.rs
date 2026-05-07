@@ -97,20 +97,31 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         Arc::from(aeqi_hosting::from_config(&hosting_config)?);
     info!(mode = hosting.mode(), "hosting provider initialized");
 
-    // Generate a random ephemeral secret if none configured.
-    // This prevents the insecure "aeqi-dev" fallback from ever being used.
-    let auth_secret = web.auth_secret.clone().or_else(|| {
-        use rand::Rng;
-        let secret: String = rand::rng()
-            .sample_iter(&rand::distr::Alphanumeric)
-            .take(48)
-            .map(char::from)
-            .collect();
-        tracing::warn!(
-            "No auth_secret configured — generated ephemeral secret (tokens won't survive restarts)"
-        );
-        Some(secret)
-    });
+    // Resolve auth_secret with strict precedence:
+    //   1. AEQI_WEB_SECRET env var (canonical for tenant runtimes — platform
+    //      threads it in via systemd --setenv so the platform's
+    //      `x-aeqi-scope-token` HMAC validates against the same shared secret).
+    //   2. [web].auth_secret from aeqi.toml (single-tenant / dev).
+    //   3. Ephemeral random fallback (warns loudly — drift here means scope
+    //      tokens never validate, gates short-circuit, cross-tenant data
+    //      leaks. Track:
+    //      `feedback_per_tenant_auth_secret_drift.md`).
+    let auth_secret = std::env::var("AEQI_WEB_SECRET")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| web.auth_secret.clone())
+        .or_else(|| {
+            use rand::Rng;
+            let secret: String = rand::rng()
+                .sample_iter(&rand::distr::Alphanumeric)
+                .take(48)
+                .map(char::from)
+                .collect();
+            tracing::warn!(
+                "AEQI_WEB_SECRET unset and [web].auth_secret unconfigured — generated ephemeral random secret. Platform-issued scope tokens will not validate; cross-tenant guards will short-circuit. Set AEQI_WEB_SECRET in the tenant's systemd unit."
+            );
+            Some(secret)
+        });
 
     let state = AppState {
         ipc: ipc.clone(),
@@ -230,7 +241,11 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         "aeqi-web listening on {} (auth: {:?})",
         web.bind, web.auth.mode
     );
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
