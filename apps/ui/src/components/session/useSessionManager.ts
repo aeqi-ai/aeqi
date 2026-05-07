@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useNav } from "@/hooks/useNav";
 import { useChatStore } from "@/store/chat";
+import { useDaemonStore } from "@/store/daemon";
 import { api } from "@/lib/api";
+import { entityPathFromId } from "@/lib/entityPath";
+import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
 import { isRateLimited } from "@/lib/rateLimit";
 import { type Message, type SessionInfo } from "./types";
 
@@ -20,7 +24,9 @@ export function useSessionManager({
   urlSessionId,
   processRawMessages,
 }: UseSessionManagerOptions) {
-  const { goEntity, entityId } = useNav();
+  const { entityId } = useNav();
+  const navigate = useNavigate();
+  const entities = useDaemonStore((s) => s.entities);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const streamingRef = useRef(false);
@@ -31,15 +37,22 @@ export function useSessionManager({
     sessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
 
-  // Navigate helpers. The company inbox landing is the bare
-  // `/c/:entityId` URL — there is no `/inbox` suffix when no session is
-  // picked. Only append the tab segment when we have a real sessionId.
+  // Navigate helpers — agent-scoped. `setSession(sid)` jumps to the
+  // canonical session URL `/c/<eid>/agents/<aid>/inbox/<sid>` (or trust
+  // equivalent). `setSession(null)` strips the session id and lands at
+  // the agent's bare URL `/c/<eid>/agents/<aid>` — chat-as-default
+  // empty state. The first message in that empty state creates the
+  // new session via the WS dispatch path; we don't pre-create one.
   const setSession = useCallback(
     (sid: string | null) => {
-      if (sid) goEntity(entityId, "inbox", sid, { replace: true });
-      else goEntity(entityId, undefined, undefined, { replace: true });
+      if (!entityId || !agentId) return;
+      if (sid) {
+        navigate(sessionDeepUrlFromId(entities, entityId, agentId, sid), { replace: true });
+      } else {
+        navigate(entityPathFromId(entities, entityId, "agents", agentId), { replace: true });
+      }
     },
-    [entityId, goEntity],
+    [entityId, agentId, entities, navigate],
   );
 
   // Load sessions for this agent
