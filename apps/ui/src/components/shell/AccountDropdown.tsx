@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Popover, SelectOption } from "@/components/ui";
 import UserAvatar from "@/components/UserAvatar";
 import { useAuthStore } from "@/store/auth";
@@ -52,6 +52,24 @@ const SignOutIcon = () => (
   </svg>
 );
 
+// Small ⋯ glyph — same affordance vocabulary as a "more" menu trigger.
+// Sits right of the user identity, opens the secondary actions popover
+// without competing with the row's primary navigation click.
+const MoreIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <circle cx="3" cy="8" r="1.25" />
+    <circle cx="8" cy="8" r="1.25" />
+    <circle cx="13" cy="8" r="1.25" />
+  </svg>
+);
+
 export default function AccountDropdown() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -65,7 +83,9 @@ export default function AccountDropdown() {
     (pathname === "/me" || pathname.startsWith("/me/")) && pathname !== "/me/billing";
   const isPersonalInbox = pathname === "/";
   const isBilling = pathname === "/me/billing";
-  const triggerActive = pathname === "/me" || pathname.startsWith("/me/");
+  // Row-level "active" — highlighted whenever we're somewhere under /me.
+  // Same vocabulary the trigger had before; just lifted onto the Link.
+  const rowActive = pathname === "/me" || pathname.startsWith("/me/");
 
   const userName =
     user?.name || user?.email?.split("@")[0] || (authMode === "none" ? "Local" : "You");
@@ -86,69 +106,103 @@ export default function AccountDropdown() {
     navigate("/login");
   }, [track, logout, navigate]);
 
-  const trigger = (
+  // Local-mode (no auth) keeps the old single-trigger shape — there
+  // are no secondary actions to surface, and there's no /me route to
+  // navigate to. Render the bare identity tile; click is a no-op.
+  if (authMode === "none") {
+    return (
+      <div className="account-dropdown-row">
+        <div
+          className="account-dropdown-trigger account-dropdown-trigger--static"
+          aria-label="Local mode"
+        >
+          <span className="account-dropdown-avatar">
+            <UserAvatar name={userName} size={16} src={user?.avatar_url} />
+          </span>
+          <span className="account-dropdown-identity">
+            <span className="account-dropdown-name">Local mode</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Primary affordance: the row IS a Link to /me. Click navigates,
+  // no popover side-effect. Keyboard activation (Enter/Space) routes
+  // identically — Link delegates to React Router. The chevron sibling
+  // is the secondary affordance for sign-out / billing / inbox.
+  const chevronTrigger = (
     <button
       type="button"
-      className={`account-dropdown-trigger${triggerActive ? " account-dropdown-trigger--active" : ""}`}
+      className="account-dropdown-chevron"
       aria-label="Account menu"
-      aria-current={triggerActive ? "page" : undefined}
+      aria-haspopup="menu"
     >
-      <span className="account-dropdown-avatar">
-        <UserAvatar name={userName} size={16} src={user?.avatar_url} />
-      </span>
-      <span className="account-dropdown-identity">
-        <span className="account-dropdown-name">{userName}</span>
-        {userEmail && (
-          <span className="account-dropdown-email" title={userEmail}>
-            {userEmail}
-          </span>
-        )}
-      </span>
+      <MoreIcon />
     </button>
   );
 
   return (
-    <Popover trigger={trigger} open={open} onOpenChange={setOpen} placement="top-start" portal>
-      <div className="account-dropdown-menu" role="menu">
-        {authMode !== "none" ? (
-          <>
-            <SelectOption
-              selected={isAccount}
-              onClick={() => go("/me")}
-              leadingIcon={<AccountIcon />}
-            >
-              Account
-            </SelectOption>
-            <SelectOption
-              selected={isPersonalInbox}
-              onClick={() => go("/")}
-              leadingIcon={<InboxIcon />}
-            >
-              Personal Inbox
-            </SelectOption>
-            <SelectOption
-              disabled
-              leadingIcon={<NotificationsIcon />}
-              trailingHint="soon"
-              title="Coming soon"
-            >
-              Notifications
-            </SelectOption>
-            <SelectOption
-              selected={isBilling}
-              onClick={() => go("/me/billing")}
-              leadingIcon={<BillingIcon />}
-            >
-              Billing
-            </SelectOption>
-            <SelectOption onClick={signOut} leadingIcon={<SignOutIcon />}>
-              Log out
-            </SelectOption>
-          </>
-        ) : (
-          <div className="account-dropdown-item account-dropdown-item--label">Local mode</div>
-        )}
-      </div>
-    </Popover>
+    <div className="account-dropdown-row">
+      <Link
+        to="/me"
+        className={`account-dropdown-trigger${rowActive ? " account-dropdown-trigger--active" : ""}`}
+        aria-current={rowActive ? "page" : undefined}
+      >
+        <span className="account-dropdown-avatar">
+          <UserAvatar name={userName} size={16} src={user?.avatar_url} />
+        </span>
+        <span className="account-dropdown-identity">
+          <span className="account-dropdown-name">{userName}</span>
+          {userEmail && (
+            <span className="account-dropdown-email" title={userEmail}>
+              {userEmail}
+            </span>
+          )}
+        </span>
+      </Link>
+      <Popover
+        trigger={chevronTrigger}
+        open={open}
+        onOpenChange={setOpen}
+        placement="top-end"
+        portal
+      >
+        <div className="account-dropdown-menu" role="menu">
+          <SelectOption
+            selected={isAccount}
+            onClick={() => go("/me")}
+            leadingIcon={<AccountIcon />}
+          >
+            Account
+          </SelectOption>
+          <SelectOption
+            selected={isPersonalInbox}
+            onClick={() => go("/")}
+            leadingIcon={<InboxIcon />}
+          >
+            Personal Inbox
+          </SelectOption>
+          <SelectOption
+            disabled
+            leadingIcon={<NotificationsIcon />}
+            trailingHint="soon"
+            title="Coming soon"
+          >
+            Notifications
+          </SelectOption>
+          <SelectOption
+            selected={isBilling}
+            onClick={() => go("/me/billing")}
+            leadingIcon={<BillingIcon />}
+          >
+            Billing
+          </SelectOption>
+          <SelectOption onClick={signOut} leadingIcon={<SignOutIcon />}>
+            Log out
+          </SelectOption>
+        </div>
+      </Popover>
+    </div>
   );
 }

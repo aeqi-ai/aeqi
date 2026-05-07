@@ -6534,16 +6534,27 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 }
 
 /* ── Account dropdown ─────────────────────────────────────────────────
-   Full-width trigger pinned at the bottom of the sidebar. Shows the
-   user avatar, name/email stack, and a chevron — same row height as
-   other nav items. */
+   Pinned at the bottom of the sidebar. The row IS a <Link to="/me"> so
+   primary click navigates to the personal entity surface; a small ⋯
+   chevron sibling opens the secondary-actions popover (account, inbox,
+   billing, sign-out). Two affordances on one rail row, separated so
+   neither steals the other's intent. */
+.account-dropdown-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
 .account-dropdown-trigger {
   /* relative anchors the .active ::before accent bar to this row. */
   position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   min-height: var(--sidebar-row-h);
   padding: 0 8px;
   background: transparent;
@@ -6554,9 +6565,13 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   color: var(--color-text-primary);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
   transition:
     background 0.1s ease,
     color 0.1s ease;
+}
+.account-dropdown-trigger--static {
+  cursor: default;
 }
 .account-dropdown-trigger:hover {
   background: var(--state-hover);
@@ -6621,6 +6636,39 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 .left-sidebar.collapsed .account-dropdown-trigger {
   justify-content: center;
   padding: 8px;
+}
+/* Collapsed rail hides the secondary chevron — the avatar tile alone
+ * routes to /me; sign-out / billing live in the expanded rail. */
+.left-sidebar.collapsed .account-dropdown-chevron {
+  display: none;
+}
+/* Secondary affordance: ⋯ glyph button right of the user identity.
+ * 24px square, ghost-circle hover, matches .sidebar-row-action-btn
+ * vocabulary so it sits naturally next to HelpMenu in the same row. */
+.account-dropdown-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
+}
+.account-dropdown-chevron:hover {
+  background: var(--state-hover);
+  color: var(--color-text-title);
+}
+.account-dropdown-chevron:focus-visible {
+  outline: 1px solid var(--border-hover);
+  outline-offset: -1px;
 }
 .account-dropdown-menu {
   min-width: 200px;
