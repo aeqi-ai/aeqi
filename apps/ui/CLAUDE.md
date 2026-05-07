@@ -278,6 +278,51 @@ already reading `entry.description` from `/integrations`. The visible
 stale copy was caused by the platform binary being two days stale —
 out of UI scope.
 
+### Brief asserts UI duplication — grep + read transports before refactoring
+
+Sister pattern to the "hardcoded string" trap. When a brief asserts that
+two/three surfaces "duplicate" the same primitive and asks for a unify
+ship, two truths can hide:
+
+1. **The unification already happened.** A shared primitive may already
+   live in `components/<family>/` and one of the surfaces may already
+   adopt it via a shell/wrapper file. Grep for the canonical class names
+   the brief mentions before reading the named files. If `<SharedThing>`
+   already exists, the ship is "adopt this in the holdouts," not "extract
+   from scratch."
+2. **The surfaces share a visual but not a transport.** Inbox uses a
+   Zustand store + polling, Agent uses WebSocket streaming with thinking
+   segments, Channels uses react-query polling. They look identical in
+   screenshots but cannot be subsumed into one component without
+   collapsing transport semantics. The right scope is: extract the
+   _visual_ primitive (rail, card, row), have each surface adapt its
+   data layer into the primitive's prop contract, leave the
+   data/streaming layer per-surface. Don't try to unify transports in a
+   single ship — that risks breaking streaming for cosmetic gain.
+
+Recipe before any "unify the X primitive" ship:
+
+```bash
+# Does a shared primitive already exist?
+ls apps/ui/src/components/<family>/ 2>/dev/null
+grep -rn "<SharedClassName>" apps/ui/src/styles/ apps/ui/src/components/
+
+# Read each surface's data layer — store / WS / react-query — and confirm
+# they're the same transport before assuming the components duplicate.
+grep -l "useWebSocketChat\|useChatStore\|useQuery\|useStore" \
+  apps/ui/src/<surface-1> apps/ui/src/<surface-2>
+```
+
+Cost (2026-05-07): workstream-2 of session-unification asserted three
+surfaces (MeInboxPage / AgentSessionView / ChannelDetailPage) duplicated
+`<SessionRail>` + `<SessionDetail>`. Grep showed `shell/SessionsRail.tsx`
+already existed and was adopted by AgentSessionView; only inbox needed
+adoption. Detail-pane unification was out of scope: WS+segments vs
+store+POST vs react-query+groupMessages. Reframed the ship to extract
+`<SessionRail>` from shell/, generalize via prop contract, adopt in
+inbox. Detail unification deferred. ~5 min triangulation saved a multi-
+day refactor that would have broken streaming.
+
 ## Stack
 
 - **Build:** Vite 6, React 19, TypeScript 5
