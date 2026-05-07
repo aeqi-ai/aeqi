@@ -259,17 +259,6 @@
   background: var(--state-hover);
 }
 
-/* Decision-request urgency tag — quiet accent strip below the header,
-   composed by MeInboxPage as preThreadSlot. */
-.inbox-detail-decision-tag {
-  padding: var(--space-2) var(--space-5) 0;
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  color: var(--color-accent);
-  letter-spacing: 0.01em;
-  flex-shrink: 0;
-}
-
 /* ── Composer wrapper ──────────────────────────────────────────
  * Floating absolute-positioned composer card — visual parity with
  * the agent surface (`.composer-row` + `.composer-wrap` pattern in

@@ -92,11 +92,6 @@ export const DecisionRequest: Story = {
     messages: SAMPLE_MESSAGES.slice(0, 1),
     onSend: noopAsync,
     composerPlaceholder: "Reply to AEIQ EA…",
-    preThreadSlot: (
-      <div className="inbox-detail-decision-tag" aria-label="Awaiting your decision">
-        Awaiting your decision
-      </div>
-    ),
   },
   render: (args) => (
     <div style={{ height: "80vh", display: "flex", flexDirection: "column" }}>

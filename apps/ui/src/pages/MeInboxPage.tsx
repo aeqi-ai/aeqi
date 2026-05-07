@@ -419,13 +419,6 @@ export default function MeInboxPage() {
       </Tooltip>
     );
 
-    const preThread =
-      selectedRow.kind === "decision_request" ? (
-        <div className="inbox-detail-decision-tag" aria-label="Awaiting your decision">
-          Awaiting your decision
-        </div>
-      ) : null;
-
     // The subject line is informationally redundant with the rail row's
     // primary, but reading it large in the detail pane is part of the
     // shipped reading rhythm. Keep it as `subtitle` on the header.
@@ -442,7 +435,6 @@ export default function MeInboxPage() {
         title={selectedRow.from.name}
         subtitle={subtitle}
         headerExtras={headerExtras}
-        preThreadSlot={preThread}
         messages={contextMessages}
         onSend={handleSend}
         composerRef={composerRef}
