@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.50.0 — 2026-05-09
+
+**Headline:** Session is universal — composer, rail, inbox now identical to chat.
+
+- **Inbox visual parity with agent session** (`apps/ui/src/pages/InboxPage.tsx` + supporting styles): inbox surface now mirrors the agent-session shape end-to-end — `attachmentTypes`, slash palette, kbd ribbon, single-line rail row, 1024px collapse breakpoint. Closes the last gap in session-as-universal-conversation: every session-shaped surface (agent chat, inbox, idea/quest comments) now lights up the same affordances. `e9c661fd`.
+- **`<SessionRail>` extracted as the canonical session-rail primitive** (`apps/ui/src/components/session/SessionRail.tsx`): -378 LOC across the surfaces that previously hand-rolled their own rail layout. One component owns rail title, row shape, collapse behavior, search/sort/filter affordances. Surfaces consume by passing items + handlers; visual drift across rails is no longer possible. `4b8bc72a`.
+- **Five surface composers collapsed into a canonical `<Composer>` primitive** (`apps/ui/src/components/session/Composer.tsx`): inbox, agent chat, idea comments, quest comments, and studio chat all rendered their own composer with subtly different keyboard shortcut sets, attachment-button placement, and submit-state handling. One primitive now owns the contract; consumers pass `attachmentTypes`, `onSubmit`, optional slash-palette + kbd ribbon. Visual + behavioral parity guaranteed by construction. `d7a78967`.
+- **Ideas search/sort/filter restored on table + kanban views** (`apps/ui/src/components/ideas/IdeasTableView.tsx` + `IdeasKanbanView.tsx`): P1 hotfix. The Phase-2 view-mode switch (v0.45.0) only wired the search/sort/filter toolbar through to the list view; switching to table or kanban silently dropped the filter state, so any non-default view rendered the unfiltered idea set. Toolbar state now flows through all three views uniformly. `6c2029a0`.
+
 ## v0.49.0 — 2026-05-08
 
 **Headline:** Architect close-the-loop — second contract trap closed, /studio walks two shapes end-to-end.
