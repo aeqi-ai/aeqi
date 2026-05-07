@@ -33,10 +33,15 @@ const DEFAULT_FILTER: SessionsFilterState = { status: "all" };
  * with the inbox.
  */
 export default function SessionsRail() {
-  // Mounted only under `/c/<entity>/agents/<agent>/inbox[/...]` per
-  // AppLayout's `showSessionsRail` gate, so both params are populated.
-  const { entityId, agentId, itemId } = useParams<{
+  // Mounted under both `/c/<entity>/agents/<agent>/inbox[/...]` and
+  // `/trust/<addr>/agents/<agent>/inbox[/...]`. The trust shape exposes
+  // `trustAddress` as the route param; resolve it back to an entityId via
+  // the daemon entities array so the URL builder can pick the canonical
+  // base. Without this, clicks on the agent rail no-op'd on `/trust/...`
+  // routes because `entityId` was undefined and the early return fired.
+  const { entityId, trustAddress, agentId, itemId } = useParams<{
     entityId?: string;
+    trustAddress?: string;
     agentId?: string;
     itemId?: string;
   }>();
@@ -93,12 +98,20 @@ export default function SessionsRail() {
 
   const navigate = useNavigate();
   const entities = useDaemonStore((s) => s.entities);
+  // Resolve a concrete entityId from either the /c/<id> param or a /trust/<addr>
+  // lookup against the daemon entities array. `sessionDeepUrlFromId` then
+  // re-derives the canonical /trust/<addr> base when the entity is on-chain.
+  const resolvedEntityId =
+    entityId ||
+    (trustAddress
+      ? entities.find((e) => e.trust_address?.toLowerCase() === trustAddress.toLowerCase())?.id
+      : undefined);
   const handleSelect = useCallback(
     (id: string) => {
-      if (!entityId || !agentId) return;
-      navigate(sessionDeepUrlFromId(entities, entityId, agentId, id), { replace: true });
+      if (!resolvedEntityId || !agentId) return;
+      navigate(sessionDeepUrlFromId(entities, resolvedEntityId, agentId, id), { replace: true });
     },
-    [entityId, agentId, entities, navigate],
+    [resolvedEntityId, agentId, entities, navigate],
   );
 
   // Empty-state copy distinguishes "no sessions yet" from "no matches"

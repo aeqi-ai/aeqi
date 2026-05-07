@@ -1,7 +1,17 @@
 //! Director-inbox IPC handlers.
 //!
-//! `handle_inbox` returns every session in the user's scope — joined
-//! with agent name and owning entity id — sorted newest-first by recency.
+//! `handle_inbox` returns every session the calling user actually
+//! participates in (joined to `session_participants` with
+//! `identity_kind='user' AND identity_id = caller_user_id`), enriched
+//! with agent name and owning entity id, sorted newest-first by recency.
+//! The participant gate was added 2026-05-09 — before that the query
+//! was tenant-scoped only, so cron-fired schedule sessions
+//! (`daily-digest`, `weekly-consolidate`, etc.) where the user is NOT a
+//! participant flooded the inbox. Decision requests fired via
+//! `question.ask` add the user as a participant via
+//! `find_or_create_dm_session`; system-only digests do not, so they are
+//! correctly excluded.
+//!
 //! The `awaiting_at IS NOT NULL` filter that used to gate this list was
 //! dropped 2026-05-07 by founder direction: the inbox is the user's
 //! full conversation history, not just decision-requests. Items that ARE
@@ -34,14 +44,26 @@ use crate::session_store::AwaitingSessionRow;
 /// knows the session-level fields).
 pub async fn handle_inbox(
     ctx: &super::CommandContext,
-    _request: &Value,
+    request: &Value,
     allowed: &Option<Vec<String>>,
 ) -> Value {
     let Some(ss) = &ctx.session_store else {
         return json!({"ok": false, "error": "session store unavailable"});
     };
     let agent_filter = tenancy::allowed_agent_ids(&ctx.agent_registry, allowed).await;
-    let raw_rows = match ss.list_awaiting(agent_filter.as_ref()).await {
+    // Participant gate — only return sessions the user is actually in.
+    // `caller_user_id` is injected by the platform `ipc_proxy` helper for
+    // every authed request. Runtime-mode (no scope) calls have no user_id
+    // and skip the filter (the local operator sees everything in scope).
+    let user_id = request
+        .get("caller_user_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let raw_rows = match ss
+        .list_awaiting_for_user(agent_filter.as_ref(), user_id.as_deref())
+        .await
+    {
         Ok(items) => items,
         Err(e) => return json!({"ok": false, "error": format!("inbox query failed: {e}")}),
     };

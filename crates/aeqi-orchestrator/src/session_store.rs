@@ -1814,7 +1814,29 @@ impl SessionStore {
         &self,
         allowed_agent_ids: Option<&std::collections::HashSet<String>>,
     ) -> Result<Vec<AwaitingSessionRow>> {
+        self.list_awaiting_for_user(allowed_agent_ids, None).await
+    }
+
+    /// Same as [`list_awaiting`] but, when `user_id` is `Some`, restricts
+    /// results to sessions where the user is a member of
+    /// `session_participants` (`identity_kind='user' AND identity_id =
+    /// user_id`). The participant gate is the canonical "is this in MY
+    /// inbox" filter — entity-scope access alone over-returns cron-fired
+    /// digest sessions and any other system-spawned thread the user
+    /// never joined.
+    ///
+    /// `user_id = None` skips the gate (runtime / operator mode where
+    /// every session in the agent-id allow-list is fair game).
+    pub async fn list_awaiting_for_user(
+        &self,
+        allowed_agent_ids: Option<&std::collections::HashSet<String>>,
+        user_id: Option<&str>,
+    ) -> Result<Vec<AwaitingSessionRow>> {
         let db = self.db.lock().await;
+        // The participant gate is expressed as a correlated EXISTS so the
+        // SELECT shape stays identical whether or not `user_id` is bound.
+        // Passing `NULL` for the param disables the gate (the
+        // `?1 IS NULL` short-circuit evaluates to true on every row).
         let mut stmt = db.prepare(
             "SELECT s.id,
                     COALESCE(
@@ -1839,9 +1861,18 @@ impl SessionStore {
                         WHERE session_id = s.id AND identity_kind = 'agent'
                         LIMIT 1)
                    ) IS NOT NULL
+               AND (
+                    ?1 IS NULL
+                    OR EXISTS (
+                        SELECT 1 FROM session_participants sp
+                        WHERE sp.session_id = s.id
+                          AND sp.identity_kind = 'user'
+                          AND sp.identity_id = ?1
+                    )
+                  )
              ORDER BY last_active DESC",
         )?;
-        let rows = stmt.query_map([], |row| {
+        let rows = stmt.query_map(params![user_id], |row| {
             Ok(AwaitingSessionRow {
                 session_id: row.get(0)?,
                 agent_id: row.get::<_, Option<String>>(1)?,
@@ -4187,6 +4218,66 @@ mod tests {
         let unfiltered = store.list_awaiting(None).await.unwrap();
         assert!(unfiltered.iter().any(|r| r.session_id == s_a));
         assert!(unfiltered.iter().any(|r| r.session_id == s_b));
+    }
+
+    /// `list_awaiting_for_user` gates on `session_participants` membership
+    /// — sessions where the user is NOT a participant (e.g. cron-fired
+    /// `daily-digest` threads spawned by the agent without the founder
+    /// being added) are excluded; sessions where the user IS a
+    /// participant (e.g. a `question.ask` decision request that goes
+    /// through `find_or_create_dm_session`) come back. `None` user_id
+    /// disables the gate (runtime / operator mode).
+    #[tokio::test]
+    async fn list_awaiting_for_user_filters_by_participant() {
+        let store = test_store().await;
+        // Session the user IS a participant in (e.g. a question.ask DM).
+        let s_in = store
+            .create_session("agent-x", "agent_user_dm", "in-inbox", None, None)
+            .await
+            .unwrap();
+        store
+            .add_session_participant(&s_in, "agent", "agent-x", None)
+            .await
+            .unwrap();
+        store
+            .add_session_participant(&s_in, "user", "user-alice", None)
+            .await
+            .unwrap();
+        // Session the user is NOT a participant in (e.g. cron-fired digest).
+        let s_out = store
+            .create_session("agent-x", "session", "cron-digest", None, None)
+            .await
+            .unwrap();
+        store
+            .add_session_participant(&s_out, "agent", "agent-x", None)
+            .await
+            .unwrap();
+
+        // With user filter: only the participated session surfaces.
+        let scoped = store
+            .list_awaiting_for_user(None, Some("user-alice"))
+            .await
+            .unwrap();
+        assert!(
+            scoped.iter().any(|r| r.session_id == s_in),
+            "user-participated session must surface"
+        );
+        assert!(
+            !scoped.iter().any(|r| r.session_id == s_out),
+            "non-participant session must be excluded"
+        );
+
+        // Without user filter: both come back (operator / runtime mode).
+        let unfiltered = store.list_awaiting_for_user(None, None).await.unwrap();
+        assert!(unfiltered.iter().any(|r| r.session_id == s_in));
+        assert!(unfiltered.iter().any(|r| r.session_id == s_out));
+
+        // Unknown user gets nothing — never silently leaks another user's inbox.
+        let stranger = store
+            .list_awaiting_for_user(None, Some("user-stranger"))
+            .await
+            .unwrap();
+        assert!(stranger.is_empty());
     }
 
     /// `answer_awaiting` clears the bit and enqueues a pending message in a

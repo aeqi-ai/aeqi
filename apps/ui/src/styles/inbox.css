@@ -38,10 +38,18 @@
   flex-shrink: 0;
 }
 
+/* Pass-through flex column — `<SessionRail>` inside owns the actual
+   scroller (`.sessions-rail-list { overflow-y: auto }`). The previous
+   shape was `overflow-y: auto` here too, which collapsed the rail's
+   `flex: 1; min-height: 0` chain (parent wasn't a flex container) and
+   left the inner scroller with no height constraint, so neither layer
+   actually scrolled when the inbox grew past the viewport. Making this
+   a flex column restores the rail's height contract. */
 .inbox-pane-list-scroll {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Right pane — fills available space. `position: relative` anchors
