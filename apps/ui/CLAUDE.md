@@ -220,21 +220,66 @@ The two recurring contract bugs the audit catches:
 
 ### Personal entity resolution — read `entity.agent_id`, not `agents.find()`
 
-When `/me/{agents,quests,ideas,events,treasury}` needs a root agent for the
-user's personal entity, do NOT use `agents.find(a => a.entity_id === pid)`
-on the daemon store. The daemon's `agents` array is filtered by the active
-X-Entity scope — when the user is currently scoped to a company, the personal
-entity's root agent is absent from the array and the lookup returns null.
+(`/me/*` routes were retired 2026-05-07; the lesson generalises to any entity
+surface that needs the entity's root agent without relying on the active
+X-Entity scope.) The daemon's `agents` array is filtered by the active
+X-Entity scope — when the user is scoped to one company, another entity's
+root agent is absent from the array and `agents.find(a => a.entity_id ===
+otherId)` returns null.
 
 The right shape is `entity.agent_id` directly off the `/api/entities`
 payload. The platform serialises `agent_id` on every placement; the entities
 normaliser at `apps/ui/src/api/entities.ts` exposes it on the Entity type
-(added 2026-05-07). Resolution order for the personal entity is now:
-(1) first `placement_type === "host"` entity, (2) first matching `user.roots`
-entry, (3) `entities[0]`. Then read `personalEntity.agent_id` directly.
-Cost (2026-05-07): MePage rendered "No personal entity found." for every
-account that DID have a personal placement, because the `agents.find()`
-lookup returned null on company-scoped pageviews.
+(added 2026-05-07). Resolution order for "the user's primary entity" is:
+(1) first `placement_type === "host"` entity, (2) `entities[0]`. Then read
+`primaryEntity.agent_id` directly. Cost (2026-05-07): MePage rendered "No
+personal entity found." for every account that DID have a personal
+placement, because the `agents.find()` lookup returned null on company-
+scoped pageviews.
+
+### Top-level routes that fire BEFORE AppLayout must kick `fetchEntities` themselves
+
+`AppLayout` is the canonical hydration point for the daemon store: its
+`useEffect(() => { fetchAll(); }, ...)` populates `entities`, `agents`,
+`quests`, `events`, etc. Any route component that mounts INSIDE AppLayout
+(every entity-scoped surface, `/account`, `/start`, `/economy`, `/blueprints`)
+can read `useDaemonStore(s => s.entities)` immediately and assume hydration
+is in flight or already done.
+
+Top-level routes that mount OUTSIDE AppLayout cannot — `RootRouteSwitch`
+(which decides the bare `/` redirect) is the canonical example. The store
+is empty at first render. If the route's job is to read `entities` and
+make a navigation decision, it must:
+
+1. `useEffect` to call `fetchEntities()` (user-scoped, no X-Entity gate;
+   safe to call before any entity is selected) when `!initialLoaded`.
+2. Render a spinner / placeholder until `initialLoaded === true`.
+3. Read the resolved value once hydration completes; navigate.
+
+```ts
+const entities = useDaemonStore((s) => s.entities);
+const initialLoaded = useDaemonStore((s) => s.initialLoaded);
+const fetchEntities = useDaemonStore((s) => s.fetchEntities);
+
+useEffect(() => {
+  if (authMode && authMode !== "none" && token && !initialLoaded) {
+    void fetchEntities();
+  }
+}, [authMode, token, initialLoaded, fetchEntities]);
+
+if (!initialLoaded) return <LoadingSpinner />;
+const primary = entities.find((e) => e.placement_type === "host") ?? entities[0] ?? null;
+if (primary) return <Navigate to={entityPath(primary, "inbox")} replace />;
+```
+
+The naming matters: call `fetchEntities` (just the user-scoped slice), NOT
+`fetchAll`. `fetchAll` would chain into `fetchAgents` / `fetchQuests` etc.
+which are X-Entity scoped and cannot fire before an entity is selected —
+they'll 400 with "X-Entity required" and pollute the daemon store with
+errors. The user-scoped `fetchEntities` is the ONLY pre-AppLayout-safe
+hydration call. Cost (2026-05-07): drop-/me-routes ship — RootRouteSwitch
+needed entities to compute the primary inbox URL, but `fetchAll` was the
+first instinct and would have fired four 400s before resolving.
 
 ### `User.roots` is dead — `/api/auth/me` returns `entities`, not `roots`
 
@@ -1466,6 +1511,47 @@ shape to the new one (the closest thing to a 308 in a SPA) so any
 existing bookmarks / shared links survive. Sessions→inbox kept
 `tab === "sessions"` as a redirect handler in AppLayout that builds
 the new URL and `<Navigate replace>`s to it.
+
+## Deleting a route family — sweep doc comments + JSDoc in the same pass
+
+When deleting a top-level route family (e.g. `/me/*` retired 2026-05-07),
+the obvious work is the route definitions, page files, and direct
+references. The non-obvious work is the doc comments scattered across
+sibling primitive components ("`/me/inbox` mounts the same primitive…"),
+JSDoc dispatch tables ("`/me/inbox → MePage`"), CSS section headers
+(`/* /me/inbox and stub pages */`), and component-prop comments
+("Override for `/me/inbox` where useNav doesn't yield…"). None of these
+break the build or fail verify; all of them mislead the next reader.
+
+Rule: before declaring the route deletion done, grep for the OLD URL
+shape in comments AND prose AND CSS:
+
+```bash
+OLD_PREFIX="/me"
+# JSDoc + inline comments + CSS section headers + prose strings
+grep -rn "$OLD_PREFIX\b\|$OLD_PREFIX/" apps/ui/src/ | \
+  grep -vE '\.test\.tsx|\.test\.ts'
+```
+
+Filter the grep output: keep matches in (a) JSDoc/inline comments, (b)
+CSS section headers (`/* — /me/* — */`), (c) prose strings inside JSX
+(any `<p>` / `<span>` body, banner copy, empty-state hints). Drop API
+endpoint paths (`apiRequest("/me/passkeys/...")` are backend routes
+under `/api/me/...` and stay until the backend rename). The fifth
+occurrence is the one you'll miss.
+
+Same shape as the "renaming" sweep above, but the discriminator is
+deletion vs rename: deletion has no NEW URL to substitute — the right
+edit is to either rewrite the comment to describe the new shape, or
+delete the comment entirely if it was specific to the old URL family.
+
+Cost (2026-05-07): drop-/me-routes ship — initial pass shipped clean
+tsc + verify but left 8 stale doc-comment references across
+AppLayout.tsx, AgentSessionView.tsx, ParticipantStrip.tsx,
+AddParticipantModal.tsx, SessionsRail.tsx, CompanySwitcher.tsx,
+Composer.tsx, pages.css, main.tsx. Caught the same ship cycle by
+grep audit; ~3 min to sweep. Folding the audit into the deletion pass
+costs zero extra time.
 
 ## Test store-state coupling — update `initialLoaded` when adding a loading gate
 
