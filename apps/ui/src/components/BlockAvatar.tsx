@@ -67,7 +67,7 @@ export default function BlockAvatar({ name, size = 22, href, ariaLabel }: BlockA
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      style={{ borderRadius: 4, flexShrink: 0, background: bg, display: "block" }}
+      style={{ borderRadius: "50%", flexShrink: 0, background: bg, display: "block" }}
     >
       {rects}
     </svg>
