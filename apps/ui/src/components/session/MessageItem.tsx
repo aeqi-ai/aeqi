@@ -52,6 +52,139 @@ function ExpandableOutput({ text, limit = 100 }: { text: string; limit?: number 
   );
 }
 
+/**
+ * Parse a runtime error string into a humane shape for the chat error bubble.
+ *
+ * The runtime emits raw upstream errors verbatim (OpenRouter/DeepInfra JSON,
+ * generic JSON-RPC envelopes, plain strings). Rendering those raw is
+ * unreadable. This helper recognises the common shapes and lifts the
+ * relevant signal to a one-line headline + optional detail + optional hint.
+ *
+ * Falls through to `headline = content` for unknown shapes so we never lose
+ * information.
+ */
+function parseErrorContent(content: string): {
+  headline: string;
+  detail?: string;
+  hint?: string;
+} {
+  const text = (content || "").trim();
+  if (!text) return { headline: "Something went wrong." };
+
+  // Try to extract any embedded JSON object so we can read structured fields.
+  let parsed: unknown = null;
+  const braceStart = text.indexOf("{");
+  if (braceStart >= 0) {
+    const candidate = text.slice(braceStart);
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      // not JSON or not at the tail; ignore
+    }
+  } else {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // not JSON
+    }
+  }
+
+  const errObj =
+    parsed && typeof parsed === "object" && parsed !== null
+      ? ((parsed as Record<string, unknown>).error ?? parsed)
+      : null;
+  const errMsg =
+    errObj && typeof errObj === "object" && errObj !== null
+      ? typeof (errObj as Record<string, unknown>).message === "string"
+        ? ((errObj as Record<string, unknown>).message as string)
+        : null
+      : null;
+  const errCode =
+    errObj && typeof errObj === "object" && errObj !== null
+      ? typeof (errObj as Record<string, unknown>).code === "number"
+        ? ((errObj as Record<string, unknown>).code as number)
+        : null
+      : null;
+  const errMetadataRaw =
+    errObj && typeof errObj === "object" && errObj !== null
+      ? (() => {
+          const m = (errObj as Record<string, unknown>).metadata;
+          if (m && typeof m === "object" && m !== null) {
+            const raw = (m as Record<string, unknown>).raw;
+            return typeof raw === "string" ? raw : null;
+          }
+          return null;
+        })()
+      : null;
+
+  // OpenRouter / provider HTTP error envelope, e.g.
+  //   "OpenRouter API error (429 Too Many Requests): {...}"
+  //   "Anthropic API error (529 Overloaded): {...}"
+  const httpEnvelope = text.match(/^([A-Za-z0-9_ -]+?) (?:API )?error \((\d{3})[^)]*\)/);
+  if (httpEnvelope) {
+    const provider = httpEnvelope[1].trim();
+    const status = parseInt(httpEnvelope[2], 10);
+    // Try to surface the upstream model name from metadata.raw if present
+    const modelMatch = errMetadataRaw?.match(/([\w./:-]+)\s+is\s+(?:temporarily\s+)?rate-limited/i);
+    const modelName = modelMatch ? modelMatch[1] : null;
+
+    if (status === 429) {
+      return {
+        headline: "Upstream is rate-limited",
+        detail: modelName
+          ? `${provider} returned 429 for ${modelName}`
+          : `${provider} returned 429`,
+        hint: "Retrying or add your own OpenRouter key in Settings → Integrations",
+      };
+    }
+    if (status === 401 || status === 403) {
+      return {
+        headline: "Upstream rejected the request",
+        detail: `${provider} returned ${status}${errMsg ? `: ${errMsg}` : ""}`,
+        hint: "Check the API key in Settings → Integrations",
+      };
+    }
+    if (status === 402) {
+      return {
+        headline: "Upstream is out of credit",
+        detail: `${provider} returned 402${errMsg ? `: ${errMsg}` : ""}`,
+        hint: "Add credit or switch provider in Settings → Integrations",
+      };
+    }
+    if (status === 408 || status === 504) {
+      return {
+        headline: "Upstream timed out",
+        detail: `${provider} returned ${status}`,
+        hint: "Retrying — if this persists try a different model",
+      };
+    }
+    if (status >= 500) {
+      return {
+        headline: "Upstream service is down",
+        detail: `${provider} returned ${status}${errMsg ? `: ${errMsg}` : ""}`,
+        hint: "Try again in a moment or switch model",
+      };
+    }
+    if (status >= 400) {
+      return {
+        headline: `${provider} returned ${status}`,
+        detail: errMsg ?? undefined,
+      };
+    }
+  }
+
+  // Generic JSON-shaped error with .error.message
+  if (errMsg) {
+    const codeNote = errCode ? ` (${errCode})` : "";
+    return {
+      headline: `${errMsg}${codeNote}`,
+    };
+  }
+
+  // Fallthrough: unknown shape — render as-is, capped to one readable line.
+  return { headline: text };
+}
+
 /** A single collapsible tool block with its own expand state. */
 function ToolBlock({ items, live = false }: { items: MessageSegment[]; live?: boolean }) {
   const [expanded, setExpanded] = useState(live);
@@ -452,12 +585,17 @@ const MessageItem = memo(function MessageItem({
     );
   }
   if (msg.role === "error") {
+    const parsed = parseErrorContent(msg.content || "");
     return (
       <div className="asv-msg asv-msg-error">
         <div className="asv-msg-header">
           {msg.duration && <span className="asv-msg-duration">{msg.duration}</span>}
         </div>
-        <div className="asv-msg-content">{msg.content}</div>
+        <div className="asv-msg-error-body">
+          <div className="asv-msg-error-headline">{parsed.headline}</div>
+          {parsed.detail && <div className="asv-msg-error-detail">{parsed.detail}</div>}
+          {parsed.hint && <div className="asv-msg-error-hint">{parsed.hint}</div>}
+        </div>
       </div>
     );
   }

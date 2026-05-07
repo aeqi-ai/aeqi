@@ -554,20 +554,34 @@
   line-height: 1.3;
 }
 
-/* Error message */
+/* Error message — quiet treatment.
+   Headline is single-line and weighted; detail/hint are muted secondaries.
+   No aggressive red — most "errors" here are upstream rate-limits, not faults. */
 .asv-msg-error {
   gap: 0;
 }
-.asv-msg-error .asv-msg-body {
-  padding: 10px 14px;
-  border-left: 2px solid var(--error);
-  background: var(--color-error-bg);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+.asv-msg-error-body {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-card-subtle);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 640px;
 }
-.asv-msg-error .asv-msg-content {
+.asv-msg-error-headline {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+.asv-msg-error-detail,
+.asv-msg-error-hint {
   font-family: var(--font-sans);
   font-size: var(--font-size-xs);
-  color: var(--error);
+  color: var(--color-text-muted);
+  line-height: 1.5;
 }
 
 /* ── Message header (streaming timer only) ── */
