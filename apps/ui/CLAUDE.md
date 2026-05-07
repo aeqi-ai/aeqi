@@ -1423,27 +1423,75 @@ fails for a reason that's irrelevant to the verification (e.g. rail
 empty, layout race). Cost (2026-05-07): one 30s timeout pass on
 inbox-visual-parity probe before switching to force-click.
 
-## SessionRail row shape — adopters drive `wrapPrimary`, not the primitive
+## SessionRail row shape — single-line everywhere (locked 2026-05-07)
 
-`<SessionRail>` (`components/sessions/SessionRail.tsx`) accepts both
-single-line (h=32) and wrap-to-2-lines (h=51) row shapes via the
-`wrapPrimary?: boolean` prop on each `SessionRailRow`. Adopters decide
-the shape per-row when mapping their data; the primitive renders both
-without preference.
+`<SessionRail>` (`components/sessions/SessionRail.tsx`) still accepts
+both single-line (h=32) and wrap-to-2-lines (h=51) row shapes via the
+`wrapPrimary?: boolean` prop on each `SessionRailRow` — but **both
+shipped adopters render single-line**. Visual parity between the inbox
+and the agent surface is the locked direction; row shape is one
+canonical h=32 across both.
 
-Two adopters today:
-
-- **`shell/SessionsRail.tsx`** (drilled-agent surface) — sets
-  `wrapPrimary: !!origin` so origin-bearing rows (telegram/whatsapp) wrap,
-  the rest stay single-line.
+- **`shell/SessionsRail.tsx`** (drilled-agent surface) — does NOT set
+  `wrapPrimary` or `secondary`. The previous origin-driven two-line
+  shape (`deriveOrigin` + `wrapPrimary: !!origin`) was removed
+  2026-05-07 (parity-v2 ship). Origin (telegram / whatsapp / web) lives
+  on the session detail header where it doesn't compete with the row
+  primary.
 - **`pages/MeInboxPage.tsx`** (inbox surface) — does NOT set `wrapPrimary`
-  or `secondary`. All rows render single-line h=32 to match the agent
-  surface (locked direction "render the user inbox like the agent
-  session"). Sender name lives in the right-pane detail header, not
-  duplicated in the rail.
+  or `secondary`. Sender name lives in the right-pane detail header.
 
-Rule: if a future adopter (channels, mentions, etc.) needs a different
-row shape, add the prop to its row mapping. Don't change the primitive's
-default. The two existing adopters' divergence is a feature, not drift —
-agent-surface rail can wrap when origin is informative; inbox cannot
-wrap because the subject IS the row identity.
+Rule: any future adopter (channels, mentions, etc.) gets the same
+single-line row by default. Do NOT reintroduce `wrapPrimary` /
+`secondary` on existing adopters without an explicit founder-locked
+direction — they ship inverted of the visual parity contract. The
+`wrapPrimary` prop stays on the primitive's API as escape hatch only;
+new shapes must be argued for, not opted into.
+
+## Composer + rail "visual parity" claims need variant inspection, not just primitive identity
+
+When a brief or memo claims two surfaces are "visually identical" because
+they consume the same primitive, that claim is FALSE if the variant prop
+differs. `<Composer variant="card">` (light card chrome on a paper
+surface, `--color-card-subtle` background) and `<Composer variant="shell">`
+(dark embedded chrome with `.composer-wrap` overrides cascading
+`--color-ink-card` palette) render with completely different palettes,
+padding, send-button treatment, and ribbon visibility — even though both
+mount the same `<Composer>` primitive.
+
+Same trap: `<SessionRailRow>` rendered with `wrapPrimary: true` (h=51,
+two-line) vs `wrapPrimary: false` (h=32, single-line) look entirely
+different side-by-side, even though both are the same primitive.
+
+Rule: when verifying visual parity, ALWAYS read the variant prop and
+the `secondary` / `wrapPrimary` data flags at every adopter. A side-by-
+side screenshot at 1440px is the ground truth; a "they both use Composer"
+or "they both use SessionRail" comment is not. Cost (2026-05-07):
+parity-v2 ship — first inbox-parity ship (8b573d86) shipped
+`variant="card"` + a comment asserting parity, founder caught the
+divergence, parity-v2 fixed it. Verify variant + computed
+`backgroundColor` of `.composer-wrap` (or equivalent) before claiming
+done.
+
+## Probe scripts must seed the canonical localStorage triple — not just the JWT
+
+Auth-seeding probe scripts (the `_<name>.mjs` family) set localStorage
+in `ctx.addInitScript(...)` before the SPA boots. The canonical key
+set is `aeqi_token` + `aeqi_app_mode` + `aeqi_auth_mode` — read by
+`apps/ui/src/store/auth.ts` lines 84–86. Setting only `aeqi_token`
+(or worse, `aeqi_jwt` — never used) leaves the auth store in
+unauthenticated mode and every probe returns null DOM measurements.
+
+Canonical probe seed (drop into every new `_*.mjs`):
+
+```js
+await ctx.addInitScript((token) => {
+  window.localStorage.setItem("aeqi_token", token);
+  window.localStorage.setItem("aeqi_app_mode", "runtime");
+  window.localStorage.setItem("aeqi_auth_mode", "accounts");
+}, TOKEN);
+```
+
+Cost (2026-05-07): one full probe re-run on parity-v2 verification when
+the seed only set `aeqi_jwt`. ~30s wasted; pattern will recur every
+new probe script.
