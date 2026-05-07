@@ -1048,6 +1048,38 @@ OLD="No treasury activity yet"
 grep -rn "$OLD" src/test/ src/pages/
 ```
 
+## Renaming a tab / primitive — rename it in user-facing prose too
+
+When renaming a tab label, primitive name, or any user-facing word
+("Sessions" → "Inbox", "Position" → "Role", "Task" → "Quest"), the
+brief usually names the obvious surfaces (the tab label array, the
+search placeholder, the empty-state title). Always grep for the OLD
+word in user-facing prose at the same time — empty-state hint copy,
+banner messages, onboarding steps, error toasts, and any `<p>` /
+`<span>` body content that mentions the renamed thing by name.
+
+Recipe before declaring a rename done:
+
+```bash
+# Capital-S exact match catches user-facing copy; case-insensitive
+# variant catches the lowercase prose that the brief also probably
+# wants renamed.
+OLD="Sessions"
+grep -rn "\"$OLD\"" apps/ui/src/        # tab labels, button text
+grep -rn "$OLD\b" apps/ui/src/components/ apps/ui/src/pages/  # prose
+```
+
+Filter the grep output: keep matches inside JSX text nodes, button
+labels, placeholders, aria-labels, prose strings; skip type names,
+ids, route paths, store keys, internal component names, code
+comments, and Storybook story args (those are dev-only).
+
+The fifth occurrence is the one you'll miss. Cost (2026-05-07):
+sessions→inbox rename brief named four surfaces; audit grep surfaced
+a fifth in `EmptyState.tsx` ("Sessions stay on Home") — extending the
+scope was the right call but had to be made consciously rather than
+caught by the brief. The grep takes 2 seconds; do it before commit.
+
 ## Test store-state coupling — update `initialLoaded` when adding a loading gate
 
 Smoke tests that call `useDaemonStore.setState({ ..., initialLoaded: false })` in
@@ -1471,6 +1503,47 @@ Wraps in `.catch(() => {})` so the probe continues even if the click
 fails for a reason that's irrelevant to the verification (e.g. rail
 empty, layout race). Cost (2026-05-07): one 30s timeout pass on
 inbox-visual-parity probe before switching to force-click.
+
+## Probe scripts can't reach drilled-agent surfaces — verify via /me/inbox + bundle scan
+
+The drilled-agent route `/c/<entity>/agents/<agent>/sessions/<session>/`
+does not render reliably in headless playwright probes. Symptom: page
+sticks on the AEIQ logo splash; `.sessions-rail` / `.page-rail-link`
+selectors never appear; daemon-store fetch chain emits HTTP 400s in the
+console. Same trap hit on `/trust/<address>/inbox` — both routes need
+the daemon-store entity-scoped fetchAll to settle, which doesn't in
+mock-JWT contexts. The prior `_rail-search-verify.mjs` (v28 walk) and
+the fresh `_sessions-to-inbox-verify.mjs` (sessions→inbox rename ship)
+both exhibit this — it's a route-level limitation, not a probe bug.
+
+Verification recipe for any rail / inbox / SessionRail copy change:
+
+1. **`/me/inbox` headless screenshot** — DOES render reliably. The
+   personal-entity rail mounts on the user-scope endpoint set, no
+   X-Entity gate, no 400 chain. Use this as the canonical visual
+   capture for SessionRail placeholder / aria-label / empty-state
+   copy.
+2. **Live bundle source-string scan** — for the agent-surface copy
+   (tab labels, drilled-agent emptyTitle, etc.) that doesn't render
+   in headless, scan the shipped JS chunk directly:
+
+   ```bash
+   curl -sL https://app.aeqi.ai/ -o /tmp/live.html
+   for f in $(grep -oE 'assets/[A-Za-z][A-Za-z0-9_-]+\.js' /tmp/live.html | sort -u); do
+     RES=$(curl -sL "https://app.aeqi.ai/$f" | grep -oE '<expected-string>|<old-string>' | sort | uniq -c)
+     [ -n "$RES" ] && echo "$f: $RES"
+   done
+   ```
+
+   Source-side proof that the new strings are in the live bundle and
+   the old strings are absent is a stronger signal than a stuck headless
+   render. Combine with the `/me/inbox` screenshot for the visual.
+
+Don't burn time iterating wait strategies / route alternatives on the
+drilled-agent route. Two ship cycles have hit it now (rail-search-v28
+ship, sessions-to-inbox ship); pattern is locked. Cost (2026-05-07):
+~3 min on sessions-to-inbox ship trying longer waits + alternate URLs
+before falling back to the bundle-scan recipe.
 
 ## SessionRail row shape — single-line everywhere (locked 2026-05-07)
 
