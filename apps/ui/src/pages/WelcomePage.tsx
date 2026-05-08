@@ -24,6 +24,46 @@ import { useState, useEffect } from "react";
 
 type Door = "wallet" | "passkey" | "email";
 
+/**
+ * Standard shape exposed by Phantom, Backpack, Solflare, and any other
+ * Solana Wallet Standard provider on `window.solana`. Only the methods
+ * we actually call are typed; extra properties exist on real providers
+ * and that's fine.
+ */
+interface WalletProvider {
+  isPhantom?: boolean;
+  isBackpack?: boolean;
+  connect: () => Promise<{ publicKey: { toString: () => string } }>;
+  signMessage: (message: Uint8Array, encoding?: "utf8") => Promise<{ signature: Uint8Array }>;
+}
+
+/**
+ * Base58 encoder. Bitcoin alphabet (matches Solana). Pulled inline so
+ * we don't pay a wallet-adapter dep just for a 30-line helper.
+ */
+function base58Encode(bytes: Uint8Array): string {
+  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+  const digits: number[] = [];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      const v = digits[j] * 256 + carry;
+      digits[j] = v % 58;
+      carry = Math.floor(v / 58);
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = Math.floor(carry / 58);
+    }
+  }
+  let out = "";
+  for (let i = 0; i < zeros; i++) out += "1";
+  for (let i = digits.length - 1; i >= 0; i--) out += ALPHABET[digits[i]];
+  return out;
+}
+
 export type WelcomeMode = "signup" | "login" | "welcome";
 
 interface WelcomeCopy {
@@ -210,28 +250,80 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
   }
 
   /**
-   * Wallet path: directly call the wallet-backed spawn endpoint with the
-   * connected wallet's pubkey as the company_id. Eventually this gets
-   * replaced with a SIWS challenge → /api/auth/welcome/wallet-verify
-   * shape that mirrors email below; for now the demo wires the simpler
-   * shape so the on-chain UX shows immediately.
+   * Wallet path: real SIWS — Sign-In With Solana.
+   *
+   *   1. POST /api/auth/welcome/wallet-start with the wallet pubkey →
+   *      get back a server-issued nonce + the canonical message text.
+   *   2. Hand the message to `wallet.signMessage()`. Phantom / Backpack /
+   *      Solflare all expose the same shape — they pop a confirmation
+   *      to the user displaying the message text, then return a 64-byte
+   *      ed25519 signature.
+   *   3. POST /api/auth/welcome/wallet-verify with the pubkey + message
+   *      + signature. Server runs ed25519 verify (cryptographic gate),
+   *      consumes the nonce (replay protection), resolves auth_methods
+   *      (returning user) or creates a new Company (first time), mints
+   *      JWT bound to company_id, kind=wallet_siws.
+   *   4. Persist JWT to localStorage and animate the spawn.
+   *
+   * Same email-style auth_methods resolution as the email path — the
+   * wallet's pubkey is the canonical identity for kind=wallet_siws.
+   * Same wallet on a second sign-in returns the same Company forever.
    */
-  async function spawnViaWallet(walletPubkey: string) {
+  async function spawnViaWalletSiws(provider: WalletProvider, walletPubkey: string) {
     setStage("spawning");
     setErrorMsg(null);
     setSteps(buildSteps());
     try {
-      const res = await fetch(`${SOLANA_API_URL}/api/solana/companies/create`, {
+      // Stage 1: get challenge.
+      const startRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/wallet-start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: walletPubkey }),
+        body: JSON.stringify({ wallet_pubkey: walletPubkey }),
       });
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`${res.status}: ${body}`);
+      if (!startRes.ok) {
+        throw new Error(`wallet-start ${startRes.status}: ${await startRes.text()}`);
       }
-      const data = (await res.json()) as SpawnResponse;
-      await animateSpawn(data);
+      const start = (await startRes.json()) as {
+        wallet_pubkey: string;
+        nonce: string;
+        message: string;
+        expires_at: string;
+      };
+
+      // Stage 2: ask the wallet to sign. Phantom & friends expose
+      // signMessage(Uint8Array, "utf8") returning { signature: Uint8Array }.
+      const encoded = new TextEncoder().encode(start.message);
+      const signed = await provider.signMessage(encoded, "utf8");
+      const signatureBytes = signed.signature;
+      const signatureB58 = base58Encode(signatureBytes);
+
+      // Stage 3: verify on the server.
+      const verifyRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/wallet-verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wallet_pubkey: walletPubkey,
+          message: start.message,
+          signature_b58: signatureB58,
+        }),
+      });
+      if (!verifyRes.ok) {
+        throw new Error(`wallet-verify ${verifyRes.status}: ${await verifyRes.text()}`);
+      }
+      const verify = (await verifyRes.json()) as SpawnResponse & {
+        session_jwt: string;
+        session_expires_at: string;
+      };
+
+      try {
+        localStorage.setItem("aeqi_session_jwt", verify.session_jwt);
+        localStorage.setItem("aeqi_session_company_id", verify.company_id);
+        localStorage.setItem("aeqi_session_expires_at", verify.session_expires_at);
+      } catch {
+        // Safari private mode etc. — non-fatal.
+      }
+
+      await animateSpawn(verify);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
@@ -305,13 +397,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
 
   async function handleWalletConnect() {
     setPicked("wallet");
-    const provider = (
-      window as unknown as {
-        solana?: {
-          connect: () => Promise<{ publicKey: { toString: () => string } }>;
-        };
-      }
-    ).solana;
+    const provider = (window as unknown as { solana?: WalletProvider }).solana;
     if (!provider) {
       setErrorMsg("No Solana wallet detected. Install Phantom, Backpack, or Solflare.");
       setStage("error");
@@ -320,9 +406,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     try {
       const resp = await provider.connect();
       const pk = resp.publicKey.toString();
-      // Use the wallet pubkey as the company_id — every distinct wallet
-      // gets a distinct Company.
-      await spawnViaWallet(pk);
+      await spawnViaWalletSiws(provider, pk);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
