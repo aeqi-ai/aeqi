@@ -389,6 +389,16 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     session_expires_at: string;
   }) {
     try {
+      // Canonical auth-store keys (read by store/auth.ts on boot). Writing
+      // the welcome JWT here is what bridges welcome → rest-of-app: without
+      // these keys the auth store treats the user as logged-out and bounces
+      // every protected route to /login?next=… even though we just spawned
+      // their company.
+      localStorage.setItem("aeqi_token", s.session_jwt);
+      localStorage.setItem("aeqi_app_mode", "runtime");
+      localStorage.setItem("aeqi_auth_mode", "accounts");
+      // Welcome-flow scope (kept for downstream surfaces that need
+      // company_id specifically without re-decoding the JWT).
       localStorage.setItem("aeqi_session_jwt", s.session_jwt);
       localStorage.setItem("aeqi_session_company_id", s.company_id);
       localStorage.setItem("aeqi_session_expires_at", s.session_expires_at);
