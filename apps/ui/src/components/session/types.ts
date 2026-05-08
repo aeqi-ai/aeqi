@@ -35,6 +35,23 @@ export interface EventFire {
   scope: string;
 }
 
+/**
+ * Structured reference to an AEQI primitive (agent / quest / idea / event).
+ * The protocol-shaped representation a final assistant message uses to refer
+ * to a real entity: type + id + label, with optional status for hover/preview
+ * extensions. Resolves at render time via daemon-store lookup; falls back to
+ * plain label text if the entity can't be resolved.
+ */
+export type EntityPrimitive = "agent" | "quest" | "idea" | "event";
+export interface EntityRef {
+  primitive: EntityPrimitive;
+  /** Backend-supplied entity ID. May be empty when the ref came from a
+   * label-only parse — render falls back to plain text in that case. */
+  entityId: string;
+  label: string;
+  status?: string;
+}
+
 export type MessageSegment =
   | { kind: "text"; text: string }
   | { kind: "tool"; event: ToolEvent }
@@ -43,7 +60,8 @@ export type MessageSegment =
   | { kind: "event_fire"; fire: EventFire }
   | { kind: "file_changed"; event: FileChangedEvent }
   | { kind: "file_deleted"; event: FileDeletedEvent }
-  | { kind: "tool_summarized"; event: ToolSummarizedEvent };
+  | { kind: "tool_summarized"; event: ToolSummarizedEvent }
+  | { kind: "entity_ref"; ref: EntityRef };
 
 export interface Message {
   role: string;
@@ -207,6 +225,28 @@ export function shouldRenderStatus(text: string): boolean {
   return true;
 }
 
+/**
+ * Heuristics for keeping raw upstream payloads (UUIDs, JSON-shaped tool
+ * results, "Subagent finished: { ... }" envelopes) out of the trail's
+ * status row. The trail is for legible, human-skimmable progress notes;
+ * shapes that match these patterns belong inside their own primitive
+ * (tool block, file chip, summarised-tool chip), not as plain prose.
+ *
+ * Returns `true` when the status string is debug-shaped and should be
+ * dropped from the visible trail.
+ */
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+export function isDebugStatus(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (UUID_RE.test(trimmed)) return true;
+  // JSON-shaped or object-shaped payloads
+  if (/^[[{]/.test(trimmed) && /[\]}]\s*$/.test(trimmed)) return true;
+  // "key: value" envelope dumps, e.g. "id: ..., status: active"
+  if (/\b(id|status|payload|tool_use_id|session_id):\s*\S/.test(trimmed)) return true;
+  return false;
+}
+
 export function numberFromMeta(value: unknown): number | undefined {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) ? n : undefined;
@@ -245,10 +285,14 @@ export function splitTrailAndFinal(segments: MessageSegment[]): {
     end--;
   }
   let start = end;
+  // Walk backwards over a contiguous run of user-facing final content. Both
+  // text and entity_ref segments qualify — entity_ref is structured prose,
+  // not progress chrome.
   while (
     start > 0 &&
-    segments[start - 1].kind === "text" &&
-    (segments[start - 1] as { kind: "text"; text: string }).text.trim().length > 0
+    (segments[start - 1].kind === "entity_ref" ||
+      (segments[start - 1].kind === "text" &&
+        (segments[start - 1] as { kind: "text"; text: string }).text.trim().length > 0))
   ) {
     start--;
   }

@@ -17,6 +17,7 @@ import {
   type FileDeletedEvent,
   type ToolSummarizedEvent,
   type EventFire,
+  type EntityRef,
   type ResolvedAuthor,
   resolveAuthor,
   formatMs,
@@ -29,6 +30,7 @@ import {
   trailHasFailure,
   trailHasMeaningfulContent,
 } from "./types";
+import EntityRefInline from "./EntityRefInline";
 
 // ── Sub-components ──
 
@@ -420,8 +422,9 @@ export function SegmentRenderer({
   segments: MessageSegment[];
   live?: boolean;
 }) {
+  type InlinePart = { kind: "text"; text: string } | { kind: "entity_ref"; ref: EntityRef };
   type SegGroup =
-    | { kind: "text"; text: string }
+    | { kind: "inline"; parts: InlinePart[] }
     | { kind: "step"; step: number }
     | { kind: "status"; text: string }
     | { kind: "event_fire"; fire: EventFire }
@@ -430,9 +433,21 @@ export function SegmentRenderer({
     | { kind: "file_deleted"; event: FileDeletedEvent }
     | { kind: "tool_summarized"; event: ToolSummarizedEvent };
   const groups: SegGroup[] = [];
+
+  const pushInline = (part: InlinePart) => {
+    const last = groups[groups.length - 1];
+    if (last && last.kind === "inline") {
+      last.parts.push(part);
+    } else {
+      groups.push({ kind: "inline", parts: [part] });
+    }
+  };
+
   for (const seg of segments) {
     if (seg.kind === "text") {
-      groups.push({ kind: "text", text: seg.text });
+      pushInline({ kind: "text", text: seg.text });
+    } else if (seg.kind === "entity_ref") {
+      pushInline({ kind: "entity_ref", ref: seg.ref });
     } else if (seg.kind === "step") {
       groups.push({ kind: "step", step: seg.step });
     } else if (seg.kind === "status") {
@@ -463,10 +478,8 @@ export function SegmentRenderer({
   return (
     <>
       {groups.map((group, gi) =>
-        group.kind === "text" ? (
-          <div key={gi} className="asv-msg-content">
-            <SessionMarkdown body={group.text} />
-          </div>
+        group.kind === "inline" ? (
+          <InlineGroup key={gi} parts={group.parts} />
         ) : group.kind === "step" ? (
           <div key={gi} className="asv-step-sep">
             <span>{`Step ${group.step}`}</span>
@@ -491,6 +504,37 @@ export function SegmentRenderer({
         ),
       )}
     </>
+  );
+}
+
+/**
+ * Renders a contiguous run of text + entity_ref parts as a single paragraph
+ * block. When the run is text-only, defers to the markdown renderer so
+ * tables / code fences / lists keep working. When entity refs are present,
+ * the run renders as plain inline elements (entity refs are link primitives,
+ * not block elements).
+ */
+function InlineGroup({
+  parts,
+}: {
+  parts: ({ kind: "text"; text: string } | { kind: "entity_ref"; ref: EntityRef })[];
+}) {
+  const allText = parts.every((p) => p.kind === "text");
+  if (allText) {
+    const body = parts.map((p) => (p as { kind: "text"; text: string }).text).join("");
+    if (!body.trim()) return null;
+    return (
+      <div className="asv-msg-content">
+        <SessionMarkdown body={body} />
+      </div>
+    );
+  }
+  return (
+    <div className="asv-msg-content asv-msg-content--inline">
+      {parts.map((p, i) =>
+        p.kind === "text" ? <span key={i}>{p.text}</span> : <EntityRefInline key={i} ref={p.ref} />,
+      )}
+    </div>
   );
 }
 

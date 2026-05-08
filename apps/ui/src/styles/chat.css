@@ -611,6 +611,32 @@
   letter-spacing: -0.005em;
 }
 
+/* Inline run — text + entity_ref mix. Bypasses the markdown block path
+   so entity refs render as inline links inside flowing prose. */
+.asv-msg-content--inline {
+  display: block;
+}
+
+/* ── Entity reference inline link — lightweight mention treatment ──
+   Subtle inline link styled via text-decoration only (no border-as-separator
+   hairlines). Underline only on hover keeps the resting prose calm; each
+   primitive can later carry its own accent without changing layout. */
+.asv-entity-ref {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--color-text-muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.12s ease;
+}
+.asv-entity-ref:hover {
+  text-decoration-color: var(--color-text-primary);
+}
+.asv-entity-ref--unresolved {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
 /* Agent prose — sans-serif at 15px/1.65, same family as UI chrome so the
    conversation reads as one continuous design system. The three-voice
    (sans/serif/mono) experiment drifted toward noise; one voice, varied

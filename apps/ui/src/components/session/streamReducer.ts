@@ -4,7 +4,10 @@ import {
   type FileChangedEvent,
   type FileDeletedEvent,
   type ToolSummarizedEvent,
+  type EntityPrimitive,
+  type EntityRef,
   countStepSegments,
+  isDebugStatus,
 } from "./types";
 
 export type RawEvent = Record<string, unknown>;
@@ -75,7 +78,15 @@ export function reduceStreamEvent(state: StreamState, event: RawEvent): ReduceRe
     case "Subscribed":
       return { kind: "next", state: applySubscribed(state, event) };
     case "TextDelta":
-      return { kind: "next", state: appendText(state, String(event.text ?? event.delta ?? "")) };
+      return {
+        kind: "next",
+        state: appendTextWithEntityParsing(state, String(event.text ?? event.delta ?? "")),
+      };
+    case "EntityRef":
+      return {
+        kind: "next",
+        state: appendSegment(state, { kind: "entity_ref", ref: entityRefFromEvent(event) }),
+      };
     case "ToolStart":
       return {
         kind: "next",
@@ -99,15 +110,16 @@ export function reduceStreamEvent(state: StreamState, event: RawEvent): ReduceRe
     case "DelegateStart":
       return {
         kind: "next",
-        state: appendStatus(state, `Delegating to ${event.worker_name ?? "agent"}...`),
+        state: appendStatus(state, `Delegating to ${event.worker_name ?? "agent"}…`),
       };
     case "DelegateComplete":
+      // Outcome can be a JSON-shaped envelope or a UUID dump — never let
+      // that leak into a status row. Render a quiet "Delegation complete"
+      // line; a downstream EntityRef event (if the runtime supplies one)
+      // surfaces the agent identity as a clickable mention.
       return {
         kind: "next",
-        state: appendStatus(
-          state,
-          `${event.worker_name ?? "Agent"} finished: ${event.outcome ?? "done"}`,
-        ),
+        state: appendStatus(state, `${event.worker_name ?? "Agent"} finished`),
       };
     case "FileChanged":
       return {
@@ -200,7 +212,63 @@ function appendSegment(state: StreamState, segment: MessageSegment): StreamState
 }
 
 function appendStatus(state: StreamState, text: string): StreamState {
+  // Drop debug-shaped fragments at the producer boundary — UUIDs, JSON
+  // payloads, and "key: value" envelope dumps belong inside their own
+  // primitive (tool block, summarised tool, file chip), not as plain
+  // status prose in the trail.
+  if (isDebugStatus(text)) return state;
   return appendSegment(state, { kind: "status", text });
+}
+
+/**
+ * Inline-mention parser. Recognises `[Agent: Name]`, `[Quest: Name]`,
+ * `[Idea: Name]`, `[Event: Name]` patterns inside a TextDelta and
+ * splits them into structured `entity_ref` segments. Backend-emitted
+ * `EntityRef` events are still the canonical path (they carry the real
+ * entity_id); this is the fallback when only a label is on the wire.
+ */
+const ENTITY_REF_RE = /\[(Agent|Quest|Idea|Event):\s*([^\]]+?)\]/g;
+
+function appendTextWithEntityParsing(state: StreamState, delta: string): StreamState {
+  if (!delta) return state;
+  if (!ENTITY_REF_RE.test(delta)) {
+    ENTITY_REF_RE.lastIndex = 0;
+    return appendText(state, delta);
+  }
+  ENTITY_REF_RE.lastIndex = 0;
+  let next = state;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ENTITY_REF_RE.exec(delta)) !== null) {
+    if (match.index > cursor) {
+      next = appendText(next, delta.slice(cursor, match.index));
+    }
+    const primitive = match[1].toLowerCase() as EntityPrimitive;
+    const label = match[2].trim();
+    next = appendSegment(next, {
+      kind: "entity_ref",
+      ref: { primitive, entityId: "", label },
+    });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < delta.length) {
+    next = appendText(next, delta.slice(cursor));
+  }
+  return next;
+}
+
+function entityRefFromEvent(event: RawEvent): EntityRef {
+  const primitiveRaw = String(event.primitive ?? event.kind ?? "agent").toLowerCase();
+  const primitive: EntityPrimitive =
+    primitiveRaw === "quest" || primitiveRaw === "idea" || primitiveRaw === "event"
+      ? primitiveRaw
+      : "agent";
+  return {
+    primitive,
+    entityId: typeof event.entity_id === "string" ? event.entity_id : "",
+    label: String(event.label ?? event.name ?? ""),
+    status: typeof event.status === "string" ? event.status : undefined,
+  };
 }
 
 function upsertToolComplete(state: StreamState, completed: ToolEvent): StreamState {
