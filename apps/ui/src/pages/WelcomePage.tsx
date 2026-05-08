@@ -38,6 +38,125 @@ interface WalletProvider {
 }
 
 /**
+ * Base64url encode/decode for WebAuthn buffer fields. WebAuthn-rs
+ * serializes byte fields as base64url strings; the browser's
+ * `navigator.credentials.create()` / `.get()` expect ArrayBuffer for
+ * those same fields. These helpers bridge.
+ */
+function b64uEncode(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < bytes.byteLength; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64uDecode(s: string): Uint8Array<ArrayBuffer> {
+  const padded = s.replace(/-/g, "+").replace(/_/g, "/");
+  const padLen = (4 - (padded.length % 4)) % 4;
+  const decoded = atob(padded + "=".repeat(padLen));
+  // Explicit ArrayBuffer (not SharedArrayBuffer) so the result narrows
+  // to Uint8Array<ArrayBuffer>, which is what BufferSource expects.
+  const bytes = new Uint8Array(new ArrayBuffer(decoded.length));
+  for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Walk the `publicKey` field of a WebAuthn-rs CreationChallengeResponse
+ * (returned as JSON) and convert all base64url byte fields into
+ * `BufferSource` (Uint8Array) so the browser API accepts it.
+ */
+function decodeCreateOptions(ccr: Record<string, unknown>): PublicKeyCredentialCreationOptions {
+  const pk = (ccr.publicKey ?? ccr) as Record<string, unknown>;
+  const user = pk.user as Record<string, unknown>;
+  const excludeRaw = (pk.excludeCredentials ?? []) as Array<{
+    id: string;
+    type: string;
+    transports?: AuthenticatorTransport[];
+  }>;
+  return {
+    challenge: b64uDecode(pk.challenge as string),
+    rp: pk.rp as PublicKeyCredentialRpEntity,
+    user: {
+      id: b64uDecode(user.id as string),
+      name: user.name as string,
+      displayName: user.displayName as string,
+    },
+    pubKeyCredParams: pk.pubKeyCredParams as PublicKeyCredentialParameters[],
+    timeout: pk.timeout as number | undefined,
+    attestation: pk.attestation as AttestationConveyancePreference | undefined,
+    authenticatorSelection: pk.authenticatorSelection as AuthenticatorSelectionCriteria | undefined,
+    excludeCredentials: excludeRaw.map((c) => ({
+      id: b64uDecode(c.id),
+      type: "public-key" as const,
+      transports: c.transports,
+    })),
+  };
+}
+
+/**
+ * Walk a WebAuthn-rs RequestChallengeResponse and convert byte fields
+ * the same way as `decodeCreateOptions` but for the assertion shape.
+ */
+function decodeRequestOptions(rcr: Record<string, unknown>): PublicKeyCredentialRequestOptions {
+  const pk = (rcr.publicKey ?? rcr) as Record<string, unknown>;
+  const allowRaw = (pk.allowCredentials ?? []) as Array<{
+    id: string;
+    type: string;
+    transports?: AuthenticatorTransport[];
+  }>;
+  return {
+    challenge: b64uDecode(pk.challenge as string),
+    rpId: pk.rpId as string | undefined,
+    timeout: pk.timeout as number | undefined,
+    userVerification: pk.userVerification as UserVerificationRequirement | undefined,
+    allowCredentials: allowRaw.map((c) => ({
+      id: b64uDecode(c.id),
+      type: "public-key" as const,
+      transports: c.transports,
+    })),
+  };
+}
+
+/**
+ * Pack a registration credential (returned by navigator.credentials.create())
+ * into the JSON shape webauthn-rs's `RegisterPublicKeyCredential` expects.
+ */
+function encodeRegistrationCredential(cred: PublicKeyCredential) {
+  const att = cred.response as AuthenticatorAttestationResponse;
+  return {
+    id: cred.id,
+    rawId: b64uEncode(cred.rawId),
+    type: cred.type,
+    response: {
+      clientDataJSON: b64uEncode(att.clientDataJSON),
+      attestationObject: b64uEncode(att.attestationObject),
+    },
+    extensions: cred.getClientExtensionResults?.() ?? {},
+  };
+}
+
+/**
+ * Pack an assertion credential (from navigator.credentials.get()) into
+ * the shape webauthn-rs's `PublicKeyCredential` expects.
+ */
+function encodeAssertionCredential(cred: PublicKeyCredential) {
+  const ass = cred.response as AuthenticatorAssertionResponse;
+  return {
+    id: cred.id,
+    rawId: b64uEncode(cred.rawId),
+    type: cred.type,
+    response: {
+      clientDataJSON: b64uEncode(ass.clientDataJSON),
+      authenticatorData: b64uEncode(ass.authenticatorData),
+      signature: b64uEncode(ass.signature),
+      userHandle: ass.userHandle ? b64uEncode(ass.userHandle) : null,
+    },
+    extensions: cred.getClientExtensionResults?.() ?? {},
+  };
+}
+
+/**
  * Base58 encoder. Bitcoin alphabet (matches Solana). Pulled inline so
  * we don't pay a wallet-adapter dep just for a 30-line helper.
  */
@@ -414,12 +533,136 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     }
   }
 
+  /**
+   * Passkey path: real WebAuthn ceremony.
+   *
+   * Tries assertion first (returning user's existing passkey for this rp_id).
+   * On NotAllowedError or no-credential / aborted, falls back to registration
+   * (new authenticator). Either path resolves through auth_methods on the
+   * server and lands on the same spawn animation.
+   */
   async function handlePasskey() {
     setPicked("passkey");
-    setErrorMsg(
-      "Passkey ceremony coming online soon — secp256r1 native instruction wiring in flight. Try email or wallet for now.",
-    );
-    setStage("error");
+    if (!window.PublicKeyCredential) {
+      setErrorMsg("This browser doesn't support WebAuthn. Try Chrome, Safari, Edge, or Firefox.");
+      setStage("error");
+      return;
+    }
+    setStage("spawning");
+    setErrorMsg(null);
+    setSteps(buildSteps());
+
+    try {
+      // Try ASSERTION first — covers the returning-user case where the
+      // browser's authenticator already has a credential for our rp_id.
+      const startRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/passkey-assert-start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!startRes.ok) {
+        const body = await startRes.text();
+        throw new Error(`assert-start ${startRes.status}: ${body}`);
+      }
+      const start = (await startRes.json()) as {
+        ceremony_id: string;
+        challenge: Record<string, unknown>;
+      };
+      const requestOptions = decodeRequestOptions(start.challenge);
+
+      let assertion: PublicKeyCredential | null = null;
+      try {
+        assertion = (await navigator.credentials.get({
+          publicKey: requestOptions,
+        })) as PublicKeyCredential | null;
+      } catch (e) {
+        // NotAllowedError / no-credential — fall through to registration.
+        if ((e as DOMException)?.name !== "NotAllowedError") {
+          throw e;
+        }
+      }
+
+      if (assertion) {
+        const verifyRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/passkey-assert-finish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ceremony_id: start.ceremony_id,
+            credential: encodeAssertionCredential(assertion),
+          }),
+        });
+        if (verifyRes.ok) {
+          const verify = (await verifyRes.json()) as SpawnResponse & {
+            session_jwt: string;
+            session_expires_at: string;
+          };
+          persistSession(verify);
+          await animateSpawn(verify);
+          return;
+        }
+        // Server rejected (credential not registered, expired, etc.) —
+        // fall through to registration so the user still lands somewhere.
+      }
+
+      // REGISTRATION path: first-time user, or assertion gave us nothing.
+      const regStartRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/passkey-register-start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!regStartRes.ok) {
+        const body = await regStartRes.text();
+        throw new Error(`register-start ${regStartRes.status}: ${body}`);
+      }
+      const regStart = (await regStartRes.json()) as {
+        ceremony_id: string;
+        challenge: Record<string, unknown>;
+      };
+      const createOptions = decodeCreateOptions(regStart.challenge);
+
+      const registration = (await navigator.credentials.create({
+        publicKey: createOptions,
+      })) as PublicKeyCredential | null;
+      if (!registration) {
+        throw new Error("authenticator did not return a credential");
+      }
+
+      const finishRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/passkey-register-finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ceremony_id: regStart.ceremony_id,
+          credential: encodeRegistrationCredential(registration),
+        }),
+      });
+      if (!finishRes.ok) {
+        throw new Error(`register-finish ${finishRes.status}: ${await finishRes.text()}`);
+      }
+      const finish = (await finishRes.json()) as SpawnResponse & {
+        session_jwt: string;
+        session_expires_at: string;
+      };
+      persistSession(finish);
+      await animateSpawn(finish);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrorMsg(msg);
+      setStage("error");
+    }
+  }
+
+  function persistSession(s: {
+    session_jwt: string;
+    company_id: string;
+    session_expires_at: string;
+  }) {
+    try {
+      localStorage.setItem("aeqi_session_jwt", s.session_jwt);
+      localStorage.setItem("aeqi_session_company_id", s.company_id);
+      localStorage.setItem("aeqi_session_expires_at", s.session_expires_at);
+    } catch {
+      // Safari private mode etc. — non-fatal.
+    }
   }
 
   async function handleEmailSubmit(e: React.FormEvent) {
