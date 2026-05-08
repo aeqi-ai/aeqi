@@ -475,32 +475,26 @@ export function SegmentRenderer({
     }
   }
 
-  // Drop step headers that have nothing meaningful between them and the next
-  // step (or the end of the trail). The runtime fires `session:step_start` on
-  // every model iteration, including iterations that produce no UI-visible
-  // output (a tool result absorbed by the model that then fires another step
-  // with no narration / new tool call). A bare "Step N" header with nothing
-  // beneath it just adds noise to the trail. Empty inline groups (whitespace-
-  // only text) also count as "no content".
-  const filteredGroups: SegGroup[] = [];
-  for (let i = 0; i < groups.length; i++) {
+  // Drop step headers with no visible content following them. The runtime
+  // fires `session:step_start` on every model iteration including ones that
+  // produce no UI output, so the raw segment list contains empty steps.
+  // Single backward pass: track whether we've seen content since the last
+  // step boundary; when we hit a step, keep it only if content followed.
+  const filteredReversed: SegGroup[] = [];
+  let seenContentSinceStep = false;
+  for (let i = groups.length - 1; i >= 0; i--) {
     const g = groups[i];
     if (g.kind === "step") {
-      let hasContent = false;
-      for (let j = i + 1; j < groups.length; j++) {
-        const next = groups[j];
-        if (next.kind === "step") break;
-        if (next.kind === "inline") {
-          const allEmpty = next.parts.every((p) => p.kind === "text" && !p.text.trim());
-          if (allEmpty) continue;
-        }
-        hasContent = true;
-        break;
-      }
-      if (!hasContent) continue;
+      if (seenContentSinceStep) filteredReversed.push(g);
+      seenContentSinceStep = false;
+      continue;
     }
-    filteredGroups.push(g);
+    if (g.kind !== "inline" || !g.parts.every((p) => p.kind === "text" && !p.text.trim())) {
+      seenContentSinceStep = true;
+    }
+    filteredReversed.push(g);
   }
+  const filteredGroups = filteredReversed.reverse();
 
   return (
     <>

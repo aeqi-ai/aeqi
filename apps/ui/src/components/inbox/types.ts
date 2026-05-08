@@ -1,16 +1,10 @@
 /**
  * Client-side model for inbox — maps the wire `InboxItem` to a richer
- * shape that's forward-compatible with the unified Session primitive.
- *
- * 2026-05-07: backend now returns every session in scope (not just
- * decision-requests). `unread` / `awaiting` track the awaiting bit;
- * `created_at` is the session's `last_active` recency anchor.
- *
- * 2026-05-08: `replyable` decoupled from `awaiting`. Every session in
- * the inbox is the user's own conversation — they can reply to any of
- * them, not only ones with a pending decision-request. The composer
- * lets the user type freely; the backend rejects with a friendly
- * error if a particular session can't accept the post.
+ * shape forward-compatible with the unified Session primitive. The
+ * inbox endpoint returns every session in scope, not only awaiting
+ * decision-requests; `awaiting` carries the "pending decision" bit
+ * (rail dot, list copy) but never gates replies — the user can type
+ * into any session they own.
  */
 import type { InboxItem } from "@/lib/api";
 
@@ -26,9 +20,8 @@ export interface InboxRow {
   entity_id: string | null;
   agent_id: string | null;
   created_at: string; // last_active — recency anchor for sort/grouping
-  unread: boolean; // sessions awaiting a human reply
-  awaiting: boolean; // true when awaiting_at is set — drives the rail's "pending" indicator
-  replyable: boolean; // composer enabled — true for every inbox session
+  unread: boolean;
+  awaiting: boolean; // pending decision-request — drives the rail's pending indicator
 }
 
 export interface InboxFilterState {
@@ -60,7 +53,6 @@ export function toInboxRow(item: InboxItem): InboxRow {
     created_at: item.last_active,
     unread: awaiting,
     awaiting,
-    replyable: true,
   };
 }
 

@@ -225,28 +225,6 @@ export function shouldRenderStatus(text: string): boolean {
   return true;
 }
 
-/**
- * Heuristics for keeping raw upstream payloads (UUIDs, JSON-shaped tool
- * results, "Subagent finished: { ... }" envelopes) out of the trail's
- * status row. The trail is for legible, human-skimmable progress notes;
- * shapes that match these patterns belong inside their own primitive
- * (tool block, file chip, summarised-tool chip), not as plain prose.
- *
- * Returns `true` when the status string is debug-shaped and should be
- * dropped from the visible trail.
- */
-const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-export function isDebugStatus(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return true;
-  if (UUID_RE.test(trimmed)) return true;
-  // JSON-shaped or object-shaped payloads
-  if (/^[[{]/.test(trimmed) && /[\]}]\s*$/.test(trimmed)) return true;
-  // "key: value" envelope dumps, e.g. "id: ..., status: active"
-  if (/\b(id|status|payload|tool_use_id|session_id):\s*\S/.test(trimmed)) return true;
-  return false;
-}
-
 export function numberFromMeta(value: unknown): number | undefined {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) ? n : undefined;
@@ -284,17 +262,18 @@ export function splitTrailAndFinal(segments: MessageSegment[]): {
   while (end > 0 && segments[end - 1].kind === "event_fire") {
     end--;
   }
+  // Walk backwards over the contiguous run of final content (text +
+  // entity_ref). Tools, steps, status, file chips break the run.
   let start = end;
-  // Walk backwards over a contiguous run of user-facing final content. Both
-  // text and entity_ref segments qualify — entity_ref is structured prose,
-  // not progress chrome.
-  while (
-    start > 0 &&
-    (segments[start - 1].kind === "entity_ref" ||
-      (segments[start - 1].kind === "text" &&
-        (segments[start - 1] as { kind: "text"; text: string }).text.trim().length > 0))
-  ) {
-    start--;
+  while (start > 0) {
+    const seg = segments[start - 1];
+    if (seg.kind === "entity_ref") {
+      start--;
+    } else if (seg.kind === "text" && seg.text.trim().length > 0) {
+      start--;
+    } else {
+      break;
+    }
   }
   if (start === end) {
     return { trail: segments, final: [] };

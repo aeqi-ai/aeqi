@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
@@ -354,6 +354,22 @@ export default function AgentSessionView({ agentId, sessionId: urlSessionId }: A
     sendDraft(mergeQueuedDrafts(drafts));
   }, [activeSessionId, streaming, queuedDrafts, drainQueuedDrafts, sendDraft]);
 
+  // Drop queued drafts (rendered separately in the trailing slot) and,
+  // while streaming, the trailing draft assistant row from the DB poll —
+  // the StreamingMessage owns the live turn; rendering both produces two
+  // stacked thinking panels.
+  const renderableMessages = useMemo(
+    () =>
+      messages.filter((msg, i, arr) => {
+        if (msg.queued) return false;
+        if (streaming && msg.role === "assistant" && msg.draft && i === arr.length - 1) {
+          return false;
+        }
+        return true;
+      }),
+    [messages, streaming],
+  );
+
   if (!agentId) return null;
 
   // ── SessionDetail bindings ───────────────────────────────────────────────
@@ -361,22 +377,6 @@ export default function AgentSessionView({ agentId, sessionId: urlSessionId }: A
   const currentSession = sessions.find((s) => s.id === activeSessionId) || null;
   const title = currentSession ? sessionLabel(currentSession) : agentName;
   const subtitle = deriveOrigin(currentSession?.name);
-
-  // The renderable thread is the static messages array minus queued drafts
-  // (those are rendered separately in the trailing slot below the
-  // StreamingMessage so the visual order matches the agent's turn-taking
-  // semantics). While the live WebSocket stream is active for this
-  // session, also filter out any trailing assistant `draft` rows pulled
-  // by the DB-poll path — the StreamingMessage owns the canonical view of
-  // the in-flight turn, and rendering the draft alongside it produces
-  // two stacked thinking panels for the same assistant turn.
-  const renderableMessages = messages.filter((msg, i, arr) => {
-    if (msg.queued) return false;
-    if (streaming && msg.role === "assistant" && msg.draft && i === arr.length - 1) {
-      return false;
-    }
-    return true;
-  });
 
   // Empty-state — surfaces the agent's full <EmptyState> block when there
   // are no messages, no queued drafts, and no live stream. Wraps in

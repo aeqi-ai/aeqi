@@ -266,11 +266,9 @@ export default function MeInboxPage() {
       } else if (e.key === "k") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("inbox:traverse", { detail: { direction: "prev" } }));
-      } else if (e.key === "r") {
-        if (selectedRow?.replyable) {
-          e.preventDefault();
-          composerRef.current?.focus();
-        }
+      } else if (e.key === "r" && selectedRow) {
+        e.preventDefault();
+        composerRef.current?.focus();
       }
     };
 
@@ -473,7 +471,6 @@ export default function MeInboxPage() {
         composerExtraActions={archiveButton}
         attachmentTypes={["idea", "quest", "file"]}
         composerPlaceholder={`Message ${selectedRow.from.name}…`}
-        composerDisabled={!selectedRow.replyable}
         emptyTitle={contextLoading ? "Loading context…" : "No prior messages."}
         errorMessage={sendError}
       />

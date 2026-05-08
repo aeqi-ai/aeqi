@@ -7,8 +7,25 @@ import {
   type EntityPrimitive,
   type EntityRef,
   countStepSegments,
-  isDebugStatus,
 } from "./types";
+
+const ENTITY_PRIMITIVES: readonly EntityPrimitive[] = ["agent", "quest", "idea", "event"];
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * Drop status fragments that are debug-shaped (UUIDs, JSON envelopes,
+ * key:value dumps). Those belong inside their own primitive (tool block,
+ * file chip, summarised tool) — not as plain prose in the trail.
+ */
+function isDebugStatus(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (UUID_RE.test(trimmed)) return true;
+  if (/^[[{]/.test(trimmed) && /[\]}]\s*$/.test(trimmed)) return true;
+  if (/\b(id|status|payload|tool_use_id|session_id):\s*\S/.test(trimmed)) return true;
+  return false;
+}
 
 export type RawEvent = Record<string, unknown>;
 
@@ -113,10 +130,7 @@ export function reduceStreamEvent(state: StreamState, event: RawEvent): ReduceRe
         state: appendStatus(state, `Delegating to ${event.worker_name ?? "agent"}…`),
       };
     case "DelegateComplete":
-      // Outcome can be a JSON-shaped envelope or a UUID dump — never let
-      // that leak into a status row. Render a quiet "Delegation complete"
-      // line; a downstream EntityRef event (if the runtime supplies one)
-      // surfaces the agent identity as a clickable mention.
+      // Drop the raw `outcome` payload — it can be JSON / UUID dump.
       return {
         kind: "next",
         state: appendStatus(state, `${event.worker_name ?? "Agent"} finished`),
@@ -212,44 +226,38 @@ function appendSegment(state: StreamState, segment: MessageSegment): StreamState
 }
 
 function appendStatus(state: StreamState, text: string): StreamState {
-  // Drop debug-shaped fragments at the producer boundary — UUIDs, JSON
-  // payloads, and "key: value" envelope dumps belong inside their own
-  // primitive (tool block, summarised tool, file chip), not as plain
-  // status prose in the trail.
   if (isDebugStatus(text)) return state;
   return appendSegment(state, { kind: "status", text });
 }
 
 /**
- * Inline-mention parser. Recognises `[Agent: Name]`, `[Quest: Name]`,
- * `[Idea: Name]`, `[Event: Name]` patterns inside a TextDelta and
- * splits them into structured `entity_ref` segments. Backend-emitted
- * `EntityRef` events are still the canonical path (they carry the real
- * entity_id); this is the fallback when only a label is on the wire.
+ * Recognises `[Agent: Name]` / `[Quest: Name]` / `[Idea: Name]` /
+ * `[Event: Name]` in a TextDelta and splits them into structured
+ * `entity_ref` segments. Backend-emitted `EntityRef` events are the
+ * canonical path (they carry the real entity_id); this is the fallback
+ * when only a label is on the wire. Stateless — uses `matchAll`, not a
+ * shared regex with `lastIndex` mutation.
  */
 const ENTITY_REF_RE = /\[(Agent|Quest|Idea|Event):\s*([^\]]+?)\]/g;
 
 function appendTextWithEntityParsing(state: StreamState, delta: string): StreamState {
   if (!delta) return state;
-  if (!ENTITY_REF_RE.test(delta)) {
-    ENTITY_REF_RE.lastIndex = 0;
-    return appendText(state, delta);
-  }
-  ENTITY_REF_RE.lastIndex = 0;
   let next = state;
   let cursor = 0;
-  let match: RegExpExecArray | null;
-  while ((match = ENTITY_REF_RE.exec(delta)) !== null) {
-    if (match.index > cursor) {
-      next = appendText(next, delta.slice(cursor, match.index));
+  for (const match of delta.matchAll(ENTITY_REF_RE)) {
+    const start = match.index ?? 0;
+    if (start > cursor) {
+      next = appendText(next, delta.slice(cursor, start));
     }
-    const primitive = match[1].toLowerCase() as EntityPrimitive;
-    const label = match[2].trim();
     next = appendSegment(next, {
       kind: "entity_ref",
-      ref: { primitive, entityId: "", label },
+      ref: {
+        primitive: match[1].toLowerCase() as EntityPrimitive,
+        entityId: "",
+        label: match[2].trim(),
+      },
     });
-    cursor = match.index + match[0].length;
+    cursor = start + match[0].length;
   }
   if (cursor < delta.length) {
     next = appendText(next, delta.slice(cursor));
@@ -258,11 +266,10 @@ function appendTextWithEntityParsing(state: StreamState, delta: string): StreamS
 }
 
 function entityRefFromEvent(event: RawEvent): EntityRef {
-  const primitiveRaw = String(event.primitive ?? event.kind ?? "agent").toLowerCase();
-  const primitive: EntityPrimitive =
-    primitiveRaw === "quest" || primitiveRaw === "idea" || primitiveRaw === "event"
-      ? primitiveRaw
-      : "agent";
+  const raw = String(event.primitive ?? event.kind ?? "").toLowerCase();
+  const primitive = (ENTITY_PRIMITIVES as readonly string[]).includes(raw)
+    ? (raw as EntityPrimitive)
+    : "agent";
   return {
     primitive,
     entityId: typeof event.entity_id === "string" ? event.entity_id : "",

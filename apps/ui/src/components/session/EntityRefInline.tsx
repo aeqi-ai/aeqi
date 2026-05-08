@@ -3,21 +3,19 @@ import { Link } from "react-router-dom";
 import { useNav } from "@/hooks/useNav";
 import { useDaemonStore } from "@/store/daemon";
 import { entityPathFromId } from "@/lib/entityPath";
-import { type EntityRef } from "./types";
+import { type EntityPrimitive, type EntityRef } from "./types";
+
+const TAB_BY_PRIMITIVE: Record<EntityPrimitive, string> = {
+  agent: "agents",
+  quest: "quests",
+  idea: "ideas",
+  event: "events",
+};
 
 /**
- * Inline mention for an AEQI primitive (agent / quest / idea / event).
- *
- * Resolution order:
- *  1. Backend-supplied `entityId` — preferred; renders as a Link.
- *  2. Daemon-store name lookup by `label` for agent / quest. Idea + event
- *     resolution by name only fires when the canonical surface for that
- *     primitive is loaded; otherwise we fall through to plain text.
- *  3. No match — falls back to plain label text (no link, no chip).
- *
- * Visual treatment is intentionally light: a subtle inline link with the
- * primitive's role conveyed via title attribute. No chips, no badges,
- * no decorative chrome — those can be layered later via the same data.
+ * Inline mention for an AEQI primitive. Resolves via backend-supplied
+ * entityId first, falling back to daemon-store name lookup for agent/quest.
+ * Renders unresolved refs as plain text — no link, no chip.
  */
 export default function EntityRefInline({ ref }: { ref: EntityRef }) {
   const { entityId } = useNav();
@@ -36,22 +34,18 @@ export default function EntityRefInline({ ref }: { ref: EntityRef }) {
       return quests.find((q) => (q.idea?.name ?? "").toLowerCase() === lc)?.id ?? "";
     }
     return "";
-  }, [ref, agents, quests]);
-
-  const tab =
-    ref.primitive === "agent"
-      ? "agents"
-      : ref.primitive === "quest"
-        ? "quests"
-        : ref.primitive === "idea"
-          ? "ideas"
-          : "events";
+  }, [ref.entityId, ref.label, ref.primitive, agents, quests]);
 
   if (!entityId || !resolved) {
     return <span className="asv-entity-ref asv-entity-ref--unresolved">{ref.label}</span>;
   }
 
-  const href = entityPathFromId(entities, entityId, tab, encodeURIComponent(resolved));
+  const href = entityPathFromId(
+    entities,
+    entityId,
+    TAB_BY_PRIMITIVE[ref.primitive],
+    encodeURIComponent(resolved),
+  );
   const role = ref.primitive[0].toUpperCase() + ref.primitive.slice(1);
   return (
     <Link
