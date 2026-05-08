@@ -1752,29 +1752,30 @@
   position: relative;
 }
 
-/* Scroll-fade strip — sits ABOVE the floating composer, NOT behind it.
-   16px transition gradient between scrolling content and the anchored
-   composer. The thread reserves exactly `composer-height + space-4` of
-   bottom padding so the last message lands at the strip's top edge
-   when scrolled fully down — fully visible, never overlapped. Fallback
-   96px tracks the compact resting height of the .composer-wrap card. */
+/* Scroll-fade strip — 32px gradient sitting ABOVE the (opaque) composer
+   row. Same shape as the inbox surface: row's solid card-color background
+   hides any content scrolling under it; this strip handles the visual
+   handoff from scrolling content into the anchored composer.
+   `.asv-messages` reserves `composer-height + 44px` of padding-bottom
+   (chat.css), so the last message sits at the strip's TOP when scrolled
+   fully down. */
 .content-main-col:has(.composer-row)::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   bottom: var(--composer-height, 96px);
-  height: var(--space-4);
+  height: 32px;
   pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--color-card));
   z-index: 1;
 }
 
-/* Composer row — floats over the scroll surface. Transparent side padding
-   acts as a bleed so the dark card doesn't touch the paper's inner edge.
-   pointer-events: none on the frame lets the user wheel through the bleed
-   into the scroll; the card itself re-enables them. Tight 8px vertical
-   padding — the fade strip above absorbs the visual transition. */
+/* Composer row — floats over the scroll surface. Tight 8px vertical
+   padding; solid card-color background covers any scrolling content that
+   would otherwise show through the row's side bleed. `pointer-events:
+   none` on the frame lets the wheel pass through the bleed to the scroll;
+   the card itself re-enables them via `.composer-row > *`. */
 .composer-row {
   position: absolute;
   left: 0;
@@ -1785,7 +1786,7 @@
   flex-direction: row;
   justify-content: center;
   padding: var(--space-2) var(--space-5) var(--space-2);
-  background: transparent;
+  background: var(--color-card);
   border: none;
   box-shadow: none;
   pointer-events: none;

@@ -67,21 +67,21 @@
   position: relative;
 }
 
-/* Scroll-fade strip — sits ABOVE the floating composer, NOT behind it.
-   The wrap is opaque from bottom → composer-height; this fade strip is a
-   16px transition gradient that lives directly on top of the wrap. The
-   thread reserves `composer-height + 16px` of bottom padding (rule below),
-   so when scrolled fully down the last message's bottom edge sits exactly
-   at the TOP of the fade strip — fully visible, never overlapped, and the
-   gradient is the visual transition between scrolling content and the
-   anchored composer. Fallback 96px tracks the new compact resting height. */
+/* Scroll-fade strip — 32px gradient sitting ABOVE the (opaque) wrap. The
+   wrap below has `background: var(--color-card)` so any content scrolling
+   under it is hidden by the wrap itself. The fade strip is the smooth
+   visual transition between scrolling content and the anchored composer:
+   transparent at the top, solid card-color at the bottom. Thread reserves
+   `composer-height + 32px` of bottom padding (rule below) so when scrolled
+   fully down the last message sits at the strip's TOP edge — fully
+   visible, with the gradient handling the visual handoff into the card. */
 .inbox-pane-detail:has(.inbox-composer-wrap)::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   bottom: var(--inbox-composer-height, 96px);
-  height: var(--space-4);
+  height: 32px;
   pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--color-card));
   z-index: 1;
@@ -215,15 +215,18 @@
   }
 }
 
-/* Thread — bottom padding = composer height + fade strip height (--space-4).
-   The fade strip sits directly above the composer (rule above); reserving
-   exactly `composer-height + space-4` means the last message lines up with
-   the strip's top edge at scroll-bottom — never overlapped, never faded.
-   Fallback 96px tracks the new compact composer resting height. */
+/* Thread — bottom padding = composer height + 32px fade strip. The strip
+   sits above the (opaque) wrap. Reserving `composer-height + 32px` lands
+   the last message at the strip's top edge when scrolled fully down —
+   fully visible, never overlapped. The fallback chain handles both
+   adopters: `--inbox-composer-height` (inbox surface, published by
+   SessionDetail's ResizeObserver) → `--composer-height` (agent surface,
+   published by the externally-mounted ComposerRow) → 96px hardcoded. */
 .session-detail-thread {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-5) calc(var(--inbox-composer-height, 96px) + var(--space-4));
+  padding: var(--space-2) var(--space-5)
+    calc(var(--inbox-composer-height, var(--composer-height, 96px)) + 32px);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -291,11 +294,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Tight 8px padding above + below the composer card. The fade strip
-     above the wrap absorbs the visual transition; we don't need a 16px
-     bottom dead-zone too. */
+  /* Tight 8px padding above + below the composer card. */
   padding: var(--space-2) var(--space-4) var(--space-2);
-  background: transparent;
+  /* Solid card-color background — covers any scrolling content so the
+     composer's transparent wrap padding can't reveal text behind it.
+     The fade strip ABOVE this wrap (rule above) handles the visual
+     transition from scrolling content into the anchored composer. */
+  background: var(--color-card);
   pointer-events: none;
 }
 
