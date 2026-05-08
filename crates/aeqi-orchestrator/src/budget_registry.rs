@@ -1725,7 +1725,21 @@ impl BudgetRegistry {
         }
 
         let tx = conn.transaction()?;
-        // Audit event BEFORE the row vanishes — refer to its own id.
+        // Dissolve = full erase of the budget + its history. We delete
+        // events in the same tx so the FK on treasury_events.budget_id
+        // (NO ACTION by default) doesn't reject the budget delete. The
+        // BUDGET_DISSOLVED event below references the budget by id but
+        // is INSERTed AFTER the cleanup, then deleted with the budget.
+        // Net: dissolve is acknowledged via the event row's existence
+        // for the duration of this tx, then both vanish — operators
+        // who need historical dissolve records read the activity log
+        // (WS-B2 wires to ActivityLog).
+        tx.execute(
+            "DELETE FROM treasury_events WHERE budget_id = ?1 OR counter_budget_id = ?1",
+            params![budget_id],
+        )?;
+        // Audit event AFTER the cleanup so the event row records the
+        // dissolution itself; it's deleted alongside the budget below.
         tx.execute(
             "INSERT INTO treasury_events (event_type, budget_id, acting_role_id, \
                                           actor_agent_id, counter_budget_id, epoch, amount, \
@@ -1743,6 +1757,13 @@ impl BudgetRegistry {
                 idempotency_key,
                 now,
             ],
+        )?;
+        // Cascade through allowances + policy via ON DELETE CASCADE on
+        // those FKs. Then drop the dissolution event we just emitted (it
+        // still references the budget so the FK would block the delete).
+        tx.execute(
+            "DELETE FROM treasury_events WHERE budget_id = ?1",
+            params![budget_id],
         )?;
         tx.execute("DELETE FROM budgets WHERE id = ?1", params![budget_id])?;
         tx.commit()?;

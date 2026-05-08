@@ -471,7 +471,31 @@ pub async fn handle_set_policy(
         .get("policy")
         .cloned()
         .unwrap_or(serde_json::Value::Null);
-    let defaults = parse_bundle(&policy_v);
+    // Policy uses canonical `default_*` names (per the brief). Fall back to
+    // bundle-style names so the same handler accepts both shapes — agent
+    // tools and direct callers stay consistent.
+    let defaults = AllowanceBundle {
+        inference_credits: policy_v
+            .get("default_inference")
+            .or_else(|| policy_v.get("inference_credits"))
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0),
+        treasury_cap: policy_v
+            .get("default_treasury")
+            .or_else(|| policy_v.get("treasury_cap"))
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0),
+        suballoc_cap: policy_v
+            .get("default_suballoc")
+            .or_else(|| policy_v.get("suballoc_cap"))
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0),
+        hire_cap: policy_v
+            .get("default_hire")
+            .or_else(|| policy_v.get("hire_cap"))
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0),
+    };
     let epoch_period_secs = policy_v
         .get("epoch_period_secs")
         .and_then(|v| v.as_i64())
