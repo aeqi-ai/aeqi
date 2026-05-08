@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Wordmark from "@/components/Wordmark";
 import { Button, Input } from "@/components/ui";
 
@@ -263,6 +263,7 @@ function PasskeyIcon({ size = 16 }: { size?: number }) {
 
 export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode } = {}) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const copy = COPY[mode];
   const [stage, setStage] = useState<"door" | "spawning" | "welcome" | "error" | "check-email">(
     "door",
@@ -275,6 +276,49 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
   const [walletDetected, setWalletDetected] = useState<{ name: string } | null>(null);
   const [passkeyAvailable, setPasskeyAvailable] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  /**
+   * Magic-link landing path: when the user clicks the email link, they
+   * arrive at `/welcome?token=<hex>`. Strip the token off the URL so the
+   * page can be safely refreshed/shared, fire `email-verify` against the
+   * platform with the raw token, persist the resulting session, and roll
+   * straight into the spawn animation.
+   */
+  useEffect(() => {
+    const token = searchParams.get("token");
+    if (!token) return;
+    // Strip the token from the URL so a back/refresh doesn't replay the
+    // verify call (the token is single-use server-side anyway).
+    const next = new URLSearchParams(searchParams);
+    next.delete("token");
+    setSearchParams(next, { replace: true });
+
+    setPicked("email");
+    setStage("spawning");
+    setErrorMsg(null);
+    setSteps(buildSteps());
+    (async () => {
+      try {
+        const verifyRes = await fetch(
+          `${SOLANA_API_URL}/api/auth/welcome/email-verify?token=${encodeURIComponent(token)}`,
+        );
+        if (!verifyRes.ok) {
+          throw new Error(`email-verify ${verifyRes.status}: ${await verifyRes.text()}`);
+        }
+        const verify = (await verifyRes.json()) as SpawnResponse & {
+          session_jwt: string;
+          session_expires_at: string;
+        };
+        persistSession(verify);
+        await animateSpawn(verify);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setErrorMsg(msg);
+        setStage("error");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const w = (
