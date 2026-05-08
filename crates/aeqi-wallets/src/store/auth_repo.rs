@@ -266,6 +266,98 @@ fn row_to_email_verification(
     })())
 }
 
+// ── Wallet (SIWS) challenges ─────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct StoredWalletChallenge {
+    pub id: String,
+    pub pubkey_b58: String,
+    pub nonce: String,
+    pub issued_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct InsertWalletChallenge {
+    pub id: String,
+    pub pubkey_b58: String,
+    pub nonce: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+pub struct WalletChallengeStore;
+
+impl WalletChallengeStore {
+    pub fn insert(conn: &Connection, c: &InsertWalletChallenge) -> Result<(), StoreError> {
+        conn.execute(
+            r#"INSERT INTO wallet_challenges
+               (id, pubkey_b58, nonce, issued_at, expires_at)
+               VALUES (?, ?, ?, ?, ?)"#,
+            params![
+                c.id,
+                c.pubkey_b58,
+                c.nonce,
+                Utc::now().to_rfc3339(),
+                c.expires_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn lookup_by_nonce(
+        conn: &Connection,
+        nonce: &str,
+    ) -> Result<Option<StoredWalletChallenge>, StoreError> {
+        let mut stmt = conn.prepare(
+            r#"SELECT id, pubkey_b58, nonce, issued_at, expires_at
+               FROM wallet_challenges WHERE nonce = ?"#,
+        )?;
+        let row = stmt
+            .query_row(params![nonce], row_to_wallet_challenge)
+            .optional()?
+            .transpose()?;
+        Ok(row)
+    }
+
+    pub fn consume(conn: &Connection, id: &str) -> Result<(), StoreError> {
+        conn.execute("DELETE FROM wallet_challenges WHERE id = ?", params![id])?;
+        Ok(())
+    }
+
+    pub fn sweep_expired(conn: &Connection) -> Result<u64, StoreError> {
+        let n = conn.execute(
+            "DELETE FROM wallet_challenges WHERE expires_at < ?",
+            params![Utc::now().to_rfc3339()],
+        )?;
+        Ok(n as u64)
+    }
+}
+
+fn row_to_wallet_challenge(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<Result<StoredWalletChallenge, StoreError>> {
+    let id: String = row.get(0)?;
+    let pubkey_b58: String = row.get(1)?;
+    let nonce: String = row.get(2)?;
+    let issued_at_s: String = row.get(3)?;
+    let expires_at_s: String = row.get(4)?;
+    Ok((|| -> Result<StoredWalletChallenge, StoreError> {
+        let issued_at = DateTime::parse_from_rfc3339(&issued_at_s)
+            .map_err(|e| StoreError::BadTimestamp(e.to_string()))?
+            .with_timezone(&Utc);
+        let expires_at = DateTime::parse_from_rfc3339(&expires_at_s)
+            .map_err(|e| StoreError::BadTimestamp(e.to_string()))?
+            .with_timezone(&Utc);
+        Ok(StoredWalletChallenge {
+            id,
+            pubkey_b58,
+            nonce,
+            issued_at,
+            expires_at,
+        })
+    })())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,6 +448,56 @@ mod tests {
         EmailVerificationStore::consume(&conn, &found.id).unwrap();
         let post = EmailVerificationStore::lookup_by_hash(&conn, &token_hash).unwrap();
         assert!(post.is_none(), "consume should delete");
+    }
+
+    #[test]
+    fn wallet_challenge_roundtrip_and_consume() {
+        let conn = fresh_db();
+        WalletChallengeStore::insert(
+            &conn,
+            &InsertWalletChallenge {
+                id: "wc-1".into(),
+                pubkey_b58: "GsbwXfJraMomNxBcjkYBSnYoGGfyW3wQEQRRH4txk2GH".into(),
+                nonce: "abc123nonce".into(),
+                expires_at: Utc::now() + Duration::minutes(5),
+            },
+        )
+        .unwrap();
+        let found = WalletChallengeStore::lookup_by_nonce(&conn, "abc123nonce")
+            .unwrap()
+            .expect("found");
+        assert_eq!(
+            found.pubkey_b58,
+            "GsbwXfJraMomNxBcjkYBSnYoGGfyW3wQEQRRH4txk2GH"
+        );
+        WalletChallengeStore::consume(&conn, &found.id).unwrap();
+        let post = WalletChallengeStore::lookup_by_nonce(&conn, "abc123nonce").unwrap();
+        assert!(post.is_none());
+    }
+
+    #[test]
+    fn wallet_challenge_unique_nonce() {
+        let conn = fresh_db();
+        WalletChallengeStore::insert(
+            &conn,
+            &InsertWalletChallenge {
+                id: "wc-1".into(),
+                pubkey_b58: "AAA".into(),
+                nonce: "shared-nonce".into(),
+                expires_at: Utc::now() + Duration::minutes(5),
+            },
+        )
+        .unwrap();
+        let dup = WalletChallengeStore::insert(
+            &conn,
+            &InsertWalletChallenge {
+                id: "wc-2".into(),
+                pubkey_b58: "BBB".into(),
+                nonce: "shared-nonce".into(),
+                expires_at: Utc::now() + Duration::minutes(5),
+            },
+        );
+        assert!(dup.is_err(), "should violate UNIQUE(nonce)");
     }
 
     #[test]

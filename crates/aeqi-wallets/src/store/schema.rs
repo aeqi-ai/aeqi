@@ -214,6 +214,28 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             ON email_verifications(email_lower);
         CREATE INDEX IF NOT EXISTS idx_email_verifications_expires
             ON email_verifications(expires_at);
+
+        -- Pending Sign-In With Solana (SIWS) challenges. The client gets
+        -- a fresh nonce, asks their wallet to sign a message containing
+        -- it, then submits the signature for verification. Short ttl
+        -- (5 min) — unsigned challenges are abandoned by the user
+        -- closing the wallet popup; expired rows are swept on every
+        -- verify call. `nonce` is the random ASCII identifier embedded
+        -- in the signed message. `pubkey_b58` is the wallet pubkey the
+        -- challenge was issued for; verify checks the signature is
+        -- valid for THAT pubkey + the message containing this nonce.
+        CREATE TABLE IF NOT EXISTS wallet_challenges (
+            id              TEXT PRIMARY KEY,
+            pubkey_b58      TEXT NOT NULL,
+            nonce           TEXT NOT NULL UNIQUE,
+            issued_at       TEXT NOT NULL,
+            expires_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_wallet_challenges_pubkey
+            ON wallet_challenges(pubkey_b58);
+        CREATE INDEX IF NOT EXISTS idx_wallet_challenges_expires
+            ON wallet_challenges(expires_at);
         "#,
     )?;
 
