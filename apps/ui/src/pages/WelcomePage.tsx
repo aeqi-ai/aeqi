@@ -187,7 +187,36 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     );
   }
 
-  async function spawn(companyId: string) {
+  async function animateSpawn(data: SpawnResponse) {
+    setOutcome(data);
+    const trustPda = data.trust_pubkey_b58;
+    // Returning users (already_existed:true) skip the long animation
+    // since nothing was actually spawned — flash through the steps and
+    // land on welcome. New users get the full ~2s motion to make the
+    // on-chain spawn feel real.
+    const tick = data.already_existed ? 120 : 450;
+    const advanceWith = async (idx: number, detail?: string) => {
+      await new Promise((r) => setTimeout(r, tick));
+      advanceStep(idx, detail);
+    };
+    await advanceWith(2, trustPda);
+    await advanceWith(3, data.role_init_signature_b58 ?? undefined);
+    await advanceWith(4, data.token_init_signature_b58 ?? undefined);
+    await advanceWith(5, data.governance_init_signature_b58 ?? undefined);
+    await new Promise((r) => setTimeout(r, tick));
+    setSteps((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
+    await new Promise((r) => setTimeout(r, 300));
+    setStage("welcome");
+  }
+
+  /**
+   * Wallet path: directly call the wallet-backed spawn endpoint with the
+   * connected wallet's pubkey as the company_id. Eventually this gets
+   * replaced with a SIWS challenge → /api/auth/welcome/wallet-verify
+   * shape that mirrors email below; for now the demo wires the simpler
+   * shape so the on-chain UX shows immediately.
+   */
+  async function spawnViaWallet(walletPubkey: string) {
     setStage("spawning");
     setErrorMsg(null);
     setSteps(buildSteps());
@@ -195,33 +224,78 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
       const res = await fetch(`${SOLANA_API_URL}/api/solana/companies/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId }),
+        body: JSON.stringify({ company_id: walletPubkey }),
       });
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`${res.status}: ${body}`);
       }
       const data = (await res.json()) as SpawnResponse;
-      setOutcome(data);
+      await animateSpawn(data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrorMsg(msg);
+      setStage("error");
+    }
+  }
 
-      // Animate the steps in. The smoke endpoint returns all sigs at
-      // once (after on-chain confirms); we reveal each one with a
-      // small delay so the user perceives motion. Real streaming is
-      // a Phase-2 enhancement (server-sent events from the spawn
-      // endpoint per-tx).
-      const trustPda = data.trust_pubkey_b58;
-      const advanceWith = async (idx: number, detail?: string) => {
-        await new Promise((r) => setTimeout(r, 450));
-        advanceStep(idx, detail);
+  /**
+   * Email path: real auth via magic link.
+   *
+   *   1. POST /api/auth/welcome/email-start with the email
+   *   2. Smoke server returns the magic_link_url directly (real prod
+   *      sends via SMTP and omits the URL); we auto-follow in dev so
+   *      the demo doesn't require an inbox
+   *   3. GET that URL → /api/auth/welcome/email-verify which:
+   *      - resolves the email via auth_methods (returning user) OR
+   *        creates a new Company + spawns TRUST + persists auth_method
+   *      - mints a JWT bound to company_id
+   *   4. We persist the JWT to localStorage and animate the spawn
+   */
+  async function spawnViaEmailMagicLink(email: string) {
+    setStage("spawning");
+    setErrorMsg(null);
+    setSteps(buildSteps());
+    try {
+      const startRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/email-start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!startRes.ok) {
+        const body = await startRes.text();
+        throw new Error(`email-start ${startRes.status}: ${body}`);
+      }
+      const start = (await startRes.json()) as {
+        email: string;
+        expires_at: string;
+        magic_link_url?: string;
       };
-      await advanceWith(2, trustPda);
-      await advanceWith(3, data.role_init_signature_b58 ?? undefined);
-      await advanceWith(4, data.token_init_signature_b58 ?? undefined);
-      await advanceWith(5, data.governance_init_signature_b58 ?? undefined);
-      await new Promise((r) => setTimeout(r, 350));
-      setSteps((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
-      await new Promise((r) => setTimeout(r, 300));
-      setStage("welcome");
+      if (!start.magic_link_url) {
+        // Real prod path: tell the user to check their inbox.
+        throw new Error(
+          "Magic link sent — check your email. (Auto-follow disabled in this build.)",
+        );
+      }
+      const verifyRes = await fetch(start.magic_link_url);
+      if (!verifyRes.ok) {
+        const body = await verifyRes.text();
+        throw new Error(`email-verify ${verifyRes.status}: ${body}`);
+      }
+      const verify = (await verifyRes.json()) as SpawnResponse & {
+        session_jwt: string;
+        session_expires_at: string;
+      };
+      // Persist the session. Future API calls attach `Authorization:
+      // Bearer ${jwt}` and the platform resolves the company from sub.
+      try {
+        localStorage.setItem("aeqi_session_jwt", verify.session_jwt);
+        localStorage.setItem("aeqi_session_company_id", verify.company_id);
+        localStorage.setItem("aeqi_session_expires_at", verify.session_expires_at);
+      } catch {
+        // Safari private mode etc. — non-fatal; session lives in memory only.
+      }
+      await animateSpawn(verify);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
@@ -248,7 +322,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
       const pk = resp.publicKey.toString();
       // Use the wallet pubkey as the company_id — every distinct wallet
       // gets a distinct Company.
-      await spawn(pk);
+      await spawnViaWallet(pk);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
@@ -268,7 +342,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     e.preventDefault();
     if (!email.trim()) return;
     setPicked("email");
-    await spawn(email.trim().toLowerCase());
+    await spawnViaEmailMagicLink(email.trim().toLowerCase());
   }
 
   function reset() {
