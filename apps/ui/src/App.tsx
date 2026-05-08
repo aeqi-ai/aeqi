@@ -14,15 +14,11 @@ import { entityPath } from "@/lib/entityPath";
 // `/login`, `/signup`, and `/welcome` all render `<WelcomePage />` with
 // different `mode` props. Per the canonical "every user = a Company"
 // model, sign-in and sign-up are the same act — the auth method
-// resolves new vs returning via the `auth_methods` table. Three URLs
-// kept live so muscle-memory bookmarks (`/login`), marketing/SEO
-// (`/signup`), and the canonical post-auth landing (`/welcome`) all
-// land on the same flow with subtly different copy framings.
-//
-// LoginPage.tsx and SignupPage.tsx remain on disk (legacy invite-only
-// shape from the pre-Solana model) — they're unimported here and will
-// be deleted in the auth-cutover ship once the new `auth_methods`
-// backend, passkey ceremony, and SIWS wiring land.
+// resolves new vs returning via the `auth_methods` table on the
+// platform side. Three URLs kept live so muscle-memory bookmarks
+// (`/login`), marketing/SEO (`/signup`), and the canonical post-auth
+// landing (`/welcome`) all land on the same flow with subtly different
+// copy framings.
 import WelcomePage from "@/pages/WelcomePage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import AuthCallbackPage from "@/pages/AuthCallbackPage";
