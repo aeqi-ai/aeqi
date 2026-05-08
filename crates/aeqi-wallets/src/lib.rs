@@ -23,10 +23,10 @@ pub use keypair::Keypair;
 pub use siwe::{SiweError, canonical_message, verify as verify_siwe};
 pub use solana_keypair::{Ed25519Signature, SolanaKeypair, SolanaPubkey, verify as verify_solana};
 pub use solana_wallet::{
-    ProvisionSolanaAgentRequest, ProvisionSolanaRequest, ProvisionedSolanaWallet,
-    SolanaWalletError, ensure_primary_solana_user_wallet, ensure_solana_agent_wallet,
-    provision_solana_custodial, provision_solana_custodial_for_agent, sign_solana_agent_custodial,
-    sign_solana_custodial,
+    PrimarySolanaSigner, ProvisionSolanaAgentRequest, ProvisionSolanaRequest,
+    ProvisionedSolanaWallet, SolanaWalletError, ensure_primary_solana_user_wallet,
+    ensure_solana_agent_wallet, load_primary_solana_signer, provision_solana_custodial,
+    provision_solana_custodial_for_agent, sign_solana_agent_custodial, sign_solana_custodial,
 };
 pub use types::{Address, EcdsaSignature, Pubkey, WalletId};
 pub use wallet::{

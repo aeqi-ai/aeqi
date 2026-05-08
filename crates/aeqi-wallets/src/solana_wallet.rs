@@ -65,6 +65,8 @@ pub enum SolanaWalletError {
     NotCustodialSignable(&'static str),
     #[error("wallet has no server share — cannot decrypt")]
     NoServerShare,
+    #[error("user has no primary Solana wallet")]
+    NoPrimaryWallet,
     #[error("aead error: {0}")]
     Aead(String),
     #[error("decrypted seed is not 32 bytes")]
@@ -73,6 +75,63 @@ pub enum SolanaWalletError {
     Join(String),
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
+}
+
+/// Snapshot of a user's primary Solana wallet — pubkey for routing/display
+/// purposes plus the decrypted seed for signing. The seed lives inside a
+/// `Zeroizing` wrapper so it zeros on drop. Manual `Debug` impl deliberately
+/// hides the seed; only the wallet id + pubkey appear in debug output.
+pub struct PrimarySolanaSigner {
+    pub wallet_id: WalletId,
+    pub pubkey: SolanaPubkey,
+    pub seed: Zeroizing<[u8; 32]>,
+}
+
+impl std::fmt::Debug for PrimarySolanaSigner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PrimarySolanaSigner")
+            .field("wallet_id", &self.wallet_id)
+            .field("pubkey", &self.pubkey)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Load a user's primary Solana custodial wallet and decrypt the 32-byte
+/// ed25519 seed. Caller owns the returned secret briefly during signing —
+/// the `Zeroizing` wrapper ensures it zeros on drop. Returns `NoPrimaryWallet`
+/// if the user has not yet had a primary Solana wallet provisioned.
+pub async fn load_primary_solana_signer<K: MasterKekProvider + ?Sized>(
+    db: &SharedDb,
+    master_kek: &K,
+    user_id: &str,
+) -> Result<PrimarySolanaSigner, SolanaWalletError> {
+    let wallets = {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        tokio::task::spawn_blocking(
+            move || -> Result<Vec<StoredSolanaWallet>, SolanaWalletError> {
+                let conn = db.lock().expect("wallet db mutex poisoned");
+                Ok(SolanaWalletStore::list_for_user(&conn, &user_id)?)
+            },
+        )
+        .await
+        .map_err(|e| SolanaWalletError::Join(e.to_string()))??
+    };
+    let primary = wallets
+        .into_iter()
+        .find(|w| w.is_primary)
+        .ok_or(SolanaWalletError::NoPrimaryWallet)?;
+    if primary.custody_state != CustodyState::Custodial {
+        return Err(SolanaWalletError::NotCustodialSignable(
+            primary.custody_state.as_str(),
+        ));
+    }
+    let seed = decrypt_seed_user(master_kek, &primary).await?;
+    Ok(PrimarySolanaSigner {
+        wallet_id: primary.id,
+        pubkey: primary.pubkey,
+        seed,
+    })
 }
 
 /// Generate a fresh custodial Solana wallet, persist it, return the pubkey.
@@ -505,6 +564,45 @@ mod tests {
             .await
             .unwrap();
         assert!(verify(&first.pubkey, b"x", &sig));
+    }
+
+    #[tokio::test]
+    async fn load_primary_signer_returns_decryptable_seed() {
+        let db = fresh_db();
+        let kek = TestMasterKek::new();
+
+        let provisioned = ensure_primary_solana_user_wallet(&db, &kek, "user-1")
+            .await
+            .unwrap()
+            .expect("provisioned");
+
+        let signer = load_primary_solana_signer(&db, &kek, "user-1")
+            .await
+            .expect("load signer");
+        assert_eq!(signer.wallet_id.as_str(), provisioned.id.as_str());
+        assert_eq!(signer.pubkey, provisioned.pubkey);
+
+        // Seed must be a valid ed25519 secret yielding the same pubkey.
+        let kp = SolanaKeypair::from_secret_bytes(&signer.seed);
+        assert_eq!(kp.pubkey, provisioned.pubkey);
+
+        // Sanity: signature with reconstructed keypair verifies under the pubkey.
+        let sig = kp.sign(b"msg");
+        assert!(verify(&provisioned.pubkey, b"msg", &sig));
+    }
+
+    #[tokio::test]
+    async fn load_primary_signer_errors_without_primary() {
+        let db = fresh_db();
+        let kek = TestMasterKek::new();
+
+        let err = load_primary_solana_signer(&db, &kek, "no-such-user")
+            .await
+            .expect_err("no primary should error");
+        assert!(
+            matches!(err, SolanaWalletError::NoPrimaryWallet),
+            "expected NoPrimaryWallet, got {err:?}"
+        );
     }
 
     #[tokio::test]
