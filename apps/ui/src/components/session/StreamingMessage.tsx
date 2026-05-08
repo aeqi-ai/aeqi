@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ThinkingDot } from "@/components/ui";
-import { SegmentRenderer } from "./MessageItem";
+import { SegmentRenderer } from "./SegmentRenderer";
 import {
   type MessageSegment,
   formatDuration,

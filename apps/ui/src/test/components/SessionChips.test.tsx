@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { SegmentRenderer } from "@/components/session/MessageItem";
+import { SegmentRenderer } from "@/components/session/SegmentRenderer";
 import type { MessageSegment } from "@/components/session/types";
 
 describe("FileChangedChip", () => {

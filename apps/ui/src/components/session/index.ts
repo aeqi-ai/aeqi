@@ -1,4 +1,5 @@
-export { default as MessageItem, SegmentRenderer } from "./MessageItem";
+export { default as MessageItem } from "./MessageItem";
+export { SegmentRenderer } from "./SegmentRenderer";
 export { default as StreamingMessage } from "./StreamingMessage";
 export { default as EmptyState } from "./EmptyState";
 export { useMessageProcessor } from "./useMessageProcessor";
