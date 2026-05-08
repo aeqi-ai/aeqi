@@ -1,15 +1,19 @@
 pub mod agents;
+pub mod budgets;
 pub mod events;
 pub mod ideas;
 pub mod openrouter_usage;
 pub mod quests;
+pub mod roles;
 pub mod sessions;
 
 pub use agents::AgentsTool;
+pub use budgets::BudgetsTool;
 pub use events::EventsTool;
 pub use ideas::IdeasTool;
 pub use openrouter_usage::{collect_openrouter_usage, collect_worker_usage, usage_log_path};
 pub use quests::QuestsTool;
+pub use roles::RolesTool;
 pub use sessions::SessionsTool;
 
 use aeqi_core::traits::{IdeaStore, Tool, ToolResult, ToolSpec};
@@ -556,11 +560,31 @@ pub fn build_orchestration_tools(
     // 4. Code tool (search/graph/transcript/usage)
     let code_tool = CodeTool::new(graph_db_path, session_store.clone(), api_key);
 
+    // 4a. Roles + Budgets tools — closes the long-standing gap where the
+    // LLM could read agents/quests/ideas/events but had no way to manage
+    // the org chart or the cost-center primitive. Both share the
+    // ConnectionPool with AgentRegistry / RoleRegistry / BudgetRegistry.
+    let role_registry = Arc::new(crate::role_registry::RoleRegistry::open(
+        agent_registry.db(),
+    ));
+    let roles_tool = RolesTool::new(
+        role_registry.clone(),
+        agent_registry.clone(),
+        agent_id.clone(),
+    );
+    let budgets_tool = BudgetsTool::new(
+        agent_registry.clone(),
+        role_registry.clone(),
+        agent_id.clone(),
+    );
+
     let mut tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(agents_tool),
         Arc::new(quests_tool),
         Arc::new(events_tool),
         Arc::new(code_tool),
+        Arc::new(roles_tool),
+        Arc::new(budgets_tool),
     ];
 
     // 4b. Sessions tool (read-only FTS5 search over transcripts).

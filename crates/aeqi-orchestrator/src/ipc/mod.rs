@@ -6,6 +6,7 @@
 pub mod agents;
 pub mod architect;
 pub mod blueprints;
+pub mod budgets;
 pub mod channels;
 pub mod chat;
 pub mod credentials;

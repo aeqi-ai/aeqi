@@ -1497,6 +1497,58 @@ impl Daemon {
                     crate::ipc::roles::handle_change_occupant(&ctx, &request, &allowed_roots).await
                 }
 
+                "list_budgets" => {
+                    crate::ipc::budgets::handle_list_budgets(&ctx, &request, &allowed_roots).await
+                }
+                "get_budget" => {
+                    crate::ipc::budgets::handle_get_budget(&ctx, &request, &allowed_roots).await
+                }
+                "budget_tree" => {
+                    crate::ipc::budgets::handle_budget_tree(&ctx, &request, &allowed_roots).await
+                }
+                "get_allowance" => {
+                    crate::ipc::budgets::handle_get_allowance(&ctx, &request, &allowed_roots).await
+                }
+                "allowance_history" => {
+                    crate::ipc::budgets::handle_allowance_history(&ctx, &request, &allowed_roots)
+                        .await
+                }
+                "create_budget" => {
+                    crate::ipc::budgets::handle_create_budget(&ctx, &request, &allowed_roots).await
+                }
+                "allocate_allowance" => {
+                    crate::ipc::budgets::handle_allocate_allowance(&ctx, &request, &allowed_roots)
+                        .await
+                }
+                "set_policy" => {
+                    crate::ipc::budgets::handle_set_policy(&ctx, &request, &allowed_roots).await
+                }
+                "spend_treasury" => {
+                    crate::ipc::budgets::handle_spend_treasury(&ctx, &request, &allowed_roots).await
+                }
+                "spend_inference" => {
+                    crate::ipc::budgets::handle_spend_inference(&ctx, &request, &allowed_roots)
+                        .await
+                }
+                "hire_role" => {
+                    crate::ipc::budgets::handle_hire_role(&ctx, &request, &allowed_roots).await
+                }
+                "refresh_allowance" => {
+                    crate::ipc::budgets::handle_refresh_allowance(&ctx, &request, &allowed_roots)
+                        .await
+                }
+                "dissolve_budget" => {
+                    crate::ipc::budgets::handle_dissolve_budget(&ctx, &request, &allowed_roots)
+                        .await
+                }
+                "pause_treasury" => {
+                    crate::ipc::budgets::handle_pause_treasury(&ctx, &request, &allowed_roots).await
+                }
+                "init_treasury_config" => {
+                    crate::ipc::budgets::handle_init_treasury_config(&ctx, &request, &allowed_roots)
+                        .await
+                }
+
                 "metrics" => {
                     crate::ipc::status::handle_metrics(&ctx, &request, &allowed_roots).await
                 }
