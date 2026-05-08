@@ -830,15 +830,30 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
         </div>
       </div>
 
-      <div className="signup-pitch-side">
+      <aside className={`signup-pitch-side signup-pitch-side--${mode}`} aria-hidden="true">
+        <div className="signup-pitch-scrim" />
         <div className="signup-pitch-content">
-          <h2 className="signup-pitch-heading">Start something that can work without you.</h2>
-          <p className="signup-lead">
-            Build companies where humans set direction. Agents turn context into execution.
-          </p>
-          <p className="signup-trust">Open source · Self-hostable · Free to start</p>
+          {mode === "login" ? (
+            <>
+              <p className="signup-pitch-eyebrow">Welcome back</p>
+              <h2 className="signup-pitch-heading">Your company is still running.</h2>
+              <p className="signup-lead">
+                Sign in. Your TRUST, your roles, your treasury — exactly where you left them.
+              </p>
+              <p className="signup-trust">On-chain · Self-custodial · Yours</p>
+            </>
+          ) : (
+            <>
+              <p className="signup-pitch-eyebrow">aeqi · the company OS</p>
+              <h2 className="signup-pitch-heading">Start something that can work without you.</h2>
+              <p className="signup-lead">
+                Three seconds. One signer. Your TRUST is on-chain before you blink.
+              </p>
+              <p className="signup-trust">Solana · Open source · Self-hostable</p>
+            </>
+          )}
         </div>
-      </div>
+      </aside>
     </main>
   );
 }
