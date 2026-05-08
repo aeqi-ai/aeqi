@@ -30,6 +30,9 @@ use serde_json::json;
 use tracing::warn;
 
 use crate::{
+    billing::role_budget::{
+        BudgetGateOutcome, NoOpBudgetGate, SharedBudgetGate, request_hash as compute_request_hash,
+    },
     billing::subscription::BalanceStore,
     error::InferenceError,
     router::Router as InferenceRouter,
@@ -50,6 +53,12 @@ pub struct AppState {
     pub router: Arc<InferenceRouter>,
     /// Subscription balance store. Phase 1: in-memory keyed by entity_id.
     pub balances: BalanceStore,
+    /// Role-budget gate. Defaults to [`NoOpBudgetGate`] which makes
+    /// pre-flight a no-op and settle a no-op. aeqi-platform plugs in a
+    /// real gate (IPC client to the orchestrator's `get_allowance` /
+    /// `spend_inference` verbs) when the workspace has role gating
+    /// enabled. See `architecture_role_budget_canonical.md` § 14.
+    pub budget_gate: SharedBudgetGate,
 }
 
 impl AppState {
@@ -57,7 +66,15 @@ impl AppState {
         Self {
             router: Arc::new(router),
             balances,
+            budget_gate: Arc::new(NoOpBudgetGate),
         }
+    }
+
+    /// Plug in a real [`BudgetGate`](crate::billing::role_budget::BudgetGate).
+    /// aeqi-platform calls this with its IPC-backed implementation.
+    pub fn with_budget_gate(mut self, gate: SharedBudgetGate) -> Self {
+        self.budget_gate = gate;
+        self
     }
 }
 
@@ -107,11 +124,84 @@ async fn chat_completions_handler(
         .unwrap_or("unknown")
         .to_owned();
 
+    // Role-budget gate inputs (optional headers; the no-op gate ignores
+    // them, the IPC-backed gate enforces).
+    let role_id = header_string(&headers, "x-role-id");
+    let budget_id_hint = header_string(&headers, "x-budget-id");
+    let actor_agent = header_string(&headers, "x-actor-agent").unwrap_or_else(|| entity_id.clone());
+
+    // Pre-flight cap check. Estimate is cheap and conservative — actual
+    // settle reconciles after upstream returns. We use 1 cent (100
+    // micro-USD * 10_000 = 1_000_000 micro-USD = 1¢) as the floor so
+    // the gate fires when the budget has zero headroom. Real cost is
+    // applied on settle.
+    let estimate_micro_usd = 1_000_000_i64;
+    let pre = state
+        .budget_gate
+        .pre_flight(
+            &entity_id,
+            role_id.as_deref(),
+            budget_id_hint.as_deref(),
+            estimate_micro_usd,
+        )
+        .await;
+    let resolved_budget_id = match pre {
+        BudgetGateOutcome::Allowed {
+            resolved_budget_id, ..
+        } => Some(resolved_budget_id),
+        BudgetGateOutcome::Skipped => None,
+        BudgetGateOutcome::Insufficient {
+            budget_id,
+            role_id,
+            remaining_micro_usd,
+        } => {
+            return (
+                StatusCode::PAYMENT_REQUIRED,
+                Json(json!({
+                    "error": {
+                        "type": "insufficient_budget_inference",
+                        "message": format!(
+                            "budget {budget_id} exhausted (remaining {remaining_micro_usd} \
+                             micro-USD); role {role_id} cannot make this call",
+                        ),
+                        "budget_id": budget_id,
+                        "role_id": role_id,
+                        "remaining_micro_usd": remaining_micro_usd,
+                    }
+                })),
+            )
+                .into_response();
+        }
+        BudgetGateOutcome::Forbidden(msg) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": {"type": "forbidden", "message": msg}})),
+            )
+                .into_response();
+        }
+        BudgetGateOutcome::Error(msg) => {
+            warn!(error = %msg, "budget gate pre-flight error");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": {"type": "internal", "message": msg}})),
+            )
+                .into_response();
+        }
+    };
+
     if req.stream {
         handle_streaming(state, entity_id, req).await
     } else {
-        handle_non_streaming(state, entity_id, req).await
+        handle_non_streaming(state, entity_id, req, resolved_budget_id, actor_agent).await
     }
+}
+
+fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
 }
 
 /// Non-streaming path: call upstream, debit cost, return JSON.
@@ -119,6 +209,8 @@ async fn handle_non_streaming(
     state: AppState,
     entity_id: String,
     req: ChatCompletionRequest,
+    resolved_budget_id: Option<String>,
+    actor_agent: String,
 ) -> Response {
     let model = req.model.clone();
     match state.router.chat_completion(req).await {
@@ -144,6 +236,34 @@ async fn handle_non_streaming(
                         cost_cents,
                         "inference cost debited"
                     );
+                }
+
+                // Settle on the role-budget gate. No-op gate is a no-op;
+                // IPC-backed gate calls `spend_inference` on the
+                // orchestrator. Idempotent on `request_hash`. Failures
+                // here are logged but don't fail the in-flight response
+                // (the user already incurred the upstream cost).
+                if let Some(budget_id) = resolved_budget_id {
+                    let req_hash = compute_request_hash(
+                        &entity_id,
+                        &resp.id,
+                        &model,
+                        usage.prompt_tokens,
+                        usage.completion_tokens,
+                    );
+                    if let Err(e) = state
+                        .budget_gate
+                        .settle(&entity_id, &budget_id, cost as i64, &req_hash, &actor_agent)
+                        .await
+                    {
+                        warn!(
+                            entity_id,
+                            budget_id,
+                            cost_microdollars = cost,
+                            error = %e,
+                            "budget gate settle failed (call already returned to client)"
+                        );
+                    }
                 }
             }
             Json(resp).into_response()

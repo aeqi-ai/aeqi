@@ -12,6 +12,7 @@
 //! Phase 1 implements Subscription and x402 stubs; Treasury becomes live in
 //! Phase 2 after the WS-4 wallet build is complete.
 
+pub mod role_budget;
 pub mod subscription;
 pub mod treasury;
 pub mod x402;
