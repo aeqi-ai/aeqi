@@ -20,6 +20,7 @@ pub enum AuthMethodKind {
     Email,
     Passkey,
     Google,
+    Github,
     WalletSiws,
 }
 
@@ -29,6 +30,7 @@ impl AuthMethodKind {
             Self::Email => "email",
             Self::Passkey => "passkey",
             Self::Google => "google",
+            Self::Github => "github",
             Self::WalletSiws => "wallet_siws",
         }
     }
@@ -37,6 +39,7 @@ impl AuthMethodKind {
             "email" => Some(Self::Email),
             "passkey" => Some(Self::Passkey),
             "google" => Some(Self::Google),
+            "github" => Some(Self::Github),
             "wallet_siws" => Some(Self::WalletSiws),
             _ => None,
         }

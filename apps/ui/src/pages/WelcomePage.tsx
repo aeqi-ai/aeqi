@@ -248,6 +248,50 @@ function PasskeyIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+function GoogleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        fill="#4285F4"
+        d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.55c2.08-1.92 3.28-4.74 3.28-8.33z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.77c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.18v2.86A11 11 0 0 0 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.83 14.08a6.6 6.6 0 0 1 0-4.16V7.06H2.18a11 11 0 0 0 0 9.88l3.65-2.86z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.07.56 4.21 1.65l3.16-3.16C17.46 2.07 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.65 2.86C6.7 7.32 9.13 5.38 12 5.38z"
+      />
+    </svg>
+  );
+}
+
+function GithubIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path d="M12 1.27a11 11 0 0 0-3.48 21.46c.55.1.75-.24.75-.53v-1.84c-3.06.66-3.7-1.47-3.7-1.47-.5-1.27-1.22-1.6-1.22-1.6-1-.68.07-.67.07-.67 1.1.08 1.69 1.13 1.69 1.13.98 1.69 2.58 1.2 3.21.92.1-.71.39-1.2.7-1.48-2.44-.28-5.01-1.22-5.01-5.43 0-1.2.43-2.18 1.13-2.95-.11-.27-.49-1.39.11-2.9 0 0 .92-.3 3.02 1.12a10.49 10.49 0 0 1 5.5 0c2.1-1.42 3.02-1.12 3.02-1.12.6 1.51.22 2.63.11 2.9.7.77 1.13 1.75 1.13 2.95 0 4.22-2.58 5.15-5.04 5.42.4.34.75 1.01.75 2.04v3.02c0 .29.2.64.76.53A11 11 0 0 0 12 1.27" />
+    </svg>
+  );
+}
+
 export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode } = {}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -263,6 +307,66 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
   const [walletDetected, setWalletDetected] = useState<{ name: string } | null>(null);
   const [passkeyAvailable, setPasskeyAvailable] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  /**
+   * OAuth hash landing path: Google + GitHub callbacks redirect to
+   * `/welcome#oauth_token=<jwt>&trust=<pubkey>&new=<0|1>`. The fragment
+   * never reaches a webserver; the SPA reads it on mount, persists the
+   * session, and either rolls into the spawn animation (new) or jumps
+   * straight to /trust/<addr>/ (returning).
+   */
+  useEffect(() => {
+    if (!window.location.hash) return;
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const token = hashParams.get("oauth_token");
+    const trust = hashParams.get("trust");
+    if (!token || !trust) return;
+    const isNew = hashParams.get("new") === "1";
+    // Strip the fragment so refreshing doesn't replay.
+    window.history.replaceState({}, "", window.location.pathname + window.location.search);
+    setPicked("email");
+    setErrorMsg(null);
+    const synthetic: SpawnResponse & { session_jwt: string; session_expires_at: string } = {
+      company_id: "",
+      trust_pubkey_b58: trust,
+      authority_pubkey_b58: "",
+      already_existed: !isNew,
+      session_jwt: token,
+      session_expires_at: "",
+      trust_id_hex: "",
+      create_signature_b58: null,
+      role_init_signature_b58: null,
+      token_init_signature_b58: null,
+      governance_init_signature_b58: null,
+      role_module_pda_b58: "",
+      token_module_pda_b58: "",
+      governance_module_pda_b58: "",
+      role_module_state_pda_b58: "",
+      token_module_state_pda_b58: "",
+      governance_module_state_pda_b58: "",
+    };
+    persistSession(synthetic);
+    if (!isNew) {
+      navigate(`/trust/${trust}/`, { replace: true });
+      return;
+    }
+    setStage("spawning");
+    setSteps(buildSteps());
+    void animateSpawn(synthetic);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** OAuth error landing: ?oauth_error=<msg> from the callback. */
+  useEffect(() => {
+    const err = searchParams.get("oauth_error");
+    if (!err) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("oauth_error");
+    setSearchParams(next, { replace: true });
+    setErrorMsg(`OAuth: ${err}`);
+    setStage("error");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Magic-link landing path: when the user clicks the email link, they
@@ -679,6 +783,12 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
               onEmailSubmit={handleEmailSubmit}
               onWallet={handleWalletConnect}
               onPasskey={handlePasskey}
+              onGoogle={() => {
+                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/google/start`;
+              }}
+              onGithub={() => {
+                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/github/start`;
+              }}
               onSwitch={() => navigate(copy.switchHref)}
             />
           )}
@@ -745,6 +855,8 @@ interface DoorViewProps {
   onEmailSubmit: (e: React.FormEvent) => void;
   onWallet: () => void;
   onPasskey: () => void;
+  onGoogle: () => void;
+  onGithub: () => void;
   onSwitch: () => void;
 }
 
@@ -758,6 +870,8 @@ function DoorView({
   onEmailSubmit,
   onWallet,
   onPasskey,
+  onGoogle,
+  onGithub,
   onSwitch,
 }: DoorViewProps) {
   return (
@@ -792,27 +906,27 @@ function DoorView({
         <p className="auth-oauth-recess-label">Or</p>
         <div className="auth-oauth-group">
           <div className="auth-oauth-row">
-            <Button
-              variant="secondary"
-              size="lg"
-              fullWidth
-              onClick={onWallet}
-              type="button"
-              disabled={!walletDetected}
-            >
-              <SolanaIcon /> {walletDetected ? walletDetected.name : "No wallet detected"}
+            <Button variant="secondary" size="lg" fullWidth onClick={onGoogle} type="button">
+              <GoogleIcon /> Google
             </Button>
-            <Button
-              variant="secondary"
-              size="lg"
-              fullWidth
-              onClick={onPasskey}
-              type="button"
-              disabled={!passkeyAvailable}
-            >
-              <PasskeyIcon /> Passkey
+            <Button variant="secondary" size="lg" fullWidth onClick={onGithub} type="button">
+              <GithubIcon /> GitHub
             </Button>
           </div>
+          {(walletDetected || passkeyAvailable) && (
+            <div className="auth-oauth-row">
+              {walletDetected && (
+                <Button variant="secondary" size="lg" fullWidth onClick={onWallet} type="button">
+                  <SolanaIcon /> {walletDetected.name}
+                </Button>
+              )}
+              {passkeyAvailable && (
+                <Button variant="secondary" size="lg" fullWidth onClick={onPasskey} type="button">
+                  <PasskeyIcon /> Passkey
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
