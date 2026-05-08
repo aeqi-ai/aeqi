@@ -996,7 +996,245 @@ export const api = {
     request<{ ok: boolean; error?: string }>(`/inbox/${encodeURIComponent(sessionId)}/dismiss`, {
       method: "POST",
     }),
+
+  // ── Budgets — the role-budget primitive (WS-B2 / B6 / canonical brief
+  // architecture_role_budget_canonical.md). Reads require treasury.read at
+  // the trust; mutations require occupant of the budget's owner role.
+  // `idempotency_key` on mutations dedupes retries within an epoch.
+  listBudgets: (
+    trustId: string,
+    filters: { ownerRoleId?: string; parentBudgetId?: string; isPrimary?: boolean } = {},
+  ) => {
+    const params = new URLSearchParams({ trust_id: trustId });
+    if (filters.ownerRoleId) params.set("owner_role_id", filters.ownerRoleId);
+    if (filters.parentBudgetId) params.set("parent_budget_id", filters.parentBudgetId);
+    if (filters.isPrimary !== undefined) params.set("is_primary", String(filters.isPrimary));
+    return request<{ ok: boolean; budgets: Budget[] }>(`/budgets?${params.toString()}`);
+  },
+
+  getBudget: (budgetId: string) =>
+    request<{
+      ok: boolean;
+      budget: Budget;
+      allowance: BudgetAllowance | null;
+      policy: BudgetPolicy | null;
+    }>(`/budgets/${encodeURIComponent(budgetId)}`),
+
+  getBudgetTree: (trustId: string) =>
+    request<{ ok: boolean; tree: { nodes: Budget[]; edges: [string, string][] } }>(
+      `/budgets/tree?trust_id=${encodeURIComponent(trustId)}`,
+    ),
+
+  getBudgetAllowance: (budgetId: string) =>
+    request<{ ok: boolean; allowance: BudgetAllowance | null }>(
+      `/budgets/${encodeURIComponent(budgetId)}/allowance`,
+    ),
+
+  getBudgetHistory: (
+    budgetId: string,
+    opts: { eventType?: string; since?: string; limit?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.eventType) params.set("event_type", opts.eventType);
+    if (opts.since) params.set("since", opts.since);
+    if (opts.limit) params.set("limit", String(opts.limit));
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<{ ok: boolean; events: TreasuryEvent[] }>(
+      `/budgets/${encodeURIComponent(budgetId)}/history${qs}`,
+    );
+  },
+
+  createBudget: (data: {
+    trust_id: string;
+    owner_role_id: string;
+    name: string;
+    kind?: BudgetKind;
+    parent_budget_id?: string;
+    as_role_id?: string;
+    idempotency_key?: string;
+  }) =>
+    request<{ ok: boolean; budget_id?: string; code?: string; error?: string; roles?: string[] }>(
+      "/budgets",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+
+  setBudgetPolicy: (
+    budgetId: string,
+    policy: {
+      default_inference?: number;
+      default_treasury?: number;
+      default_suballoc?: number;
+      default_hire?: number;
+      epoch_period_secs?: number;
+      rollover_mode?: "burn" | "rollover";
+    },
+    opts: { as_role_id?: string; idempotency_key?: string } = {},
+  ) =>
+    request<{ ok: boolean; code?: string; error?: string; roles?: string[] }>(
+      `/budgets/${encodeURIComponent(budgetId)}/policy`,
+      {
+        method: "POST",
+        body: JSON.stringify({ policy, ...opts }),
+      },
+    ),
+
+  allocateBudget: (
+    parentBudgetId: string,
+    data: {
+      child_budget_id: string;
+      bundle: AllowanceBundle;
+      as_role_id?: string;
+      idempotency_key?: string;
+    },
+  ) =>
+    request<{ ok: boolean; code?: string; error?: string; roles?: string[] }>(
+      `/budgets/${encodeURIComponent(parentBudgetId)}/allocate`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+
+  spendTreasury: (
+    budgetId: string,
+    data: {
+      destination: string;
+      amount: number;
+      memo?: string;
+      as_role_id?: string;
+      idempotency_key?: string;
+    },
+  ) =>
+    request<{ ok: boolean; code?: string; error?: string; roles?: string[] }>(
+      `/budgets/${encodeURIComponent(budgetId)}/spend`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+
+  hireFromBudget: (
+    parentBudgetId: string,
+    data: {
+      parent_role_id: string;
+      new_role: {
+        title: string;
+        role_type?: "director" | "operational" | "advisor";
+        occupant_kind?: "human" | "agent" | "vacant";
+        occupant_id?: string;
+        grants?: string[];
+      };
+      bundle: AllowanceBundle;
+      as_role_id?: string;
+      idempotency_key?: string;
+    },
+  ) =>
+    request<{
+      ok: boolean;
+      role_id?: string;
+      primary_budget_id?: string;
+      code?: string;
+      error?: string;
+      roles?: string[];
+    }>(`/budgets/${encodeURIComponent(parentBudgetId)}/hire`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  refreshBudget: (budgetId: string) =>
+    request<{ ok: boolean; allowance: BudgetAllowance | null }>(
+      `/budgets/${encodeURIComponent(budgetId)}/refresh`,
+      { method: "POST" },
+    ),
+
+  dissolveBudget: (budgetId: string, opts: { idempotency_key?: string } = {}) =>
+    request<{ ok: boolean; code?: string; error?: string }>(
+      `/budgets/${encodeURIComponent(budgetId)}/dissolve`,
+      {
+        method: "POST",
+        body: JSON.stringify(opts),
+      },
+    ),
+
+  pauseTreasury: (trustId: string, paused: boolean) =>
+    request<{ ok: boolean; paused?: boolean; code?: string; error?: string; roles?: string[] }>(
+      `/trusts/${encodeURIComponent(trustId)}/treasury/pause`,
+      {
+        method: "POST",
+        body: JSON.stringify({ paused }),
+      },
+    ),
+
+  initTreasuryConfig: (trustId: string, gateway: string, adminRoleId: string) =>
+    request<{ ok: boolean; code?: string; error?: string }>(
+      `/trusts/${encodeURIComponent(trustId)}/treasury/config`,
+      {
+        method: "POST",
+        body: JSON.stringify({ inference_gateway: gateway, admin_role_id: adminRoleId }),
+      },
+    ),
 };
+
+// ── Budget primitive types — match the orchestrator's Rust serde shapes
+//    in `aeqi-orchestrator/src/budget_registry.rs`.
+
+export type BudgetKind = "primary" | "operating" | "hiring" | "project" | "discretionary";
+
+export interface AllowanceBundle {
+  inference_credits: number;
+  treasury_cap: number;
+  suballoc_cap: number;
+  hire_cap: number;
+}
+
+export interface Budget {
+  id: string;
+  trust_id: string;
+  parent_budget_id: string | null;
+  owner_role_id: string;
+  name: string;
+  kind: BudgetKind;
+  is_primary: boolean;
+  created_by_role_id: string | null;
+  created_at: string;
+}
+
+export interface BudgetAllowance {
+  budget_id: string;
+  epoch: number;
+  caps: AllowanceBundle;
+  spent_inference: number;
+  spent_treasury: number;
+  spent_suballoc: number;
+  used_hire: number;
+  last_event_at: string;
+}
+
+export interface BudgetPolicy {
+  budget_id: string;
+  defaults: AllowanceBundle;
+  epoch_period_secs: number;
+  rollover_mode: "burn" | "rollover";
+  set_by_role_id: string | null;
+  updated_at: string;
+}
+
+export interface TreasuryEvent {
+  id: number;
+  event_type: string;
+  budget_id: string;
+  acting_role_id: string;
+  actor_agent_id: string | null;
+  counter_budget_id: string | null;
+  epoch: number;
+  amount: number | null;
+  request_hash: string | null;
+  idempotency_key: string | null;
+  created_at: string;
+}
 
 /// One row of the inbox query — see `crates/aeqi-orchestrator/src/ipc/inbox.rs`.
 ///

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useBalance } from "wagmi";
 import { anvil } from "wagmi/chains";
 
+import BudgetsBlock from "@/components/BudgetsBlock";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -148,6 +149,8 @@ export default function TreasuryPage({ entityId, agentId }: TreasuryPageProps) {
       {(indexerEnabled() || trustAddress) && (
         <OnChainHoldings trustAddress={trustAddress} trustId={trustId} />
       )}
+
+      {!agentId && trustId && <BudgetsBlock trustId={trustId} />}
 
       {billingError && (
         <div
