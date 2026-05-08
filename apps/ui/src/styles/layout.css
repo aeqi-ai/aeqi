@@ -1752,28 +1752,29 @@
   position: relative;
 }
 
-/* Scroll-fade: a gradient mask above the floating composer so the last
-   few lines of session text dissolve into paper as they pass behind the
-   card. Sits between the scroll content (z:0) and the composer (z:2).
-   Height tracks --composer-height (published by ComposerRow's
-   ResizeObserver) so the fade and the card expand together when the
-   draft grows into multiple lines. */
+/* Scroll-fade strip — sits ABOVE the floating composer, NOT behind it.
+   16px transition gradient between scrolling content and the anchored
+   composer. The thread reserves exactly `composer-height + space-4` of
+   bottom padding so the last message lands at the strip's top edge
+   when scrolled fully down — fully visible, never overlapped. Fallback
+   96px tracks the compact resting height of the .composer-wrap card. */
 .content-main-col:has(.composer-row)::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: calc(var(--composer-height, 140px) + 44px);
+  bottom: var(--composer-height, 96px);
+  height: var(--space-4);
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent 0%, var(--color-card) 72%);
+  background: linear-gradient(to bottom, transparent, var(--color-card));
   z-index: 1;
 }
 
-/* Composer row — now floats over the scroll surface. Transparent side
-   padding acts as a bleed so the dark card doesn't touch the paper's
-   inner edge. pointer-events: none on the frame lets the user wheel
-   through the bleed into the scroll; the card itself re-enables them. */
+/* Composer row — floats over the scroll surface. Transparent side padding
+   acts as a bleed so the dark card doesn't touch the paper's inner edge.
+   pointer-events: none on the frame lets the user wheel through the bleed
+   into the scroll; the card itself re-enables them. Tight 8px vertical
+   padding — the fade strip above absorbs the visual transition. */
 .composer-row {
   position: absolute;
   left: 0;
@@ -1783,7 +1784,7 @@
   display: flex;
   flex-direction: row;
   justify-content: center;
-  padding: var(--space-3) var(--space-5) var(--space-4);
+  padding: var(--space-2) var(--space-5) var(--space-2);
   background: transparent;
   border: none;
   box-shadow: none;
@@ -1869,7 +1870,7 @@
 }
 .composer-wrap .asv-composer-inner {
   max-width: none;
-  padding: 10px 14px;
+  padding: 6px 14px;
   border-radius: var(--radius-md);
 }
 .composer-wrap .asv-textarea {
@@ -1877,6 +1878,10 @@
   /* Paper-white caret reads as a single confident mark on the dark
      surface — like chalk on slate. */
   caret-color: var(--color-card);
+  /* Compact min-height — 40px is one line at line-height 24 + 8 padding,
+     16px shorter than the bare global default. The card grows naturally
+     when the draft wraps. */
+  min-height: 40px;
 }
 .composer-wrap .asv-textarea::placeholder {
   color: var(--composer-text-muted);

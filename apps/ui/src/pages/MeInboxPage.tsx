@@ -550,7 +550,7 @@ export default function MeInboxPage() {
                 primary: r.subject,
                 time: timeShort(r.created_at),
                 status: r.unread ? "active" : undefined,
-                awaiting: r.replyable,
+                awaiting: r.awaiting,
                 group: recencyBucket(r.created_at),
                 sortKey: Date.parse(r.created_at) || 0,
                 pulseNew: newIds.has(r.id),

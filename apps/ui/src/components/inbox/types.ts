@@ -3,8 +3,14 @@
  * shape that's forward-compatible with the unified Session primitive.
  *
  * 2026-05-07: backend now returns every session in scope (not just
- * decision-requests). `unread` / `replyable` track the awaiting bit;
+ * decision-requests). `unread` / `awaiting` track the awaiting bit;
  * `created_at` is the session's `last_active` recency anchor.
+ *
+ * 2026-05-08: `replyable` decoupled from `awaiting`. Every session in
+ * the inbox is the user's own conversation — they can reply to any of
+ * them, not only ones with a pending decision-request. The composer
+ * lets the user type freely; the backend rejects with a friendly
+ * error if a particular session can't accept the post.
  */
 import type { InboxItem } from "@/lib/api";
 
@@ -21,7 +27,8 @@ export interface InboxRow {
   agent_id: string | null;
   created_at: string; // last_active — recency anchor for sort/grouping
   unread: boolean; // sessions awaiting a human reply
-  replyable: boolean; // true when awaiting_at is set
+  awaiting: boolean; // true when awaiting_at is set — drives the rail's "pending" indicator
+  replyable: boolean; // composer enabled — true for every inbox session
 }
 
 export interface InboxFilterState {
@@ -52,7 +59,8 @@ export function toInboxRow(item: InboxItem): InboxRow {
     agent_id: item.agent_id ?? null,
     created_at: item.last_active,
     unread: awaiting,
-    replyable: awaiting,
+    awaiting,
+    replyable: true,
   };
 }
 
