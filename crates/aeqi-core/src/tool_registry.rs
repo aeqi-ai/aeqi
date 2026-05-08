@@ -91,6 +91,12 @@ pub struct ExecutionContext {
     pub quest_description: Option<String>,
     /// Tool names denied for this agent.
     pub tool_deny: Vec<String>,
+    /// The role the calling agent is occupying for this session. `None` when
+    /// the agent is acting outside any chair (sandbox / eval). Resolved by
+    /// the orchestrator from `sessions.target_role_id`. Mutating budget and
+    /// role tools fail `ENotOccupant` when this is `None` — authority (and
+    /// therefore budget) lives on the chair, not the agent.
+    pub caller_role_id: Option<String>,
     /// Sender for emitting Status events on the current session's stream.
     /// `None` in tests or contexts without a live stream.
     pub chat_stream: Option<ChatStreamSender>,
@@ -115,6 +121,7 @@ impl std::fmt::Debug for ExecutionContext {
             .field("transcript_tail", &self.transcript_tail)
             .field("quest_description", &self.quest_description)
             .field("tool_deny", &self.tool_deny)
+            .field("caller_role_id", &self.caller_role_id)
             .field("has_chat_stream", &self.chat_stream.is_some())
             .field(
                 "has_credential_resolver",

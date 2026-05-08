@@ -1411,6 +1411,11 @@ impl AgentRegistry {
         // 3c. role_type, founder, and role_grants — added in roles-grants wave.
         migrate_role_types_and_grants(&conn)?;
 
+        // 3d. Budget primitive — budgets + allowances + policies + events +
+        //     treasury_config. Idempotent. See `budget_registry.rs` and
+        //     `architecture_role_budget_canonical.md`.
+        crate::budget_registry::bootstrap_budget_tables(&conn)?;
+
         // 4. Legacy carryover — only fires while `agents.parent_id` still
         //    exists on disk. Backfills entities, agents.entity_id,
         //    roles, and role_edges from the legacy parent_id chain.
