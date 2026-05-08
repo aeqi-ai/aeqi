@@ -87,7 +87,7 @@ export const useDaemonStore = create<DaemonState>((set, get) => ({
       // failure; keep what we had. Empty + key present = the user
       // genuinely has no companies; commit the empty list.
       if (nextEntities.length === 0 && !Array.isArray(data.entities)) return;
-      set({ entities: nextEntities });
+      set({ entities: nextEntities, initialLoaded: true });
     } catch {
       // Keep existing entities on transient failure.
     }
