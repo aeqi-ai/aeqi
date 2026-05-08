@@ -66,6 +66,52 @@
   text-align: center;
 }
 
+/* Header inner — flex line so the sort indicator sits inline with the
+   label. End-aligned columns push the whole assembly right via parent
+   text-align: right. */
+.headerInner {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.headerLabel {
+  display: inline-block;
+}
+
+/* Sortable header — clickable, hover bumps the label one tier toward
+   primary; active sort lifts it the rest of the way. */
+.headerSortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+.headerSortable:hover {
+  color: var(--color-text-secondary);
+}
+
+.headerSortable:focus-visible {
+  outline: none;
+  color: var(--color-text-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.headerSortable[aria-sort="ascending"],
+.headerSortable[aria-sort="descending"] {
+  color: var(--color-text-primary);
+}
+
+.sortIndicator {
+  display: inline-block;
+  font-size: 0.7em;
+  line-height: 1;
+  color: currentColor;
+  /* Reserve a fixed slot so inactive headers don't reflow on activation. */
+  min-width: 0.7em;
+  text-align: center;
+}
+
 /* Clickable rows — the entire <tr> is the affordance. Hover paints the
    row in the elevated tint; focus matches the action focus register. */
 .rowClickable {

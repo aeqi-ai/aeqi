@@ -1,8 +1,14 @@
-import { forwardRef, type ReactNode, type KeyboardEvent } from "react";
+import { forwardRef, useMemo, useState, type ReactNode, type KeyboardEvent } from "react";
 import styles from "./Table.module.css";
 
+export type TableSortDir = "asc" | "desc";
+export interface TableSort {
+  key: string;
+  dir: TableSortDir;
+}
+
 export interface TableColumn<T> {
-  /** Stable key for React reconciliation. */
+  /** Stable key for React reconciliation. Also the value passed to `sort.key`. */
   key: string;
   /** Header label. */
   header: ReactNode;
@@ -18,6 +24,14 @@ export interface TableColumn<T> {
   align?: "start" | "end" | "center";
   /** Extra class for both the header and body cells of this column. */
   className?: string;
+  /** Make this column's header clickable to sort. Requires `sortAccessor`. */
+  sortable?: boolean;
+  /**
+   * Comparable value extracted from a row for sort. Strings compared
+   * locale-aware (case-insensitive); numbers / dates compared numerically.
+   * Required when `sortable` is `true`. `null`/`undefined` sort to the end.
+   */
+  sortAccessor?: (row: T) => string | number | Date | null | undefined;
 }
 
 export interface TableProps<T> {
@@ -36,22 +50,34 @@ export interface TableProps<T> {
   /** ARIA label for the table. */
   ariaLabel?: string;
   className?: string;
+  /**
+   * Initial uncontrolled sort. Header clicks cycle asc → desc → cleared,
+   * starting from this state.
+   */
+  defaultSort?: TableSort | null;
+  /** Controlled sort. When set, `defaultSort` is ignored. */
+  sort?: TableSort | null;
+  /** Fires on header click. Receives `null` when sort is cleared. */
+  onSortChange?: (next: TableSort | null) => void;
 }
 
 /**
- * Table — Notion-minimal data table primitive.
+ * Table — Notion-minimal data table primitive with column-header sort.
  *
  * Real `<table>` semantics so columns align, screen readers announce
  * structure, and tabular numerics line up. No hairlines (per design
- * system) — separation is by spacing + tint on hover. One canonical
- * answer for every list view in the app.
+ * system) — separation is by spacing + tint on hover. Click any column
+ * marked `sortable` to cycle asc → desc → cleared.
  *
  * Example:
  *
  *   <Table
  *     columns={[
- *       { key: "title", header: "Title", cell: (r) => r.title },
- *       { key: "date", header: "Created", cell: (r) => r.created_at, width: "120px", align: "end" },
+ *       { key: "title", header: "Title", cell: (r) => r.title,
+ *         sortable: true, sortAccessor: (r) => r.title },
+ *       { key: "date",  header: "Created", cell: (r) => r.created_at,
+ *         width: "120px", align: "end",
+ *         sortable: true, sortAccessor: (r) => r.created_at },
  *     ]}
  *     data={rows}
  *     rowKey={(r) => r.id}
@@ -69,9 +95,65 @@ function TableInner<T>(
     empty,
     ariaLabel,
     className,
+    defaultSort = null,
+    sort: sortProp,
+    onSortChange,
   }: TableProps<T>,
   ref: React.Ref<HTMLTableElement>,
 ) {
+  const [internalSort, setInternalSort] = useState<TableSort | null>(defaultSort);
+  const sort = sortProp !== undefined ? sortProp : internalSort;
+
+  const setSort = (next: TableSort | null) => {
+    if (sortProp === undefined) setInternalSort(next);
+    onSortChange?.(next);
+  };
+
+  const handleHeaderClick = (col: TableColumn<T>) => {
+    if (!col.sortable || !col.sortAccessor) return;
+    if (!sort || sort.key !== col.key) {
+      setSort({ key: col.key, dir: "asc" });
+    } else if (sort.dir === "asc") {
+      setSort({ key: col.key, dir: "desc" });
+    } else {
+      setSort(null);
+    }
+  };
+
+  const handleHeaderKeyDown = (e: KeyboardEvent<HTMLTableCellElement>, col: TableColumn<T>) => {
+    if (!col.sortable || !col.sortAccessor) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleHeaderClick(col);
+    }
+  };
+
+  const sortedData = useMemo(() => {
+    if (!sort) return data;
+    const col = columns.find((c) => c.key === sort.key);
+    if (!col?.sortAccessor) return data;
+    const accessor = col.sortAccessor;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...data].sort((a, b) => {
+      const va = accessor(a);
+      const vb = accessor(b);
+      // null / undefined sort to the end regardless of direction
+      const aNull = va === null || va === undefined;
+      const bNull = vb === null || vb === undefined;
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      if (typeof va === "string" && typeof vb === "string") {
+        return va.localeCompare(vb, undefined, { sensitivity: "base" }) * dir;
+      }
+      const na = va instanceof Date ? va.getTime() : (va as number);
+      const nb = vb instanceof Date ? vb.getTime() : (vb as number);
+      if (na < nb) return -1 * dir;
+      if (na > nb) return 1 * dir;
+      return 0;
+    });
+  }, [data, sort, columns]);
+
   const cls = [styles.table, styles[density], className].filter(Boolean).join(" ");
 
   if (data.length === 0 && empty !== undefined) {
@@ -88,21 +170,45 @@ function TableInner<T>(
       {!hideHeader && (
         <thead>
           <tr>
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                scope="col"
-                data-align={col.align ?? "start"}
-                className={col.className}
-              >
-                {col.header}
-              </th>
-            ))}
+            {columns.map((col) => {
+              const isSortable = !!col.sortable && !!col.sortAccessor;
+              const ariaSort = !isSortable
+                ? undefined
+                : sort?.key === col.key
+                  ? sort.dir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none";
+              const headerCls = [col.className, isSortable ? styles.headerSortable : ""]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <th
+                  key={col.key}
+                  scope="col"
+                  data-align={col.align ?? "start"}
+                  className={headerCls}
+                  aria-sort={ariaSort}
+                  onClick={isSortable ? () => handleHeaderClick(col) : undefined}
+                  onKeyDown={isSortable ? (e) => handleHeaderKeyDown(e, col) : undefined}
+                  tabIndex={isSortable ? 0 : undefined}
+                >
+                  <span className={styles.headerInner}>
+                    <span className={styles.headerLabel}>{col.header}</span>
+                    {isSortable && (
+                      <span className={styles.sortIndicator} aria-hidden>
+                        {sort?.key === col.key ? (sort.dir === "asc" ? "▲" : "▼") : ""}
+                      </span>
+                    )}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
       )}
       <tbody>
-        {data.map((row, i) => {
+        {sortedData.map((row, i) => {
           const clickable = !!onRowClick;
           const handleClick = clickable ? () => onRowClick!(row, i) : undefined;
           const handleKeyDown = clickable

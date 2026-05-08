@@ -27,6 +27,14 @@ function sortByBucket(roles: Role[]): Role[] {
   });
 }
 
+function occupantSortKey(role: Role, agentNames: Map<string, string>): string {
+  if (role.occupant_kind === "vacant") return "￿"; // sort vacant to the end
+  if (role.occupant_kind === "agent") {
+    return (agentNames.get(role.occupant_id ?? "") ?? role.occupant_id ?? "").toLowerCase();
+  }
+  return (role.occupant_name ?? role.occupant_id ?? "").toLowerCase();
+}
+
 export default function RolesList({
   roles,
   edges,
@@ -38,12 +46,44 @@ export default function RolesList({
   const ordered = useMemo(() => sortByBucket(roles), [roles]);
   const allRolesRef = allRoles ?? roles;
 
+  /**
+   * Titles aren't globally unique (two "Engineer"s reporting to the same
+   * manager is normal). When a parent's title collides with another role's
+   * title in the data set, ParentsCell appends the occupant for
+   * disambiguation. Computed here once, threaded down via prop.
+   */
+  const ambiguousTitles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of allRolesRef) {
+      const t = (r.title || "(untitled)").trim();
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, n]) => n > 1)
+        .map(([t]) => t),
+    );
+  }, [allRolesRef]);
+
+  const firstParentTitle = useMemo(() => {
+    const titleById = new Map(allRolesRef.map((r) => [r.id, r.title || "(untitled)"]));
+    const out = new Map<string, string>();
+    for (const e of edges) {
+      if (out.has(e.child_role_id)) continue;
+      const t = titleById.get(e.parent_role_id);
+      if (t) out.set(e.child_role_id, t);
+    }
+    return out;
+  }, [allRolesRef, edges]);
+
   const columns = useMemo<Array<TableColumn<Role>>>(
     () => [
       {
         key: "title",
         header: "Title",
         width: "28%",
+        sortable: true,
+        sortAccessor: (role) => (role.title || "").toLowerCase(),
         cell: (role) =>
           role.title || <em style={{ color: "var(--color-text-muted)" }}>(untitled)</em>,
       },
@@ -51,6 +91,8 @@ export default function RolesList({
         key: "occupant",
         header: "Occupant",
         width: "30%",
+        sortable: true,
+        sortAccessor: (role) => occupantSortKey(role, agentNames),
         cell: (role) => (
           <OccupantInline
             role={role}
@@ -63,17 +105,29 @@ export default function RolesList({
         key: "parents",
         header: "Reports to",
         width: "26%",
-        cell: (role) => <ParentsCell roleId={role.id} allRoles={allRolesRef} edges={edges} />,
+        sortable: true,
+        sortAccessor: (role) => (firstParentTitle.get(role.id) ?? "").toLowerCase(),
+        cell: (role) => (
+          <ParentsCell
+            roleId={role.id}
+            allRoles={allRolesRef}
+            edges={edges}
+            agentNames={agentNames}
+            ambiguousTitles={ambiguousTitles}
+          />
+        ),
       },
       {
         key: "created",
         header: "Created",
         width: "16%",
         align: "end",
+        sortable: true,
+        sortAccessor: (role) => role.created_at,
         cell: (role) => role.created_at.slice(0, 10),
       },
     ],
-    [agentNames, agentAvatars, allRolesRef, edges],
+    [agentNames, agentAvatars, allRolesRef, edges, ambiguousTitles, firstParentTitle],
   );
 
   return (
@@ -93,22 +147,46 @@ function ParentsCell({
   roleId,
   allRoles,
   edges,
+  agentNames,
+  ambiguousTitles,
 }: {
   roleId: string;
   allRoles: Role[];
   edges: RoleEdge[];
+  agentNames: Map<string, string>;
+  ambiguousTitles: Set<string>;
 }) {
   const parents = useMemo(() => {
-    // Use allRoles for title lookups so cross-type edges (e.g. CEO reports
-    // to a Director) resolve correctly when only a type-group is passed as roles.
-    const titleById = new Map(allRoles.map((r) => [r.id, r.title || "(untitled)"]));
+    // Use allRoles for parent lookups so cross-type edges (e.g. CEO reports
+    // to a Director) resolve correctly when only a type-group is passed as
+    // roles. Each entry carries the parent role so the cell can disambiguate
+    // by occupant when the title collides with another role's title.
+    const byId = new Map(allRoles.map((r) => [r.id, r]));
     return edges
-      .filter((e) => e.child_role_id === roleId && titleById.has(e.parent_role_id))
-      .map((e) => titleById.get(e.parent_role_id)!);
+      .filter((e) => e.child_role_id === roleId && byId.has(e.parent_role_id))
+      .map((e) => byId.get(e.parent_role_id)!);
   }, [roleId, allRoles, edges]);
 
   if (parents.length === 0) return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
-  return <>{parents.join(", ")}</>;
+  const parts: string[] = [];
+  for (const p of parents) {
+    const title = (p.title || "(untitled)").trim();
+    if (ambiguousTitles.has(title)) {
+      const occ = parentOccupantLabel(p, agentNames);
+      parts.push(occ ? `${title} · ${occ}` : title);
+    } else {
+      parts.push(title);
+    }
+  }
+  return <>{parts.join(", ")}</>;
+}
+
+function parentOccupantLabel(role: Role, agentNames: Map<string, string>): string {
+  if (role.occupant_kind === "vacant") return "vacant";
+  if (role.occupant_kind === "agent") {
+    return agentNames.get(role.occupant_id ?? "") ?? role.occupant_id?.slice(0, 6) ?? "";
+  }
+  return role.occupant_name ?? (role.occupant_id ? `${role.occupant_id.slice(0, 6)}…` : "");
 }
 
 const AVATAR_SIZE = 18;

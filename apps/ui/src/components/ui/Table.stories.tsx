@@ -53,6 +53,42 @@ const demoColumns: Array<TableColumn<DemoRow>> = [
   { key: "created", header: "Created", cell: (r) => r.created, width: "16%", align: "end" },
 ];
 
+const sortableColumns: Array<TableColumn<DemoRow>> = [
+  {
+    key: "title",
+    header: "Title",
+    cell: (r) => r.title,
+    width: "28%",
+    sortable: true,
+    sortAccessor: (r) => r.title,
+  },
+  {
+    key: "occupant",
+    header: "Occupant",
+    cell: (r) => r.occupant,
+    width: "28%",
+    sortable: true,
+    sortAccessor: (r) => r.occupant,
+  },
+  {
+    key: "reportsTo",
+    header: "Reports to",
+    cell: (r) => r.reportsTo,
+    width: "28%",
+    sortable: true,
+    sortAccessor: (r) => r.reportsTo,
+  },
+  {
+    key: "created",
+    header: "Created",
+    cell: (r) => r.created,
+    width: "16%",
+    align: "end",
+    sortable: true,
+    sortAccessor: (r) => r.created,
+  },
+];
+
 export const Default: Story = {
   render: () => (
     <div style={{ maxWidth: 720 }}>
@@ -86,6 +122,43 @@ export const Compact: Story = {
         rowKey={(r) => r.id}
         density="compact"
         ariaLabel="Roles — compact"
+      />
+    </div>
+  ),
+};
+
+export const Sortable: Story = {
+  name: "Sortable columns",
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Click any header marked `sortable` to cycle asc → desc → cleared. ▲ / ▼ shows the active column and direction. Strings sort case-insensitive (locale-aware); numbers / dates sort numerically. `null`/`undefined` accessor values sort to the end.",
+      },
+    },
+  },
+  render: () => (
+    <div style={{ maxWidth: 720 }}>
+      <Table
+        columns={sortableColumns}
+        data={demoRows}
+        rowKey={(r) => r.id}
+        ariaLabel="Roles — sortable"
+      />
+    </div>
+  ),
+};
+
+export const SortableWithDefault: Story = {
+  name: "Sortable — with default sort",
+  render: () => (
+    <div style={{ maxWidth: 720 }}>
+      <Table
+        columns={sortableColumns}
+        data={demoRows}
+        rowKey={(r) => r.id}
+        defaultSort={{ key: "title", dir: "asc" }}
+        ariaLabel="Roles — default sort by title asc"
       />
     </div>
   ),
