@@ -2209,6 +2209,49 @@ divergence, parity-v2 fixed it. Verify variant + computed
 `backgroundColor` of `.composer-wrap` (or equivalent) before claiming
 done.
 
+## Broadening a backend response — re-audit every UI gate keyed on the prior narrow predicate
+
+When a backend endpoint widens its result set (e.g. `/api/inbox`
+broadened 2026-05-07 to return ALL sessions, not just decision-
+requests), every UI gate keyed on the prior narrow predicate becomes
+a latent regression. The bug compiles, type-checks, and ships clean —
+the predicate's domain just expanded under it without any
+type-system signal.
+
+Concrete pattern: `InboxRow.replyable` was wired `replyable:
+!!awaiting_at` on the assumption that every inbox row was a
+decision-request. After the broadening, normal chat sessions started
+appearing in the inbox with `awaiting_at = null` → `replyable =
+false` → composer disabled. Latent for ~24h until founder dogfooded
+the inbox and couldn't type. Cost (2026-05-08): one ship cycle to
+decouple `awaiting` (rail's pending-dot indicator) from `replyable`
+(composer-enabled — true for every inbox session the user owns).
+
+Recipe whenever a backend response broadens (a new endpoint version,
+a removed `WHERE` clause, a new include flag):
+
+```bash
+# 1. Find every UI gate that reads a field whose semantics may have
+#    shifted. For boolean predicates, look for `!field` / `disabled={`
+#    / conditional class spreads keyed on the field.
+FIELD="replyable"
+grep -rn "$FIELD" apps/ui/src/ | grep -E "disabled|!$FIELD|\?$FIELD"
+```
+
+For each hit: confirm whether the gate's semantic still holds under the
+broadened response. If the field's domain shifted (e.g. it used to
+imply "this row is actionable" because every row was actionable;
+now it doesn't), decouple — introduce a separate field for the new
+semantic and update the gate. The `replyable / awaiting` split is
+the canonical shape: one field per UI semantic, even when they
+coincide on the narrow case.
+
+Sister rule: the field-renaming sweep ("Renaming a tab / primitive —
+rename it in user-facing prose too") is for VOCABULARY changes; this
+rule is for SEMANTIC changes that don't trigger a rename. Both miss
+silently in TypeScript; both require grep audits keyed on the old
+shape.
+
 ## "Unify these surfaces" briefs — opt-out prop, not divergent render path
 
 When a brief asks to extract a primitive that some adopters compose
