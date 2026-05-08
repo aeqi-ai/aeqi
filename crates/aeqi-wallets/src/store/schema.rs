@@ -171,6 +171,49 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_solana_agent_wallets_pubkey
             ON solana_agent_wallets(pubkey_b58);
+
+        -- Auth methods. Many-to-one with companies: a single Company can have
+        -- multiple auth methods (passkey + email + Google + wallet_siws), any
+        -- of which mints a session for the same Company. `kind` discriminates
+        -- the verification path; `identity` is the canonical identifier for
+        -- that kind (verified email address, WebAuthn credential_id, OIDC sub
+        -- claim, base58 wallet pubkey). `metadata_json` carries kind-specific
+        -- detail (passkey public key, OAuth display name, etc.).
+        --
+        -- This is the canonical "every user = a Company, no separate user
+        -- account" surface — auth resolves to a company_id, never to a user_id.
+        CREATE TABLE IF NOT EXISTS auth_methods (
+            id              TEXT PRIMARY KEY,
+            company_id      TEXT NOT NULL,
+            kind            TEXT NOT NULL CHECK (kind IN ('email','passkey','google','wallet_siws')),
+            identity        TEXT NOT NULL,
+            metadata_json   TEXT,
+            verified_at     TEXT NOT NULL,
+            last_used_at    TEXT,
+            UNIQUE(kind, identity)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_auth_methods_company
+            ON auth_methods(company_id);
+
+        -- Pending email magic-link verifications. Short-lived (15 min ttl).
+        -- `token_hash` is SHA-256 of the secret token sent in the email link;
+        -- the plaintext token never lives on the server. `email_lower` is
+        -- the email address normalised to lowercase for case-insensitive
+        -- lookup at verify time. One row per outstanding link; verified
+        -- rows are deleted on successful verify.
+        CREATE TABLE IF NOT EXISTS email_verifications (
+            id              TEXT PRIMARY KEY,
+            email_lower     TEXT NOT NULL,
+            token_hash      BLOB NOT NULL UNIQUE,
+            issued_at       TEXT NOT NULL,
+            expires_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_email_verifications_email
+            ON email_verifications(email_lower);
+        CREATE INDEX IF NOT EXISTS idx_email_verifications_expires
+            ON email_verifications(expires_at);
         "#,
     )?;
 
