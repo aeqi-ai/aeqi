@@ -24,7 +24,7 @@ Prerequisites:
 Clone and build:
 
 ```bash
-git clone https://github.com/aeqiai/aeqi
+git clone https://github.com/aeqi-ai/aeqi
 cd aeqi
 cp config/aeqi.example.toml config/aeqi.toml   # local only, not committed
 npm run ui:install

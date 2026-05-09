@@ -92,7 +92,7 @@ Positive open source signals:
 The public path is:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
 aeqi setup
 aeqi secrets set OPENROUTER_API_KEY <key>
 aeqi doctor --strict

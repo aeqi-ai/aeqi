@@ -7,7 +7,7 @@ Get AEQI running locally with the daemon, web server, and dashboard.
 ### Option A: Install Script
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
 ```
 
 ### Option B: Build from Source
@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh
 Requires Rust stable.
 
 ```bash
-git clone https://github.com/aeqiai/aeqi.git
+git clone https://github.com/aeqi-ai/aeqi.git
 cd aeqi
 cargo build --release
 ```

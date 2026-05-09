@@ -155,8 +155,8 @@ This ensures the ship cycle treats contract changes with the same rigor as platf
 
 GitHub repository settings:
 
-1. Archive the `aeqiai/aeqi-core` repository as read-only.
-2. Add a README banner pointing at `https://github.com/aeqiai/aeqi/tree/main/contracts`.
+1. Archive the `aeqi-ai/aeqi-core` repository as read-only.
+2. Add a README banner pointing at `https://github.com/aeqi-ai/aeqi/tree/main/contracts`.
 3. Lock branch protections so accidental pushes fail.
 
 Local cleanup:

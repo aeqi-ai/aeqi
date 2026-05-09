@@ -5,7 +5,7 @@ All notable changes to aeqi are documented here. The format is loosely based on
 [Semantic Versioning](https://semver.org/) on the workspace `version` field.
 
 Per-release detail (full commit list, contributors, artifacts) lives at
-[github.com/aeqiai/aeqi/releases](https://github.com/aeqiai/aeqi/releases).
+[github.com/aeqi-ai/aeqi/releases](https://github.com/aeqi-ai/aeqi/releases).
 
 ## [0.15.0] — 2026-05-04
 
