@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
         .init();
 
     match cli.command {
-        None => tui::run(&cli.config, None, None).await,
+        None => tui::run(&cli.config, None, None, None, None, None, None).await,
         Some(Commands::Run {
             prompt,
             root,
@@ -140,8 +140,24 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Web { action }) => cmd::web::cmd_web(&cli.config, action).await,
         Some(Commands::Graph { action }) => cmd::graph::cmd_graph(&cli.config, action).await,
-        Some(Commands::Chat { agent, root }) => {
-            tui::run(&cli.config, agent.as_deref(), root.as_deref()).await
+        Some(Commands::Chat {
+            agent,
+            root,
+            api_url,
+            api_key,
+            entity,
+            role,
+        }) => {
+            tui::run(
+                &cli.config,
+                agent.as_deref(),
+                root.as_deref(),
+                api_url.as_deref(),
+                api_key.as_deref(),
+                entity.as_deref(),
+                role.as_deref(),
+            )
+            .await
         }
         Some(Commands::Primer) => cmd::primer::cmd_primer(&cli.config),
         Some(Commands::Mcp) => cmd::mcp::cmd_mcp(&cli.config).map(|_| ()),

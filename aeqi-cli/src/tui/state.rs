@@ -105,6 +105,7 @@ pub struct AppState {
     pub start_time: Instant,
     pub should_quit: bool,
     pub agent_id: Option<String>,
+    pub acting_role_id: Option<String>,
     pub project: Option<String>,
     pub streaming_text: String,
     /// Spinner frame counter for animation.
@@ -130,6 +131,7 @@ impl AppState {
             start_time: Instant::now(),
             should_quit: false,
             agent_id: None,
+            acting_role_id: None,
             project: None,
             streaming_text: String::new(),
             tick: 0,

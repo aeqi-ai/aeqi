@@ -2108,6 +2108,11 @@ impl Daemon {
                         .get("stream")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
+                    let caller_user_id =
+                        request_field(&request, "caller_user_id").map(|s| s.to_string());
+                    let acting_role_id = request_field(&request, "as_role_id")
+                        .or_else(|| request_field(&request, "role_id"))
+                        .map(|s| s.to_string());
 
                     // Tenancy check: verify agent belongs to an allowed root agent.
                     let send_allowed = if allowed_roots.is_none() {
@@ -2141,12 +2146,20 @@ impl Daemon {
                         let session_store = ipc_ctx.session_store.clone();
                         let request_started = std::time::Instant::now();
 
-                        // Resolve web sender identity (anonymous — no auth context yet).
+                        // Resolve the human sender identity when the platform proxy supplied
+                        // account context; otherwise keep the legacy anonymous web sender.
                         let web_sender_id: Option<String> = if let Some(ref cs) = session_store {
-                            cs.resolve_sender("web", "anonymous", "Web User", None, None, None)
-                                .await
-                                .ok()
-                                .map(|s| s.id)
+                            if let Some(ref user_id) = caller_user_id {
+                                cs.resolve_sender("user", user_id, "User", None, None, None)
+                                    .await
+                                    .ok()
+                                    .map(|s| s.id)
+                            } else {
+                                cs.resolve_sender("web", "anonymous", "Web User", None, None, None)
+                                    .await
+                                    .ok()
+                                    .map(|s| s.id)
+                            }
                         } else {
                             None
                         };
@@ -2216,6 +2229,15 @@ impl Daemon {
 
                         let build_input_content = |base: &str| {
                             let mut content = base.to_string();
+                            if acting_role_id.is_some() {
+                                let mut context = String::from("<aeqi_chat_context>\n");
+                                if let Some(ref role_id) = acting_role_id {
+                                    context.push_str(&format!("acting_role_id: {role_id}\n"));
+                                }
+                                context.push_str("</aeqi_chat_context>\n\n");
+                                context.push_str(&content);
+                                content = context;
+                            }
                             if let Some(files) = request.get("files").and_then(|v| v.as_array())
                                 && !files.is_empty()
                             {

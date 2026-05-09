@@ -62,6 +62,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tungstenite 0.29.0",
+ "urlencoding",
 ]
 
 [[package]]
@@ -7018,8 +7019,11 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
  "sha1",
  "thiserror 2.0.18",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]

@@ -43,10 +43,14 @@ pub async fn handler(
     // Validate token from query param, dispatching by auth mode.
     // Also resolve user's root agents for tenant scoping when in Accounts mode.
     let mut user_roots: Option<Vec<String>> = None;
+    let mut caller_user_id: Option<String> = None;
 
     match state.auth_mode {
         AuthMode::None => {
-            user_roots = auth::proxy_scope_from_headers(&state, &headers).map(|s| s.roots);
+            if let Some(scope) = auth::proxy_scope_from_headers(&state, &headers) {
+                user_roots = Some(scope.roots);
+                caller_user_id = scope.user_id;
+            }
         }
         AuthMode::Secret | AuthMode::Accounts => {
             let secret = match auth::signing_secret(&state) {
@@ -63,8 +67,9 @@ pub async fn handler(
             match auth::validate_token(token, secret) {
                 Ok(claims) => {
                     // Resolve user's root agents for tenant scoping.
+                    let user_id = claims.user_id.as_deref().unwrap_or(&claims.sub);
+                    caller_user_id = Some(user_id.to_string());
                     if let Some(accounts) = &state.accounts {
-                        let user_id = claims.user_id.as_deref().unwrap_or(&claims.sub);
                         user_roots = accounts
                             .get_user_by_id(user_id)
                             .ok()
@@ -82,13 +87,14 @@ pub async fn handler(
         }
     }
 
-    ws.on_upgrade(move |socket| handle_session_socket(socket, state, user_roots))
+    ws.on_upgrade(move |socket| handle_session_socket(socket, state, user_roots, caller_user_id))
 }
 
 async fn handle_session_socket(
     mut socket: axum::extract::ws::WebSocket,
     state: AppState,
     user_roots: Option<Vec<String>>,
+    caller_user_id: Option<String>,
 ) {
     use axum::extract::ws::Message;
 
@@ -146,6 +152,9 @@ async fn handle_session_socket(
             if let Some(ref roots) = user_roots {
                 req["allowed_roots"] = serde_json::json!(roots);
             }
+            if let Some(ref user_id) = caller_user_id {
+                req["caller_user_id"] = serde_json::json!(user_id);
+            }
             req
         } else {
             let message = request
@@ -195,6 +204,17 @@ async fn handle_session_socket(
             }
             if let Some(ref roots) = user_roots {
                 req["allowed_roots"] = serde_json::json!(roots);
+            }
+            if let Some(ref user_id) = caller_user_id {
+                req["caller_user_id"] = serde_json::json!(user_id);
+            }
+            if let Some(role_id) = request
+                .get("as_role_id")
+                .or_else(|| request.get("role_id"))
+                .and_then(|v| v.as_str())
+                && !role_id.is_empty()
+            {
+                req["as_role_id"] = serde_json::json!(role_id);
             }
             req
         };

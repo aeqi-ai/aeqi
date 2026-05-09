@@ -220,6 +220,18 @@ pub enum Commands {
         /// Root agent scope for agent selection and memory.
         #[arg(short = 'r', long = "root")]
         root: Option<String>,
+        /// Platform API base URL for account-key chat (defaults to AEQI_API_URL or https://cloud.aeqi.ai).
+        #[arg(long = "api-url")]
+        api_url: Option<String>,
+        /// Account API key (ak_...). Defaults to AEQI_API_KEY.
+        #[arg(long = "api-key")]
+        api_key: Option<String>,
+        /// Company/entity id to chat inside. Prompts when omitted in account-key mode.
+        #[arg(long = "entity")]
+        entity: Option<String>,
+        /// Acting role id for this chat session. Prompts when omitted and matching human roles exist.
+        #[arg(long = "role")]
+        role: Option<String>,
     },
 
     /// Emit session primer context from the daemon (replaces session-primer.sh).
