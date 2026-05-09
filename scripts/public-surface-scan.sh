@@ -32,6 +32,7 @@ tracked_text_paths() {
         '*.md' '*.mdx' '*.txt' '*.toml' '*.json' '*.yml' '*.yaml' \
         '*.rs' '*.js' '*.jsx' '*.ts' '*.tsx' '*.css' '*.sh' \
         ':!:apps/ui/package-lock.json' \
+        ':!:scripts/public-surface-scan.sh' \
         ':!:Cargo.lock'
 }
 
