@@ -60,6 +60,9 @@ jobs:
       - name: Install ripgrep and jq
         run: sudo apt-get install -y ripgrep jq
 
+      - name: Public surface scan
+        run: scripts/public-surface-scan.sh
+
       # 3. Security scanning
       - name: Install security tools
         run: |

@@ -77,12 +77,13 @@ scripts/                   Install, deploy, and operator scripts
 | UI production build | `npm run ui:build` |
 | UI type check | `npm --prefix apps/ui run check` |
 | UI tests | `npm --prefix apps/ui test` |
+| Public surface scan | `scripts/public-surface-scan.sh` |
 
 ## Pre-commit Hook
 
 The repo ships a husky-managed pre-commit hook in `.husky/pre-commit`. It runs UI checks (typecheck, lint, vitest) **only when files under `apps/ui/` are staged**, so Rust-only commits stay fast.
 
-The full Rust suite (`fmt`, `clippy -- -D warnings`, `test --workspace`) is enforced in CI on every push and pull request — please run these locally before opening a PR.
+The full Rust suite (`fmt`, `clippy -- -D warnings`, `test --workspace`) is enforced in CI on every push and pull request. CI also runs `scripts/public-surface-scan.sh`, which blocks internal notes, local workstation paths, private deployment runbooks, and license wording drift from entering the public tree.
 
 To install the hooks after cloning:
 
@@ -99,6 +100,10 @@ npm install   # at the repo root, runs husky's install script
 5. CI must be green before merge.
 
 If your change touches public behavior, please update the relevant docs under `docs/` and any examples in the README.
+
+Do not commit local operator notes, private deployment scripts, UX walk output,
+or production incident logs. Keep those in ignored paths such as `.private/`,
+`.observations/`, `notes/`, or local untracked scripts.
 
 ## Commit Messages
 

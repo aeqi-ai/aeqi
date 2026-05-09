@@ -79,7 +79,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
 
-      # 4. JavaScript/TypeScript security scanning (npm audit)
+      # 4. Public repository surface guard
+      - name: Public surface scan
+        run: |
+          echo "=== Checking Public Repository Surface ==="
+          scripts/public-surface-scan.sh
+
+      # 5. JavaScript/TypeScript security scanning (npm audit)
       - name: JavaScript security audit with npm audit
         run: |
           echo "=== Running JavaScript Security Audit ==="
@@ -151,21 +157,21 @@ jobs:
           fi
         continue-on-error: false
 
-      # 5. Security vulnerability scanning (cargo-audit)
+      # 6. Security vulnerability scanning (cargo-audit)
       - name: Security audit with cargo-audit
         run: |
           echo "=== Running Security Audit ==="
           cargo audit
         continue-on-error: false
 
-      # 6. Dependency analysis (cargo-deny)
+      # 7. Dependency analysis (cargo-deny)
       - name: Dependency analysis with cargo-deny
         run: |
           echo "=== Running Dependency Analysis ==="
           cargo deny check
         continue-on-error: false
 
-      # 7. Unused dependency detection (cargo-udeps)
+      # 8. Unused dependency detection (cargo-udeps)
       - name: Unused dependency detection with cargo-udeps
         run: |
           echo "=== Checking for Unused Dependencies ==="
@@ -174,38 +180,38 @@ jobs:
           cargo +nightly udeps --workspace --all-targets
         continue-on-error: false
 
-      # 8. Code formatting check
+      # 9. Code formatting check
       - name: Code formatting check
         run: |
           echo "=== Checking Code Format ==="
           cargo fmt --check --all
 
-      # 9. Linting with clippy
+      # 10. Linting with clippy
       - name: Linting with clippy
         run: |
           echo "=== Running Clippy Lints ==="
           cargo clippy --workspace -- -D warnings
 
-      # 10. Build verification
+      # 11. Build verification
       - name: Build verification
         run: |
           echo "=== Building Workspace ==="
           cargo build --workspace --verbose
 
-      # 11. Test execution
+      # 12. Test execution
       - name: Run tests
         run: |
           echo "=== Running Tests ==="
           cargo test --workspace --verbose
 
-      # 12. Code coverage with cargo-tarpaulin
+      # 13. Code coverage with cargo-tarpaulin
       - name: Code coverage with cargo-tarpaulin
         run: |
           echo "=== Measuring Code Coverage ==="
           cargo tarpaulin --workspace --out Lcov --output-dir ./coverage
         continue-on-error: false
 
-      # 13. Documentation generation
+      # 14. Documentation generation
       - name: Generate documentation
         run: |
           echo "=== Generating Documentation ==="
@@ -227,12 +233,13 @@ jobs:
           path: ./target/doc/
           retention-days: 30
 
-      # 14. Summary report
+      # 15. Summary report
       - name: Generate quality gate summary
         if: always()
         run: |
           echo "=== QUALITY GATES SUMMARY ==="
           echo "✅ JavaScript security audit: npm audit"
+          echo "✅ Public surface scan"
           echo "✅ Security audit: cargo-audit"
           echo "✅ Dependency analysis: cargo-deny"
           echo "✅ Unused dependencies: cargo-udeps (nightly)"

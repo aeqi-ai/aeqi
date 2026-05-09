@@ -34,8 +34,8 @@ use tracing::{info, warn};
 
 /// Resolve the architect's LLM credential + base URL. Checks the process
 /// env vars first (DEEPINFRA_API_KEY, OPENROUTER_API_KEY); when both are
-/// absent (the host runtime case — only `aeqi-platform.service` loads
-/// `/etc/aeqi/secrets.env`, the per-tenant host services don't),
+/// absent (the hosted runtime case, where the control plane may hold
+/// upstream credentials outside the runtime process),
 /// resolves the runtime's data dir and tries two fallbacks in order:
 ///
 /// 1. The credentials substrate at `<data_dir>/aeqi.db` (where the
