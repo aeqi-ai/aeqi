@@ -564,10 +564,11 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     setStage("check-email");
     setErrorMsg(null);
     try {
+      const inviteCode = searchParams.get("invite") ?? undefined;
       const startRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/email-start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddress }),
+        body: JSON.stringify({ email: emailAddress, invite_code: inviteCode }),
       });
       if (!startRes.ok) {
         throw new Error(`email-start ${startRes.status}: ${await startRes.text()}`);
@@ -799,10 +800,11 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
               onCodeSubmit={(code) => spawnViaEmailCode(email.trim().toLowerCase(), code)}
               onResend={async () => {
                 const lower = email.trim().toLowerCase();
+                const inviteCode = searchParams.get("invite") ?? undefined;
                 await fetch(`${SOLANA_API_URL}/api/auth/welcome/email-start`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ email: lower }),
+                  body: JSON.stringify({ email: lower, invite_code: inviteCode }),
                 });
               }}
               onBack={reset}
