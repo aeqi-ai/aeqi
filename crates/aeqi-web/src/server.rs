@@ -267,11 +267,20 @@ async fn embedded_spa_handler(req: Request) -> Response {
 
     let file_path = path.trim_start_matches('/');
 
-    let file = Assets::get(file_path).or_else(|| Assets::get("index.html"));
+    // Two-step lookup: try the literal path first, fall back to index.html for
+    // SPA routes (any path that doesn't match a static asset). Critically, the
+    // mime-guess MUST use the file actually served — using the original request
+    // path when we fell back to index.html produces `application/octet-stream`
+    // for `/`, `/me/inbox`, and every SPA route, which makes the browser
+    // download the HTML instead of rendering it.
+    let (file, served_name) = match Assets::get(file_path) {
+        Some(f) => (Some(f), file_path),
+        None => (Assets::get("index.html"), "index.html"),
+    };
 
     match file {
         Some(content) => {
-            let mime = mime_guess::from_path(file_path)
+            let mime = mime_guess::from_path(served_name)
                 .first_or_octet_stream()
                 .to_string();
             Response::builder()
