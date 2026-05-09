@@ -1893,20 +1893,32 @@ impl SessionStore {
         Ok(out)
     }
 
-    /// Atomic "director answers from the inbox" path. In a single
+    /// Lenient "director replies from the inbox" path. In a single
     /// `BEGIN IMMEDIATE` transaction, this:
     ///   1. UPDATEs `sessions` to clear `awaiting_at` IFF it was non-null
-    ///   2. If the UPDATE affected zero rows (someone else already answered
-    ///      or the session was never awaiting), ROLLBACKs and returns
-    ///      `Ok(false)` — the caller MUST treat this as "race lost".
-    ///   3. Otherwise INSERTs the supplied payload into `pending_messages`
-    ///      with `status='queued'` so the next `claim_and_run_loop` tick
-    ///      picks it up as the human's reply, COMMITs, returns `Ok(true)`.
+    ///      (idempotent no-op when already null — normal-chat reply path).
+    ///   2. INSERTs the supplied payload into `pending_messages` with
+    ///      `status='queued'` so the next `claim_and_run_loop` tick picks
+    ///      it up as the human's reply.
+    ///   3. COMMITs.
+    ///
+    /// Returns `true` IFF an `awaiting_at` flag was actively cleared (so the
+    /// caller can decide whether to emit a "decision-request answered"
+    /// telemetry event vs a plain "user replied" event). The reply itself
+    /// is ALWAYS enqueued — a `false` return is NOT a failure.
     ///
     /// This is the only place outside `enqueue_pending` that writes to
     /// `pending_messages` — kept dedicated rather than folded into a
     /// general "enqueue and clear" helper because most enqueue paths
     /// (quest re-runs, internal continuations) must NOT clear awaiting.
+    ///
+    /// Pre-broadening (2026-05-07) the inbox returned only sessions where
+    /// `awaiting_at IS NOT NULL`, and a 0-row UPDATE meant "someone else
+    /// answered first" — a real race. After the broadening (every
+    /// participant session shows in the inbox), the user can reply to any
+    /// session whether or not the agent is currently asking; gating on
+    /// awaiting would block normal chat. Race-loss semantics moved into
+    /// the boolean return; the enqueue is unconditional.
     pub async fn answer_awaiting(&self, session_id: &str, payload: &str) -> Result<bool> {
         let mut db = self.db.lock().await;
         let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -1915,11 +1927,6 @@ impl SessionStore {
              WHERE id = ?1 AND awaiting_at IS NOT NULL",
             params![session_id],
         )?;
-        if cleared == 0 {
-            // Race lost — already answered or never awaiting. Tx rolls back
-            // implicitly when dropped without commit.
-            return Ok(false);
-        }
         let now = Utc::now().timestamp();
         tx.execute(
             "INSERT INTO pending_messages (session_id, payload, status, created_at) \
@@ -1927,7 +1934,7 @@ impl SessionStore {
             params![session_id, payload, now],
         )?;
         tx.commit()?;
-        Ok(true)
+        Ok(cleared > 0)
     }
 
     /// Archive an awaiting session without queuing a reply. Clears
@@ -4405,10 +4412,14 @@ mod tests {
         );
     }
 
-    /// Second `answer_awaiting` for the same session must lose — the row
-    /// count check on the UPDATE prevents a duplicate enqueue.
+    /// `answer_awaiting` is lenient — both calls enqueue the reply; the
+    /// boolean return only reports whether THIS call cleared an
+    /// outstanding `awaiting_at`. Pre-broadening (2026-05-07) the second
+    /// caller used to "lose" (false return AND no enqueue); under the
+    /// broadened-inbox model that would block normal chat replies on
+    /// any session that isn't actively asking a question.
     #[tokio::test]
-    async fn answer_awaiting_second_caller_loses() {
+    async fn answer_awaiting_enqueues_unconditionally_clears_only_once() {
         let store = test_store().await;
         let session_id = store
             .create_session("agent-y", "session", "ask flow", None, None)
@@ -4416,26 +4427,34 @@ mod tests {
             .unwrap();
         store.set_awaiting(&session_id, "subj").await.unwrap();
 
-        let won = store
+        let cleared_first = store
             .answer_awaiting(&session_id, "{\"message\":\"first\"}")
             .await
             .unwrap();
-        assert!(won);
+        assert!(
+            cleared_first,
+            "first call clears awaiting_at and returns true"
+        );
 
-        let lost = store
+        let cleared_second = store
             .answer_awaiting(&session_id, "{\"message\":\"second\"}")
             .await
             .unwrap();
         assert!(
-            !lost,
-            "second caller must return Ok(false) once awaiting_at is cleared"
+            !cleared_second,
+            "second call returns false (nothing to clear) but still enqueues"
         );
 
-        // Exactly one pending row exists.
+        // BOTH messages got queued — normal chat after a decision-request
+        // is just chat, not a "race lost" rejection.
         let claimed = store
             .claim_pending_for_session(&session_id, None)
             .await
             .unwrap();
-        assert_eq!(claimed.len(), 1);
+        assert_eq!(
+            claimed.len(),
+            2,
+            "both replies queued — no race-loss in the broadened-inbox model"
+        );
     }
 }

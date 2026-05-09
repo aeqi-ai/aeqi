@@ -163,13 +163,15 @@ pub async fn handle_answer_inbox(
         Err(e) => return json!({"ok": false, "error": format!("payload encode failed: {e}")}),
     };
 
-    let won = match ss.answer_awaiting(&session_id, &payload).await {
+    // The reply is always enqueued; the boolean only reports whether THIS
+    // call also cleared an outstanding `awaiting_at` flag (decision-request
+    // answer vs normal chat reply). Both shapes return ok — the inbox
+    // surfaces every participant session, not just decision requests, so
+    // gating on awaiting would block normal chat.
+    let _cleared_awaiting = match ss.answer_awaiting(&session_id, &payload).await {
         Ok(b) => b,
         Err(e) => return json!({"ok": false, "error": format!("answer failed: {e}")}),
     };
-    if !won {
-        return json!({"ok": false, "error": "already answered"});
-    }
 
     // Trigger the existing claim loop so the new pending row is picked up
     // without waiting for an external tick. We assemble the same
