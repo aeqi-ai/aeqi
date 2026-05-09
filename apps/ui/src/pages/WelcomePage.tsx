@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Wordmark from "@/components/Wordmark";
 import { Button, Input } from "@/components/ui";
+import { useAuthStore } from "@/store/auth";
+import { api } from "@/lib/api";
 
 /**
  * Welcome — combined sign-in / sign-up entry point. Per the canonical
@@ -292,10 +294,118 @@ function GithubIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+/**
+ * Self-host secret-mode login. The operator pasted their `auth_secret` from
+ * `aeqi setup` (printed at first run, also in `~/.aeqi/aeqi.toml` under
+ * `[web].auth_secret`). One input → POST /api/auth/login → JWT → into the app.
+ */
+function SecretLogin() {
+  const navigate = useNavigate();
+  const [secret, setSecret] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!secret.trim() || submitting) return;
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const resp = await api.login(secret.trim());
+      if (!resp.ok || !resp.token) {
+        setErrorMsg("Invalid secret. Check `~/.aeqi/aeqi.toml` for `auth_secret`.");
+        setSubmitting(false);
+        return;
+      }
+      localStorage.setItem("aeqi_token", resp.token);
+      localStorage.setItem("aeqi_app_mode", "runtime");
+      localStorage.setItem("aeqi_auth_mode", "secret");
+      navigate("/", { replace: true });
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Login failed.");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="signup-split">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <div className="signup-form-side" id="main-content">
+        <div className="auth-container" role="region" aria-live="polite">
+          <div className="auth-logo">
+            <Wordmark size={36} />
+          </div>
+          <h1 className="auth-title">Welcome back.</h1>
+          <p className="auth-subtitle">Self-hosted aeqi. Paste your dashboard secret to sign in.</p>
+          <form onSubmit={handleSubmit} style={{ marginTop: "var(--space-6)" }}>
+            <Input
+              type="password"
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              placeholder="dashboard secret"
+              autoFocus
+              autoComplete="current-password"
+              disabled={submitting}
+              aria-label="dashboard secret"
+            />
+            {errorMsg && (
+              <p
+                style={{
+                  marginTop: "var(--space-3)",
+                  color: "var(--color-error)",
+                  fontSize: "var(--font-size-sm)",
+                }}
+              >
+                {errorMsg}
+              </p>
+            )}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!secret.trim() || submitting}
+              style={{ marginTop: "var(--space-4)", width: "100%" }}
+            >
+              {submitting ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+          <p
+            style={{
+              marginTop: "var(--space-6)",
+              color: "var(--color-text-muted)",
+              fontSize: "var(--font-size-xs)",
+            }}
+          >
+            Find your secret with: <code>grep auth_secret ~/.aeqi/aeqi.toml</code>
+          </p>
+        </div>
+      </div>
+      <div className="signup-pitch-side" aria-hidden />
+    </main>
+  );
+}
+
 export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode } = {}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const copy = COPY[mode];
+
+  // Auth-mode dispatch — self-hosters running with `[web.auth].mode = "secret"`
+  // (the default) get a single passphrase form, NOT the email/OAuth flow.
+  // The accounts flow is opt-in for multi-user teams. fetchAuthMode polls
+  // /api/auth/mode on first render; the actual dispatch lives at the final
+  // return so every hook in this component fires unconditionally
+  // (rules-of-hooks).
+  const authMode = useAuthStore((s) => s.authMode);
+  const authModeLoaded = useAuthStore((s) => s.authModeLoaded);
+  const fetchAuthMode = useAuthStore((s) => s.fetchAuthMode);
+  useEffect(() => {
+    if (!authModeLoaded) void fetchAuthMode();
+  }, [authModeLoaded, fetchAuthMode]);
+  useEffect(() => {
+    if (authModeLoaded && authMode === "none") navigate("/", { replace: true });
+  }, [authModeLoaded, authMode, navigate]);
   const [stage, setStage] = useState<
     "door" | "spawning" | "welcome" | "error" | "check-email" | "waitlist" | "waitlist-sent"
   >("door");
@@ -772,6 +882,23 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     setOutcome(null);
     setSteps([]);
   }
+
+  // Dispatch on auth mode AFTER all hooks above have run unconditionally.
+  // Self-host default = "secret" → simple passphrase form. SaaS / multi-user
+  // teams set "accounts" → fall through to the existing wallet/passkey/email
+  // flow. "none" navigates to / via effect; render nothing while it fires.
+  if (!authModeLoaded) {
+    return (
+      <main className="signup-split">
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
+        <div className="signup-form-side" id="main-content" />
+      </main>
+    );
+  }
+  if (authMode === "secret") return <SecretLogin />;
+  if (authMode === "none") return null;
 
   return (
     <main className="signup-split">
