@@ -174,17 +174,18 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   },
 
   answerItem: async (sessionId, answer) => {
-    // Optimistic dismiss so the row collapses while the POST flies.
-    get().dismissOptimistically(sessionId);
+    // Answering a session is just sending a reply — the row stays in the
+    // inbox like every other ongoing conversation. The "awaiting" pending-
+    // dot indicator clears when the backend clears `awaiting_at`; the row
+    // itself remains visible. Explicit archive is the only path that hides
+    // a row (that's `dismissItem`).
     try {
       const resp = await api.answerInbox(sessionId, answer);
       if (!resp.ok) {
-        get().restoreItem(sessionId);
         return { ok: false, error: resp.error || "answer failed" };
       }
       return { ok: true };
     } catch (err) {
-      get().restoreItem(sessionId);
       return {
         ok: false,
         error: err instanceof Error ? err.message : String(err),
@@ -221,11 +222,18 @@ export const useInboxStore = create<InboxState>((set, get) => ({
           return { items: [payload.item, ...s.items] };
         });
       } else if (payload.kind === "cleared") {
+        // `cleared` means the backend cleared `awaiting_at` on this session
+        // (user answered, or the agent moved on). Drop the awaiting flag on
+        // the row but KEEP it visible — answering a question shouldn't make
+        // the conversation disappear from the user's inbox. Explicit
+        // archive (`dismissItem`) is the only path that removes a row.
         set((s) => {
           const next = new Set(s.pendingDismissal);
           next.delete(payload.session_id);
           return {
-            items: s.items.filter((i) => i.session_id !== payload.session_id),
+            items: s.items.map((i) =>
+              i.session_id === payload.session_id ? { ...i, awaiting_at: null } : i,
+            ),
             pendingDismissal: next,
           };
         });

@@ -99,13 +99,19 @@ describe("inbox store", () => {
       expect(useInboxStore.getState().items).toHaveLength(1);
     });
 
-    it("'cleared' removes the row and drops any pendingDismissal entry", () => {
+    it("'cleared' clears awaiting_at on the row but keeps it visible", () => {
       useInboxStore.setState({
-        items: [makeItem("a"), makeItem("b")],
+        items: [{ ...makeItem("a"), awaiting_at: "2026-05-09T08:00:00Z" }, makeItem("b")],
         pendingDismissal: new Set<string>(["a"]),
       });
       useInboxStore.getState().pushInboxUpdate({ kind: "cleared", session_id: "a" });
-      expect(useInboxStore.getState().items.map((i) => i.session_id)).toEqual(["b"]);
+      // Row stays — answering a question doesn't archive the conversation.
+      expect(useInboxStore.getState().items.map((i) => i.session_id)).toEqual(["a", "b"]);
+      // Awaiting flag is gone (the rail-dot indicator clears).
+      expect(useInboxStore.getState().items.find((i) => i.session_id === "a")?.awaiting_at).toBe(
+        null,
+      );
+      // pendingDismissal entry is dropped (cleanup of stale optimistic state).
       expect(useInboxStore.getState().pendingDismissal.has("a")).toBe(false);
     });
   });
