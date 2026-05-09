@@ -296,7 +296,13 @@ export default function App() {
           <Route path="/login" element={<WelcomePage mode="login" />} />
           <Route path="/signup" element={<WelcomePage mode="signup" />} />
           <Route path="/welcome" element={<WelcomePage mode="welcome" />} />
-          <Route path="/start" element={<Navigate to="/welcome" replace />} />
+          {/* `/start` is the in-shell Company-launch surface — blueprint
+              picker at `/start`, setup at `/start/<slug>`. Routes through
+              GatedAppShell so the LeftSidebar stays mounted and unauth
+              visitors bounce to /login. AppLayout dispatches `isStart` to
+              StartPage / CompanySetupPage. */}
+          <Route path="/start" element={<GatedAppShell />} />
+          <Route path="/start/*" element={<GatedAppShell />} />
           <Route path="/waitlist" element={<Navigate to="/signup" replace />} />
           <Route path="/verify" element={<VerifyEmailPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
