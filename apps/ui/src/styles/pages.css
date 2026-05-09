@@ -305,13 +305,11 @@
   background: var(--bg-base);
 }
 
-/* Signup / Login pitch side — charcoal hero illustration with white text
-   overlaid. Two mode-specific images carry distinct registers:
-     - login   → ambient particle waves (welcome-back, calm)
-     - signup  → spawn pillar with light streams (launch, dramatic)
-   Both share the same chrome (typography, scrim, layout). The graphite
-   accent is preserved as fallback colour so a failed image still gives
-   a coherent dark panel. */
+/* Signup / Login pitch side — charcoal spawn-pillar hero with white text
+   overlaid. The graphite accent is preserved as fallback colour so a
+   failed image still gives a coherent dark panel. Same image across
+   login / signup / welcome modes; mode-specific copy carries the
+   register difference. */
 .signup-pitch-side {
   position: relative;
   flex: 1;
@@ -320,22 +318,13 @@
   justify-content: center;
   padding: var(--space-10) var(--space-8);
   background-color: var(--color-accent);
+  background-image: url("/auth-hero.webp");
   background-size: cover;
-  background-position: center;
+  background-position: center 45%;
   background-repeat: no-repeat;
   color: #ffffff;
   overflow: hidden;
   isolation: isolate;
-}
-
-.signup-pitch-side--login,
-.signup-pitch-side--welcome {
-  background-image: url("/auth-hero-login.webp");
-}
-
-.signup-pitch-side--signup {
-  background-image: url("/auth-hero-signup.webp");
-  background-position: center 45%;
 }
 
 /* Layered scrim — radial vignette pushing focus to centre, plus a
