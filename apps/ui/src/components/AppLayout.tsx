@@ -366,6 +366,14 @@ export default function AppLayout() {
     return <Navigate to={`${base}${search}`} replace />;
   }
 
+  // The bare `/c/<id>` / `/trust/<addr>` URL IS the company cockpit —
+  // there is no separate `/overview` segment. Replace-navigate any stale
+  // link/bookmark onto the bare URL so the sidebar's "Company" row
+  // (which lights up only at `path === base`) activates correctly.
+  if (tab === "overview" && isEntityRoute && !drilledAgent) {
+    return <Navigate to={`${base}${search}`} replace />;
+  }
+
   const mainContent = (() => {
     if (isNotFound) return <NotFoundPage />;
     if (isRolesNew) return <RoleNewPage />;

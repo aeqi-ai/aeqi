@@ -61,7 +61,7 @@ export default function CompanySwitcher() {
       // Navigate to the canonical URL for the entity — /trust/<addr> for
       // on-chain companies, /c/<id> for pending ones. Going straight
       // avoids a server 301 round-trip.
-      navigate(entityPath(entity, "overview"));
+      navigate(entityPath(entity));
       setOpen(false);
     },
     [navigate, setActiveEntity],

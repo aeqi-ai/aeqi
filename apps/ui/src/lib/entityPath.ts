@@ -18,7 +18,10 @@ export function entityBasePath(entity: Pick<Entity, "id" | "trust_address">): st
 
 /**
  * Full path for an entity + optional sub-path.
- * e.g. entityPath(entity, "overview") → "/trust/0xabc.../overview"
+ * e.g. entityPath(entity, "roles") → "/trust/0xabc.../roles".
+ * `entityPath(entity)` (no segments) → bare base; the bare URL IS the
+ * company cockpit, so don't pass an "overview" segment — that route
+ * 308-redirects back to the bare URL via AppLayout.
  */
 export function entityPath(
   entity: Pick<Entity, "id" | "trust_address">,
