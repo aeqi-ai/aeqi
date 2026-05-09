@@ -3,9 +3,8 @@
 **Status:** Decided 2026-05-04 (founder strategic input mid-push). Implemented in commit e9b0fc3 on aeqi-core.  
 **Owner:** runtime team.  
 **Companion docs:**
-- `aeqi/docs/aeqi-economy-plan.md` — sequencing context
-- `aeqi/docs/aeqi-entity-aa-design.md` — what TRUST is
-- `aeqi-core/scripts/foundry/RegisterTemplates.s.sol` — the canonical implementation
+- [`runtime-platform-separation.md`](runtime-platform-separation.md) — runtime versus hosted control-plane ownership
+- [`architecture.md`](architecture.md) — runtime primitives and storage model
 
 ---
 
@@ -14,7 +13,7 @@
 aeqi has TWO layers that interact at company creation:
 
 1. **On-chain templates** (in Factory.sol): exactly 4 canonical archetypes with locked module sets. Foundation, Entity, Venture, Fund. These are the contract-level primitives — what the on-chain world sees. ~200 module addresses + value-config bytes per template.
-2. **Off-chain blueprints** (JSON in aeqi/presets/blueprints/): MANY blueprints. Each declares a `templateSlug` selecting one of the 4. Blueprints layer agent role trees, ideas, events, default sessions, prompts on top of the on-chain shape — runtime concerns the chain doesn't model.
+2. **Off-chain blueprints** (JSON in `presets/blueprints/`): many blueprints. Each declares a template selecting one of the 4. Blueprints layer agent role trees, ideas, events, default sessions, and prompts on top of the on-chain shape — runtime concerns the chain doesn't model.
 
 Many blueprints can map to one template. The mapping is N-to-1.
 

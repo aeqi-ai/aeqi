@@ -147,16 +147,16 @@ async fn rpc(
 
 // ── Contract bytecode loaders ─────────────────────────────────────────────────
 
-/// Load Paymaster.sol compiled bytecode from aeqi-core forge output.
+/// Load Paymaster.sol compiled bytecode from forge output.
 fn load_paymaster_bytecode() -> Result<String> {
     let bytecode = sh(
-        "cat /home/claudedev/projects/aeqi-core/out/Paymaster.sol/Paymaster.json \
+        "cat ${AEQI_CORE_OUT:-contracts/out}/Paymaster.sol/Paymaster.json \
          2>/dev/null | python3 -c \
          \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
     );
     if bytecode.is_empty() || !bytecode.starts_with("0x") {
         return Err(anyhow!(
-            "Paymaster.sol not compiled. Run: forge build --root /home/claudedev/projects/aeqi-core"
+            "Paymaster.sol not compiled. Set AEQI_CORE_OUT to a forge out directory or run forge build for the contracts workspace"
         ));
     }
     Ok(bytecode)
@@ -165,7 +165,7 @@ fn load_paymaster_bytecode() -> Result<String> {
 /// Load SimpleAccount compiled bytecode.
 ///
 /// First tries the pre-compiled artifact at /tmp/simple-account-test.
-/// If absent, compiles from /home/claudedev/aeqi/test-contracts/SimpleAccount.sol.
+/// If absent, compiles from `test-contracts/SimpleAccount.sol`.
 fn load_simple_account_bytecode() -> Result<String> {
     // Try pre-compiled first.
     let bytecode = sh(
@@ -181,7 +181,7 @@ fn load_simple_account_bytecode() -> Result<String> {
     eprintln!("SimpleAccount not pre-compiled — building now...");
     let (_, ok) = sh_status(
         "mkdir -p /tmp/simple-account-test/src && \
-         cp /home/claudedev/aeqi/test-contracts/SimpleAccount.sol \
+         cp ${AEQI_REPO_ROOT:-.}/test-contracts/SimpleAccount.sol \
            /tmp/simple-account-test/src/SimpleAccount.sol 2>/dev/null && \
          forge build --root /tmp/simple-account-test >/dev/null 2>&1",
     );
@@ -189,7 +189,7 @@ fn load_simple_account_bytecode() -> Result<String> {
         return Err(anyhow!(
             "Failed to compile SimpleAccount.sol via forge. \
              Ensure foundry is installed and SimpleAccount.sol is at \
-             /home/claudedev/aeqi/test-contracts/SimpleAccount.sol"
+             AEQI_REPO_ROOT/test-contracts/SimpleAccount.sol"
         ));
     }
 

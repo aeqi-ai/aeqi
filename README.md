@@ -4,7 +4,7 @@
 [![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-black)](Cargo.toml)
 
-**An agent runtime built on four primitives.** A tree of agents that grows from context, remembers everything, acts autonomously, and reshapes itself from within.
+**A source-available agent runtime built on four primitives.** A tree of agents that grows from context, remembers everything, acts autonomously, and reshapes itself from within.
 
 ```
 aeqi start    # daemon + dashboard on :8400
@@ -18,7 +18,7 @@ aeqi chat     # talk to your root agent
 ## Four Primitives
 
 ```
-Agent tree (root agent = workspace)
+Agent tree (root agent = company)
  ├── Agent has Ideas
  ├── Agent has Events
  └── Agent does Quests
@@ -28,7 +28,7 @@ Agent tree (root agent = workspace)
 
 An agent is a node with a name, a model, and a position in a parent-child hierarchy (`parent_id`). Agents inherit configuration from ancestors: model, budget, workdir, timeout, ideas. Set once on a parent, inherited by every descendant. Override at any node.
 
-Agents live in the agent registry (`~/.aeqi/aeqi.db`) — the DB is the runtime source of truth. New workspaces are seeded from `agents/<name>/agent.md` files and `[[agents]]` entries in `aeqi.toml`; once loaded, agents spawn children at runtime through the delegate tool.
+Agents live in the agent registry (`~/.aeqi/aeqi.db`) — the DB is the runtime source of truth. Starter agents can be seeded during setup; once loaded, agents spawn children at runtime through the delegate tool.
 
 ### Idea -- unified knowledge store
 
@@ -141,7 +141,7 @@ Tenant environments run in bubblewrap sandboxes with read-only root filesystems,
 | `aeqi-gates` | Telegram, Discord, Slack bridges |
 | `aeqi-tools` | Shell, file I/O, git, grep, glob, delegate |
 | `aeqi-graph` | Code intelligence: Rust/TS/Solidity parsing, community detection, impact analysis |
-| `aeqi-hosting` | Multi-tenant platform, bubblewrap sandboxing |
+| `aeqi-hosting` | Local/self-host runtime placement helpers |
 | `aeqi-mcp` | MCP server exposing primitives to external clients |
 | `aeqi-wallets` | Per-agent wallet keys, signing, on-chain identity |
 | `aeqi-pack-github` | Tool pack: GitHub repos, issues, releases, search |
@@ -250,8 +250,6 @@ Start at [docs/README.md](docs/README.md) for the full index. Highlights:
 - [Deployment](docs/deployment.md) -- production topology, systemd, reverse proxy
 - [Roadmap](docs/roadmap.md) -- phases from current state to long-term product
 
-Historical audits and internal migration plans live under [docs/internal/](docs/internal/).
-
 ## Vocabulary
 
 aeqi has four runtime primitives — **agents**, **ideas**, **quests**, **events**. Two further nouns appear in code and docs and are worth disambiguating:
@@ -260,7 +258,7 @@ aeqi has four runtime primitives — **agents**, **ideas**, **quests**, **events
 |---|---|---|
 | `agent` | A persistent identity in the agent tree | `[[agents]]` in `aeqi.toml`, `agents/<name>/agent.md` on disk, `aeqi.db` at runtime |
 | `project` | A repo-bound worker pool the orchestrator can dispatch quests to | `[[projects]]` in `aeqi.toml` |
-| `company` | User-facing label for a root agent (in dashboard copy and CTAs) | UI only; under the hood it's a root agent + its `project` |
+| `company` | Runtime identity that scopes agents, quests, ideas, events, sessions, and credentials | `aeqi.db` and dashboard routes |
 | `agent_spawn` | Internal Rust field name for the same thing as `project` | Rust API only — never write it in `aeqi.toml` for new configs |
 
 The canonical TOML key is `[[projects]]`. The legacy `[[agent_spawns]]` parses as an alias for back-compat; the older `[[companies]]` is no longer recognised. Pick `[[projects]]` for new work.

@@ -9,9 +9,9 @@
 //!   cargo run -p aeqi-tools --bin porkbun_aeqi_dns -- apply         # diff + add missing
 
 use aeqi_core::credentials::store::read_global_legacy_blob_sync;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 
 const DOMAIN: &str = "aeqi.ai";
@@ -108,12 +108,7 @@ fn record_matches(existing: &Value, want: &Required) -> bool {
     normalized_existing == normalized_want
 }
 
-async fn add_record(
-    client: &Client,
-    api: &str,
-    sec: &str,
-    want: &Required,
-) -> Result<()> {
+async fn add_record(client: &Client, api: &str, sec: &str, want: &Required) -> Result<()> {
     let mut body = auth_body(api, sec);
     let obj = body.as_object_mut().unwrap();
     obj.insert("type".to_string(), json!(want.record_type));
@@ -126,13 +121,18 @@ async fn add_record(
         obj.insert("prio".to_string(), json!(p));
     }
     let resp = post(client, &format!("/dns/create/{DOMAIN}"), body).await?;
-    println!("    + created (porkbun id {})", resp.get("id").map(|v| v.to_string()).unwrap_or_default());
+    println!(
+        "    + created (porkbun id {})",
+        resp.get("id").map(|v| v.to_string()).unwrap_or_default()
+    );
     Ok(())
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let mode = std::env::args().nth(1).unwrap_or_else(|| "check".to_string());
+    let mode = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "check".to_string());
     let do_apply = match mode.as_str() {
         "check" => false,
         "apply" => true,
@@ -141,9 +141,7 @@ async fn main() -> Result<()> {
 
     let data_dir: PathBuf = std::env::var("AEQI_DATA_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir().unwrap_or_default().join(".aeqi")
-        });
+        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default().join(".aeqi"));
 
     let api_key = read_global_legacy_blob_sync(&data_dir, "PORKBUN_API_KEY")?
         .context("PORKBUN_API_KEY missing from credentials substrate")?;
@@ -200,7 +198,10 @@ async fn main() -> Result<()> {
 
     println!();
     if !do_apply {
-        println!("(check mode) {} record(s) missing — re-run with `apply` to add", missing.len());
+        println!(
+            "(check mode) {} record(s) missing — re-run with `apply` to add",
+            missing.len()
+        );
         return Ok(());
     }
 

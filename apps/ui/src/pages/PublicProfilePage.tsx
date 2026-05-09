@@ -5,7 +5,7 @@ import { Button, EmptyState, Spinner } from "@/components/ui";
 
 /**
  * Public profile page — Phase 2 of public-profiles. Renders at the
- * top-level URL `app.aeqi.ai/<slug>` where `<slug>` is the entity_id
+ * top-level URL `<host>/<slug>` where `<slug>` is the entity_id
  * UUID. Reads from the unauth `/api/public/entities/<slug>` endpoint;
  * 404s when the entity is not marked `public=true` (or doesn't exist —
  * the public-read endpoint deliberately doesn't distinguish, so private

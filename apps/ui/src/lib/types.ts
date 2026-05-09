@@ -26,7 +26,7 @@ export interface Entity {
   placement_type?: string;
   /** One-line description rendered in the entity hero strip on Overview. */
   tagline?: string;
-  /** When true, `app.aeqi.ai/<slug>` returns a public profile page. */
+  /** When true, `<host>/<slug>` returns a public profile page. */
   public?: boolean;
   /** Per-Company billing plan ID (`free`, `starter`, `growth`). */
   plan?: string;

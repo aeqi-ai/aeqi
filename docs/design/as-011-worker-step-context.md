@@ -1,6 +1,6 @@
 # as-011: wiring `session:execution_start` + `session:step_start` into quest workers
 
-Filed from the 2026-04-19 dogfood pass as leak #6 in the seven-leaks tally.
+Filed from a lifecycle-parity audit.
 Interactive chat sessions fire all four lifecycle patterns; quest workers
 only fire `session:start` + `session:quest_start`. A user who attaches an
 idea to `on_step_start` expecting per-LLM-call injection gets zero firings

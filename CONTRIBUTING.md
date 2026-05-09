@@ -54,7 +54,7 @@ crates/
   aeqi-web                Axum REST API + WebSocket + embedded SPA
   aeqi-gates              Telegram, Discord, Slack bridges
   aeqi-graph              Code intelligence, parsing, community detection
-  aeqi-hosting            Multi-tenant platform, bubblewrap sandboxing
+  aeqi-hosting            Local/self-host runtime placement helpers
   aeqi-mcp                MCP server exposing primitives to external clients
   aeqi-wallets            Per-agent wallet keys, signing
   aeqi-pack-*             Optional tool packs (GitHub, Slack, Notion, Workspace)

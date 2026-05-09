@@ -5,7 +5,7 @@
 
 use alloy::sol;
 
-// Factory contract — all events from /home/claudedev/projects/aeqi-graph/abis/Factory.json
+// Factory contract events.
 // We declare events directly in Solidity syntax for clarity (alloy generates
 // the decoder from this). The ABI JSON path is included for reference.
 sol! {
@@ -48,7 +48,7 @@ sol! {
 }
 
 // TRUST contract events — emitted by every deployed TRUST proxy.
-// Source: /home/claudedev/projects/aeqi-graph/abis/TRUST.json
+// TRUST contract event subset.
 sol! {
     #[sol(rpc)]
     contract TRUST {
@@ -64,7 +64,7 @@ sol! {
 }
 
 // Role module events — emitted by Role.module instances attached to a TRUST.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Role.module.json
+// Role module event subset.
 //
 // Cherry-picked the high-leverage events for the Company switcher / org-chart
 // surface. The full Role module emits 17+ events; admin/internal ones can be
@@ -89,7 +89,7 @@ sol! {
 }
 
 // Governance module events — emitted by Governance.module instances.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Governance.module.json
+// Governance module event subset.
 //
 // v1 indexer covers proposal lifecycle + vote cast. The dynamic-array fields
 // of ProposalCreated (targets/values/signatures/calldatas) are decoded but
@@ -124,7 +124,7 @@ sol! {
 }
 
 // Token module events — emitted by Token.module instances.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Token.module.json
+// Token module event subset.
 //
 // AEQI's Token module is a per-instance ERC20 (one module = one token).
 // v1 covers standard Transfer; mint = Transfer(from=0x0,...), burn = Transfer(...,to=0x0).
@@ -142,7 +142,7 @@ sol! {
 }
 
 // Vesting module events — emitted by Vesting.module instances.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Vesting.module.json
+// Vesting module event subset.
 //
 // v1 covers the lifecycle: position created → activated → contributed →
 // claimed → removed. Position metadata (beneficiary role, amount, cliff,
@@ -169,7 +169,7 @@ sol! {
 }
 
 // Funding module events — emitted by Funding.module instances.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Funding.module.json
+// Funding module event subset.
 //
 // v1 covers the round lifecycle + exit audit. Round events only carry
 // fundingId; rich metadata (assetAmount, FDV multipliers, liquidity asset,
@@ -187,7 +187,7 @@ sol! {
 }
 
 // Budget module events — emitted by Budget.module instances.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Budget.module.json
+// Budget module event subset.
 //
 // v1 covers lifecycle (Created/Frozen/Unfrozen/Removed) + money movements
 // (Deposited/Consumed). Skipped: Reset, SetBudgetConfig (admin),
@@ -216,7 +216,7 @@ sol! {
 }
 
 // Fund module events — emitted by Fund.module instances.
-// Source: /home/claudedev/projects/aeqi-graph/abis/Fund.module.json
+// Fund module event subset.
 //
 // v1 covers NAV checkpoints + flow lifecycle + position lifecycle. Skipped:
 // {Manager,Trust}CarryClaimed + MgmtFeesClaimed (tracked indirectly via NAV

@@ -260,7 +260,10 @@ impl EmailVerificationStore {
     /// Consume (delete) a verification row by id. Called after successful
     /// verify to enforce single-use.
     pub fn consume(conn: &Connection, id: &str) -> Result<(), StoreError> {
-        conn.execute("DELETE FROM welcome_email_verifications WHERE id = ?", params![id])?;
+        conn.execute(
+            "DELETE FROM welcome_email_verifications WHERE id = ?",
+            params![id],
+        )?;
         Ok(())
     }
 

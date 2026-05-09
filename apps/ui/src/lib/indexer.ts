@@ -7,7 +7,7 @@
  *
  * Default URL is the relative path `/indexer/graphql`, served by aeqi-platform
  * as a reverse-proxy to its local indexer instance. This keeps hosted
- * (app.aeqi.ai) and OSS self-deploys on the same UI bundle without per-env
+ * and self-deployed instances on the same UI bundle without per-env
  * VITE_INDEXER_URL config — the relative URL resolves against whatever
  * platform the UI is hosted on, which proxies to its own local indexer.
  *

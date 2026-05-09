@@ -10,7 +10,7 @@
 ## Operate
 
 - [deployment.md](deployment.md) — production topology, systemd, reverse proxy.
-- [runtime-platform-separation.md](runtime-platform-separation.md) — open-source runtime kernel vs hosted platform.
+- [runtime-platform-separation.md](runtime-platform-separation.md) — source-available runtime vs hosted platform.
 - [mcp-setup.md](mcp-setup.md) — wire aeqi into an MCP-aware client.
 
 ## Build with aeqi
@@ -24,8 +24,7 @@
 
 - [roadmap.md](roadmap.md) — current phases and what's next.
 
-## Internal
+## Reference
 
-- [internal/](internal/) — historical audits, migration plans, and implementation intelligence. Useful for maintainers, noisy for first-time users.
-- [design/](design/) — component design notes.
-- [security/](security/) — security playbooks and disclosures.
+- [design/](design/) — component design notes and architectural decisions.
+- [security/](security/) — security configuration and hardening notes.

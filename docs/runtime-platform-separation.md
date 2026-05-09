@@ -1,375 +1,149 @@
 # Runtime / Platform Separation
 
-This document defines the clean split between:
+AEQI has two products that should share vocabulary without sharing ownership.
 
-- the open-source AEQI runtime
-- the hosted AEQI platform
+- `aeqi` is the source-available runtime: CLI, daemon, API, embedded dashboard,
+  primitives, local/self-host execution, and company-scoped state.
+- `aeqi-platform` is the hosted control plane: accounts, billing, hosted auth,
+  provisioning, placement, domains, upgrades, observability, and fleet
+  lifecycle.
 
-The core rule is simple:
+The separation rule:
 
-- the runtime owns AEQI execution
-- the platform owns accounts and operated infrastructure
+> The runtime owns execution. The platform owns operated infrastructure.
 
-The critical semantic rule is also simple:
+## Runtime Ownership
 
-- `Company` is a kernel primitive
-- it should not be renamed away to `Workspace`
+The runtime owns:
 
-If AEQI is company-native intelligence infrastructure, the runtime should say that plainly.
+- companies as runtime identities
+- agents, roles, events, quests, ideas, sessions, tools, and execution
+- runtime-local credentials and integration state
+- SQLite schema and migrations for runtime data
+- the embedded dashboard for local/self-host operation
+- stable HTTP, WebSocket, IPC, and MCP contracts
 
-## Correct Product Split
-
-### AEQI Runtime
-
-The open-source runtime is:
-
-- a local or self-hosted dashboard for one or more companies
-- the place where agents, events, quests, ideas, sessions, tools, and execution live
-- the substrate where company-scoped intelligence runs
-
-It may support:
-
-- no auth
-- simple local auth
-- operator-managed auth
-
-It should not require:
+The runtime must not require:
 
 - SaaS accounts
-- billing
-- plans
+- billing plans
 - waitlists
-- hosted placement state
-- account-level API products
+- hosted placement records
+- platform user/session tables
+- platform-owned OAuth or payment products
 
-### AEQI Platform
+Company is still a runtime term. It is not a hosted-only concept.
 
-The hosted platform is:
+## Platform Ownership
 
-- the control plane above one or more AEQI runtimes
-- the owner of accounts, memberships, billing, auth, provisioning, domains, placement, upgrades, and lifecycle
-- the operator shell above the runtime
+The hosted platform owns:
 
-Its job is not to redefine AEQI.
-Its job is to make AEQI runtimes manageable and commercial.
+- human accounts, sessions, passkeys, and hosted OAuth
+- memberships and account-derived access policy
+- billing, plans, invoices, subscriptions, and usage products
+- runtime placement, provisioning, restart, upgrade, and rollback
+- public domains, routing, reverse proxying, and fleet health
+- hosted admin and support tooling
 
-## Key UI Principle
+The platform may mount runtime pages, proxy runtime APIs, and provision runtime
+instances. It must not redefine the runtime primitives.
 
-Do not make one shell pretend to be both products.
+## Boundary Contract
 
-The separation is not:
+Platform-to-runtime interaction should use explicit contracts:
 
-- runtime uses `Workspace`
-- platform uses `Company`
+- released runtime binaries and UI assets
+- versioned blueprint/catalog artifacts
+- HTTP/WebSocket/API routes
+- IPC or MCP only where an API is intentionally local
+- version and health endpoints
+- migration and schema metadata exposed by the runtime
 
-The separation is:
+Platform-to-runtime interaction should not use:
 
-- both runtime and platform operate on companies
-- only the platform owns account/control-plane surfaces
+- sibling source-tree paths
+- direct runtime SQLite mutation
+- assumptions about private runtime table layout
+- build scripts that require a developer workstation path
+- platform user IDs as runtime ontology
 
-That means:
+The platform can pass a caller identity or access context to the runtime, but
+that context is an authorization adapter, not a new runtime primitive.
 
-- a company switcher is legitimate in the runtime shell
-- `X-Company` scoping is legitimate in both runtime and platform
-- `CompanyPage` is a real runtime page, not a SaaS-only page
-- `AccountPage` is a platform page
+## UI Shape
 
-## Current Status
+Shared runtime pages should work in both local and hosted modes:
 
-The first separation cut is in place.
-
-Shipped:
-
-- backend bootstrap explicitly reports `app_mode: runtime` from the open-source runtime [auth.rs](crates/aeqi-web/src/routes/auth.rs:128)
-- backend bootstrap explicitly reports `app_mode: platform` from the hosted control plane [server.rs](aeqi-platform/src/server.rs:408)
-- the shared UI now renders a mode-aware route tree so platform-only pages stay out of the runtime shell [App.tsx](apps/ui/src/App.tsx:62)
-- company routes now stay available in both runtime and platform mode, and legacy `/workspace` redirects to `/company` [App.tsx](apps/ui/src/App.tsx:72)
-- the left navigation now treats company selection/settings as runtime-native instead of replacing them with `Workspace` terminology [AppLayout.tsx](apps/ui/src/components/AppLayout.tsx:71)
-- generic API requests, websocket connections, and chat streaming now carry the selected company in both modes [api.ts](apps/ui/src/lib/api.ts:46) [useDaemonSocket.ts](apps/ui/src/hooks/useDaemonSocket.ts:26) [useWebSocket.ts](apps/ui/src/hooks/useWebSocket.ts:84) [AgentSessionView.tsx](apps/ui/src/components/AgentSessionView.tsx:1003)
-- the shared company page now drops hosted account API key assumptions when running in self-hosted/runtime mode [CompanyPage.tsx](apps/ui/src/pages/CompanyPage.tsx:69)
-
-Still deferred:
-
-- removing account/control-plane assumptions from more shared pages
-- eliminating direct platform mutation of runtime DB internals
-- isolating account-derived access policy behind adapters instead of letting it leak into core runtime semantics
-- adding an explicit local operator layer for advanced multi-runtime self-hosting
-
-## Open-Source Dashboard
-
-The open-source runtime should ship with a dashboard, and that dashboard should be company-native.
-
-Its navigation should be company-scoped:
-
-- Home
-- Companies
-- Company
-- Agents
-- Events
-- Quests
-- Ideas
-- Sessions
-
-If local auth exists, a minimal local profile page is acceptable.
-That is still different from a SaaS account page.
-
-`Company` in the runtime means:
-
-- company identity
-- company configuration
-- company-scoped API/runtime credentials
-- company execution defaults
-
-It does not mean:
-
-- billing
-- plan management
-- hosted ownership model
-
-## Hosted Dashboard
-
-The hosted platform should have its own shell above the company runtime views.
-
-Its navigation should include control-plane concerns:
-
-- Account
-- Billing
-- Security
-- Domains
-- Deployments
-- Infrastructure
-
-Inside a selected company/runtime, the platform can mount shared AEQI pages:
-
-- Company
-- Agents
-- Events
-- Quests
-- Ideas
-- Sessions
-
-That gives you two levels:
-
-- platform shell: which account/runtime/company am I operating?
-- runtime shell: what is happening inside this company?
-
-## Mental Model
-
-Use this hierarchy:
-
-1. Platform Account
-2. Company
-3. AEQI primitives inside that company
-
-For self-hosted runtime mode:
-
-1. Local runtime
-2. Company
-3. AEQI primitives inside that company
-
-No account layer is required there.
-
-## Self-Hosted Multi-Company
-
-Yes, self-hosted users should be able to have multiple companies in one runtime.
-
-That is not a violation of the model.
-That is the model.
-
-The hosted service is still justified because most users do not want to operate:
-
-- auth and memberships
-- billing and plans
-- provisioning
-- placement
-- domains
-- upgrades and rollback
-- monitoring and recovery
-
-The hosted value is operator leverage, not semantic ownership of `Company`.
-
-## What Must Move Out Of The Runtime
-
-The runtime should keep `Company`.
-What should move out are platform-business concerns.
-
-### 1. Accounts and Memberships
-
-The runtime should not own the platform account model.
-
-Target state:
-
-- runtime owns companies and AEQI execution
-- platform owns accounts, memberships, and identity relationships
-
-### 2. Billing, Waitlists, OAuth, and Account API Products
-
-These are SaaS concerns.
-
-Target state:
-
-- runtime does not need billing, subscriptions, waitlists, or hosted account API key semantics
-- platform owns those surfaces entirely
-
-### 3. Placement and Direct Runtime DB Mutation
-
-The host runtime manager currently edits runtime SQLite state directly [host.rs](aeqi-platform/src/host.rs:304).
-
-That weakens the substrate.
-
-Target state:
-
-- platform interacts with runtimes through explicit APIs / IPC contracts
-- platform does not patch runtime DB internals behind the runtime's back
-
-### 4. Account-Derived Access Policy in Core Semantics
-
-Company scoping is part of the runtime model.
-Account-derived access policy is not.
-
-Target state:
-
-- runtime keeps company identity and company CRUD
-- hosted adapters/proxies can still enforce which companies an account may access
-- access policy does not redefine the ontology
-
-## UI Architecture
-
-You want shared company pages and separate shells.
-
-### Shared Pages
-
-These should work in both products:
-
-- company
 - companies
+- company overview/settings
 - agents
+- roles
 - events
 - quests
 - ideas
 - sessions
+- integrations that belong to a company runtime
 
-### Runtime Shell
+Platform-only pages should stay outside the local runtime shell:
 
-This shell is for the open-source product.
+- account
+- billing
+- hosted security
+- hosted domains
+- deployments
+- infrastructure
+- admin
 
-It should own:
+The clean shape is separate shells over shared company pages:
 
-- company navigation
-- runtime-local settings
-- local auth/profile if needed
+- `RuntimeLayout`: local/self-host operator shell
+- `PlatformLayout`: hosted account and fleet shell
+- shared company pages below either shell
 
-### Platform Shell
+## Artifact Boundary
 
-This shell is for the hosted SaaS.
+Hosted deployments should consume runtime release artifacts instead of a local
+checkout:
 
-It should own:
+- `aeqi` binary
+- embedded or external UI dist
+- blueprint catalog
+- OpenAPI or JSON schema definitions where applicable
+- migration manifest
+- checksum and version metadata
 
-- account navigation
-- billing/security/admin surfaces
-- runtime placement/lifecycle views
+`aeqi-platform` should pin the runtime version it deploys and should verify the
+runtime's reported version and health after placement.
 
-The platform shell can mount shared company pages underneath it.
+## Database Boundary
 
-## Recommended Implementation Strategy
+Runtime databases are runtime-owned. Platform databases are platform-owned.
 
-### Phase 1: Separate by Mode, Not by Repo
+Allowed:
 
-Do this first.
+- platform stores placement rows that point to runtime instances
+- platform stores account, billing, and membership state
+- runtime stores company, agent, role, quest, event, idea, and session state
+- runtime exposes APIs for state the platform needs to read or mutate
 
-- keep the shared React codebase
-- expose explicit app modes: `runtime`, `platform`, later `operator`
-- return mode and capabilities from backend bootstrap
-- render different shells based on mode
+Forbidden:
 
-This is the lowest-risk path.
+- platform patching runtime SQLite rows behind the runtime's back
+- runtime reading platform account/billing tables directly
+- shared table names that imply shared ownership
+- hidden migration dependencies across repositories
 
-### Phase 2: Split Shells While Keeping Company Pages Shared
+## Implementation Roadmap
 
-Replace the single-shell route model with:
+1. Publish the runtime contract in docs and tests.
+2. Add runtime version/health/schema endpoints that the platform can rely on.
+3. Package blueprint/catalog data as an artifact consumed by both runtime and
+   platform.
+4. Replace platform local-path runtime builds with pinned release artifacts.
+5. Replace any direct runtime DB mutation with runtime API calls.
+6. Keep shared dashboard pages, but split runtime and platform shells.
+7. Add CI checks that block local workstation paths, production incident notes,
+   and internal deployment data from the public runtime repository.
 
-- `RuntimeLayout`
-- `PlatformLayout`
-
-Move:
-
-- `AccountPage` to platform-only
-- company navigation into both products where relevant
-- platform control-plane pages out of the runtime shell
-
-### Phase 3: Introduce a Company Adapter Boundary
-
-Create one client-side interface for the selected company:
-
-- current company id
-- display name
-- runtime endpoint
-- auth capabilities
-
-In runtime mode:
-
-- adapter resolves to a locally selected company
-
-In platform mode:
-
-- adapter resolves through the selected hosted company/runtime context
-
-This lets shared pages stop caring whether they are local or hosted.
-
-### Phase 4: Remove Platform Assumptions From Shared APIs and Pages
-
-Do not deprecate `Company`.
-Deprecate platform leakage.
-
-Do this in order:
-
-1. keep `company` as the public runtime term
-2. remove hosted account assumptions from shared pages
-3. move account/billing/provisioning semantics fully into platform contracts
-4. keep runtime provisioning APIs company-generic: initialize company, seed ideas, spawn agents
-
-### Phase 5: Add an Operator Layer for Advanced Self-Hosting
-
-Long term:
-
-- the runtime stays company-native
-- the platform stays the commercial operator plane
-- an optional local operator layer can manage many runtimes for advanced self-hosters
-
-## Concrete Changes Needed
-
-### In `apps/ui`
-
-1. Keep company routes and company scoping in runtime mode.
-2. Keep account pages platform-only.
-3. Continue splitting runtime/company pages from platform/account pages.
-4. Remove remaining `Workspace` terminology from the product shell.
-5. Make shared pages explicitly branch only when account semantics are truly required.
-
-### In `aeqi-orchestrator`
-
-1. Keep `company` as the kernel identity.
-2. Avoid introducing account/billing/hosted business concepts into runtime contracts.
-3. Keep provisioning APIs company-centric and generic.
-4. Move hosted access-policy helpers behind adapters instead of letting them redefine runtime semantics.
-
-### In `aeqi-platform`
-
-1. Treat the runtime as an external substrate, not a DB you patch directly.
-2. Keep all account, billing, invite, OAuth, API product, secret management, and placement logic here.
-3. Own route-to-runtime and company selection concerns here when operating hosted deployments.
-4. Expose platform bootstrap metadata so the UI can choose the correct shell.
-
-## Product Outcome
-
-If you do this correctly:
-
-- the open-source AEQI runtime stays faithful to the company-native ontology
-- the hosted platform has a justified reason to exist
-- self-hosting stays real instead of crippled
-- the kernel becomes more foundational because it stops absorbing SaaS semantics
-
-That is the right differentiation:
-
-- open-source AEQI: company-native agent runtime
-- hosted AEQI Platform: operator and commercial control plane
+The goal is not two disconnected products. The goal is a clean kernel and a
+clean hosted operator plane.

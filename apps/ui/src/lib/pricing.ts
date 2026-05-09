@@ -19,7 +19,7 @@
  *
  *  Subscription includes $25 / month of inference credit, pooled across all
  *  Companies in the workspace. Top up anytime via card or USDC. External
- *  callers pay per-call via x402 (cost + 20%) — see aeqi-economy-plan.md.
+ *  callers pay per-call via x402 (cost + 20%).
  *
  *  No tier picker, no trial, no annual. `FOUNDER_FEE` is the effective
  *  first-month price on both rails.

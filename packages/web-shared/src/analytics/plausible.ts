@@ -10,7 +10,7 @@ declare global {
 }
 
 export interface PlausibleConfig {
-  /** Domain registered with Plausible (e.g. `app.aeqi.ai`). */
+  /** Domain registered with Plausible (for example, your hosted app domain). */
   domain: string;
   /** Self-hosted Plausible base URL (e.g. `https://analytics.aeqi.ai`). */
   apiHost: string;

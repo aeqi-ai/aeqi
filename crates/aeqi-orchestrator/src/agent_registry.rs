@@ -658,7 +658,7 @@ fn ensure_inference_calls_table(conn: &Connection) -> rusqlite::Result<()> {
 /// Phase-1 public-profile columns on `entities`. Two fields, both
 /// idempotent: `tagline` (one-line description) and `public` (boolean
 /// flag — when 1, the workspace exposes a public profile at
-/// `app.aeqi.ai/<slug>`; when 0, returns 404 to non-members).
+/// `<host>/<slug>`; when 0, returns 404 to non-members).
 fn ensure_entity_public_columns(conn: &Connection) -> rusqlite::Result<()> {
     let cols: Vec<String> = {
         let mut stmt = conn.prepare("PRAGMA table_info(entities)")?;

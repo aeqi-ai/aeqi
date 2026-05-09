@@ -24,8 +24,8 @@
 //! blueprint plus rationale + provenance metadata around without leaking
 //! orchestrator types into the architect's surface.
 //!
-//! See `/home/claudedev/aeqi/.observations/architect-agent-2026-05-08.md` for
-//! the design brief that this crate implements.
+//! The public contract is the generated Blueprint JSON envelope; implementation
+//! notes stay in this crate and the runtime/platform separation docs.
 
 pub mod generator;
 pub mod llm;

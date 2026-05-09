@@ -448,7 +448,7 @@ const VALID_ROLE_TYPES: &[&str] = &["director", "operational", "advisor"];
 /// On-chain template slugs whose every module slot is wired to a Beacon
 /// implementation on the live anvil deploy.
 ///
-/// Walk-3 dogfood (2026-05-08) reverted at `Factory._createModules` with
+/// A deployment walk reverted at `Factory._createModules` with
 /// `BeaconProxy_ImplementationNotFound()` (`0x269dea0a`) when the LLM
 /// emitted `template: "foundation"` — the foundation template's 5th
 /// module slot `keccak256("foundation")` has no `FoundationModule`
@@ -1275,7 +1275,7 @@ mod tests {
 
     #[test]
     fn schema_gate_snaps_foundation_to_entity() {
-        // Walk-3 dogfood (2026-05-08) reverted because the LLM emitted
+        // A deployment walk reverted because the LLM emitted
         // `template: "foundation"` — the on-chain foundation template's
         // 5th module slot has no Beacon implementation registered, so
         // `Factory._createModules` reverts at module-init with

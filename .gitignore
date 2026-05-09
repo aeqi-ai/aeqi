@@ -34,6 +34,9 @@ projects/*/
 !projects/README.md
 
 # Claude Code
+.claude/
+.agents/
+skills-lock.json
 .claude/worktrees/
 apps/ui/dist-storybook/
 apps/ui/apps/
@@ -82,6 +85,7 @@ apps/ui/CLAUDE.md
 # dogfood flow, mints JWTs against our auth). Self-hosters don't need these.
 scripts/ux-*.mjs
 scripts/ux-*.sh
+apps/ui/scripts/ux-*.mjs
 scripts/persona-walk-*.mjs
 scripts/AUDIT.md
 scripts/_*.mjs

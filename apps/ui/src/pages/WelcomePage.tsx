@@ -205,7 +205,7 @@ interface SpawnStep {
   status: "pending" | "active" | "done";
 }
 
-// Empty default → relative URLs hit the current origin (app.aeqi.ai in
+// Empty default → relative URLs hit the current origin (hosted or local in
 // prod, localhost dev in dev). Override with VITE_AEQI_SOLANA_API only
 // when running the standalone smoke server on a non-default port.
 const SOLANA_API_URL = (import.meta.env.VITE_AEQI_SOLANA_API as string | undefined) ?? "";

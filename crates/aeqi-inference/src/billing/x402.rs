@@ -13,8 +13,6 @@
 //! - Forward to upstream; calculate cost post-response.
 //! - Submit settlement tx via Coinbase Facilitator (Phase 1) or self-hosted (Phase 2).
 //! - Retry settlement up to N times; log failure without interrupting stream.
-//!
-//! See `aeqi/docs/x402-rails-design.md` for the full spec.
 
 use std::task::{Context, Poll};
 

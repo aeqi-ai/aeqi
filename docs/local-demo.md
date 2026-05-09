@@ -6,7 +6,7 @@ Time: ~10 minutes the first time (most of it is the model download). About 30 se
 
 ## What you need
 
-- Linux or macOS. (Windows: build from source; see [windows-port-intelligence.md](internal/windows-port-intelligence.md).)
+- Linux or macOS. Windows users should build from source and run the daemon manually.
 - ~5 GB free disk: ~400 MB for the smallest Ollama model, the rest for `target/release` and the SQLite databases under `~/.aeqi/`.
 - About 8 GB of RAM. The default model fits in 4 GB; bigger models are happier with more.
 

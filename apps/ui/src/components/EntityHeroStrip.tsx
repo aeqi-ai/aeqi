@@ -351,9 +351,7 @@ export default function EntityHeroStrip({
                 userSelect: "none",
               }}
               title={
-                isPublic
-                  ? "Profile is public at app.aeqi.ai/<slug>"
-                  : "Profile is private to members"
+                isPublic ? "Profile is public at <host>/<slug>" : "Profile is private to members"
               }
             >
               <input

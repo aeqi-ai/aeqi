@@ -39,8 +39,7 @@ const DRIVE_UPLOAD_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 /// the rest via export+attachment if it needs more.
 const READ_FILE_MAX_BYTES: usize = 50 * 1024;
 
-const FIELDS_LIST: &str =
-    "files(id,name,mimeType,webViewLink,modifiedTime),nextPageToken";
+const FIELDS_LIST: &str = "files(id,name,mimeType,webViewLink,modifiedTime),nextPageToken";
 const FIELDS_FILE: &str = "id,name,mimeType,webViewLink,modifiedTime";
 
 fn need(scopes: Vec<&'static str>) -> CredentialNeed {
@@ -317,12 +316,7 @@ impl Tool for DriveReadFileTool {
         );
         let (auth_k, auth_v) = auth_header(&cred);
         let http = Client::new();
-        let meta_resp = match http
-            .get(&meta_url)
-            .header(&auth_k, &auth_v)
-            .send()
-            .await
-        {
+        let meta_resp = match http.get(&meta_url).header(&auth_k, &auth_v).send().await {
             Ok(r) => r,
             Err(e) => return Ok(into_tool_error(GoogleApiError::Transport(e.to_string()))),
         };
@@ -353,10 +347,7 @@ impl Tool for DriveReadFileTool {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let web_view_link = meta
-            .get("webViewLink")
-            .cloned()
-            .unwrap_or(Value::Null);
+        let web_view_link = meta.get("webViewLink").cloned().unwrap_or(Value::Null);
 
         // 2. Fetch content. Google-native (`application/vnd.google-apps.*`)
         //    must use /export; everything else uses ?alt=media.
@@ -371,12 +362,7 @@ impl Tool for DriveReadFileTool {
                 urlencoding::encode(file_id),
             )
         };
-        let content_resp = match http
-            .get(&content_url)
-            .header(&auth_k, &auth_v)
-            .send()
-            .await
-        {
+        let content_resp = match http.get(&content_url).header(&auth_k, &auth_v).send().await {
             Ok(r) => r,
             Err(e) => return Ok(into_tool_error(GoogleApiError::Transport(e.to_string()))),
         };
@@ -546,10 +532,12 @@ impl Tool for DriveCreateDocTool {
             .unwrap_or("")
             .to_string();
         let web_view_link = parsed.get("webViewLink").cloned().unwrap_or(Value::Null);
-        Ok(ToolResult::success(format!("created doc id={id}")).with_data(json!({
-            "id":            id,
-            "web_view_link": web_view_link,
-        })))
+        Ok(
+            ToolResult::success(format!("created doc id={id}")).with_data(json!({
+                "id":            id,
+                "web_view_link": web_view_link,
+            })),
+        )
     }
 }
 
@@ -585,10 +573,7 @@ mod tests {
             id: "cred-test".into(),
             provider: PROVIDER.into(),
             name: NAME.into(),
-            headers: vec![(
-                "Authorization".to_string(),
-                "Bearer token-test".to_string(),
-            )],
+            headers: vec![("Authorization".to_string(), "Bearer token-test".to_string())],
             bearer: Some("token-test".into()),
             raw: Vec::new(),
             metadata: json!({ "scopes": scopes }),

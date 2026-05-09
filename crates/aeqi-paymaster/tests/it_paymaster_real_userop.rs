@@ -206,13 +206,13 @@ async fn test_userop_selfpay_mines_success() {
     // shell argument length limits and quoting issues.
 
     let paymaster_bytecode = sh(
-        "cat ${AEQI_CORE_OUT:-/home/claudedev/projects/aeqi-core/out}/Paymaster.sol/Paymaster.json \
+        "cat ${AEQI_CORE_OUT:-contracts/out}/Paymaster.sol/Paymaster.json \
              2>/dev/null | python3 -c \
              \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
     );
     assert!(
         !paymaster_bytecode.is_empty() && paymaster_bytecode.starts_with("0x"),
-        "Paymaster.sol not compiled; run `forge build` in /home/claudedev/projects/aeqi-core"
+        "Paymaster.sol not compiled; set AEQI_CORE_OUT or run forge build for the contracts workspace"
     );
 
     let paymaster_addr = cast_deploy(
@@ -256,7 +256,7 @@ async fn test_userop_selfpay_mines_success() {
     // Compile SimpleAccount (idempotent — forge skips if already compiled).
     // Redirect forge stdout to /dev/null to avoid mixing with bytecode output.
     sh("mkdir -p /tmp/simple-account-test/src && \
-         cp /home/claudedev/aeqi-paymaster-funding-test/test-contracts/SimpleAccount.sol \
+         cp ${AEQI_REPO_ROOT:-.}/test-contracts/SimpleAccount.sol \
            /tmp/simple-account-test/src/SimpleAccount.sol 2>/dev/null; \
          forge build --root /tmp/simple-account-test >/dev/null 2>/dev/null || \
          forge clean --root /tmp/simple-account-test >/dev/null 2>/dev/null && \
@@ -469,13 +469,13 @@ async fn test_paymaster_sol_accepts_v07_layout_onchain() {
 
     // ── Deploy Paymaster.sol with the test key as signer ─────────────────────
     let paymaster_bytecode = sh(
-        "cat ${AEQI_CORE_OUT:-/home/claudedev/projects/aeqi-core/out}/Paymaster.sol/Paymaster.json \
+        "cat ${AEQI_CORE_OUT:-contracts/out}/Paymaster.sol/Paymaster.json \
              2>/dev/null | python3 -c \
              \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
     );
     assert!(
         !paymaster_bytecode.is_empty() && paymaster_bytecode.starts_with("0x"),
-        "Paymaster.sol not compiled; run `forge build` in /home/claudedev/projects/aeqi-core"
+        "Paymaster.sol not compiled; set AEQI_CORE_OUT or run forge build for the contracts workspace"
     );
 
     let paymaster_addr = cast_deploy(
@@ -692,13 +692,13 @@ async fn test_paymaster_sol_deploy_and_fund() {
 
     // Check Paymaster.sol bytecode is available.
     let bytecode = sh(
-        "cat ${AEQI_CORE_OUT:-/home/claudedev/projects/aeqi-core/out}/Paymaster.sol/Paymaster.json \
+        "cat ${AEQI_CORE_OUT:-contracts/out}/Paymaster.sol/Paymaster.json \
              2>/dev/null | python3 -c \
              \"import sys,json; d=json.load(sys.stdin); print(d['bytecode']['object'])\" 2>/dev/null",
     );
     if !bytecode.starts_with("0x") || bytecode.len() < 10 {
         eprintln!(
-            "SKIP: Paymaster.sol not compiled; run `forge build` in /home/claudedev/projects/aeqi-core"
+            "SKIP: Paymaster.sol not compiled; set AEQI_CORE_OUT or run forge build for the contracts workspace"
         );
         return;
     }

@@ -77,7 +77,7 @@ pub struct Entity {
     pub updated_at: Option<String>,
     /// One-line description shown in the entity hero strip on Overview.
     pub tagline: Option<String>,
-    /// When true, `app.aeqi.ai/<slug>` returns a public profile page;
+    /// When true, `<host>/<slug>` returns a public profile page;
     /// when false, returns 404 to non-members. Defaults to false.
     pub public: bool,
 }
@@ -312,7 +312,7 @@ impl EntityRegistry {
         Ok(())
     }
 
-    /// Toggle the public-profile flag. When true, `app.aeqi.ai/<slug>`
+    /// Toggle the public-profile flag. When true, `<host>/<slug>`
     /// returns a public profile; when false, returns 404 to non-members.
     pub async fn set_public(&self, id: &str, public: bool) -> Result<()> {
         let now = Utc::now().to_rfc3339();

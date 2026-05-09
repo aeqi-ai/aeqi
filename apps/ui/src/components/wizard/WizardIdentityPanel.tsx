@@ -82,7 +82,7 @@ export function WizardIdentityPanel({
             value={state.slug}
             onChange={handleSlugChange}
             placeholder="atlas-studio"
-            hint={`app.aeqi.ai/c/${state.slug || "your-slug"}`}
+            hint={state.slug || "your-slug"}
           />
         </div>
         <div className={styles.avatarNote}>Avatar — generated from name at create time.</div>
