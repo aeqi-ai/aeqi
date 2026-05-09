@@ -66,3 +66,25 @@ config/ports.toml
 # Personal deploy scripts
 scripts/deploy.sh
 scripts/check-recall.sh.real
+
+# Internal dogfood / UX walks / observation reports — never committed
+# (UX screenshots, walk reports, internal briefs, dogfood notes)
+.observations/
+
+# Internal AI-pair-programming context — full of cost notes, prod paths,
+# session-specific recipes. Self-hosters and contributors don't need this;
+# generic project conventions live in CONTRIBUTING.md / docs/.
+CLAUDE.md
+apps/ui/CLAUDE.md
+.private/
+
+# Internal UX walk + audit tooling (hits prod URLs, references our
+# dogfood flow, mints JWTs against our auth). Self-hosters don't need these.
+scripts/ux-*.mjs
+scripts/ux-*.sh
+scripts/persona-walk-*.mjs
+scripts/AUDIT.md
+scripts/_*.mjs
+scripts/tg-*.sh
+scripts/bridge-wizard-verify.mjs
+scripts/dogfood-*.mjs
