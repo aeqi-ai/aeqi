@@ -302,7 +302,7 @@ export default function App() {
               visitors bounce to /login. AppLayout dispatches `isStart` to
               StartPage / CompanySetupPage. */}
           <Route path="/start" element={<GatedAppShell />} />
-          <Route path="/start/*" element={<GatedAppShell />} />
+          <Route path="/start/:slug" element={<GatedAppShell />} />
           <Route path="/waitlist" element={<Navigate to="/signup" replace />} />
           <Route path="/verify" element={<VerifyEmailPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
