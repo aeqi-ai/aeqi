@@ -1,7 +1,5 @@
-/* /economy — coming-soon skeleton. The page paints muted preview
-   cards in the shell's jade-mineral palette; nothing here is live
-   data yet, so colors stay flat and edges stay soft so the surface
-   reads as "preview" without performing fake activity. */
+/* /economy — public discovery surface. Real cards over real data:
+   one tile per public Company with a registered TRUST on Solana. */
 
 .economy-page {
   display: flex;
@@ -13,30 +11,13 @@
 }
 
 /* ── Hero ──
-   Eyebrow ("Coming soon") above the title. The title borrows the
-   Blueprints page's typographic gesture (Exo 2 wordmark + period) so
-   the two operator surfaces feel like siblings. */
+   Title + lede + count. Mirrors the typographic gesture of /blueprints
+   so the two operator-facing public surfaces feel like siblings. */
 .economy-hero {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 8px 0 0;
-}
-.economy-hero-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-canvas);
-  border: none;
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
 }
 .economy-hero-title {
   margin: 0;
@@ -54,201 +35,132 @@
   line-height: 1.55;
   color: var(--color-text-secondary);
 }
+.economy-hero-meta {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+}
 
-/* ── Skeleton grid ──
-   Two-column auto-fill above 720px; one column below. Cards float on
-   the page background, no inner shadow — they're placeholders, not
-   live tiles. */
-.economy-skel-grid {
+/* ── Status / loading row ── */
+.economy-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* ── Card grid ──
+   Auto-fill at min-320px columns; collapses to one column under 720px.
+   Cards are flat tiles on the canvas — paper background, no border,
+   subtle hover lift. */
+.economy-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.economy-skel-card {
+.economy-grid > li {
+  display: flex;
+}
+.economy-card {
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: var(--bg-canvas);
-  border: none;
+  background: var(--color-card);
   border-radius: var(--radius-lg);
-  min-height: 220px;
+  cursor: pointer;
+  width: 100%;
+  min-height: 140px;
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease;
 }
-.economy-skel-card-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.economy-skel-card-title {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  letter-spacing: -0.005em;
-}
-.economy-skel-card-sub {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  line-height: 1.45;
+.economy-card:hover,
+.economy-card:focus-visible {
+  background: var(--color-card-elevated);
+  box-shadow: var(--shadow-sm);
+  outline: none;
 }
 
-/* Wallets — three rows of dot + bar + amount stub. */
-.economy-skel-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.economy-skel-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.economy-skel-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--border);
-  flex-shrink: 0;
-}
-.economy-skel-bar {
-  height: 8px;
-  border-radius: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--state-hover) 0%,
-    var(--border-faint) 50%,
-    var(--state-hover) 100%
-  );
-  background-size: 200% 100%;
-  animation: economy-skel-shimmer 2.4s ease-in-out infinite;
-}
-.economy-skel-amount {
-  width: 48px;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--border-faint);
-  flex-shrink: 0;
-  margin-left: auto;
-}
-@keyframes economy-skel-shimmer {
-  0%,
-  100% {
-    background-position: 200% 0;
-  }
-  50% {
-    background-position: -200% 0;
-  }
-}
-
-/* Cap-table pie — flat circle with two visible slices, legend below. */
-.economy-skel-pie {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.economy-skel-pie svg {
-  width: 96px;
-  height: 96px;
-  flex-shrink: 0;
-}
-.economy-skel-pie circle {
-  fill: var(--state-hover);
-}
-.economy-skel-pie .slice-a {
-  fill: var(--color-text-secondary);
-  opacity: 0.55;
-}
-.economy-skel-pie .slice-b {
-  fill: var(--color-text-secondary);
-  opacity: 0.32;
-}
-.economy-skel-legend {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* Card head — title + tagline. Title weighted, tagline muted. */
+.economy-card-head {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
+}
+.economy-card-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--color-text-primary);
+  line-height: 1.25;
+}
+.economy-card-tagline {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card foot — TRUST address pill (link out to Solana explorer) and
+   relative-time subtext. The pill stops click bubbling so explorer
+   navigation doesn't also trigger the card's primary navigate. */
+.economy-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.economy-card-trust {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: background 0.12s ease;
 }
-.economy-skel-legend li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.economy-card-trust:hover {
+  background: var(--state-hover);
+  color: var(--color-text-primary);
 }
-.economy-skel-legend .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.economy-card-trust--pending {
+  cursor: default;
+  opacity: 0.6;
 }
-.economy-skel-legend .dot-a {
-  background: var(--color-text-secondary);
-  opacity: 0.55;
+.economy-card-trust--pending:hover {
+  background: var(--bg-subtle);
+  color: var(--color-text-secondary);
 }
-.economy-skel-legend .dot-b {
-  background: var(--color-text-secondary);
-  opacity: 0.32;
-}
-.economy-skel-legend .dot-c {
-  background: var(--border);
-}
-
-/* Ownership graph — minimal node-and-edge sketch. */
-.economy-skel-graph {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.economy-skel-graph svg {
-  width: 100%;
-  max-width: 240px;
-  height: 120px;
-}
-.economy-skel-graph line {
-  stroke: var(--border);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
-.economy-skel-graph circle {
-  fill: var(--bg-canvas);
-  stroke: var(--color-text-muted);
-  stroke-width: 1.5;
-}
-
-/* Cost-telemetry bars — seven columns at varied heights. */
-.economy-skel-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 96px;
-  padding-top: 8px;
-}
-.economy-skel-col {
-  flex: 1;
-  background: linear-gradient(180deg, var(--color-text-secondary) 0%, var(--border) 100%);
-  opacity: 0.45;
-  border-radius: 3px 3px 0 0;
-  min-height: 12px;
-}
-
-/* Footer attribution — small print pinned below the grid. */
-.economy-foot {
-  padding-top: 16px;
-  border-top: 1px dashed var(--border-faint);
-  font-size: var(--font-size-xs);
+.economy-card-trust-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
 }
-.economy-foot p {
-  margin: 0;
+.economy-card-trust-addr {
+  font-family: var(--font-mono);
 }
-.economy-foot code {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  padding: 1px 6px;
-  background: var(--bg-row);
-  border-radius: 4px;
-  color: var(--color-text-secondary);
+.economy-card-since {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  letter-spacing: 0.01em;
 }

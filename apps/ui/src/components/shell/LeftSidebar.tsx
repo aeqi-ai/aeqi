@@ -206,7 +206,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   const isCompanyOverview = !!base && path === base;
 
   // Top-level public rows.
-  const isDiscover = path === "/";
+  const isDiscover = path === "/" || path === "/economy" || path.startsWith("/economy/");
   const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
@@ -336,9 +336,12 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
       <div className="left-sidebar-body">
         {/* ── Economy — sits ABOVE the CompanySwitcher. Public front
-            door at `/`. Search caps the row. ── */}
+            door at `/economy`. Search caps the row. The bare `/` resolves
+            via RootRouteSwitch to the user's inbox (authed) or login
+            (unauth) — that's why the sidebar links at `/economy` directly,
+            not at `/`, even though both render EconomyPage. ── */}
         <nav className="sidebar-surface-nav sidebar-zone" aria-label="Public">
-          {topLevelItem("/", "Economy", <EconomyIcon />, isDiscover, {
+          {topLevelItem("/economy", "Economy", <EconomyIcon />, isDiscover, {
             action: rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`),
           })}
         </nav>
