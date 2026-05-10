@@ -104,7 +104,7 @@ only difference at the call site.
   the row carries the user's identity inside the access token).
 
 The pack chose `ScopeHint::Installation` because that's the canonical
-GitHub axis: aeqi may need separate credentials for `aeqiai/aeqi`
+GitHub axis: aeqi may need separate credentials for `aeqi-ai/aeqi`
 (installation A) vs `myorg/my-private-app` (installation B). Per-agent
 scoping (à la W1) is layered above by passing `installation_id` on
 the resolution scope; the substrate's lookup walks the

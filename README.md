@@ -1,6 +1,6 @@
 # aeqi
 
-[![CI](https://github.com/aeqiai/aeqi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aeqiai/aeqi/actions/workflows/ci.yml)
+[![CI](https://github.com/aeqi-ai/aeqi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aeqi-ai/aeqi/actions/workflows/ci.yml)
 [![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-black)](Cargo.toml)
 
@@ -53,13 +53,13 @@ source surface.
 Install the latest published binary for Linux amd64 or macOS arm64:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/aeqiai/aeqi.git
+git clone https://github.com/aeqi-ai/aeqi.git
 cd aeqi
 cargo build --release -p aeqi
 ```

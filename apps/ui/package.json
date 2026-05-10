@@ -7,7 +7,7 @@
   "author": "aeqixyz",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aeqiai/aeqi/tree/main/apps/ui"
+    "url": "https://github.com/aeqi-ai/aeqi/tree/main/apps/ui"
   },
   "type": "module",
   "engines": {

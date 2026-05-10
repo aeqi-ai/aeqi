@@ -32,8 +32,8 @@ edition = "2024"
 license = "BUSL-1.1"
 authors = ["AEQI Contributors"]
 description = "Agent runtime, multi-agent harness, orchestration engine, and web control plane"
-repository = "https://github.com/aeqiai/aeqi"
-homepage = "https://github.com/aeqiai/aeqi"
+repository = "https://github.com/aeqi-ai/aeqi"
+homepage = "https://github.com/aeqi-ai/aeqi"
 categories = ["development-tools", "command-line-utilities"]
 keywords = ["agents", "runtime", "orchestration", "automation", "control-plane"]
 

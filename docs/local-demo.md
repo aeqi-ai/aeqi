@@ -32,7 +32,7 @@ ollama serve &
 ## Step 2 — Install aeqi
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
 ```
 
 The script downloads a pre-built binary (Linux amd64 or Darwin arm64) and verifies its SHA-256. For platforms it doesn't publish, it tells you to build from source — `cargo build --release -p aeqi` and copy the binary into your PATH.
