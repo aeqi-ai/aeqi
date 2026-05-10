@@ -45,6 +45,19 @@ function getToken(): string | null {
   return localStorage.getItem("aeqi_token");
 }
 
+async function tokenStillValid(token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function parseResponseBody(res: Response): Promise<unknown> {
   const contentType = res.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
@@ -87,6 +100,9 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
     // Don't redirect for auth mode check or if mode is "none".
     const authMode = localStorage.getItem("aeqi_auth_mode");
     if (authMode !== "none" && !path.startsWith("/auth/")) {
+      if (token && (await tokenStillValid(token))) {
+        throw new ApiError(401, "Unauthorized");
+      }
       clearSessionData();
       localStorage.removeItem("aeqi_auth_mode");
       // Preserve the user's current location as ?next= so post-auth
