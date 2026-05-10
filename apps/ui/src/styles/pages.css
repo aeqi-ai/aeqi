@@ -375,8 +375,8 @@
 /* Signup / Login pitch side — charcoal spawn-pillar hero with white text
    overlaid. The graphite accent is preserved as fallback colour so a
    failed image still gives a coherent dark panel. Same image across
-   login / signup / welcome modes; mode-specific copy carries the
-   register difference. */
+   login / signup / welcome modes; the category lockup stays canonical
+   across the auth entrance. */
 .signup-pitch-side {
   position: relative;
   flex: 1;
