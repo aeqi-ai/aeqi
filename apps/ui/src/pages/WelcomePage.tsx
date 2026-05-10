@@ -623,6 +623,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     setErrorMsg(null);
     setSteps(buildSteps());
     try {
+      const inviteCode = searchParams.get("invite") ?? undefined;
       const startRes = await fetch(`${SOLANA_API_URL}/api/auth/welcome/wallet-start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -642,6 +643,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
           wallet_pubkey: walletPubkey,
           message: start.message,
           signature_b58: signatureB58,
+          invite_code: inviteCode,
         }),
       });
       if (!verifyRes.ok) {
@@ -847,6 +849,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
         body: JSON.stringify({
           ceremony_id: regStart.ceremony_id,
           credential: encodeRegistrationCredential(registration),
+          invite_code: searchParams.get("invite") ?? undefined,
         }),
       });
       if (!finishRes.ok) {
@@ -931,10 +934,14 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
               onWallet={handleWalletConnect}
               onPasskey={handlePasskey}
               onGoogle={() => {
-                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/google/start`;
+                const inviteCode = searchParams.get("invite");
+                const qs = inviteCode ? `?invite_code=${encodeURIComponent(inviteCode)}` : "";
+                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/google/start${qs}`;
               }}
               onGithub={() => {
-                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/github/start`;
+                const inviteCode = searchParams.get("invite");
+                const qs = inviteCode ? `?invite_code=${encodeURIComponent(inviteCode)}` : "";
+                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/github/start${qs}`;
               }}
               onSwitch={() => navigate(copy.switchHref)}
             />
