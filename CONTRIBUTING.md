@@ -24,14 +24,14 @@ Prerequisites:
 Clone and build:
 
 ```bash
-git clone https://github.com/aeqi-ai/aeqi
+git clone https://github.com/aeqiai/aeqi
 cd aeqi
 cp config/aeqi.example.toml config/aeqi.toml   # local only, not committed
 npm run ui:install
 cargo build
 ```
 
-First-run init (non-interactive — writes config, seeds three starter agents, and generates a stable dashboard secret):
+First-run init (non-interactive — writes config, seeds a starter orchestrator agent, and generates a stable dashboard secret):
 
 ```bash
 aeqi setup

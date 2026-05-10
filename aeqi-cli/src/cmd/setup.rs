@@ -96,7 +96,7 @@ pub(crate) async fn cmd_setup(runtime: &str, service: bool, force: bool) -> Resu
             render_agent_md(
                 "assistant",
                 "asst",
-                "executive_assistant",
+                "orchestrator",
                 "vocal",
                 runtime,
                 "You are an executive assistant — autonomous, precise, and proactive. Manage tasks, gather context, execute work, and keep the operator informed.\n\nDefault to action over deliberation. Prefer concrete output over analysis. Surface blockers with clear options.",
@@ -242,7 +242,7 @@ dispatch_ttl_secs = 3600\n\
 [[agents]]\n\
 name = \"assistant\"\n\
 prefix = \"asst\"\n\
-role = \"executive_assistant\"\n\
+role = \"orchestrator\"\n\
 voice = \"vocal\"\n\
 runtime = \"{runtime}\"\n\
 max_workers = 1\n\

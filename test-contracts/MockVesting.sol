@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock Vesting module emitting the same event signatures as the real
-/// aeqi-core Vesting.module (sourced from
-/// /home/claudedev/projects/aeqi-graph/abis/Vesting.module.json).
+/// aeqi-core Vesting.module.
 contract MockVesting {
     event Vesting_VestingPositionCreated(bytes32 indexed vestingPositionId);
     event Vesting_VestingPositionActivated(bytes32 indexed vestingPositionId);

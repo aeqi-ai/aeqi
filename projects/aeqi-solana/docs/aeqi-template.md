@@ -105,7 +105,7 @@ Once `aeqi_treasury` ships:
 
 ## Reference
 
-- EVM AEQI memory: `project_aeqi_dogfood_company.md` (entity_id=59bc9fd3, original Base address `0x4a922...4edc`, being purged)
+- Historical EVM migration notes live outside the public runtime tree.
 - EA pattern: `architecture_executive_assistant_pattern.md`
 - Role primitive: `architecture_role_primitive.md`
 - Board vs org chart: `architecture_board_vs_org_chart.md` (directors are NOT in operational chain)

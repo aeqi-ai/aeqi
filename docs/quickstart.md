@@ -7,7 +7,7 @@ Get AEQI running locally with the daemon, web server, and dashboard.
 ### Option A: Install Script
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
 ```
 
 ### Option B: Build from Source
@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.s
 Requires Rust stable.
 
 ```bash
-git clone https://github.com/aeqi-ai/aeqi.git
+git clone https://github.com/aeqiai/aeqi.git
 cd aeqi
 cargo build --release
 ```
@@ -24,7 +24,7 @@ The binary is at `target/release/aeqi`.
 
 ## Setup
 
-Run setup. It is non-interactive: it detects your environment (workspace if you're inside a git repo, otherwise `~/.aeqi/`), writes a starter `aeqi.toml`, generates a stable dashboard secret in `[web].auth_secret`, and seeds three starter agents (`leader`, `researcher`, `reviewer`) under `agents/`.
+Run setup. It is non-interactive: it detects your environment (workspace if you're inside a git repo, otherwise `~/.aeqi/`), writes a starter `aeqi.toml`, generates a stable dashboard secret in `[web].auth_secret`, and seeds an `assistant` orchestrator agent under `agents/`.
 
 ```bash
 aeqi setup

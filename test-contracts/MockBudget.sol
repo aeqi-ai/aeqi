@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock Budget module emitting the same event signatures as the real
-/// aeqi-core Budget.module (sourced from
-/// /home/claudedev/projects/aeqi-graph/abis/Budget.module.json).
+/// aeqi-core Budget.module.
 contract MockBudget {
     event Budget_BudgetCreated(bytes32 indexed budgetId);
     event Budget_BudgetFrozen(bytes32 indexed budgetId);

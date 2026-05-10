@@ -3,7 +3,7 @@
 # and verifies its SHA-256 checksum against the signed release manifest.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
 #
 # Environment variables:
 #   AEQI_VERSION     — Pin a specific version (e.g. v0.14.0). Default: latest.
@@ -15,7 +15,7 @@ set -eu
 # ash, zsh-as-sh) supports it; opt in only if the running shell does.
 ( set -o pipefail 2>/dev/null ) && set -o pipefail
 
-REPO="aeqi-ai/aeqi"
+REPO="aeqiai/aeqi"
 INSTALL_DIR="${AEQI_INSTALL_DIR:-/usr/local/bin}"
 SKIP_VERIFY="${AEQI_SKIP_VERIFY:-0}"
 

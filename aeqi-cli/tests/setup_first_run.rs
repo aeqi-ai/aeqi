@@ -62,11 +62,23 @@ fn setup_clean_home_writes_curl_install_layout() {
     // NOT in the neutral cwd.
     let aeqi_dir = home.join(".aeqi");
     assert!(aeqi_dir.join("aeqi.toml").exists(), "aeqi.toml missing");
-    assert!(aeqi_dir.join("agents/leader/agent.md").exists());
-    assert!(aeqi_dir.join("agents/researcher/agent.md").exists());
-    assert!(aeqi_dir.join("agents/reviewer/agent.md").exists());
+    assert!(aeqi_dir.join("agents/assistant/agent.md").exists());
     assert!(aeqi_dir.join("agents/shared/WORKFLOW.md").exists());
     assert!(aeqi_dir.join("secrets").exists());
+
+    let toml = std::fs::read_to_string(aeqi_dir.join("aeqi.toml")).unwrap();
+    let parsed: toml::Value = toml.parse().expect("config must be valid TOML");
+    let first_agent_role = parsed
+        .get("agents")
+        .and_then(|agents| agents.as_array())
+        .and_then(|agents| agents.first())
+        .and_then(|agent| agent.get("role"))
+        .and_then(|role| role.as_str());
+    assert_eq!(
+        first_agent_role,
+        Some("orchestrator"),
+        "setup must seed an orchestrator agent so `aeqi doctor --strict` can pass"
+    );
 
     // Neutral cwd stays empty — setup must not have detected workspace mode.
     assert!(
@@ -179,7 +191,7 @@ fn setup_workspace_mode_writes_to_cwd_not_home() {
         "workspace mode should write config to cwd/config/aeqi.toml"
     );
     assert!(
-        cwd.join("agents/leader/agent.md").exists(),
+        cwd.join("agents/assistant/agent.md").exists(),
         "workspace mode should write agents to cwd/agents/<name>"
     );
 

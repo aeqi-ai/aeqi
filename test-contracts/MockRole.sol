@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock Role module emitting the same event signatures as the real
-/// aeqi-core Role.module (sourced from
-/// /home/claudedev/projects/aeqi-graph/abis/Role.module.json).
+/// aeqi-core Role.module.
 /// Used to verify the indexer's per-module dispatch — Role events come
 /// from the module address, which is auto-watched after TRUST_ModuleAdded.
 contract MockRole {

@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock TRUST contract emitting the same event signatures as the real
-/// aeqi-core TRUST (sourced from
-/// /home/claudedev/projects/aeqi-graph/abis/TRUST.json).
+/// aeqi-core TRUST.
 /// Used to verify the indexer's multi-address dispatch — TRUST events come
 /// from the per-trust contract address, not Factory.
 contract MockTRUST {

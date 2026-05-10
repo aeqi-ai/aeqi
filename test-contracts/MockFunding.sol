@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock Funding module emitting the same event signatures as the real
-/// aeqi-core Funding.module (sourced from
-/// /home/claudedev/projects/aeqi-graph/abis/Funding.module.json).
+/// aeqi-core Funding.module.
 contract MockFunding {
     event Funding_FundingCreated(bytes32 indexed fundingId);
     event Funding_FundingActivated(bytes32 indexed fundingId);

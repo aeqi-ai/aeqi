@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock Token module emitting standard ERC20 Transfer events as the real
-/// aeqi-core Token.module does. (Source:
-/// /home/claudedev/projects/aeqi-graph/abis/Token.module.json)
+/// aeqi-core Token.module does.
 ///
 /// Mint = Transfer(from=address(0), to, value).
 /// Burn = Transfer(from, to=address(0), value).

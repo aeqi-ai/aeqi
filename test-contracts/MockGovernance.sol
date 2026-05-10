@@ -2,8 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Mock Governance module emitting the same event signatures as the real
-/// aeqi-core Governance.module (sourced from
-/// /home/claudedev/projects/aeqi-graph/abis/Governance.module.json).
+/// aeqi-core Governance.module.
 contract MockGovernance {
     event Governance_ProposalCreated(
         uint256 indexed proposalId,

@@ -32,7 +32,7 @@ ollama serve &
 ## Step 2 — Install aeqi
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aeqiai/aeqi/main/scripts/install.sh | sh
 ```
 
 The script downloads a pre-built binary (Linux amd64 or Darwin arm64) and verifies its SHA-256. For platforms it doesn't publish, it tells you to build from source — `cargo build --release -p aeqi` and copy the binary into your PATH.
@@ -43,7 +43,7 @@ The script downloads a pre-built binary (Linux amd64 or Darwin arm64) and verifi
 aeqi setup --runtime ollama_agent
 ```
 
-Setup is non-interactive. It writes a starter config to `~/.aeqi/aeqi.toml`, seeds three agents (`leader`, `researcher`, `reviewer`), and generates a stable dashboard secret. It prints the secret on stdout — copy it; you'll paste it on the dashboard sign-in screen.
+Setup is non-interactive. It writes a starter config to `~/.aeqi/aeqi.toml`, seeds an `assistant` orchestrator agent, and generates a stable dashboard secret. It prints the secret on stdout — copy it; you'll paste it on the dashboard sign-in screen.
 
 The default model in the rendered config is `llama3.1:8b`. To use the smaller `qwen2.5:0.5b` you just pulled, edit `~/.aeqi/aeqi.toml` and change:
 
@@ -65,9 +65,7 @@ You should see something like:
 [OK]   Config: ~/.aeqi/aeqi.toml
 [OK]   Default runtime: ollama_agent
 [OK]   Ollama reachable at http://localhost:11434
-[OK]   Agent 'leader': agent.md | runtime=ollama | mode=Agent | model=qwen2.5:0.5b
-[OK]   Agent 'researcher': ...
-[OK]   Agent 'reviewer': ...
+[OK]   Agent 'assistant': agent.md | runtime=ollama | mode=Agent | model=qwen2.5:0.5b
 [OK]   Secret store: ~/.aeqi/secrets
 Summary: 0 blocking, 0 needs-action, 0 optional, 0 fixed.
 ```
@@ -92,17 +90,17 @@ In a second terminal you can also use the TUI:
 aeqi chat
 ```
 
-Type a question. The leader agent dispatches to the model you configured, streams the response back, and persists the transcript in `~/.aeqi/sessions.db`. No request leaves your machine.
+Type a question. The assistant agent dispatches to the model you configured, streams the response back, and persists the transcript in `~/.aeqi/sessions.db`. No request leaves your machine.
 
 ## Step 7 — Try a quest
 
 Quests are durable units of work. From the TUI or the dashboard:
 
 ```bash
-aeqi assign "summarize what aeqi does in three sentences" --root leader
+aeqi assign "summarize what aeqi does in three sentences" --root assistant
 ```
 
-The leader agent picks it up, runs the model, and stores the result. Watch progress live:
+The assistant agent picks it up, runs the model, and stores the result. Watch progress live:
 
 ```bash
 aeqi monitor --watch
@@ -110,7 +108,7 @@ aeqi monitor --watch
 
 ## What you've got now
 
-- Your three starter agents are in `~/.aeqi/aeqi.db`.
+- Your starter agent is in `~/.aeqi/aeqi.db`.
 - Every chat / quest / event lives in `~/.aeqi/sessions.db` and `~/.aeqi/aeqi.db`.
 - Nothing has called an external API. You can `curl` your Ollama at `http://localhost:11434` to confirm it's the only thing handling inference.
 
