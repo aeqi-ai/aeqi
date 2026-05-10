@@ -30,6 +30,8 @@ agents/*/.aeqi/
 
 # Project directories (personal)
 projects/*/
+!projects/aeqi-solana/
+!projects/aeqi-solana/**
 !projects/shared/
 !projects/README.md
 

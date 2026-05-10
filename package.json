@@ -6,7 +6,9 @@
     "ui:install": "npm --prefix apps/ui install",
     "ui:dev": "npm --prefix apps/ui run dev",
     "ui:build": "npm --prefix apps/ui run build",
-    "ui:preview": "npm --prefix apps/ui run preview"
+    "ui:preview": "npm --prefix apps/ui run preview",
+    "solana:build": "cd projects/aeqi-solana && anchor build",
+    "solana:test": "cd projects/aeqi-solana && anchor test --skip-build"
   },
   "devDependencies": {
     "playwright": "^1.52.0"
