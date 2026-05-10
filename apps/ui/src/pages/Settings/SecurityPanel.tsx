@@ -341,7 +341,7 @@ export default function SecurityPanel() {
                 size="sm"
                 type="button"
                 onClick={() => {
-                  window.location.href = "/api/auth/google";
+                  window.location.href = "/api/auth/welcome/google/start";
                 }}
               >
                 Connect
@@ -360,7 +360,7 @@ export default function SecurityPanel() {
                 size="sm"
                 type="button"
                 onClick={() => {
-                  window.location.href = "/api/auth/github";
+                  window.location.href = "/api/auth/welcome/github/start";
                 }}
               >
                 Connect
