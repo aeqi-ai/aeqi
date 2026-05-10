@@ -902,13 +902,19 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
   if (authMode === "secret") return <SecretLogin />;
   if (authMode === "none") return null;
 
+  const isWaitlistStage = stage === "waitlist" || stage === "waitlist-sent";
+
   return (
     <main className="signup-split">
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
       <div className="signup-form-side" id="main-content">
-        <div className="auth-container" role="region" aria-live="polite">
+        <div
+          className={isWaitlistStage ? "auth-container auth-container--waitlist" : "auth-container"}
+          role="region"
+          aria-live="polite"
+        >
           <div className="auth-logo">
             <Wordmark size={36} />
           </div>
@@ -1003,21 +1009,15 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
       <aside className={`signup-pitch-side signup-pitch-side--${mode}`} aria-hidden="true">
         <div className="signup-pitch-scrim" />
         <div className="signup-pitch-content">
-          {mode === "login" ? (
-            <>
-              <p className="signup-pitch-eyebrow">Welcome back</p>
-              <h2 className="signup-pitch-heading">Your company is still running.</h2>
-              <p className="signup-lead">Pick up where you left off.</p>
-            </>
-          ) : (
-            <>
-              <p className="signup-pitch-eyebrow">aeqi · the company OS</p>
-              <h2 className="signup-pitch-heading">Start something that can work without you.</h2>
-              <p className="signup-lead">
-                Build companies where humans set direction. Agents turn context into execution.
-              </p>
-            </>
-          )}
+          <p className="signup-pitch-eyebrow">THE COMPANY OS</p>
+          <h2 className="signup-pitch-heading">
+            <span>Start something</span>
+            <span>that can work</span>
+            <span>without you.</span>
+          </h2>
+          <p className="signup-lead">
+            Build companies where humans set direction and agents coordinate execution.
+          </p>
         </div>
       </aside>
     </main>
@@ -1359,7 +1359,7 @@ function WaitlistView({
       <p className="auth-subheading">
         We'll add <strong>{email}</strong> to the waitlist and email you when it's your turn.
       </p>
-      <form className="auth-form" onSubmit={handleSubmit} autoComplete="off">
+      <form className="auth-form waitlist-form" onSubmit={handleSubmit} autoComplete="off">
         {/* Honeypot — hidden from humans, bots fill it. */}
         <input
           type="text"
@@ -1370,13 +1370,20 @@ function WaitlistView({
           aria-hidden="true"
         />
         {error && <p className="auth-error">{error}</p>}
-        <Button variant="primary" size="lg" type="submit" fullWidth disabled={submitting}>
+        <Button
+          className="waitlist-primary"
+          variant="primary"
+          size="lg"
+          type="submit"
+          fullWidth
+          disabled={submitting}
+        >
           {submitting ? "Adding…" : "Add me to the waitlist"}
         </Button>
+        <button className="waitlist-secondary-action" type="button" onClick={onBack}>
+          Use a different method
+        </button>
       </form>
-      <Button variant="secondary" size="lg" fullWidth type="button" onClick={onBack}>
-        Use a different method
-      </Button>
     </>
   );
 }

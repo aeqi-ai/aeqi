@@ -23,6 +23,13 @@
   animation: auth-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.auth-container--waitlist {
+  max-width: 400px;
+  padding: var(--space-10);
+  border-color: var(--color-border-faint);
+  box-shadow: var(--shadow-sm);
+}
+
 @keyframes auth-fade-in {
   from {
     opacity: 0;
@@ -46,6 +53,10 @@
   user-select: none;
 }
 
+.auth-container--waitlist .auth-logo {
+  margin-bottom: var(--space-8);
+}
+
 /* Exo 2 masthead — sci-fi geometric sans anchors the card.
    Optically larger than body — auth is a moment, not a utility. */
 .auth-heading {
@@ -66,10 +77,54 @@
   line-height: 1.5;
 }
 
+.auth-container--waitlist .auth-subheading {
+  margin-bottom: calc(var(--space-6) + var(--space-1));
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.waitlist-form {
+  gap: var(--space-3);
+}
+
+.auth-container--waitlist .waitlist-primary {
+  height: calc(var(--space-10) + var(--space-1));
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+}
+
+.auth-container--waitlist .waitlist-primary:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.waitlist-secondary-action {
+  align-self: center;
+  width: max-content;
+  min-height: var(--space-6);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.waitlist-secondary-action:hover {
+  color: var(--color-text-primary);
+}
+
+.waitlist-secondary-action:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .auth-name-row {
@@ -273,16 +328,28 @@
 .auth-footer {
   margin-top: var(--space-8);
 }
+.auth-container--waitlist .auth-footer {
+  margin-top: var(--space-8);
+}
 .auth-footer p {
   font-family: var(--font-sans);
   font-size: var(--font-size-micro);
   color: var(--color-text-muted);
   line-height: 1.6;
 }
+.auth-container--waitlist .auth-footer p {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
 .auth-footer a {
   color: var(--color-text-muted);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+.auth-container--waitlist .auth-footer a {
+  color: var(--color-text-secondary);
 }
 .auth-footer a:hover {
   color: var(--color-text-secondary);
@@ -313,14 +380,11 @@
 .signup-pitch-side {
   position: relative;
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: var(--space-10) var(--space-8);
   background-color: var(--color-accent);
   background-image: url("/auth-hero.webp");
   background-size: cover;
-  background-position: center 45%;
+  background-position: 50% 50%;
   background-repeat: no-repeat;
   color: #ffffff;
   overflow: hidden;
@@ -336,50 +400,59 @@
   z-index: 0;
   background:
     radial-gradient(
-      ellipse at 50% 38%,
-      rgba(10, 10, 11, 0) 0%,
-      rgba(10, 10, 11, 0.3) 55%,
-      rgba(10, 10, 11, 0.7) 100%
+      ellipse at 50% 45%,
+      rgba(10, 10, 11, 0.1) 0%,
+      rgba(10, 10, 11, 0.24) 48%,
+      rgba(10, 10, 11, 0.68) 100%
     ),
-    linear-gradient(to bottom, rgba(10, 10, 11, 0.3) 0%, rgba(10, 10, 11, 0.55) 100%);
+    linear-gradient(to bottom, rgba(10, 10, 11, 0.28) 0%, rgba(10, 10, 11, 0.4) 100%);
   pointer-events: none;
 }
 
 .signup-pitch-content {
-  position: relative;
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 1;
-  max-width: 420px;
+  width: min(520px, calc(100% - var(--space-16)));
+  max-width: 520px;
   text-align: center;
 }
 
 .signup-pitch-eyebrow {
   font-family: var(--font-sans);
-  font-size: var(--font-size-2xs);
-  font-weight: 500;
-  letter-spacing: 0.22em;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.64);
   margin: 0 0 var(--space-6);
 }
 
 .signup-pitch-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   font-family: var(--font-display);
-  font-size: clamp(1.875rem, 1.3rem + 2vw, 2.875rem);
+  font-size: var(--font-size-5xl);
   font-weight: 500;
   color: #ffffff;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   line-height: 1.04;
+  max-width: 480px;
   margin: 0 0 var(--space-6);
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.34);
 }
 
 .signup-lead {
   font-family: var(--font-sans);
-  font-size: var(--font-size-base);
-  color: rgba(255, 255, 255, 0.92);
+  font-size: var(--font-size-lg);
+  color: rgba(255, 255, 255, 0.84);
   line-height: 1.55;
-  margin: 0;
-  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.4);
+  max-width: 440px;
+  margin: 0 auto;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.36);
 }
 
 @media (max-width: 768px) {
@@ -387,7 +460,14 @@
     flex-direction: column;
   }
   .signup-pitch-side {
+    min-height: 360px;
     padding: var(--space-8) var(--space-6);
+  }
+  .signup-pitch-content {
+    width: min(520px, calc(100% - var(--space-8)));
+  }
+  .signup-pitch-heading {
+    font-size: var(--font-size-4xl);
   }
   .auth-page {
     padding-top: max(var(--space-8), env(safe-area-inset-top));
