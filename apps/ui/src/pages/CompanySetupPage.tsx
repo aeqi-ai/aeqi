@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
+import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
 import { entityPath } from "@/lib/entityPath";
 import { DEFAULT_LAUNCH_PLAN, LAUNCH_PLANS, type LaunchPlanId } from "@/lib/pricing";
+import { RECOMMENDED_BLUEPRINTS } from "@/lib/recommendedBlueprints";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
 import { isSingleBlueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
@@ -14,6 +16,17 @@ import "@/styles/blueprint-launch-picker.css";
 
 const PROVISION_POLL_INTERVAL_MS = 1000;
 const PROVISION_POLL_TIMEOUT_MS = 60_000;
+
+function pickInitialBlueprintId(
+  blueprints: Blueprint[],
+  byBlueprintId: Map<string, Blueprint>,
+): string | null {
+  for (const id of RECOMMENDED_BLUEPRINTS) {
+    if (byBlueprintId.has(id)) return id;
+  }
+  if (byBlueprintId.has(DEFAULT_BLUEPRINT_SLUG)) return DEFAULT_BLUEPRINT_SLUG;
+  return blueprints[0] ? blueprintId(blueprints[0]) : null;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,17 +60,36 @@ export default function CompanySetupPage() {
   }, [blueprint?.name]);
 
   useEffect(() => {
-    if (!blueprintIdParam) return;
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    api
-      .getBlueprint(blueprintIdParam)
-      .then((resp) => {
+    const loadBlueprint = async () => {
+      try {
+        if (blueprintIdParam) {
+          const resp = await api.getBlueprint(blueprintIdParam);
+          if (cancelled) return;
+          const tpl = resp.blueprint;
+          if (!tpl || !isSingleBlueprint(tpl)) {
+            setLoadError("Blueprint not found.");
+            return;
+          }
+          setBlueprint(tpl);
+          const initialName = tpl.root?.name ?? tpl.name;
+          setOrganizationName(initialName);
+          setMission(tpl.tagline || tpl.description || "");
+          setPlan(DEFAULT_LAUNCH_PLAN);
+          return;
+        }
+
+        const resp = await api.getBlueprints();
         if (cancelled) return;
-        const tpl = resp.blueprint;
-        if (!tpl || !isSingleBlueprint(tpl)) {
-          setLoadError("Blueprint not found.");
+        const blueprints = (resp.blueprints ?? []).filter(isSingleBlueprint);
+        const byId = new Map<string, Blueprint>();
+        for (const tpl of blueprints) byId.set(blueprintId(tpl), tpl);
+        const selectedId = pickInitialBlueprintId(blueprints, byId);
+        const tpl = selectedId ? (byId.get(selectedId) ?? null) : null;
+        if (!tpl) {
+          setLoadError("No blueprints are available yet.");
           return;
         }
         setBlueprint(tpl);
@@ -65,14 +97,16 @@ export default function CompanySetupPage() {
         setOrganizationName(initialName);
         setMission(tpl.tagline || tpl.description || "");
         setPlan(DEFAULT_LAUNCH_PLAN);
-      })
-      .catch((e: Error) => {
+      } catch (e) {
         if (cancelled) return;
-        setLoadError(e.message || "Could not reach the blueprint store.");
-      })
-      .finally(() => {
+        const msg = e instanceof Error ? e.message : "Could not reach the blueprint store.";
+        setLoadError(msg);
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    void loadBlueprint();
     return () => {
       cancelled = true;
     };

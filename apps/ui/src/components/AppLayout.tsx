@@ -22,7 +22,6 @@ import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 
 const DrivePage = lazy(() => import("@/pages/DrivePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
-const StartPage = lazy(() => import("@/pages/StartPage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
@@ -380,16 +379,13 @@ export default function AppLayout() {
     if (isRoleEdit) return <RoleEditPage />;
     if (isRoleDetail) return <RoleDetailPage />;
     if (isLaunch || isStart) {
-      // /launch/<blueprintId> or legacy /start/<blueprintId> → CompanySetupPage
-      // (name + mission + plan). Bare /launch or /start
-      // stays on the launch surface.
+      // /launch and /start both mount the same setup page. When the
+      // URL omits a blueprint id, CompanySetupPage resolves the default
+      // blueprint internally so the launch surface is a single wizard.
       if (path === "/launch/studio" || path === "/start/studio") {
         return <Navigate to="/launch" replace />;
       }
-      if (path.startsWith("/launch/") || path.startsWith("/start/")) {
-        return <CompanySetupPage />;
-      }
-      return <StartPage />;
+      return <CompanySetupPage />;
     }
     if (isAdmin) return <AdminPage />;
     if (isDrive) return <DrivePage />;
