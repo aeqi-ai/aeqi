@@ -259,8 +259,8 @@ export default function StartPage() {
     <div className="start-page start-page--studio">
       <header className="start-head start-head--studio">
         <div className="start-head-copy">
-          <p className="start-eyebrow">Launch studio</p>
-          <h1 className="page-title">Describe the company. AEQI shapes the structure.</h1>
+          <p className="start-eyebrow">Launch</p>
+          <h1 className="page-title">Choose the blueprint. AEQI shapes the company.</h1>
           <p className="start-sub">
             Talk on the left. The live canvas on the right recomposes as you change the brief or
             switch the blueprint.
@@ -273,7 +273,7 @@ export default function StartPage() {
             size="sm"
             onClick={() => navigate("/blueprints")}
           >
-            Browse blueprints
+            Open catalog
           </Button>
           <Button
             type="button"
