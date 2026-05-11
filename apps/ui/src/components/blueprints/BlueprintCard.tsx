@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
+import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
 import { countBlueprintStructures } from "@/lib/blueprintStructures";
 import { Card } from "@/components/ui";
@@ -45,13 +46,14 @@ function formatRuntimeLine(t: SingleBlueprint): string {
  * system tokens. Card surface, hover, radius from the `Card` primitive.
  */
 function BlueprintCardImpl({ template, importTargetSuffix = "" }: BlueprintCardProps) {
-  const isDefault = template.slug === DEFAULT_BLUEPRINT_SLUG;
+  const id = blueprintId(template);
+  const isDefault = id === DEFAULT_BLUEPRINT_SLUG;
   const onchainModules = template.template ? ONCHAIN_MODULES[template.template] : null;
   const runtimeLine = formatRuntimeLine(template);
 
   return (
     <Link
-      to={`/blueprints/${encodeURIComponent(template.slug)}${importTargetSuffix}`}
+      to={`/blueprints/${encodeURIComponent(id)}${importTargetSuffix}`}
       className="bp-card-link"
       role="listitem"
       aria-label={`${template.name} blueprint${template.tagline ? ` — ${template.tagline}` : ""}`}

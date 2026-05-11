@@ -342,8 +342,8 @@ export default function App() {
           <Route path="/blueprints/events" element={<GatedAppShell />} />
           <Route path="/blueprints/quests" element={<GatedAppShell />} />
           <Route path="/blueprints/ideas" element={<GatedAppShell />} />
-          <Route path="/blueprints/:slug" element={<GatedAppShell />} />
-          <Route path="/blueprints/:slug/:section" element={<GatedAppShell />} />
+          <Route path="/blueprints/:blueprintId" element={<GatedAppShell />} />
+          <Route path="/blueprints/:blueprintId/:section" element={<GatedAppShell />} />
 
           {/* Public profile — top-level `/<slug>` route. Lives BEFORE the
               authed catch-all so unauth visitors can hit a Company's

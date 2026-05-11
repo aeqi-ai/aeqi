@@ -384,7 +384,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Detail page (/blueprints/:slug) ───────────────
+/* ── Detail page (/blueprints/:blueprintId) ─────────
  *
  * Same shape language as the ideas canvas: slim head band on top
  * (back-icon + title + primary CTA on the right), single-column

@@ -81,8 +81,8 @@ const renderApp = (entry = "/blueprints") =>
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/blueprints" element={<BlueprintsPage />} />
-          <Route path="/blueprints/:slug" element={<BlueprintDetailPage />} />
-          <Route path="/blueprints/:slug/:section" element={<BlueprintDetailPage />} />
+          <Route path="/blueprints/:blueprintId" element={<BlueprintDetailPage />} />
+          <Route path="/blueprints/:blueprintId/:section" element={<BlueprintDetailPage />} />
         </Routes>
       </MemoryRouter>
     </StrictMode>,
@@ -211,11 +211,11 @@ describe("BlueprintDetailPage", () => {
       <StrictMode>
         <MemoryRouter initialEntries={["/blueprints/solo-founder"]}>
           <Routes>
-            <Route path="/blueprints/:slug" element={<BlueprintDetailPage />} />
+            <Route path="/blueprints/:blueprintId" element={<BlueprintDetailPage />} />
             <Route path="/launch" element={<Probe />} />
-            <Route path="/launch/:slug" element={<Probe />} />
+            <Route path="/launch/:blueprintId" element={<Probe />} />
             <Route path="/start" element={<Probe />} />
-            <Route path="/start/:slug" element={<Probe />} />
+            <Route path="/start/:blueprintId" element={<Probe />} />
           </Routes>
         </MemoryRouter>
       </StrictMode>,

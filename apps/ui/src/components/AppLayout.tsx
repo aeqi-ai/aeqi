@@ -52,8 +52,8 @@ const RELOCATED_AGENT_TABS = new Set([
 ]);
 
 // Top-level segments under /blueprints that are catalog-kind tabs, not
-// blueprint slugs. Anything else after /blueprints/ is treated as a slug
-// and dispatches BlueprintDetailPage.
+// blueprint ids. Anything else after /blueprints/ is treated as a blueprint
+// id and dispatches BlueprintDetailPage.
 const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ideas"]);
 
 // Tabs that route through CompanyPage. Each is now a top-level sidebar
@@ -397,11 +397,11 @@ export default function AppLayout() {
     if (isEconomy) return <EconomyPage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /
-      // events / quests / ideas) → catalog tab. Otherwise <seg> is a slug
-      // → detail page. Bare /blueprints also lands on the catalog.
+      // events / quests / ideas) → catalog tab. Otherwise <seg> is a blueprint
+      // id → detail page. Bare /blueprints also lands on the catalog.
       const segments = path.split("/").filter(Boolean);
       // segments[0] === "blueprints"; segments[1] (if present) is either a
-      // catalog kind or a blueprint slug.
+      // catalog kind or a blueprint id.
       const second = segments[1];
       const isDetail = !!second && !BLUEPRINT_KINDS.has(second);
       return isDetail ? <BlueprintDetailPage /> : <BlueprintsPage />;

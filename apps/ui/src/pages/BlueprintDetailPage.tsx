@@ -61,7 +61,10 @@ const EMPTY_SEED_IDEAS: BlueprintSeedIdea[] = [];
  * shape is constant across blueprints.
  */
 export default function BlueprintDetailPage() {
-  const { slug = "", section } = useParams<{ slug: string; section?: string }>();
+  const { blueprintId: blueprintIdParam = "", section } = useParams<{
+    blueprintId: string;
+    section?: string;
+  }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -89,12 +92,12 @@ export default function BlueprintDetailPage() {
   }, [template?.name]);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!blueprintIdParam) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
     api
-      .getBlueprint(slug)
+      .getBlueprint(blueprintIdParam)
       .then((resp) => {
         if (cancelled) return;
         const tpl = resp.blueprint;
@@ -111,7 +114,7 @@ export default function BlueprintDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [blueprintIdParam]);
 
   if (loading && !template) {
     return (
@@ -133,7 +136,7 @@ export default function BlueprintDetailPage() {
         <main className="page-rail-content page-rail-content--full">
           <EmptyState
             title="Blueprint not found."
-            description={error || "We couldn't find a blueprint with that slug."}
+            description={error || "We couldn't find a blueprint with that id."}
             action={<Link to="/blueprints">Back to the catalog →</Link>}
           />
         </main>

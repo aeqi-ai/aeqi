@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { blueprintId } from "@/lib/blueprintId";
 import type { Blueprint, BlueprintCategory, SingleBlueprint, StackBlueprint } from "@/lib/types";
 import { isSingleBlueprint, isStackBlueprint } from "@/lib/types";
 import { Button, Card, Popover, Spinner, Tooltip } from "@/components/ui";
@@ -512,12 +513,14 @@ function BlueprintCategorySection({
       ) : view === "list" ? (
         <ul className="bp-list" role="list">
           {blueprints.map((t) => (
-            <li key={t.slug} className="bp-list-row">
+            <li key={blueprintId(t)} className="bp-list-row">
               <button
                 type="button"
                 className="bp-list-row-btn"
                 onClick={() =>
-                  onNavigate(`/blueprints/${encodeURIComponent(t.slug)}${importTargetSuffix}`)
+                  onNavigate(
+                    `/blueprints/${encodeURIComponent(blueprintId(t))}${importTargetSuffix}`,
+                  )
                 }
               >
                 <span className="bp-list-row-name">{t.name}</span>
@@ -532,7 +535,11 @@ function BlueprintCategorySection({
       ) : (
         <div className="bp-grid" role="list">
           {blueprints.map((t) => (
-            <BlueprintCard key={t.slug} template={t} importTargetSuffix={importTargetSuffix} />
+            <BlueprintCard
+              key={blueprintId(t)}
+              template={t}
+              importTargetSuffix={importTargetSuffix}
+            />
           ))}
         </div>
       )}
