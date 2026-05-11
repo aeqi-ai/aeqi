@@ -577,6 +577,39 @@
   gap: 0;
   padding: 8px 20px 24px;
 }
+.bp-structure-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bp-structure-block + .bp-structure-block {
+  padding-top: 20px;
+}
+.bp-structure-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bp-structure-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.bp-structure-title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.bp-structure-sub {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
 .bp-orgchart-layer {
   display: flex;
   flex-direction: column;

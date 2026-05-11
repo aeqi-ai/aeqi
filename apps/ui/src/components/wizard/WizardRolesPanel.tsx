@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
+import { countBlueprintStructures, describeBlueprintStructures } from "@/lib/blueprintStructures";
 import { Button, Input, Select } from "@/components/ui";
 import { WizardPanel } from "./WizardPanel";
 import styles from "./WizardRolesPanel.module.css";
@@ -49,6 +50,7 @@ const ROLE_TYPE_OPTIONS = [
  * Hover-+ at the list footer adds an invite row (stub, no submit logic).
  */
 export function WizardRolesPanel({
+  blueprint,
   userId,
   userName,
   seats,
@@ -60,10 +62,12 @@ export function WizardRolesPanel({
   personalOs,
 }: WizardRolesPanelProps) {
   const [hoveringAdd, setHoveringAdd] = useState(false);
+  const structureCount = countBlueprintStructures(blueprint);
 
   const sentCount = invites.filter((r) => r.sent).length;
   const summary =
     `${seats.length} seat${seats.length !== 1 ? "s" : ""}` +
+    (structureCount > 1 ? ` · ${structureCount} structures` : "") +
     (sentCount > 0 ? ` · ${sentCount} invite${sentCount !== 1 ? "s" : ""} queued` : "");
 
   function addInviteRow() {
@@ -94,9 +98,13 @@ export function WizardRolesPanel({
       onToggle={onToggle}
     >
       <div className={styles.seatList}>
-        {seats.map((seat) => (
-          <SeatRow key={seat.key} seat={seat} userId={userId} userName={userName} />
-        ))}
+        {structureCount > 1 ? (
+          <StructuredSeatList blueprint={blueprint} seats={seats} userName={userName} />
+        ) : (
+          seats.map((seat) => (
+            <SeatRow key={seat.key} seat={seat} userId={userId} userName={userName} />
+          ))
+        )}
 
         {!personalOs &&
           invites.map((inv, idx) => (
@@ -125,6 +133,38 @@ export function WizardRolesPanel({
         )}
       </div>
     </WizardPanel>
+  );
+}
+
+interface StructuredSeatListProps {
+  blueprint: Blueprint;
+  seats: RoleSeat[];
+  userName: string;
+}
+
+function StructuredSeatList({ blueprint, seats, userName }: StructuredSeatListProps) {
+  const seatsByKey = new Map(seats.map((seat) => [seat.key, seat]));
+  const structures = describeBlueprintStructures(blueprint);
+
+  return (
+    <>
+      {structures.map((structure, idx) => (
+        <section key={structure.id} className={styles.structureGroup}>
+          <header className={styles.structureHead}>
+            <span className={styles.structureEyebrow}>Structure {idx + 1}</span>
+            <span className={styles.structureTitle}>{structure.title}</span>
+            <span className={styles.structureMeta}>{structure.subtitle}</span>
+          </header>
+          <div className={styles.structureSeats}>
+            {structure.roles.map((role) => {
+              const seat = seatsByKey.get(role.key);
+              if (!seat) return null;
+              return <SeatRow key={seat.key} seat={seat} userId={null} userName={userName} />;
+            })}
+          </div>
+        </section>
+      ))}
+    </>
   );
 }
 

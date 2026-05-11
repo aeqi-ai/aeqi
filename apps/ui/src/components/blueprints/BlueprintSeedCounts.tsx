@@ -1,4 +1,5 @@
 import type { SingleBlueprint } from "@/lib/types";
+import { countBlueprintStructures } from "@/lib/blueprintStructures";
 
 interface BlueprintSeedCountsProps {
   template: SingleBlueprint;
@@ -16,7 +17,9 @@ interface BlueprintSeedCountsProps {
 export function BlueprintSeedCounts({ template }: BlueprintSeedCountsProps) {
   const declaredRoles = template.seed_roles?.length ?? 0;
   const seedAgents = template.seed_agents?.length ?? 0;
+  const structureCount = countBlueprintStructures(template);
   const pills: Array<[label: string, value: number]> = [
+    ...(structureCount > 1 ? ([["Structures", structureCount]] as Array<[string, number]>) : []),
     ["Roles", declaredRoles > 0 ? declaredRoles : seedAgents],
     ["Default agents", seedAgents],
     ["Quests", template.seed_quests?.length ?? 0],

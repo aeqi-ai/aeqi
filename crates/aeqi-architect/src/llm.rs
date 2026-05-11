@@ -688,7 +688,8 @@ Output STRICTLY this JSON shape, no prose, no code fences:
 
 Rules:
 - Pick 1-3 seed_agents that operationally support the brief (e.g. a writing assistant for a content business, a hiring assistant for a startup planning to scale).
-- Pick 3-5 seed_roles total. Always include `founder` as a director-typed role with `default_occupant_agent="root"`.
+- Pick 3-7 seed_roles total. Always include `founder` as a director-typed role with `default_occupant_agent="root"`.
+- If the brief naturally needs more than one structure, emit a role forest: multiple disconnected trees inside the same blueprint. Keep the roots legible through the role titles.
 - For each non-founder role, set `role_type` to `operational` and `default_occupant_agent` to one of the seed_agent names (or omit to leave vacant).
 - Always include exactly 3 seed_ideas: Mission, Vision, Values.
 - Always include exactly 1 seed_quest: a kickoff that operationalises the brief.

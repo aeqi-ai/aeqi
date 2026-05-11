@@ -4,6 +4,49 @@
   gap: 2px;
 }
 
+.structureGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.structureGroup + .structureGroup {
+  margin-top: 12px;
+}
+
+.structureHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 2px 2px 0;
+}
+
+.structureEyebrow {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.structureTitle {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.structureMeta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.structureSeats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .seatRow {
   display: flex;
   align-items: center;

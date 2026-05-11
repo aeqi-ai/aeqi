@@ -1,4 +1,8 @@
-import type { SingleBlueprint, BlueprintSeedAgent, BlueprintSeedRole } from "@/lib/types";
+import type { SingleBlueprint, BlueprintSeedAgent } from "@/lib/types";
+import {
+  describeBlueprintStructures,
+  type BlueprintStructurePreview,
+} from "@/lib/blueprintStructures";
 
 interface BlueprintTreePreviewProps {
   template: SingleBlueprint;
@@ -21,71 +25,116 @@ interface BlueprintTreePreviewProps {
  * back to the implicit root → flat seed_agents shape otherwise.
  */
 export function BlueprintTreePreview({ template }: BlueprintTreePreviewProps) {
+  const structures = describeBlueprintStructures(template);
+  const multi = structures.length > 1;
   const rootName = template.root?.name ?? template.name;
   const rootColor = template.root?.color ?? undefined;
-  const declared = (template.seed_roles ?? []).length > 0;
-
-  const layers = declared
-    ? computeDeclaredLayers(template, rootName)
-    : computeImplicitLayers(template.seed_agents ?? [], rootName);
-
-  const seedAgents = template.seed_agents ?? [];
   const agentByName = new Map<string, BlueprintSeedAgent>();
-  for (const a of seedAgents) agentByName.set(a.name, a);
+  for (const agent of template.seed_agents ?? []) {
+    agentByName.set(agent.name, agent);
+  }
 
   return (
     <section className="bp-orgchart-card" aria-label="Org chart">
       <header className="bp-orgchart-card-head">
         <h2 className="bp-orgchart-card-title">Org chart</h2>
-        <p className="bp-orgchart-card-sub">Roles ship pre-filled with default agents.</p>
+        <p className="bp-orgchart-card-sub">
+          {multi
+            ? `${structures.length} structures · previewed as separate role trees.`
+            : "Roles ship pre-filled with default agents."}
+        </p>
       </header>
       <div className="bp-orgchart" aria-hidden="true">
-        {layers.map((layer, layerIdx) => {
-          const showConnector = layerIdx > 0 && layer.length > 0;
-          return (
-            <div key={layerIdx} className="bp-orgchart-layer">
-              {showConnector && <ConnectorRow count={layer.length} />}
-              <div className="bp-orgchart-row">
-                {layer.map((role, i) => {
-                  const isRoot =
-                    role.default_occupant_agent === "root" ||
-                    role.default_occupant_agent === rootName;
-                  const occupantName = role.default_occupant_agent ?? null;
-                  const occupantAgent = occupantName ? agentByName.get(occupantName) : undefined;
-                  const subtitle = occupantName ? (isRoot ? rootName : occupantName) : "vacant";
-                  const category = isRoot ? "leadership" : categorizeRole(role.title);
-                  const swatchColor = isRoot ? rootColor : (occupantAgent?.color ?? undefined);
-                  return (
-                    <article
-                      key={role.key}
-                      className={`bp-role-card bp-role-card--${category}${
-                        isRoot ? " bp-role-card--root" : ""
-                      }`}
-                      style={{
-                        animationDelay: `${50 + (layerIdx * 80 + i * 50)}ms`,
-                      }}
-                      title={occupantAgent?.system_prompt || occupantAgent?.tagline || role.title}
-                    >
-                      <span className="bp-role-eyebrow">{categoryLabel(category)}</span>
-                      <span className="bp-role-title">{role.title}</span>
-                      <span className="bp-role-occupant">
-                        {swatchColor && !isRoot && (
-                          <span
-                            className="bp-role-occupant-dot"
-                            style={{ background: swatchColor }}
-                            aria-hidden="true"
-                          />
-                        )}
-                        {subtitle}
-                      </span>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {structures.map((structure, idx) => (
+          <StructureBlock
+            key={structure.id}
+            structure={structure}
+            index={idx}
+            multi={multi}
+            rootName={rootName}
+            rootColor={rootColor}
+            agentByName={agentByName}
+          />
+        ))}
       </div>
+    </section>
+  );
+}
+
+function StructureBlock({
+  structure,
+  index,
+  multi,
+  rootName,
+  rootColor,
+  agentByName,
+}: {
+  structure: BlueprintStructurePreview;
+  index: number;
+  multi: boolean;
+  rootName: string;
+  rootColor?: string;
+  agentByName: Map<string, BlueprintSeedAgent>;
+}) {
+  return (
+    <section className={`bp-structure-block${multi ? " bp-structure-block--multi" : ""}`}>
+      {multi && (
+        <header className="bp-structure-head">
+          <span className="bp-structure-eyebrow">Structure {index + 1}</span>
+          <span className="bp-structure-title">{structure.title}</span>
+          <span className="bp-structure-sub">{structure.subtitle}</span>
+        </header>
+      )}
+      {structure.layers.map((layer, layerIdx) => {
+        const showConnector = layerIdx > 0 && layer.length > 0;
+        return (
+          <div key={`${structure.id}-${layerIdx}`} className="bp-orgchart-layer">
+            {showConnector && <ConnectorRow count={layer.length} />}
+            <div className="bp-orgchart-row">
+              {layer.map((role, i) => {
+                const isRoot =
+                  structure.rootKeys.includes(role.key) ||
+                  role.default_occupant_agent === "root" ||
+                  role.default_occupant_agent === rootName;
+                const occupantName = role.default_occupant_agent ?? null;
+                const occupantAgent = occupantName ? agentByName.get(occupantName) : undefined;
+                const subtitle = occupantName
+                  ? isRoot
+                    ? structure.title
+                    : occupantName
+                  : "vacant";
+                const category = isRoot ? "leadership" : categorizeRole(role.title);
+                const swatchColor = isRoot ? rootColor : (occupantAgent?.color ?? undefined);
+                return (
+                  <article
+                    key={role.key}
+                    className={`bp-role-card bp-role-card--${category}${
+                      isRoot ? " bp-role-card--root" : ""
+                    }`}
+                    style={{
+                      animationDelay: `${50 + (layerIdx * 80 + i * 50)}ms`,
+                    }}
+                    title={occupantAgent?.system_prompt || occupantAgent?.tagline || role.title}
+                  >
+                    <span className="bp-role-eyebrow">{categoryLabel(category)}</span>
+                    <span className="bp-role-title">{role.title}</span>
+                    <span className="bp-role-occupant">
+                      {swatchColor && !isRoot && (
+                        <span
+                          className="bp-role-occupant-dot"
+                          style={{ background: swatchColor }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {subtitle}
+                    </span>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -119,58 +168,6 @@ function ConnectorRow({ count }: { count: number }) {
       ))}
     </svg>
   );
-}
-
-/* ── Layout helpers ──────────────────────────────────── */
-
-function computeDeclaredLayers(template: SingleBlueprint, rootName: string): BlueprintSeedRole[][] {
-  const roles = template.seed_roles ?? [];
-  const edges = template.seed_role_edges ?? [];
-  const incoming = new Map<string, string[]>();
-  for (const r of roles) incoming.set(r.key, []);
-  for (const e of edges) {
-    if (!incoming.has(e.child)) continue;
-    incoming.get(e.child)!.push(e.parent);
-  }
-  const depth = new Map<string, number>();
-  const visit = (id: string, seen: Set<string>): number => {
-    if (depth.has(id)) return depth.get(id)!;
-    if (seen.has(id)) return 0;
-    seen.add(id);
-    const parents = incoming.get(id) ?? [];
-    if (parents.length === 0) {
-      depth.set(id, 0);
-      return 0;
-    }
-    let d = 0;
-    for (const p of parents) d = Math.max(d, visit(p, seen) + 1);
-    depth.set(id, d);
-    return d;
-  };
-  for (const r of roles) visit(r.key, new Set());
-  const maxDepth = Math.max(0, ...Array.from(depth.values()));
-  const layers: BlueprintSeedRole[][] = Array.from({ length: maxDepth + 1 }, () => []);
-  for (const r of roles) layers[depth.get(r.key) ?? 0].push(r);
-  void rootName; // referenced by the renderer through props, not here
-  return layers;
-}
-
-function computeImplicitLayers(
-  seeds: BlueprintSeedAgent[],
-  rootName: string,
-): BlueprintSeedRole[][] {
-  const root: BlueprintSeedRole = {
-    key: "root",
-    title: rootName,
-    default_occupant_agent: "root",
-  };
-  if (seeds.length === 0) return [[root]];
-  const children: BlueprintSeedRole[] = seeds.map((seed, i) => ({
-    key: `seed-${i}`,
-    title: seed.role || seed.name,
-    default_occupant_agent: seed.name,
-  }));
-  return [[root], children];
 }
 
 /* ── Category heuristic ──────────────────────────────── */

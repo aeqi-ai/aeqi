@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
+import { countBlueprintStructures } from "@/lib/blueprintStructures";
 import { Card } from "@/components/ui";
 import type { SingleBlueprint, BlueprintTemplate } from "@/lib/types";
 
@@ -25,7 +26,9 @@ function formatRuntimeLine(t: SingleBlueprint): string {
   const e = t.seed_events?.length ?? 0;
   const i = t.seed_ideas?.length ?? 0;
   const q = t.seed_quests?.length ?? 0;
+  const structures = countBlueprintStructures(t);
   parts.push(`${a} ${a === 1 ? "agent" : "agents"}`);
+  if (structures > 1) parts.push(`${structures} structures`);
   if (e > 0) parts.push(`${e} ${e === 1 ? "event" : "events"}`);
   if (i > 0) parts.push(`${i} ${i === 1 ? "idea" : "ideas"}`);
   if (q > 0) parts.push(`${q} ${q === 1 ? "quest" : "quests"}`);

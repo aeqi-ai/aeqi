@@ -155,6 +155,24 @@
       "key": "coo-assistant",
       "title": "COO Assistant",
       "default_occupant_agent": "COO Assistant"
+    },
+    {
+      "key": "advisory-board",
+      "title": "Advisory Board",
+      "default_occupant_agent": null,
+      "role_type": "advisor"
+    },
+    {
+      "key": "legal-advisor",
+      "title": "Legal Advisor",
+      "default_occupant_agent": null,
+      "role_type": "advisor"
+    },
+    {
+      "key": "finance-advisor",
+      "title": "Finance Advisor",
+      "default_occupant_agent": null,
+      "role_type": "advisor"
     }
   ],
   "seed_role_edges": [
@@ -177,6 +195,14 @@
     {
       "parent": "coo",
       "child": "coo-assistant"
+    },
+    {
+      "parent": "advisory-board",
+      "child": "legal-advisor"
+    },
+    {
+      "parent": "advisory-board",
+      "child": "finance-advisor"
     }
   ]
 }
