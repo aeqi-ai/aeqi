@@ -4,6 +4,7 @@ import Wordmark from "@/components/Wordmark";
 import { Button, Input } from "@/components/ui";
 import { useAuthStore } from "@/store/auth";
 import { api } from "@/lib/api";
+import { getRedirectAfterAuth } from "@/lib/redirectAfterAuth";
 
 /**
  * Welcome — combined sign-in / sign-up entry point. A user authenticates
@@ -451,10 +452,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
       token_module_state_pda_b58: "",
       governance_module_state_pda_b58: "",
     };
-    persistSession(synthetic);
-    setStage("spawning");
-    setSteps(buildSteps());
-    void animateSpawn(synthetic);
+    void completeWelcomeAuth(synthetic);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -502,8 +500,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
           session_jwt: string;
           session_expires_at: string;
         };
-        persistSession(verify);
-        await animateSpawn(verify);
+        await completeWelcomeAuth(verify);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setErrorMsg(msg);
@@ -568,6 +565,19 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
     setSteps((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
     await new Promise((r) => setTimeout(r, 300));
     setStage("welcome");
+  }
+
+  async function completeWelcomeAuth(
+    data: AccountSessionResponse & { session_jwt: string; session_expires_at: string },
+  ) {
+    persistSession(data);
+    if (mode !== "signup" && data.already_existed) {
+      navigate(getRedirectAfterAuth(searchParams), { replace: true });
+      return;
+    }
+    setStage("spawning");
+    setSteps(buildSteps());
+    await animateSpawn(data);
   }
 
   function persistSession(s: {
@@ -640,8 +650,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
         session_jwt: string;
         session_expires_at: string;
       };
-      persistSession(verify);
-      await animateSpawn(verify);
+      await completeWelcomeAuth(verify);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
@@ -698,8 +707,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
           session_jwt: string;
           session_expires_at: string;
         };
-        persistSession(verify);
-        await animateSpawn(verify);
+        await completeWelcomeAuth(verify);
       }
       // Prod path: stays on "check-email" — user types the code or
       // clicks the magic link from their inbox.
@@ -731,8 +739,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
         session_jwt: string;
         session_expires_at: string;
       };
-      persistSession(verify);
-      await animateSpawn(verify);
+      await completeWelcomeAuth(verify);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
@@ -806,8 +813,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
             session_jwt: string;
             session_expires_at: string;
           };
-          persistSession(verify);
-          await animateSpawn(verify);
+          await completeWelcomeAuth(verify);
           return;
         }
       }
@@ -846,8 +852,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
         session_jwt: string;
         session_expires_at: string;
       };
-      persistSession(finish);
-      await animateSpawn(finish);
+      await completeWelcomeAuth(finish);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
