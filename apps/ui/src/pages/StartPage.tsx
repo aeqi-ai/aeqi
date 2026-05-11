@@ -77,6 +77,37 @@ function formatChoiceMeta(template: Blueprint): string {
   return parts.join(" · ");
 }
 
+function buildLaunchMessages(
+  brief: string,
+  selectedBlueprint: Blueprint | null,
+  loading: boolean,
+): Array<{ kind: "assistant" | "user"; title: string; body: string }> {
+  const intro = {
+    kind: "assistant" as const,
+    title: "AEQI",
+    body: "Tell me what you want to build. I’ll shape the company structure on the right.",
+  };
+  const messages: Array<{ kind: "assistant" | "user"; title: string; body: string }> = [intro];
+  const trimmed = brief.trim();
+  if (trimmed) {
+    messages.push({
+      kind: "user" as const,
+      title: "You",
+      body: trimmed,
+    });
+  }
+  messages.push({
+    kind: "assistant" as const,
+    title: "AEQI",
+    body: loading
+      ? "I’m loading the blueprint ecosystem."
+      : selectedBlueprint
+        ? `I’ve mapped this to ${selectedBlueprint.name}${selectedBlueprint.tagline ? ` — ${selectedBlueprint.tagline}` : ""}.`
+        : "Pick a blueprint or write a brief and I’ll suggest a structure.",
+  });
+  return messages;
+}
+
 /**
  * `/launch` is the company studio. It gives the user one shell-native
  * formation surface: talk on the left, shape the blueprint on the right,
@@ -217,23 +248,42 @@ export default function StartPage() {
   const briefValue = brief.trim();
   const previewLine =
     briefValue || selectedBlueprint?.tagline || "Write a brief and the canvas will adapt.";
+  const launchMessages = useMemo(
+    () => buildLaunchMessages(brief, selectedBlueprint, loading),
+    [brief, selectedBlueprint, loading],
+  );
 
   if (!isAuthed) return null;
 
   return (
     <div className="start-page start-page--studio">
       <header className="start-head start-head--studio">
-        <p className="start-eyebrow">Launch studio</p>
-        <h1 className="page-title">Describe the company. AEQI shapes the structure.</h1>
-        <p className="start-sub">
-          Talk on the left. The live canvas on the right recomposes as you change the brief or
-          switch the blueprint. When it looks right, continue into setup.
-        </p>
-        <div className="start-step-row" aria-label="Launch steps">
-          <span className="start-step">1 Brief</span>
-          <span className="start-step">2 Blueprint</span>
-          <span className="start-step">3 Review</span>
-          <span className="start-step">4 Provision</span>
+        <div className="start-head-copy">
+          <p className="start-eyebrow">Launch studio</p>
+          <h1 className="page-title">Describe the company. AEQI shapes the structure.</h1>
+          <p className="start-sub">
+            Talk on the left. The live canvas on the right recomposes as you change the brief or
+            switch the blueprint.
+          </p>
+        </div>
+        <div className="start-head-actions">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate("/blueprints")}
+          >
+            Browse blueprints
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={handleContinue}
+            disabled={loading || !selectedBlueprint}
+          >
+            Launch
+          </Button>
         </div>
       </header>
 
@@ -246,32 +296,41 @@ export default function StartPage() {
       <section className="start-studio-grid" aria-label="Launch studio">
         <aside className="start-session-pane">
           <div className="start-pane-head">
-            <p className="start-section-kicker">Composer</p>
-            <h2 className="start-section-title">Write the brief.</h2>
+            <p className="start-section-kicker">Chat</p>
+            <h2 className="start-section-title">Shape the company in conversation.</h2>
             <p className="start-section-sub">
-              Keep it short. The studio will suggest a shape, and you can refine it on the canvas.
+              Keep it short. The canvas updates as you type and pin a blueprint.
             </p>
           </div>
 
-          <Composer
-            value={brief}
-            onChange={setBrief}
-            onSend={handleBriefSend}
-            composerRef={composerRef}
-            variant="shell"
-            placeholder="Tell AEQI what this company should do, who it serves, and what makes it different."
-            sendLabel="Review setup"
-            extraActions={
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => navigate("/blueprints")}
-              >
-                Browse blueprints
-              </Button>
-            }
-          />
+          <div className="start-chat-shell">
+            <div className="start-chat-log" aria-label="Launch conversation">
+              {launchMessages.map((message, idx) => (
+                <article
+                  key={`${message.kind}-${idx}`}
+                  className={`start-chat-message start-chat-message--${message.kind}`}
+                >
+                  <div className="start-chat-message-meta">
+                    <span className="start-chat-message-title">{message.title}</span>
+                    <span className="start-chat-message-kind">
+                      {message.kind === "assistant" ? "assistant" : "you"}
+                    </span>
+                  </div>
+                  <p className="start-chat-message-body">{message.body}</p>
+                </article>
+              ))}
+            </div>
+
+            <Composer
+              value={brief}
+              onChange={setBrief}
+              onSend={handleBriefSend}
+              composerRef={composerRef}
+              variant="shell"
+              placeholder="Tell AEQI what this company should do, who it serves, and what makes it different."
+              sendLabel="Launch"
+            />
+          </div>
 
           <div className="start-brief-actions" aria-label="Quick prompts">
             {START_PROMPTS.map((prompt) => (
@@ -294,15 +353,6 @@ export default function StartPage() {
             <div className="start-session-foot-actions">
               <Button type="button" variant="secondary" size="sm" onClick={resetAutoMatch}>
                 Re-suggest
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={handleContinue}
-                disabled={loading || !selectedBlueprint}
-              >
-                Continue
               </Button>
             </div>
           </div>
@@ -395,13 +445,8 @@ export default function StartPage() {
             </div>
 
             <div className="start-canvas-foot">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => navigate("/blueprints")}
-              >
-                Browse all blueprints
+              <Button type="button" variant="secondary" size="sm" onClick={resetAutoMatch}>
+                Re-suggest
               </Button>
               <Button
                 type="button"
@@ -410,7 +455,7 @@ export default function StartPage() {
                 onClick={handleContinue}
                 disabled={loading || !selectedBlueprint}
               >
-                Use this blueprint
+                Launch this blueprint
               </Button>
             </div>
           </section>
