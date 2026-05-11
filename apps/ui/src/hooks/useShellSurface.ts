@@ -18,10 +18,6 @@ export interface ShellSurface {
   isAccount: boolean;
   isEconomy: boolean;
   isBlueprints: boolean;
-  /** `/studio` — Architect surface (Wave 34 Phase 1). Free-text brief →
-   *  generated Blueprint preview → deploy. Top-level destination, not
-   *  scoped to any Company. */
-  isStudio: boolean;
   /** `/launch` — company formation surface. Left composer + right canvas. */
   isLaunch: boolean;
   isDrive: boolean;
@@ -51,7 +47,6 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // dispatch lands on EconomyPage in both cases.
     const isEconomy = path === "/" || path === "/economy" || path.startsWith("/economy/");
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
-    const isStudio = path === "/studio" || path.startsWith("/studio/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
     const isStart = path === "/start" || path.startsWith("/start/");
     const isDrive = tab === "drive";
@@ -72,21 +67,13 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // door (isEconomy === true at `/`).
     const isCompanyRoute = /^\/c\/[^/]+(\/|$)/.test(path) || /^\/trust\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute =
-      isCompanyRoute ||
-      isAccount ||
-      isEconomy ||
-      isBlueprints ||
-      isStudio ||
-      isLaunch ||
-      isStart ||
-      isAdmin;
+      isCompanyRoute || isAccount || isEconomy || isBlueprints || isLaunch || isStart || isAdmin;
     const isNotFound = !isKnownShellRoute;
 
     return {
       isAccount,
       isEconomy,
       isBlueprints,
-      isStudio,
       isLaunch,
       isDrive,
       isStart,

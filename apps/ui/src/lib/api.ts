@@ -669,12 +669,14 @@ export const api = {
   // Full Template including seed_agents/events/ideas/quests arrays. The
   // list endpoint returns counts only to keep the catalog payload small;
   // the detail endpoint is what the store calls when a card is selected.
-  getBlueprint: (slug: string) =>
-    request<{ ok: boolean; blueprint: Blueprint }>(`/blueprints/${encodeURIComponent(slug)}`),
+  getBlueprint: (blueprintId: string) =>
+    request<{ ok: boolean; blueprint: Blueprint }>(
+      `/blueprints/${encodeURIComponent(blueprintId)}`,
+    ),
 
   // Resolves the operator-configured default Blueprint
   // (`[blueprints] default` in aeqi.toml). Used by `/start` when the
-  // user lands there without a `?blueprint=:slug` query param.
+  // user lands there without a `?blueprintId=` query param.
   getDefaultBlueprint: () => request<{ ok: boolean; blueprint: Blueprint }>("/blueprints/default"),
 
   /** `role_overrides` lets the operator stage occupants before the spawn

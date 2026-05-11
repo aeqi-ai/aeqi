@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { blueprintId } from "@/lib/blueprintId";
 import type {
   Blueprint,
   BlueprintCategory,
@@ -45,7 +46,7 @@ const EMPTY_SEED_QUESTS: BlueprintSeedQuest[] = [];
 const EMPTY_SEED_IDEAS: BlueprintSeedIdea[] = [];
 
 /**
- * `/blueprints/:slug[/:section]` — inspect a Blueprint and explore its
+ * `/blueprints/:blueprintId[/:section]` — inspect a Blueprint and explore its
  * seed primitives.
  *
  * Two-column shell mirrors the catalog and `/settings`: vertical
@@ -156,11 +157,11 @@ export default function BlueprintDetailPage() {
   const single = template as SingleBlueprint;
 
   // Detail page is preview-only. The launch CTA hands off to
-  // `/launch/<slug>` (CompanySetupPage) where the operator confirms a
+  // `/launch/<blueprintId>` (CompanySetupPage) where the operator confirms a
   // name, stages role overrides, and picks a plan before spawn.
   const launchHref = isImportMode
-    ? `/blueprints/${encodeURIComponent(single.slug)}?import_into=${encodeURIComponent(importIntoId ?? "")}`
-    : `/launch/${encodeURIComponent(single.slug)}`;
+    ? `/blueprints/${encodeURIComponent(blueprintId(single))}?import_into=${encodeURIComponent(importIntoId ?? "")}`
+    : `/launch/${encodeURIComponent(blueprintId(single))}`;
 
   return (
     <div className="page-rail-shell">
@@ -168,7 +169,7 @@ export default function BlueprintDetailPage() {
         tabs={SECTION_TABS}
         defaultTab="overview"
         title="Blueprint"
-        basePath={`/blueprints/${encodeURIComponent(single.slug)}`}
+        basePath={`/blueprints/${encodeURIComponent(blueprintId(single))}`}
         currentValue={activeSection}
       />
       <main className="page-rail-content page-rail-content--full">

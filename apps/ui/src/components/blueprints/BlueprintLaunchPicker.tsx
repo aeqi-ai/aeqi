@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { blueprintId } from "@/lib/blueprintId";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
 import { isSingleBlueprint } from "@/lib/types";
 import { Card, Spinner } from "@/components/ui";
@@ -19,11 +20,11 @@ interface BlueprintLaunchPickerProps {
    *  named seed blocks materialize on spawn (e.g. `["ideas"]` for the
    *  Ideas Import flow). Omit for full-company import. */
   parts?: string[];
-  /** Fired after a successful `spawn-into-entity`. Receives the slug of the
+  /** Fired after a successful `spawn-into-entity`. Receives the id of the
    *  blueprint that was merged in (the modal version uses this to close
    *  itself + refresh). spawn-company mode no longer fires a callback —
    *  it navigates to the setup surface instead. */
-  onSpawnedAgent?: (slug: string) => void;
+  onSpawnedAgent?: (blueprintId: string) => void;
   /** Optional query string appended when `mode === "spawn-company"`.
    *  Used by `/start` to carry the user's brief into the setup wizard. */
   launchQuery?: string;
@@ -33,11 +34,11 @@ interface BlueprintLaunchPickerProps {
  * Shared picker UX for `/start` and the `+ New agent` modal. Three sections:
  *
  *   1. Start blank — promoted top row.
- *   2. Recommended — 3-4 curated slugs from `recommendedBlueprints.ts`.
+ *   2. Recommended — 3-4 curated ids from `recommendedBlueprints.ts`.
  *   3. Browse all → /blueprints — full catalog.
  *
  * Branches on `mode`:
- *   - spawn-company → navigate to /launch/<slug> (CompanySetupPage)
+ *   - spawn-company → navigate to /launch/<blueprintId> (CompanySetupPage)
  *     so the operator confirms name + roles + plan before spawn
  *   - spawn-into-entity → POST /api/blueprints/spawn-into
  *     (a "merge into existing company" flow — no naming or billing
@@ -57,7 +58,7 @@ export function BlueprintLaunchPicker({
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]); // only single blueprints
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [submittingSlug, setSubmittingSlug] = useState<string | null>(null);
+  const [submittingBlueprintId, setSubmittingBlueprintId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -82,26 +83,26 @@ export function BlueprintLaunchPicker({
     };
   }, []);
 
-  const bySlug = useMemo(() => {
+  const byId = useMemo(() => {
     const m = new Map<string, Blueprint>();
-    for (const b of blueprints) m.set(b.slug, b);
+    for (const b of blueprints) m.set(blueprintId(b), b);
     return m;
   }, [blueprints]);
 
-  // Drop unknown slugs silently — the catalog is the source of truth, so a
+  // Drop unknown ids silently — the catalog is the source of truth, so a
   // typo or a retired blueprint shouldn't render a broken card.
   const recommended = useMemo(
-    () => RECOMMENDED_BLUEPRINTS.map((slug) => bySlug.get(slug)).filter((t): t is Blueprint => !!t),
-    [bySlug],
+    () => RECOMMENDED_BLUEPRINTS.map((id) => byId.get(id)).filter((t): t is Blueprint => !!t),
+    [byId],
   );
 
-  const blank = bySlug.get("blank") ?? null;
+  const blank = byId.get("blank") ?? null;
 
   const launch = useCallback(
-    async (slug: string) => {
-      const tpl = bySlug.get(slug);
+    async (id: string) => {
+      const tpl = byId.get(id);
       if (!tpl) {
-        setSubmitError(`Blueprint '${slug}' is not available.`);
+        setSubmitError(`Blueprint '${id}' is not available.`);
         return;
       }
       // spawn-company mode: route through the setup surface so the
@@ -112,29 +113,29 @@ export function BlueprintLaunchPicker({
       // blueprint into my existing company" flow with no naming or
       // billing concerns to surface.
       if (mode === "spawn-company") {
-        navigate(`/launch/${encodeURIComponent(tpl.slug)}${launchQuery ?? ""}`);
+        navigate(`/launch/${encodeURIComponent(blueprintId(tpl))}${launchQuery ?? ""}`);
         return;
       }
-      setSubmittingSlug(slug);
+      setSubmittingBlueprintId(id);
       setSubmitError(null);
       try {
         if (!entityId) throw new Error("Missing entity id for spawn-into-entity.");
         await api.spawnBlueprintIntoEntity({
-          blueprint: tpl.slug,
+          blueprint: blueprintId(tpl),
           entity_id: entityId,
           parts,
         });
-        onSpawnedAgent?.(tpl.slug);
+        onSpawnedAgent?.(blueprintId(tpl));
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Could not spawn.";
         setSubmitError(msg);
-        setSubmittingSlug(null);
+        setSubmittingBlueprintId(null);
       }
     },
-    [bySlug, mode, entityId, parts, onSpawnedAgent, navigate, launchQuery],
+    [byId, mode, entityId, parts, onSpawnedAgent, navigate, launchQuery],
   );
 
-  const isBusy = submittingSlug !== null;
+  const isBusy = submittingBlueprintId !== null;
 
   if (loading) {
     return (
@@ -165,7 +166,7 @@ export function BlueprintLaunchPicker({
         <button
           type="button"
           className="bp-launch-blank"
-          onClick={() => void launch(blank.slug)}
+          onClick={() => void launch(blueprintId(blank))}
           disabled={isBusy}
           aria-label={`${blank.name} — ${blank.tagline ?? ""}`}
         >
@@ -174,7 +175,7 @@ export function BlueprintLaunchPicker({
             {blank.tagline && <span className="bp-launch-blank-tagline">{blank.tagline}</span>}
           </span>
           <span className="bp-launch-blank-cue" aria-hidden>
-            {submittingSlug === blank.slug ? <Spinner size="sm" /> : "→"}
+            {submittingBlueprintId === blueprintId(blank) ? <Spinner size="sm" /> : "→"}
           </span>
         </button>
       )}
@@ -185,14 +186,14 @@ export function BlueprintLaunchPicker({
           <h3 className="bp-launch-section-label">Recommended</h3>
           <div className="bp-launch-grid" role="list">
             {recommended.map((t) => {
-              const busy = submittingSlug === t.slug;
+              const busy = submittingBlueprintId === blueprintId(t);
               return (
                 <button
-                  key={t.slug}
+                  key={blueprintId(t)}
                   type="button"
                   className="bp-launch-card-btn"
                   role="listitem"
-                  onClick={() => void launch(t.slug)}
+                  onClick={() => void launch(blueprintId(t))}
                   disabled={isBusy}
                   aria-label={`${t.name}${t.tagline ? ` — ${t.tagline}` : ""}`}
                 >

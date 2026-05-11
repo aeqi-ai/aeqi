@@ -5,6 +5,7 @@ import { BlueprintSeedCounts } from "@/components/blueprints/BlueprintSeedCounts
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import { Banner, Button, Card, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
+import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
 import { countBlueprintStructures } from "@/lib/blueprintStructures";
 import { Events, useTrack } from "@/lib/analytics";
@@ -14,34 +15,27 @@ import { isSingleBlueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import "@/styles/blueprints-store.css";
 import "@/styles/blueprint-launch-picker.css";
-
-const START_PROMPTS = [
-  "An organization that ships AI agents for customer support and ops",
-  "A crypto-native studio with treasury, vesting, and governance",
-  "A small founder-led organization with roles, hiring, and a clear roadmap",
-];
-
 type SelectionMode = "auto" | "manual";
 
-function pickInitialBlueprintSlug(
+function pickInitialBlueprintId(
   blueprints: Blueprint[],
-  bySlug: Map<string, Blueprint>,
+  byBlueprintId: Map<string, Blueprint>,
 ): string | null {
-  for (const slug of RECOMMENDED_BLUEPRINTS) {
-    if (bySlug.has(slug)) return slug;
+  for (const id of RECOMMENDED_BLUEPRINTS) {
+    if (byBlueprintId.has(id)) return id;
   }
-  if (bySlug.has(DEFAULT_BLUEPRINT_SLUG)) return DEFAULT_BLUEPRINT_SLUG;
-  if (bySlug.has("blank")) return "blank";
-  return blueprints[0]?.slug ?? null;
+  if (byBlueprintId.has(DEFAULT_BLUEPRINT_SLUG)) return DEFAULT_BLUEPRINT_SLUG;
+  if (byBlueprintId.has("blank")) return "blank";
+  return blueprints[0] ? blueprintId(blueprints[0]) : null;
 }
 
-function guessBlueprintSlug(
+function guessBlueprintId(
   brief: string,
   blueprints: Blueprint[],
-  bySlug: Map<string, Blueprint>,
+  byBlueprintId: Map<string, Blueprint>,
 ): string | null {
   const text = brief.toLowerCase();
-  if (!text.trim()) return pickInitialBlueprintSlug(blueprints, bySlug);
+  if (!text.trim()) return pickInitialBlueprintId(blueprints, byBlueprintId);
 
   const rules: Array<[RegExp, string[]]> = [
     [/\b(fund|treasury|capital|vesting|investment|portfolio|lp)\b/i, ["fund", "venture"]],
@@ -54,12 +48,12 @@ function guessBlueprintSlug(
 
   for (const [pattern, candidates] of rules) {
     if (!pattern.test(text)) continue;
-    for (const slug of candidates) {
-      if (bySlug.has(slug)) return slug;
+    for (const id of candidates) {
+      if (byBlueprintId.has(id)) return id;
     }
   }
 
-  return pickInitialBlueprintSlug(blueprints, bySlug);
+  return pickInitialBlueprintId(blueprints, byBlueprintId);
 }
 
 function formatChoiceMeta(template: Blueprint): string {
@@ -77,37 +71,6 @@ function formatChoiceMeta(template: Blueprint): string {
   return parts.join(" · ");
 }
 
-function buildLaunchMessages(
-  brief: string,
-  selectedBlueprint: Blueprint | null,
-  loading: boolean,
-): Array<{ kind: "assistant" | "user"; title: string; body: string }> {
-  const intro = {
-    kind: "assistant" as const,
-    title: "AEQI",
-    body: "Tell me what you want to build. I’ll shape the organization on the right.",
-  };
-  const messages: Array<{ kind: "assistant" | "user"; title: string; body: string }> = [intro];
-  const trimmed = brief.trim();
-  if (trimmed) {
-    messages.push({
-      kind: "user" as const,
-      title: "You",
-      body: trimmed,
-    });
-  }
-  messages.push({
-    kind: "assistant" as const,
-    title: "AEQI",
-    body: loading
-      ? "I’m loading the blueprint ecosystem."
-      : selectedBlueprint
-        ? `I’ve mapped this to ${selectedBlueprint.name}${selectedBlueprint.tagline ? ` — ${selectedBlueprint.tagline}` : ""}.`
-        : "Pick a blueprint or write a brief and I’ll suggest a structure.",
-  });
-  return messages;
-}
-
 /**
  * `/launch` is the organization studio. It gives the user one shell-native
  * formation surface: talk on the left, shape the blueprint on the right,
@@ -122,7 +85,7 @@ export default function StartPage() {
   const isAuthed = authMode === "none" || !!token;
   const [brief, setBrief] = useState("");
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
-  const [selectedSlug, setSelectedSlug] = useState<string>("");
+  const [selectedBlueprintId, setSelectedBlueprintId] = useState<string>("");
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("auto");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -166,36 +129,38 @@ export default function StartPage() {
     };
   }, []);
 
-  const bySlug = useMemo(() => {
+  const byBlueprintId = useMemo(() => {
     const m = new Map<string, Blueprint>();
     for (const blueprint of blueprints) {
-      m.set(blueprint.slug, blueprint);
+      m.set(blueprintId(blueprint), blueprint);
     }
     return m;
   }, [blueprints]);
 
   const selectedBlueprint = useMemo(() => {
-    if (selectedSlug && bySlug.has(selectedSlug)) {
-      return bySlug.get(selectedSlug) ?? null;
+    if (selectedBlueprintId && byBlueprintId.has(selectedBlueprintId)) {
+      return byBlueprintId.get(selectedBlueprintId) ?? null;
     }
-    return pickInitialBlueprintSlug(blueprints, bySlug)
-      ? (bySlug.get(pickInitialBlueprintSlug(blueprints, bySlug) as string) ?? null)
+    return pickInitialBlueprintId(blueprints, byBlueprintId)
+      ? (byBlueprintId.get(pickInitialBlueprintId(blueprints, byBlueprintId) as string) ?? null)
       : null;
-  }, [blueprints, bySlug, selectedSlug]);
+  }, [blueprints, byBlueprintId, selectedBlueprintId]);
 
   useEffect(() => {
     if (blueprints.length === 0) return;
-    const initial = pickInitialBlueprintSlug(blueprints, bySlug);
+    const initial = pickInitialBlueprintId(blueprints, byBlueprintId);
     if (!initial) return;
-    setSelectedSlug((current) => (current && bySlug.has(current) ? current : initial));
-  }, [blueprints, bySlug]);
+    setSelectedBlueprintId((current) =>
+      current && byBlueprintId.has(current) ? current : initial,
+    );
+  }, [blueprints, byBlueprintId]);
 
   useEffect(() => {
     if (blueprints.length === 0 || selectionMode !== "auto") return;
-    const next = guessBlueprintSlug(brief, blueprints, bySlug);
+    const next = guessBlueprintId(brief, blueprints, byBlueprintId);
     if (!next) return;
-    setSelectedSlug((current) => (current === next ? current : next));
-  }, [brief, blueprints, bySlug, selectionMode]);
+    setSelectedBlueprintId((current) => (current === next ? current : next));
+  }, [brief, blueprints, byBlueprintId, selectionMode]);
 
   const launchQuery = useMemo(() => {
     const trimmed = brief.trim();
@@ -203,56 +168,44 @@ export default function StartPage() {
   }, [brief]);
 
   const choiceBlueprints = useMemo(() => {
-    const slugs: string[] = [];
-    const add = (slug: string | null | undefined) => {
-      if (!slug || slugs.includes(slug) || !bySlug.has(slug)) return;
-      slugs.push(slug);
+    const ids: string[] = [];
+    const add = (id: string | null | undefined) => {
+      if (!id || ids.includes(id) || !byBlueprintId.has(id)) return;
+      ids.push(id);
     };
 
     add("blank");
-    for (const slug of RECOMMENDED_BLUEPRINTS) add(slug);
+    for (const id of RECOMMENDED_BLUEPRINTS) add(id);
     for (const blueprint of blueprints) {
-      if (slugs.length >= 7) break;
-      add(blueprint.slug);
+      if (ids.length >= 7) break;
+      add(blueprintId(blueprint));
     }
 
-    return slugs.map((slug) => bySlug.get(slug)).filter((t): t is Blueprint => !!t);
-  }, [blueprints, bySlug]);
+    return ids.map((id) => byBlueprintId.get(id)).filter((t): t is Blueprint => !!t);
+  }, [blueprints, byBlueprintId]);
 
   const handleContinue = useCallback(() => {
     if (!selectedBlueprint) return;
-    navigate(`/launch/${encodeURIComponent(selectedBlueprint.slug)}${launchQuery}`);
+    navigate(`/launch/${encodeURIComponent(blueprintId(selectedBlueprint))}${launchQuery}`);
   }, [launchQuery, navigate, selectedBlueprint]);
 
   const handleBriefSend = useCallback(() => {
     handleContinue();
   }, [handleContinue]);
 
-  const handlePrompt = useCallback((prompt: string) => {
+  const handleBriefChange = useCallback((next: string) => {
     setSelectionMode("auto");
-    setBrief(prompt);
-    requestAnimationFrame(() => composerRef.current?.focus());
+    setBrief(next);
   }, []);
 
-  const handleSelectBlueprint = useCallback((slug: string) => {
+  const handleSelectBlueprint = useCallback((id: string) => {
     setSelectionMode("manual");
-    setSelectedSlug(slug);
+    setSelectedBlueprintId(id);
   }, []);
-
-  const resetAutoMatch = useCallback(() => {
-    setSelectionMode("auto");
-    const next = guessBlueprintSlug(brief, blueprints, bySlug);
-    if (next) setSelectedSlug(next);
-  }, [brief, blueprints, bySlug]);
 
   const briefValue = brief.trim();
   const previewLine =
     briefValue || selectedBlueprint?.tagline || "Write a brief and the canvas will adapt.";
-  const launchMessages = useMemo(
-    () => buildLaunchMessages(brief, selectedBlueprint, loading),
-    [brief, selectedBlueprint, loading],
-  );
-
   if (!isAuthed) return null;
 
   return (
@@ -262,19 +215,10 @@ export default function StartPage() {
           <p className="start-eyebrow">Launch</p>
           <h1 className="page-title">Choose the blueprint. AEQI shapes the organization.</h1>
           <p className="start-sub">
-            Talk on the left. The live canvas on the right recomposes as you change the brief or
-            switch the blueprint.
+            Brief on the left. Blueprint on the right. Launch when the structure is right.
           </p>
         </div>
         <div className="start-head-actions">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => navigate("/blueprints")}
-          >
-            Open catalog
-          </Button>
           <Button
             type="button"
             variant="primary"
@@ -296,34 +240,17 @@ export default function StartPage() {
       <section className="start-studio-grid" aria-label="Launch studio">
         <aside className="start-session-pane">
           <div className="start-pane-head">
-            <p className="start-section-kicker">Chat</p>
-            <h2 className="start-section-title">Shape the organization in conversation.</h2>
+            <p className="start-section-kicker">Brief</p>
+            <h2 className="start-section-title">Say what this organization should do.</h2>
             <p className="start-section-sub">
-              Keep it short. The canvas updates as you type and pin a blueprint.
+              AEQI will map the brief to a blueprint and keep the canvas in sync.
             </p>
           </div>
 
           <div className="start-chat-shell">
-            <div className="start-chat-log" aria-label="Launch conversation">
-              {launchMessages.map((message, idx) => (
-                <article
-                  key={`${message.kind}-${idx}`}
-                  className={`start-chat-message start-chat-message--${message.kind}`}
-                >
-                  <div className="start-chat-message-meta">
-                    <span className="start-chat-message-title">{message.title}</span>
-                    <span className="start-chat-message-kind">
-                      {message.kind === "assistant" ? "assistant" : "you"}
-                    </span>
-                  </div>
-                  <p className="start-chat-message-body">{message.body}</p>
-                </article>
-              ))}
-            </div>
-
             <Composer
               value={brief}
-              onChange={setBrief}
+              onChange={handleBriefChange}
               onSend={handleBriefSend}
               composerRef={composerRef}
               variant="shell"
@@ -332,30 +259,9 @@ export default function StartPage() {
             />
           </div>
 
-          <div className="start-brief-actions" aria-label="Quick prompts">
-            {START_PROMPTS.map((prompt) => (
-              <Button
-                key={prompt}
-                variant="secondary"
-                size="sm"
-                type="button"
-                onClick={() => handlePrompt(prompt)}
-              >
-                {prompt}
-              </Button>
-            ))}
-          </div>
-
-          <div className="start-session-foot">
-            <span className="start-session-foot-copy">
-              {selectionMode === "auto" ? "Auto-matching to your brief." : "Pinned to your choice."}
-            </span>
-            <div className="start-session-foot-actions">
-              <Button type="button" variant="secondary" size="sm" onClick={resetAutoMatch}>
-                Re-suggest
-              </Button>
-            </div>
-          </div>
+          <p className="start-session-foot-copy">
+            {selectionMode === "auto" ? "Auto-matching to your brief." : "Pinned blueprint."}
+          </p>
         </aside>
 
         <main className="start-canvas-pane">
@@ -414,14 +320,17 @@ export default function StartPage() {
 
             <div className="start-choice-grid" role="list">
               {choiceBlueprints.map((template) => {
-                const active = template.slug === selectedBlueprint?.slug;
+                const templateId = blueprintId(template);
+                const active = selectedBlueprint
+                  ? blueprintId(selectedBlueprint) === templateId
+                  : false;
                 return (
                   <button
-                    key={template.slug}
+                    key={templateId}
                     type="button"
                     className="start-choice-card-btn"
                     role="listitem"
-                    onClick={() => handleSelectBlueprint(template.slug)}
+                    onClick={() => handleSelectBlueprint(templateId)}
                     aria-pressed={active}
                     aria-label={`${template.name}${template.tagline ? ` — ${template.tagline}` : ""}`}
                   >
@@ -443,21 +352,6 @@ export default function StartPage() {
                   </button>
                 );
               })}
-            </div>
-
-            <div className="start-canvas-foot">
-              <Button type="button" variant="secondary" size="sm" onClick={resetAutoMatch}>
-                Re-suggest
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={handleContinue}
-                disabled={loading || !selectedBlueprint}
-              >
-                Launch this blueprint
-              </Button>
             </div>
           </section>
         </main>

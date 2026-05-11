@@ -241,9 +241,9 @@ export default function App() {
           <Route path="account/:tab" element={null} />
           <Route path="admin" element={null} />
           <Route path="launch" element={null} />
-          <Route path="launch/:slug" element={null} />
+          <Route path="launch/:blueprintId" element={null} />
           <Route path="start" element={null} />
-          <Route path="start/:slug" element={null} />
+          <Route path="start/:blueprintId" element={null} />
           <Route path="trust/:trustAddress" element={null}>
             <Route index element={null} />
             <Route path="agents/:agentId" element={null}>
@@ -299,14 +299,14 @@ export default function App() {
           <Route path="/signup" element={<WelcomePage mode="signup" />} />
           <Route path="/welcome" element={<WelcomePage mode="welcome" />} />
           {/* `/launch` is the in-shell Company-launch surface — the
-              launch studio lives in the shell, and `/launch/<slug>` (with
+              launch flow lives in the shell, and `/launch/<blueprintId>` (with
               `/start` aliases kept live) routes to CompanySetupPage.
               Routes through GatedAppShell so the LeftSidebar stays
               mounted and unauth visitors bounce to /login. AppLayout
               dispatches `isLaunch` / `isStart` to StartPage /
               CompanySetupPage. */}
           <Route path="/start" element={<GatedAppShell />} />
-          <Route path="/start/:slug" element={<GatedAppShell />} />
+          <Route path="/start/:blueprintId" element={<GatedAppShell />} />
           <Route path="/waitlist" element={<Navigate to="/signup" replace />} />
           <Route path="/verify" element={<VerifyEmailPage />} />
           <Route path="/auth/magic" element={<MagicLinkPage />} />
@@ -329,17 +329,13 @@ export default function App() {
           <Route path="/" element={<RootRouteSwitch />} />
           <Route path="/economy" element={<GatedAppShell />} />
           <Route path="/economy/*" element={<GatedAppShell />} />
+          <Route path="/studio" element={<Navigate to="/launch" replace />} />
+          <Route path="/studio/*" element={<Navigate to="/launch" replace />} />
 
           {/* Blueprints — top-level destination, auth-gated end-to-end.
               GatedAppShell dispatches AppLayout for authed visitors and
               redirects everyone else to /login?next=<here>. Will revert
               to a public-marketing variant once that surface ships. */}
-          {/* Studio — Architect surface (Wave 34 Phase 1). Top-level
-              destination, auth-gated end-to-end. Same dispatch shape as
-              /blueprints — GatedAppShell mounts AppLayout for authed
-              visitors and bounces everyone else to /login?next=<here>. */}
-          <Route path="/studio" element={<GatedAppShell />} />
-          <Route path="/studio/*" element={<GatedAppShell />} />
           <Route path="/blueprints" element={<GatedAppShell />} />
           <Route path="/blueprints/companies" element={<GatedAppShell />} />
           <Route path="/blueprints/agents" element={<GatedAppShell />} />

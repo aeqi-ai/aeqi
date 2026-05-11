@@ -28,7 +28,6 @@ const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
 const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
 const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
-const StudioPage = lazy(() => import("@/pages/StudioPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 const RoleNewPage = lazy(() => import("@/pages/RoleNewPage"));
@@ -218,7 +217,6 @@ export default function AppLayout() {
     isAccount,
     isEconomy,
     isBlueprints,
-    isStudio,
     isLaunch,
     isDrive,
     isStart,
@@ -382,9 +380,12 @@ export default function AppLayout() {
     if (isRoleEdit) return <RoleEditPage />;
     if (isRoleDetail) return <RoleDetailPage />;
     if (isLaunch || isStart) {
-      // /launch/<slug> or legacy /start/<slug> → CompanySetupPage
+      // /launch/<blueprintId> or legacy /start/<blueprintId> → CompanySetupPage
       // (name + roles + plan confirmation). Bare /launch or /start
-      // stays on the company studio.
+      // stays on the launch surface.
+      if (path === "/launch/studio" || path === "/start/studio") {
+        return <Navigate to="/launch" replace />;
+      }
       if (path.startsWith("/launch/") || path.startsWith("/start/")) {
         return <CompanySetupPage />;
       }
@@ -394,7 +395,6 @@ export default function AppLayout() {
     if (isDrive) return <DrivePage />;
     if (isAccount) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
-    if (isStudio) return <StudioPage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /
       // events / quests / ideas) → catalog tab. Otherwise <seg> is a slug
@@ -448,7 +448,6 @@ export default function AppLayout() {
     !isStart &&
     !isEconomy &&
     !isBlueprints &&
-    !isStudio &&
     isAgentChatDefault;
   const showComposer = sessionsMounted;
   const showSessionsRail = sessionsMounted && !!isEntityRoute;

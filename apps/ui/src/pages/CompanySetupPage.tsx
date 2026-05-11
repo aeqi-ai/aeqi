@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "@/lib/api";
+import { blueprintId } from "@/lib/blueprintId";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
 import { isSingleBlueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
@@ -32,7 +33,7 @@ import "@/styles/blueprints-store.css";
 import "@/styles/wizard.css";
 
 /**
- * `/start/:slug` — organization setup wizard.
+ * `/start/:blueprintId` — organization setup wizard.
  *
  * Sits between picking a Blueprint and the actual spawn so the operator
  * configures six panels in one scrollable flow:
@@ -47,7 +48,7 @@ import "@/styles/wizard.css";
 
 /** True when the blueprint is "personal-os" — stripped wizard variant. */
 function isPersonalOs(blueprint: Blueprint): boolean {
-  return blueprint.slug === "personal-os";
+  return blueprintId(blueprint) === "personal-os";
 }
 
 /**
@@ -149,7 +150,7 @@ type PanelId = "identity" | "roles" | "token" | "vesting" | "governance" | "revi
 export default function CompanySetupPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { slug = "" } = useParams<{ slug: string }>();
+  const { blueprintId: blueprintIdParam = "" } = useParams<{ blueprintId: string }>();
   const fetchEntities = useDaemonStore((s) => s.fetchEntities);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const userName = useAuthStore((s) => s.user?.name ?? "You");
@@ -211,12 +212,12 @@ export default function CompanySetupPage() {
   }, [blueprint?.name]);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!blueprintIdParam) return;
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
     api
-      .getBlueprint(slug)
+      .getBlueprint(blueprintIdParam)
       .then((resp) => {
         if (cancelled) return;
         if (resp.blueprint && isSingleBlueprint(resp.blueprint)) {
@@ -252,7 +253,7 @@ export default function CompanySetupPage() {
     return () => {
       cancelled = true;
     };
-  }, [brief, slug, userId]);
+  }, [brief, blueprintIdParam, userId]);
 
   async function handleCreate() {
     if (!blueprint || !isValid) return;
@@ -260,7 +261,7 @@ export default function CompanySetupPage() {
     setSubmitting(true);
     try {
       const resp = await api.startLaunch({
-        template: blueprint.slug,
+        template: blueprintId(blueprint),
         display_name: identity.name.trim(),
       });
       // Refresh the entity list so the switcher shows the new organization.
@@ -292,10 +293,10 @@ export default function CompanySetupPage() {
       if (e instanceof ApiError && e.status === 402) {
         // No active subscription — redirect to Stripe checkout.
         // Pass blueprint + display_name so the success redirect lands back
-        // on /start/:slug with the right context.
+        // on /start/:blueprintId with the right context.
         try {
           const { url } = await api.createCheckoutSession({
-            blueprint: blueprint.slug,
+            blueprint: blueprintId(blueprint),
             display_name: identity.name.trim(),
           });
           window.location.href = url;
@@ -325,7 +326,7 @@ export default function CompanySetupPage() {
       <div className="wizard-page">
         <EmptyState
           title="Blueprint not found."
-          description={loadError || "We couldn't find a blueprint with that slug."}
+          description={loadError || "We couldn't find a blueprint with that id."}
           action={
             <Button variant="secondary" onClick={() => navigate("/blueprints")}>
               Back to catalog
@@ -442,7 +443,7 @@ export default function CompanySetupPage() {
         <WizardReviewPanel
           state={wizardState}
           isValid={isValid}
-          blueprintSlug={blueprint.slug}
+          blueprintSlug={blueprintId(blueprint)}
           skipsStripe={skipsStripe}
           founderFee={FOUNDER_FEE}
           expanded={expandedPanels.has("review")}
@@ -455,7 +456,7 @@ export default function CompanySetupPage() {
       <div className="wizard-foot">
         <Button
           variant="secondary"
-          onClick={() => navigate(`/blueprints/${encodeURIComponent(blueprint.slug)}`)}
+          onClick={() => navigate(`/blueprints/${encodeURIComponent(blueprintId(blueprint))}`)}
         >
           Back to blueprint
         </Button>

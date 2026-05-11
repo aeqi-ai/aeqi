@@ -390,6 +390,10 @@ export type BlueprintTemplate = "entity" | "venture" | "foundation" | "fund";
 /** Single-company blueprint — spawns one TRUST + runtime entity. */
 export interface SingleBlueprint {
   kind?: "single";
+  /** Opaque blueprint identifier used for launch/setup routes. Mirrors the
+   *  shipped slug for v1 presets; future catalogs can decouple this from the
+   *  human-readable slug without changing the UI contract. */
+  id?: string;
   slug: string;
   name: string;
   tagline?: string;
