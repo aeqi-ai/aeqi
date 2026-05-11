@@ -4222,7 +4222,7 @@
   padding: var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
   max-width: 1280px;
   margin: 0 auto;
   width: 100%;
@@ -4245,6 +4245,20 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+  max-width: 68ch;
+}
+
+.admin-page-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.admin-page-refresh-note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
 .admin-page-loading {
@@ -4261,30 +4275,79 @@
   font-size: var(--font-size-sm);
 }
 
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-metric {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--color-card);
+  border-radius: var(--radius-sm);
+}
+
+.admin-metric-label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-metric-value {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.admin-metric-detail {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.admin-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) auto;
+  align-items: end;
+  justify-content: start;
+  gap: var(--space-2);
+}
+
+.admin-tabs {
+  min-width: 0;
+}
+
 .admin-section {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.admin-section-title {
+.admin-section-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
+}
+
+.admin-section-title {
   margin: 0;
   font-size: var(--font-size-base);
   font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .admin-section-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  padding: 0 var(--space-1);
-  height: 18px;
-  border-radius: var(--radius-sm);
-  background: var(--color-card);
+  min-width: 24px;
+  height: 20px;
+  padding: 0 var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: 500;
@@ -4292,47 +4355,48 @@
 
 .admin-section-body {
   background: var(--color-card);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
 }
 
-.admin-section-empty {
-  padding: var(--space-5);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.admin-table thead th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: var(--color-paper, var(--color-card));
-}
-
-.admin-table tbody td {
-  padding: var(--space-3) var(--space-4);
-  vertical-align: top;
+.admin-primary-cell {
   color: var(--color-text-primary);
+  font-weight: 500;
 }
 
-.admin-table tbody tr:nth-child(even) td {
-  background: var(--color-paper, transparent);
-}
-
-.admin-cell-mono {
+.admin-mono-cell {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+}
+
+@media (max-width: 900px) {
+  .admin-page-header {
+    flex-direction: column;
+  }
+
+  .admin-page-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .admin-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-page {
+    padding: var(--space-4);
+  }
+
+  .admin-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-toolbar {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Pill-radius reset for buttons and chips ───── */
