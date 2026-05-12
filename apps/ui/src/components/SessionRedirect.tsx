@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { useDaemonStore } from "@/store/daemon";
 import { useInboxStore } from "@/store/inbox";
@@ -28,10 +28,13 @@ export default function SessionRedirect() {
   const agents = useDaemonStore((s) => s.agents);
   const entities = useDaemonStore((s) => s.entities);
 
-  const inboxResolved: Resolved | null =
-    inboxItem?.agent_id && inboxItem?.entity_id
-      ? { agentId: inboxItem.agent_id, entityId: inboxItem.entity_id }
-      : null;
+  const inboxResolved: Resolved | null = useMemo(
+    () =>
+      inboxItem?.agent_id && inboxItem?.entity_id
+        ? { agentId: inboxItem.agent_id, entityId: inboxItem.entity_id }
+        : null,
+    [inboxItem?.agent_id, inboxItem?.entity_id],
+  );
 
   const [resolved, setResolved] = useState<Resolved | null>(inboxResolved);
   const [resolveFailed, setResolveFailed] = useState(false);

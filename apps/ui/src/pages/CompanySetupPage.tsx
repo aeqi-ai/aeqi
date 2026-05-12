@@ -325,10 +325,8 @@ export default function CompanySetupPage() {
   }, [
     blueprint,
     canSkipCheckout,
-    fetchEntities,
     mission,
     nameCheck.status,
-    navigate,
     organizationName,
     plan,
     setSearchParams,

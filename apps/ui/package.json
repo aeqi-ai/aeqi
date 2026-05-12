@@ -17,9 +17,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src/",
+    "lint": "eslint src/ --max-warnings=0",
     "check": "tsc --noEmit && prettier --check \"src/**/*.{ts,tsx,css}\"",
-    "verify": "npm run sync-tokens 2>/dev/null || true && tsc --noEmit && prettier --check \"src/**/*.{ts,tsx,css,mdx}\" && eslint src/ && vitest run && node scripts/hygiene-check.mjs && vite build",
+    "verify": "npm run sync-tokens 2>/dev/null || true && tsc --noEmit && prettier --check \"src/**/*.{ts,tsx,css,mdx}\" && npm run lint && vitest run && node scripts/hygiene-check.mjs && vite build",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -30,7 +30,7 @@
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
-      "eslint --fix",
+      "eslint --fix --max-warnings=0",
       "prettier --write"
     ],
     "src/**/*.css": [
