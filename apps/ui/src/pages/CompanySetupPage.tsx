@@ -226,12 +226,13 @@ export default function CompanySetupPage() {
         await fetchEntities();
         const match = useDaemonStore.getState().entities.find((entity) => entity.id === launchId);
         if (match) {
-          if (match.trust_address) {
+          const launchState = match.launch_state ?? match.placement_status ?? "";
+          const launchComplete = ["complete", "ready"].includes(launchState);
+          if (match.trust_address && launchComplete) {
             setSearchParams(new URLSearchParams(), { replace: true });
             navigate(`/trust/${encodeURIComponent(match.trust_address)}`, { replace: true });
             return;
           }
-          const launchState = match.launch_state ?? match.placement_status ?? "";
           if (launchState === "failed") {
             setProvisioning(false);
             setSubmitError(
