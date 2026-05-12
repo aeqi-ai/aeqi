@@ -1,4 +1,5 @@
 .button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -158,21 +159,26 @@
 /* Loading */
 
 .loading {
-  position: relative;
-  color: transparent;
+  cursor: progress;
 }
 
-.loading > * {
-  visibility: hidden;
+.content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: inherit;
+  min-width: 0;
+}
+
+.label {
+  min-width: 0;
 }
 
 .spinner {
-  position: absolute;
-  inset: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  visibility: visible;
+  flex-shrink: 0;
 }
 
 .spinner::after {
@@ -190,6 +196,10 @@
 .sm .spinner::after {
   width: 12px;
   height: 12px;
+}
+
+.loading .label {
+  opacity: 0.72;
 }
 
 .lg .spinner::after {

@@ -49,12 +49,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
           {loadingLabel && <span className="sr-only">{loadingLabel}</span>}
         </span>
       )}
-      {children}
-      {trailingIcon && (
-        <span className={styles.trailingIcon} aria-hidden="true">
-          {trailingIcon}
-        </span>
-      )}
+      <span className={styles.content}>
+        <span className={styles.label}>{children}</span>
+        {trailingIcon && (
+          <span className={styles.trailingIcon} aria-hidden="true">
+            {trailingIcon}
+          </span>
+        )}
+      </span>
     </button>
   );
 });

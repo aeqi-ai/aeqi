@@ -44,7 +44,15 @@ exports[`WalletUpgradeSection — snapshots > renders the custodial EOA state wi
           class="_button_947cf7 _secondary_947cf7 _sm_947cf7"
           type="button"
         >
-          Upgrade to passkey
+          <span
+            class="_content_947cf7"
+          >
+            <span
+              class="_label_947cf7"
+            >
+              Upgrade to passkey
+            </span>
+          </span>
         </button>
       </span>
     </div>
