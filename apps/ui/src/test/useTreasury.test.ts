@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 
 // ── Module mock for indexer ───────────────────────────────────────────────────
 // The new useTreasury hook calls the indexer directly via fetch (no indexer
@@ -43,10 +43,12 @@ describe("useTreasury", () => {
   });
 
   it("returns loading=true initially", () => {
-    const { result } = renderHook(() => useTreasury(TRUST_ID));
+    global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
+    const { result, unmount } = renderHook(() => useTreasury(TRUST_ID));
     expect(result.current.loading).toBe(true);
     expect(result.current.balances).toBeNull();
     expect(result.current.transfers).toBeNull();
+    unmount();
   });
 
   it("resolves to empty arrays when indexer returns no data", async () => {
@@ -155,7 +157,9 @@ describe("useTreasury", () => {
   it("resets to loading when trustId changes", async () => {
     global.fetch = vi
       .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ data: { treasuryBalances: [] } }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { treasuryBalances: [] } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { treasuryTransfers: [] } }) })
+      .mockReturnValue(new Promise(() => {}));
 
     const { result, rerender } = renderHook(({ id }: { id: string }) => useTreasury(id), {
       initialProps: { id: TRUST_ID },
@@ -164,7 +168,9 @@ describe("useTreasury", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     // Change the id — should reset immediately.
-    rerender({ id: "0xnewtrustid" });
+    act(() => {
+      rerender({ id: "0xnewtrustid" });
+    });
     expect(result.current.loading).toBe(true);
   });
 });

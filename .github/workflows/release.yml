@@ -21,7 +21,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/ui/package-lock.json
       - run: npm --prefix apps/ui ci
-      - run: npm --prefix apps/ui run build
+      - run: npm --prefix apps/ui run verify
       - name: Package UI dist
         run: tar -C apps/ui -czf aeqi-ui-dist.tar.gz dist
       - uses: actions/upload-artifact@v4

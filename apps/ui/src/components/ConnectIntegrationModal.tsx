@@ -37,6 +37,8 @@ export function ConnectIntegrationModal({
   onClose,
   onConnected,
 }: ConnectIntegrationModalProps) {
+  const scopeKind = scope.scope_kind;
+  const scopeId = scope.scope_id;
   const [phase, setPhase] = useState<Phase>("idle");
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,17 +60,17 @@ export function ConnectIntegrationModal({
     setPhase("starting");
     setError(null);
 
-    const platformAgentGoogle = usesPlatformAgentGoogle(entry, scope);
+    const platformAgentGoogle = usesPlatformAgentGoogle(entry, { scope_kind: scopeKind });
     const start = platformAgentGoogle
-      ? integrationsApi.startAgentGoogle(scope.scope_id).then((res) => ({
+      ? integrationsApi.startAgentGoogle(scopeId).then((res) => ({
           authorize_url: res.authorize_url,
           handle: null as string | null,
         }))
       : integrationsApi
           .bootstrap({
             provider: entry.provider,
-            scope_kind: scope.scope_kind,
-            scope_id: scope.scope_id,
+            scope_kind: scopeKind,
+            scope_id: scopeId,
           })
           .then((res) => ({ authorize_url: res.authorize_url, handle: res.handle }));
 
@@ -88,7 +90,7 @@ export function ConnectIntegrationModal({
         pollTimer.current = setInterval(async () => {
           try {
             if (platformAgentGoogle) {
-              const status = await integrationsApi.getAgentGoogleStatus(scope.scope_id);
+              const status = await integrationsApi.getAgentGoogleStatus(scopeId);
               if (!status.connected) return;
               if (pollTimer.current) clearInterval(pollTimer.current);
               setPhase("complete");
@@ -125,7 +127,7 @@ export function ConnectIntegrationModal({
       if (pollTimer.current) clearInterval(pollTimer.current);
       pollTimer.current = null;
     };
-  }, [open, entry, scope.scope_kind, scope.scope_id, onConnected]);
+  }, [open, entry, scopeKind, scopeId, onConnected]);
 
   if (!open || !entry) return null;
 

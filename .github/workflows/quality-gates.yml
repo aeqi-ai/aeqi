@@ -6,7 +6,7 @@ on:
     branches: [main]
   schedule:
     # Weekly security audit
-    - cron: '0 0 * * 0'
+    - cron: "0 0 * * 0"
 
 env:
   CARGO_TERM_COLOR: always
@@ -58,19 +58,19 @@ jobs:
       - name: Install quality gate tools
         run: |
           echo "=== Installing Quality Gate Tools ==="
-          
+
           # Install cargo-audit for security scanning
           echo "Installing cargo-audit..."
           cargo install cargo-audit --locked
-          
+
           # Install cargo-deny for dependency analysis
           echo "Installing cargo-deny..."
           cargo install cargo-deny --locked
-          
+
           # Install cargo-udeps for unused dependencies
           echo "Installing cargo-udeps..."
           cargo install cargo-udeps --locked
-          
+
           # Install cargo-tarpaulin for code coverage
           echo "Installing cargo-tarpaulin..."
           cargo install cargo-tarpaulin --locked
@@ -86,17 +86,22 @@ jobs:
           scripts/public-surface-scan.sh
 
       # 5. JavaScript/TypeScript security scanning (npm audit)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       - name: JavaScript security audit with npm audit
         run: |
           echo "=== Running JavaScript Security Audit ==="
-          
+
           # Find npm projects
           find_npm_projects() {
             find . -name "package.json" -type f | grep -v node_modules | head -10
           }
-          
+
           npm_projects=$(find_npm_projects)
-          
+
           if [ -z "$npm_projects" ]; then
             echo "⚠️  No npm projects found. Skipping npm audit."
           else
@@ -107,7 +112,7 @@ jobs:
             # Install Node.js if not already installed
             if ! command -v npm &> /dev/null; then
               echo "Installing Node.js..."
-              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
               sudo apt-get install -y nodejs
             fi
             

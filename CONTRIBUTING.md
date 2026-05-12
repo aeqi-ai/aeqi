@@ -18,7 +18,7 @@ Please do **not** open a public issue for security vulnerabilities. Follow the d
 Prerequisites:
 
 - Rust (stable, 2024 edition — see `rust-toolchain.toml` if present)
-- Node.js 20+ and npm (for the `apps/ui` dashboard)
+- Node.js 22+ and npm (for the `apps/ui` dashboard; see `.nvmrc`)
 - `bubblewrap` (`bwrap`) on Linux if you want to test sandboxing locally
 
 Clone and build:
@@ -67,17 +67,18 @@ scripts/                   Install, deploy, and operator scripts
 
 ## Common Commands
 
-| Area | Command |
-| --- | --- |
-| Build everything | `cargo build --workspace` |
-| Run all Rust tests | `cargo test --workspace` |
-| Lint Rust (warnings = errors) | `cargo clippy --workspace -- -D warnings` |
-| Format Rust | `cargo fmt --all` |
-| UI dev server | `npm run ui:dev` (proxies `/api` to `:8400`) |
-| UI production build | `npm run ui:build` |
-| UI type check | `npm --prefix apps/ui run check` |
-| UI tests | `npm --prefix apps/ui test` |
-| Public surface scan | `scripts/public-surface-scan.sh` |
+| Area                          | Command                                      |
+| ----------------------------- | -------------------------------------------- |
+| Build everything              | `cargo build --workspace`                    |
+| Run all Rust tests            | `cargo test --workspace`                     |
+| Lint Rust (warnings = errors) | `cargo clippy --workspace -- -D warnings`    |
+| Format Rust                   | `cargo fmt --all`                            |
+| UI dev server                 | `npm run ui:dev` (proxies `/api` to `:8400`) |
+| UI production build           | `npm run ui:build`                           |
+| UI type + format check        | `npm --prefix apps/ui run check`             |
+| UI full verify                | `npm --prefix apps/ui run verify`            |
+| UI tests                      | `npm --prefix apps/ui test`                  |
+| Public surface scan           | `scripts/public-surface-scan.sh`             |
 
 ## Pre-commit Hook
 

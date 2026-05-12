@@ -91,14 +91,8 @@ jobs:
       - name: UI install
         run: npm --prefix apps/ui ci
 
-      - name: UI check (tsc + prettier)
-        run: npm --prefix apps/ui run check
-
-      - name: UI lint (eslint)
-        run: npm --prefix apps/ui run lint
-
-      - name: UI test (vitest — smoke + unit)
-        run: npm --prefix apps/ui test
+      - name: UI verify (typecheck + prettier + eslint + tests + build)
+        run: npm --prefix apps/ui run verify
 
       # 6. Code coverage for frontend
       - name: UI test with coverage
@@ -112,9 +106,6 @@ jobs:
             echo "Vitest coverage not configured, running tests without coverage"
             npm test
           fi
-
-      - name: UI build
-        run: npm --prefix apps/ui run build
 
       # ── Backend ───────────────────────────────────
       # Baileys bridge deps — aeqi-gates tests boot the Node bridge as a

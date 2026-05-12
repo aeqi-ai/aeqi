@@ -7,7 +7,7 @@ It is the working handoff for the trust/indexer/runtime question set.
 
 The important product decision is now clear:
 
-- `aeqi` should own the open-source trust kernel, self-host runtime, protocol client, indexer, and the code/idea surfaces needed to operate a trust locally.
+- `aeqi` should own the source-available trust kernel, self-host runtime, protocol client, indexer, and the code/idea surfaces needed to operate a trust locally.
 - `aeqi-platform` should own hosted auth, billing, invite gating, provisioning policy, and any SaaS-specific wrapper around the same trust kernel.
 
 That means the trust primitive itself should not be platform-only. It must be runnable by self-host users and reusable by the hosted product.
@@ -26,7 +26,7 @@ That means the trust primitive itself should not be platform-only. It must be ru
 - The runtime CLI now exposes `aeqi trust derive --entity-id <ENTITY>` for inspecting the canonical binding.
 - The code graph crate exists and can index/search/inspect repository structure.
 - The ideas store exists and already provides search, graph, and recall behavior.
-- The Solana trust/provisioning work currently lives in the platform-side code path and needs to be normalized into the open-source trust kernel if Solana remains the canonical chain.
+- The Solana trust/provisioning work currently lives in the platform-side code path and needs to be normalized into the source-available trust kernel if Solana remains the canonical chain.
 
 ## What This Means For MVP
 
@@ -92,7 +92,7 @@ The next useful implementation task is to map the current Solana trust path in c
 
 If we execute this plan successfully, AEQI ends up with:
 
-- one open-source trust kernel in `aeqi`
+- one source-available trust kernel in `aeqi`
 - the kernel starts with `aeqi-trust`
 - one hosted wrapper in `aeqi-platform`
 - one trust creation flow that works for both self-host and hosted users

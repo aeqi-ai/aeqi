@@ -27,21 +27,21 @@ licensor's paid versions. The change license is Apache 2.0 on April 5, 2030.
 
 ## Repository Layout
 
-| Path | Purpose |
-| --- | --- |
-| `aeqi-cli/` | `aeqi` binary: CLI, daemon entrypoint, setup, doctor, TUI chat, and web startup |
-| `crates/` | Rust workspace crates for the runtime, orchestration, storage, providers, tools, web API, MCP, graph indexing, wallets, and integration packs |
-| `apps/ui/` | React/Vite dashboard embedded into the release binary by default |
-| `bridges/` | Node bridge package for channel gateway work |
-| `config/` | Example runtime configuration |
-| `docs/` | User, architecture, security, and design documentation |
-| `agents/` | Historical starter agent presets and notes about the database-backed agent model |
-| `presets/` | Bootstrap and blueprint seed data used by setup and starter flows |
-| `packages/` | Shared TypeScript packages used by the UI |
-| `projects/aeqi-solana/` | Solana program workspace and indexer work |
-| `scripts/` | Install, smoke-test, security, dependency, and public-surface scripts |
-| `.github/` | CI, release workflow, issue templates, and repository policy files |
-| `deploy/` | Example systemd units for deployable services |
+| Path                    | Purpose                                                                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aeqi-cli/`             | `aeqi` binary: CLI, daemon entrypoint, setup, doctor, TUI chat, and web startup                                                               |
+| `crates/`               | Rust workspace crates for the runtime, orchestration, storage, providers, tools, web API, MCP, graph indexing, wallets, and integration packs |
+| `apps/ui/`              | React/Vite dashboard embedded into the release binary by default                                                                              |
+| `bridges/`              | Node bridge package for channel gateway work                                                                                                  |
+| `config/`               | Example runtime configuration                                                                                                                 |
+| `docs/`                 | User, architecture, security, and design documentation                                                                                        |
+| `agents/`               | Historical starter agent presets and notes about the database-backed agent model                                                              |
+| `presets/`              | Bootstrap and blueprint seed data used by setup and starter flows                                                                             |
+| `packages/`             | Shared TypeScript packages used by the UI                                                                                                     |
+| `projects/aeqi-solana/` | Solana program workspace and indexer work                                                                                                     |
+| `scripts/`              | Install, smoke-test, security, dependency, and public-surface scripts                                                                         |
+| `.github/`              | CI, release workflow, issue templates, and repository policy files                                                                            |
+| `deploy/`               | Example systemd units for deployable services                                                                                                 |
 
 Ignored local artifacts such as `target/`, `node_modules/`, `.aeqi/`,
 `.observations/`, `notes/`, and `tmp/` are intentionally outside the public
@@ -86,20 +86,20 @@ For a local no-provider-key walkthrough, use the Ollama path in
 The CLI command definitions live in [aeqi-cli/src/cli.rs](aeqi-cli/src/cli.rs).
 Common commands:
 
-| Command | Use |
-| --- | --- |
-| `aeqi setup` | Write starter config, agents, and dashboard secret |
-| `aeqi doctor --strict` | Validate config, agents, provider readiness, and local state |
-| `aeqi start` | Start the daemon and embedded dashboard together |
-| `aeqi chat` | Open the interactive terminal chat client |
-| `aeqi run "<prompt>"` | Run a one-shot agent prompt |
-| `aeqi agent list` | List discovered and registered agents |
-| `aeqi assign "subject" --root <ROOT>` | Assign a quest to a root agent |
-| `aeqi events install-defaults` | Install the standard schedule events on existing agents |
-| `aeqi monitor` | Show a consolidated operator monitor view |
-| `aeqi graph index --root <ROOT>` | Index a repository into the code graph |
-| `aeqi trust derive --entity-id <ENTITY>` | Derive the canonical trust identity for a company or entity |
-| `aeqi mcp` | Run the MCP server |
+| Command                                  | Use                                                          |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| `aeqi setup`                             | Write starter config, agents, and dashboard secret           |
+| `aeqi doctor --strict`                   | Validate config, agents, provider readiness, and local state |
+| `aeqi start`                             | Start the daemon and embedded dashboard together             |
+| `aeqi chat`                              | Open the interactive terminal chat client                    |
+| `aeqi run "<prompt>"`                    | Run a one-shot agent prompt                                  |
+| `aeqi agent list`                        | List discovered and registered agents                        |
+| `aeqi assign "subject" --root <ROOT>`    | Assign a quest to a root agent                               |
+| `aeqi events install-defaults`           | Install the standard schedule events on existing agents      |
+| `aeqi monitor`                           | Show a consolidated operator monitor view                    |
+| `aeqi graph index --root <ROOT>`         | Index a repository into the code graph                       |
+| `aeqi trust derive --entity-id <ENTITY>` | Derive the canonical trust identity for a company or entity  |
+| `aeqi mcp`                               | Run the MCP server                                           |
 
 Run `aeqi <command> --help` for the exact flags supported by a local build.
 
@@ -107,12 +107,12 @@ Run `aeqi <command> --help` for the exact flags supported by a local build.
 
 AEQI models runtime state with four primitives:
 
-| Primitive | Runtime role |
-| --- | --- |
-| Agent | Persistent identity in a parent/child tree, with inherited configuration and runtime context |
-| Idea | Stored knowledge used for identity, instructions, skills, memory, and retrieval |
-| Quest | Structured work item with status, dependencies, assignment, retries, and outcomes |
-| Event | Rule that fires on a schedule, pattern, one-time trigger, or webhook and connects runtime activity to ideas or tools |
+| Primitive | Runtime role                                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------------------- |
+| Agent     | Persistent identity in a parent/child tree, with inherited configuration and runtime context                         |
+| Idea      | Stored knowledge used for identity, instructions, skills, memory, and retrieval                                      |
+| Quest     | Structured work item with status, dependencies, assignment, retries, and outcomes                                    |
+| Event     | Rule that fires on a schedule, pattern, one-time trigger, or webhook and connects runtime activity to ideas or tools |
 
 The daemon coordinates sessions, queued work, event firing, provider calls,
 middleware, tool execution, and persistence. The web server exposes the local
@@ -121,40 +121,40 @@ binary when built with the default `aeqi-web` feature set.
 
 ## Workspace Crates
 
-| Crate | Purpose |
-| --- | --- |
-| `aeqi` | CLI, daemon, and web entrypoint |
-| `aeqi-core` | Core types, traits, config, credentials, checkpoints, and execution abstractions |
+| Crate               | Purpose                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `aeqi`              | CLI, daemon, and web entrypoint                                                         |
+| `aeqi-core`         | Core types, traits, config, credentials, checkpoints, and execution abstractions        |
 | `aeqi-orchestrator` | Agent registry, daemon, sessions, events, delegation, middleware, tools, roles, and IPC |
-| `aeqi-ideas` | SQLite-backed idea store, FTS, vector search, deduplication, tags, and graph edges |
-| `aeqi-quests` | Quest model, DAG handling, dependency inference, and query helpers |
-| `aeqi-providers` | OpenRouter, Anthropic, and Ollama provider clients with cost estimation |
-| `aeqi-tools` | Built-in shell, file, git, grep, glob, web, prompt, and messaging tools |
-| `aeqi-web` | HTTP API, WebSocket server, auth helpers, embedded UI serving, and route layer |
-| `aeqi-gates` | Telegram, Discord, Slack, and channel gateway abstractions |
-| `aeqi-graph` | Code graph indexing for Rust, TypeScript, and Solidity |
-| `aeqi-hosting` | Hosting provider traits and local/managed placement helpers |
-| `aeqi-mcp` | MCP integration for exposing runtime capabilities to external clients |
-| `aeqi-trust` | Trust kernel primitives for company identity and trust binding |
-| `aeqi-wallets` | Wallet custody, signing, passkey, and session-key primitives |
-| `aeqi-inference` | OpenAI-compatible inference router and billing lanes |
-| `aeqi-ipfs` | Kubo HTTP API client for IPFS storage |
-| `aeqi-architect` | Blueprint generator for turning a brief into runtime starter data |
-| `aeqi-pack-*` | GitHub, Google Workspace, Notion, and Slack tool packs |
-| `aeqi-test-support` | Shared test harnesses and fixtures |
+| `aeqi-ideas`        | SQLite-backed idea store, FTS, vector search, deduplication, tags, and graph edges      |
+| `aeqi-quests`       | Quest model, DAG handling, dependency inference, and query helpers                      |
+| `aeqi-providers`    | OpenRouter, Anthropic, and Ollama provider clients with cost estimation                 |
+| `aeqi-tools`        | Built-in shell, file, git, grep, glob, web, prompt, and messaging tools                 |
+| `aeqi-web`          | HTTP API, WebSocket server, auth helpers, embedded UI serving, and route layer          |
+| `aeqi-gates`        | Telegram, Discord, Slack, and channel gateway abstractions                              |
+| `aeqi-graph`        | Code graph indexing for Rust, TypeScript, and Solidity                                  |
+| `aeqi-hosting`      | Hosting provider traits and local/managed placement helpers                             |
+| `aeqi-mcp`          | MCP integration for exposing runtime capabilities to external clients                   |
+| `aeqi-trust`        | Trust kernel primitives for company identity and trust binding                          |
+| `aeqi-wallets`      | Wallet custody, signing, passkey, and session-key primitives                            |
+| `aeqi-inference`    | OpenAI-compatible inference router and billing lanes                                    |
+| `aeqi-ipfs`         | Kubo HTTP API client for IPFS storage                                                   |
+| `aeqi-architect`    | Blueprint generator for turning a brief into runtime starter data                       |
+| `aeqi-pack-*`       | GitHub, Google Workspace, Notion, and Slack tool packs                                  |
+| `aeqi-test-support` | Shared test harnesses and fixtures                                                      |
 
 ## Storage
 
 By default, runtime data lives under `~/.aeqi`:
 
-| Path | Contents |
-| --- | --- |
-| `aeqi.db` | Agents, ideas, events, roles, credentials, budgets, entities, and template state |
-| `sessions.db` | Sessions, messages, activity, runs, quests, and journal state |
-| `accounts.db` | Local web account data when account auth is enabled |
-| `codegraph/*.db` | Per-root code graph indexes |
-| `rm.sock` | Local daemon IPC socket |
-| `secrets/` | Encrypted local secret files used by legacy and migration paths |
+| Path             | Contents                                                                         |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `aeqi.db`        | Agents, ideas, events, roles, credentials, budgets, entities, and template state |
+| `sessions.db`    | Sessions, messages, activity, runs, quests, and journal state                    |
+| `accounts.db`    | Local web account data when account auth is enabled                              |
+| `codegraph/*.db` | Per-root code graph indexes                                                      |
+| `rm.sock`        | Local daemon IPC socket                                                          |
+| `secrets/`       | Encrypted local secret files used by legacy and migration paths                  |
 
 ## Development
 
@@ -171,6 +171,7 @@ cargo fmt --check
 cargo clippy --workspace -- -D warnings
 cargo test --workspace
 npm --prefix apps/ui run check
+npm --prefix apps/ui run lint
 npm --prefix apps/ui test
 scripts/public-surface-scan.sh
 ```
