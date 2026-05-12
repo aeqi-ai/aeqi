@@ -67,7 +67,13 @@ fn print_starting(config_path: &Option<PathBuf>, bind_override: Option<&str>) {
         );
     }
 
-    if config.web.auth_secret.as_deref().unwrap_or("").is_empty() {
+    if std::env::var("AEQI_WEB_SECRET")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        println!("  Auth:     persistent secret from AEQI_WEB_SECRET");
+    } else if config.web.auth_secret.as_deref().unwrap_or("").is_empty() {
         println!(
             "  Auth:     ephemeral secret (sign-ins won't survive restart). Run `aeqi setup` to persist one."
         );

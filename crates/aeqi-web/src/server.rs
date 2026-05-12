@@ -1,4 +1,4 @@
-use aeqi_core::config::{AEQIConfig, AuthConfig, AuthMode};
+use aeqi_core::config::{AEQIConfig, AuthConfig, AuthMode, WebConfig};
 use anyhow::Result;
 use axum::{
     Router,
@@ -58,6 +58,53 @@ pub struct AppState {
     pub bootstrap_registry: Arc<crate::routes::integrations::BootstrapRegistry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AuthSecretSource {
+    Env,
+    Config,
+    Generated,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedAuthSecret {
+    value: String,
+    source: AuthSecretSource,
+}
+
+fn resolve_auth_secret_from(web: &WebConfig, env_secret: Option<String>) -> ResolvedAuthSecret {
+    if let Some(value) = env_secret.filter(|s| !s.is_empty()) {
+        return ResolvedAuthSecret {
+            value,
+            source: AuthSecretSource::Env,
+        };
+    }
+
+    if let Some(value) = web.auth_secret.clone().filter(|s| !s.is_empty()) {
+        return ResolvedAuthSecret {
+            value,
+            source: AuthSecretSource::Config,
+        };
+    }
+
+    use rand::Rng;
+    let value: String = rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
+        .take(48)
+        .map(char::from)
+        .collect();
+    tracing::warn!(
+        "AEQI_WEB_SECRET unset and [web].auth_secret unconfigured — generated ephemeral random secret. Platform-issued scope tokens will not validate; cross-tenant guards will short-circuit. Set AEQI_WEB_SECRET in the tenant's systemd unit."
+    );
+    ResolvedAuthSecret {
+        value,
+        source: AuthSecretSource::Generated,
+    }
+}
+
+fn resolve_auth_secret(web: &WebConfig) -> ResolvedAuthSecret {
+    resolve_auth_secret_from(web, std::env::var("AEQI_WEB_SECRET").ok())
+}
+
 /// Start the web server using settings from AEQIConfig.
 pub async fn start(config: &AEQIConfig) -> Result<()> {
     let web = &config.web;
@@ -72,11 +119,22 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         None
     };
 
+    // Resolve auth_secret with strict precedence:
+    //   1. AEQI_WEB_SECRET env var (canonical for tenant runtimes — platform
+    //      threads it in via systemd --setenv so the platform's
+    //      `x-aeqi-scope-token` HMAC validates against the same shared secret).
+    //   2. [web].auth_secret from aeqi.toml (single-tenant / dev).
+    //   3. Ephemeral random fallback (warns loudly — drift here means scope
+    //      tokens never validate, gates short-circuit, cross-tenant data
+    //      leaks. Track:
+    //      `feedback_per_tenant_auth_secret_drift.md`).
+    //
+    // Resolve this before bootstrapping wallets. Wallet KEK derivation must use
+    // the same secret the HTTP auth/scope layer uses.
+    let auth_secret = resolve_auth_secret(web);
+
     // Initialize wallet/passkey services.
-    let wallets = Arc::new(WalletContext::bootstrap(
-        web.auth_secret.as_deref().unwrap_or("aeqi-dev"),
-        &data_dir,
-    )?);
+    let wallets = Arc::new(WalletContext::bootstrap(&auth_secret.value, &data_dir)?);
     let passkeys = Arc::new(PasskeyContext::bootstrap(
         web.auth
             .base_url
@@ -113,35 +171,9 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         Arc::from(aeqi_hosting::from_config(&hosting_config)?);
     info!(mode = hosting.mode(), "hosting provider initialized");
 
-    // Resolve auth_secret with strict precedence:
-    //   1. AEQI_WEB_SECRET env var (canonical for tenant runtimes — platform
-    //      threads it in via systemd --setenv so the platform's
-    //      `x-aeqi-scope-token` HMAC validates against the same shared secret).
-    //   2. [web].auth_secret from aeqi.toml (single-tenant / dev).
-    //   3. Ephemeral random fallback (warns loudly — drift here means scope
-    //      tokens never validate, gates short-circuit, cross-tenant data
-    //      leaks. Track:
-    //      `feedback_per_tenant_auth_secret_drift.md`).
-    let auth_secret = std::env::var("AEQI_WEB_SECRET")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .or_else(|| web.auth_secret.clone())
-        .or_else(|| {
-            use rand::Rng;
-            let secret: String = rand::rng()
-                .sample_iter(&rand::distr::Alphanumeric)
-                .take(48)
-                .map(char::from)
-                .collect();
-            tracing::warn!(
-                "AEQI_WEB_SECRET unset and [web].auth_secret unconfigured — generated ephemeral random secret. Platform-issued scope tokens will not validate; cross-tenant guards will short-circuit. Set AEQI_WEB_SECRET in the tenant's systemd unit."
-            );
-            Some(secret)
-        });
-
     let state = AppState {
         ipc: ipc.clone(),
-        auth_secret,
+        auth_secret: Some(auth_secret.value),
         auth_mode: web.auth.mode.clone(),
         auth_config: web.auth.clone(),
         ui_dist_dir: web.ui_dist_dir.as_ref().map(PathBuf::from),
@@ -158,7 +190,7 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
 
     // Error if auth mode requires a secret but signing_secret resolves to the default.
     if matches!(state.auth_mode, AuthMode::Secret)
-        && state.auth_secret.as_deref() == Some("aeqi-ephemeral-fallback")
+        && auth_secret.source == AuthSecretSource::Generated
     {
         tracing::error!(
             "SECURITY: auth_mode is {:?} but no auth_secret configured — using insecure default. Set [web] auth_secret in aeqi.toml",
@@ -341,5 +373,46 @@ async fn spa_handler(State(state): State<AppState>, req: Request) -> Response {
             format!("failed to serve UI asset: {err}"),
         )
             .into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AuthSecretSource, resolve_auth_secret_from};
+    use aeqi_core::config::WebConfig;
+
+    #[test]
+    fn auth_secret_prefers_env_over_config() {
+        let web = WebConfig {
+            auth_secret: Some("config-secret".to_string()),
+            ..WebConfig::default()
+        };
+
+        let resolved = resolve_auth_secret_from(&web, Some("env-secret".to_string()));
+
+        assert_eq!(resolved.value, "env-secret");
+        assert_eq!(resolved.source, AuthSecretSource::Env);
+    }
+
+    #[test]
+    fn auth_secret_uses_config_when_env_missing() {
+        let web = WebConfig {
+            auth_secret: Some("config-secret".to_string()),
+            ..WebConfig::default()
+        };
+
+        let resolved = resolve_auth_secret_from(&web, None);
+
+        assert_eq!(resolved.value, "config-secret");
+        assert_eq!(resolved.source, AuthSecretSource::Config);
+    }
+
+    #[test]
+    fn auth_secret_generates_ephemeral_fallback_when_unconfigured() {
+        let resolved = resolve_auth_secret_from(&WebConfig::default(), None);
+
+        assert_eq!(resolved.source, AuthSecretSource::Generated);
+        assert_eq!(resolved.value.len(), 48);
+        assert_ne!(resolved.value, "aeqi-dev");
     }
 }
