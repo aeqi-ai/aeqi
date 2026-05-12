@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
-import { entityPath, entityPathFromId } from "@/lib/entityPath";
+import { entityPath } from "@/lib/entityPath";
 import { DEFAULT_LAUNCH_PLAN, LAUNCH_PLANS, type LaunchPlanId } from "@/lib/pricing";
 import { RECOMMENDED_BLUEPRINTS } from "@/lib/recommendedBlueprints";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
@@ -44,10 +44,8 @@ export default function CompanySetupPage() {
 
   const fetchEntities = useDaemonStore((s) => s.fetchEntities);
   const entities = useDaemonStore((s) => s.entities);
-  const subscriptionStatus = useAuthStore((s) => s.user?.subscription_status ?? null);
   const isAdmin = useAuthStore((s) => s.user?.is_admin === true);
-  const canSkipCheckout =
-    isAdmin || subscriptionStatus === "active" || subscriptionStatus === "invited";
+  const canSkipCheckout = isAdmin;
 
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [loading, setLoading] = useState(true);
@@ -288,10 +286,12 @@ export default function CompanySetupPage() {
           plan,
         });
 
-        await fetchEntities();
-        navigate(entityPathFromId(useDaemonStore.getState().entities, resp.entity_id), {
-          replace: true,
-        });
+        setSearchParams(
+          new URLSearchParams({
+            launch: resp.entity_id,
+          }),
+          { replace: true },
+        );
         return;
       }
 
