@@ -722,6 +722,17 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  checkLaunchName: (display_name: string) =>
+    request<{
+      ok: boolean;
+      available: boolean;
+      normalized_name?: string;
+      reason?: string;
+    }>("/start/check-name", {
+      method: "POST",
+      body: JSON.stringify({ display_name }),
+    }),
+
   // Stack blueprint provisioning — spawns N companies in dependency order.
   // `names` maps slot → display_name; falls back to component defaults.
   // Partial success: ok:true even when some components fail. Check each

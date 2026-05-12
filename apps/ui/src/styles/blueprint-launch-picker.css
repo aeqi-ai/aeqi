@@ -267,40 +267,6 @@
   min-width: 0;
 }
 
-.launch-blueprint-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  background: var(--color-card);
-}
-
-.launch-blueprint-picker {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-  border-radius: var(--radius-xl);
-}
-
-.launch-blueprint-picker:focus-visible {
-  outline: none;
-}
-
-.launch-blueprint-picker:focus-visible .launch-blueprint-card {
-  box-shadow: var(--focus-ring);
-}
-
-.launch-blueprint-picker:hover .launch-blueprint-card {
-  background: var(--color-card-elevated);
-}
-
-.launch-blueprint-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
 .launch-card {
   display: flex;
   flex-direction: column;
@@ -315,7 +281,6 @@
   gap: var(--space-4);
 }
 
-.launch-blueprint-link,
 .launch-browse-link {
   display: inline-flex;
   align-items: center;
@@ -325,12 +290,7 @@
   font-weight: 600;
 }
 
-.launch-blueprint-link:hover,
 .launch-browse-link:hover {
-  color: var(--color-text-primary);
-}
-
-.launch-blueprint-picker:hover .launch-blueprint-link {
   color: var(--color-text-primary);
 }
 
@@ -361,19 +321,6 @@
 
 .launch-field--name {
   gap: var(--space-3);
-}
-
-.launch-field-label {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.launch-field--name .launch-field-label {
-  color: var(--color-text-primary);
-  font-size: 13px;
-  letter-spacing: 0.01em;
 }
 
 .launch-field--name input {
@@ -442,6 +389,13 @@
 
 .launch-preview-sub {
   max-width: 38ch;
+}
+
+.launch-blueprint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: calc(var(--space-1) * -1);
 }
 
 .launch-preview-card .bp-summary-pills {
@@ -547,12 +501,6 @@
 
   .launch-footer .button {
     width: 100%;
-  }
-}
-
-@media (max-width: 640px) {
-  .launch-blueprint-head {
-    flex-direction: column;
   }
 }
 

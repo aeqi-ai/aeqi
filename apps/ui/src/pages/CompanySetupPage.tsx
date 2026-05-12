@@ -20,6 +20,13 @@ import "@/styles/blueprint-launch-picker.css";
 const PROVISION_POLL_INTERVAL_MS = 1000;
 const PROVISION_POLL_TIMEOUT_MS = 60_000;
 
+type NameCheckState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "available"; message: string }
+  | { status: "taken"; message: string }
+  | { status: "error"; message: string };
+
 function pickInitialBlueprintId(
   blueprints: Blueprint[],
   byBlueprintId: Map<string, Blueprint>,
@@ -51,8 +58,10 @@ export default function CompanySetupPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [mission, setMission] = useState("");
   const [plan, setPlan] = useState<LaunchPlanId>(DEFAULT_LAUNCH_PLAN);
+  const [nameCheck, setNameCheck] = useState<NameCheckState>({ status: "idle" });
 
   const provisionHandled = useRef(false);
+  const nameCheckSeq = useRef(0);
 
   useEffect(() => {
     document.title = blueprint?.name ? `Launch ${blueprint.name} · aeqi` : "Launch · aeqi";
@@ -130,6 +139,64 @@ export default function CompanySetupPage() {
     return { label: "Company", meta: "cap table · standard launch" };
   }, [blueprint]);
 
+  const blueprintPath = useMemo(() => {
+    if (!blueprint) return "/blueprints";
+    return `/blueprints/${encodeURIComponent(blueprintId(blueprint))}`;
+  }, [blueprint]);
+
+  const nameHint = useMemo(() => {
+    switch (nameCheck.status) {
+      case "checking":
+        return "Checking availability…";
+      case "available":
+        return nameCheck.message;
+      case "error":
+        return nameCheck.message;
+      case "taken":
+        return undefined;
+      case "idle":
+      default:
+        return "This becomes the registered name.";
+    }
+  }, [nameCheck]);
+
+  const nameError = useMemo(() => {
+    if (nameCheck.status === "taken" || nameCheck.status === "error") {
+      return nameCheck.message;
+    }
+    return undefined;
+  }, [nameCheck]);
+
+  useEffect(() => {
+    const name = organizationName.trim();
+    if (!name) {
+      setNameCheck({ status: "idle" });
+      return;
+    }
+
+    setNameCheck({ status: "checking" });
+    const seq = ++nameCheckSeq.current;
+    const timer = window.setTimeout(async () => {
+      try {
+        const resp = await api.checkLaunchName(name);
+        if (seq !== nameCheckSeq.current) return;
+        setNameCheck(
+          resp.available
+            ? { status: "available", message: "Available in your workspace." }
+            : { status: "taken", message: "Already used in your workspace." },
+        );
+      } catch {
+        if (seq !== nameCheckSeq.current) return;
+        setNameCheck({
+          status: "error",
+          message: "Could not check availability right now.",
+        });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [organizationName]);
+
   useEffect(() => {
     const spawnName = searchParams.get("spawn");
     if (!spawnName || provisionHandled.current) return;
@@ -181,7 +248,7 @@ export default function CompanySetupPage() {
     if (!blueprint) return;
     const displayName = organizationName.trim();
     const shortMission = mission.trim();
-    if (!displayName) return;
+    if (!displayName || nameCheck.status !== "available") return;
 
     setSubmitError(null);
     setSubmitting(true);
@@ -231,7 +298,16 @@ export default function CompanySetupPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [blueprint, canSkipCheckout, fetchEntities, mission, navigate, organizationName, plan]);
+  }, [
+    blueprint,
+    canSkipCheckout,
+    fetchEntities,
+    mission,
+    nameCheck.status,
+    navigate,
+    organizationName,
+    plan,
+  ]);
 
   if (loading && !blueprint) {
     return (
@@ -294,49 +370,34 @@ export default function CompanySetupPage() {
 
       <section className="launch-grid">
         <div className="launch-main">
-          <Link
-            to="/blueprints"
-            className="launch-blueprint-picker"
-            aria-label={`Change selected blueprint. Current blueprint: ${blueprint.name}`}
-          >
-            <Card variant="default" padding="lg" interactive className="launch-blueprint-card">
-              <div className="launch-blueprint-head">
-                <div>
-                  <p className="start-section-kicker">Blueprint</p>
-                  <h2 className="start-section-title">{blueprint.name}</h2>
-                </div>
-                <span className="launch-blueprint-link" aria-hidden>
-                  Change →
-                </span>
-              </div>
-            </Card>
-          </Link>
-
           <Card variant="default" padding="lg" className="launch-card">
             <div className="launch-card-head">
               <p className="start-section-kicker">Identity</p>
             </div>
 
             <div className="launch-fields">
-              <label className="launch-field launch-field--name">
-                <span className="launch-field-label">Name</span>
+              <div className="launch-field launch-field--name">
                 <Input
+                  label="Organization name"
+                  hint={nameHint}
+                  error={nameError}
                   value={organizationName}
                   onChange={(e) => setOrganizationName(e.target.value)}
-                  placeholder="The name on the charter"
+                  placeholder="Registered name"
                   size="lg"
                 />
-              </label>
+              </div>
 
-              <label className="launch-field">
-                <span className="launch-field-label">Mission</span>
+              <div className="launch-field">
                 <Textarea
+                  label="Mission"
+                  hint="One short sentence is enough."
                   value={mission}
                   onChange={(e) => setMission(e.target.value)}
                   rows={3}
                   placeholder="What should this organization do?"
                 />
-              </label>
+              </div>
             </div>
           </Card>
         </div>
@@ -345,7 +406,7 @@ export default function CompanySetupPage() {
           <Card variant="default" padding="lg" className="launch-preview-card">
             <div className="launch-preview-head">
               <div>
-                <p className="start-section-kicker">Preview</p>
+                <p className="start-section-kicker">Blueprint</p>
                 <h3 className="start-section-title">{blueprint.name}</h3>
               </div>
               <span className="launch-preview-type">{blueprintMode.label}</span>
@@ -354,6 +415,14 @@ export default function CompanySetupPage() {
               {blueprint.tagline || blueprint.description || blueprintMode.meta}
             </p>
             <BlueprintTreePreview template={blueprint} />
+            <div className="launch-blueprint-actions">
+              <Link to={blueprintPath} className="launch-secondary-link">
+                Edit this blueprint
+              </Link>
+              <Link to="/blueprints" className="launch-secondary-link">
+                Browse others
+              </Link>
+            </div>
           </Card>
         </div>
       </section>
@@ -430,7 +499,7 @@ export default function CompanySetupPage() {
             size="lg"
             fullWidth
             onClick={() => void handleLaunch()}
-            disabled={submitting || !organizationName.trim()}
+            disabled={submitting || !organizationName.trim() || nameCheck.status !== "available"}
             loading={submitting}
             loadingLabel="Creating"
           >
