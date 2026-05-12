@@ -176,6 +176,16 @@ npm --prefix apps/ui test
 scripts/public-surface-scan.sh
 ```
 
+For route-level UI visual QA, capture a Playwright screenshot and compact report:
+
+```bash
+npm run visual:route -- --url /admin --expect-text "Admin"
+```
+
+Use `--no-auth` for public routes, `AEQI_TOKEN` for an existing session, or
+`AEQI_WEB_SECRET` with `AEQI_USER_ID` and `AEQI_EMAIL` to mint a short-lived
+local JWT.
+
 The CI workflow runs the public-surface scan, Rust format, clippy, build, tests,
 UI checks, UI tests, release smoke tests, and documentation generation. The
 quality-gates workflow also runs dependency and security checks.

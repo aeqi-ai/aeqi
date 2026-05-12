@@ -7,6 +7,7 @@
     "ui:dev": "npm --prefix apps/ui run dev",
     "ui:build": "npm --prefix apps/ui run build",
     "ui:preview": "npm --prefix apps/ui run preview",
+    "visual:route": "node scripts/visual-route.mjs",
     "solana:build": "cd projects/aeqi-solana && anchor build",
     "solana:test": "cd projects/aeqi-solana && anchor test --skip-build"
   },

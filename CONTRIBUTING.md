@@ -78,6 +78,7 @@ scripts/                   Install, deploy, and operator scripts
 | UI type + format check        | `npm --prefix apps/ui run check`               |
 | UI full verify                | `npm --prefix apps/ui run verify`              |
 | UI design-system audit        | `npm --prefix apps/ui run design-system:audit` |
+| UI visual route probe         | `npm run visual:route -- --url /admin`         |
 | UI tests                      | `npm --prefix apps/ui test`                    |
 | Public surface scan           | `scripts/public-surface-scan.sh`               |
 
@@ -86,6 +87,26 @@ scripts/                   Install, deploy, and operator scripts
 The repo ships a husky-managed pre-commit hook in `.husky/pre-commit`. It runs UI checks (typecheck, lint, vitest) **only when files under `apps/ui/` are staged**, so Rust-only commits stay fast.
 
 The full Rust suite (`fmt`, `clippy -- -D warnings`, `test --workspace`) is enforced in CI on every push and pull request. CI also runs `scripts/public-surface-scan.sh`, which blocks internal notes, local workstation paths, private deployment runbooks, and license wording drift from entering the public tree.
+
+## UI Visual QA
+
+For UI changes that affect layout, navigation, dense tables, forms, modals,
+admin/operator pages, onboarding, settings, or launch-critical flows, capture a
+route screenshot before shipping. The probe is intentionally operator-grade, not
+a blanket CI gate:
+
+```bash
+npm run visual:route -- --url /admin --expect-text "Admin"
+```
+
+The script writes a PNG screenshot plus a JSON report with final URL, response
+status, body-text sample, console errors, request failures, and assertion
+results. It is cheap by default; inspect the image only when the change needs
+visual judgment.
+
+Authentication is optional. Pass `--no-auth` for public/login routes, `AEQI_TOKEN`
+or `--token` to seed an existing session JWT, or set `AEQI_WEB_SECRET`,
+`AEQI_USER_ID`, and `AEQI_EMAIL` to mint a short-lived JWT locally.
 
 To install the hooks after cloning:
 
