@@ -1,12 +1,13 @@
 //! aeqi_funding — capital raise orchestration.
 //!
-//! Ports `modules/Funding.module.sol`. A FundingRequest declares the *intent*
-//! to raise capital via one of the three Unifutures primitives:
+//! A FundingRequest declares the *intent* to raise capital via one of the
+//! three live Unifutures primitives, plus the pool surface as it lands:
 //!   - CommitmentSale (fixed-price pre-sale)
 //!   - BondingCurve (continuous-curve issuance)
 //!   - Exit (pro-rata redemption)
+//!   - LiquidityPool (constant-product pool)
 //!
-//! Lifecycle (full EVM model — implemented incrementally):
+//! Lifecycle (implemented incrementally):
 //!   1. `create_funding_request` — declares the intent, references a Budget
 //!      for the asset allocation
 //!   2. `activate` — draws from Budget, creates the corresponding Unifutures
@@ -20,9 +21,9 @@
 //! This iteration ships state + create only. The CPI-orchestrated lifecycle
 //! follows once the inter-module CPI surfaces stabilize.
 
-use anchor_lang::prelude::*;
 use aeqi_unifutures::cpi::accounts::{CreateCommitmentSale, CreateCurve, CreateExit};
 use aeqi_unifutures::program::AeqiUnifutures;
+use anchor_lang::prelude::*;
 
 declare_id!("8EAVY6uosAatbwhemj1gsPB47WwwmDLzi2t7yo2b8CWV");
 
@@ -50,9 +51,9 @@ pub mod aeqi_funding {
     ) -> Result<()> {
         require!(kind <= 2, FundingError::InvalidKind);
         // CommitmentSale needs concrete amounts at request time; BondingCurve
-        // and Exit carry their parameters in the activation call (price curve
-        // / exit_quote are kind-specific and meaningless here), so the zero
-        // gate is kind=0 only.
+        // and Exit carry their parameters in the activation call (curve /
+        // exit parameters are kind-specific and meaningless here), so the
+        // zero gate is kind=0 only.
         if kind == 0 {
             require!(asset_amount > 0, FundingError::ZeroAmount);
             require!(target_quote > 0, FundingError::ZeroAmount);

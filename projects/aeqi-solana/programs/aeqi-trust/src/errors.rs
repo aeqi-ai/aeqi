@@ -18,4 +18,6 @@ pub enum AeqiTrustError {
     ModuleNotInitialized,
     #[msg("config payload exceeds maximum size")]
     ConfigTooLarge,
+    #[msg("math overflow")]
+    MathOverflow,
 }

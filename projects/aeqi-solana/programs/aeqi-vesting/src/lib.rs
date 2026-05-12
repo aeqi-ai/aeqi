@@ -1,8 +1,7 @@
 //! aeqi_vesting — linear cliff vesting positions for equity grants.
 //!
-//! Ports `modules/Vesting.module.sol`. Each VestingPosition tracks a single
-//! equity grant: total_amount, start_time, cliff_time, end_time. The
-//! claimable amount at any moment is:
+//! Each VestingPosition tracks a single equity grant: total_amount,
+//! start_time, cliff_time, end_time. The claimable amount at any moment is:
 //!
 //!   if now < cliff_time:        0
 //!   elif now >= end_time:       total - claimed
@@ -138,10 +137,7 @@ pub mod aeqi_vesting {
             p.grantor,
             VestingError::Unauthorized
         );
-        require!(
-            !p.fdv_milestone_unlocked,
-            VestingError::AlreadyUnlocked
-        );
+        require!(!p.fdv_milestone_unlocked, VestingError::AlreadyUnlocked);
         p.fdv_milestone_unlocked = true;
         emit!(FdvMilestoneHit {
             trust: p.trust,
@@ -184,11 +180,8 @@ pub mod aeqi_vesting {
             to: ctx.accounts.recipient_ta.to_account_info(),
             authority: ctx.accounts.vault_authority.to_account_info(),
         };
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            cpi,
-            seeds,
-        );
+        let cpi_ctx =
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi, seeds);
         transfer_checked(cpi_ctx, claimable, ctx.accounts.mint.decimals)?;
 
         p.claimed_amount = p.claimed_amount.checked_add(claimable).unwrap();
@@ -214,7 +207,11 @@ fn vested_amount_at(p: &VestingPosition, now: i64) -> u64 {
     let elapsed = (now.checked_sub(p.start_time).unwrap()) as u128;
     let duration = (p.end_time.checked_sub(p.start_time).unwrap()) as u128;
     let total = p.total_amount as u128;
-    let vested = total.checked_mul(elapsed).unwrap().checked_div(duration).unwrap();
+    let vested = total
+        .checked_mul(elapsed)
+        .unwrap()
+        .checked_div(duration)
+        .unwrap();
     vested as u64
 }
 
@@ -241,12 +238,10 @@ pub struct VestingPosition {
     pub end_time: i64,
     /// FDV milestone — when set true, vested_amount_at() short-circuits to
     /// `total_amount`. Used for fully-vested-on-milestone-hit grants
-    /// (founder unlock when company FDV crosses a target). Mirrors EVM
-    /// `Vesting.module` FDV unlock modifier.
+    /// (founder unlock when company FDV crosses a target).
     pub fdv_milestone_unlocked: bool,
     /// Contribution requirement — quote amount the recipient must pay (burn)
-    /// before claims unlock. Zero means no contribution gate. Mirrors EVM
-    /// "founder pre-pays for upfront equity" pattern.
+    /// before claims unlock. Zero means no contribution gate.
     pub contribution_required: u64,
     pub contribution_paid: bool,
     pub contribution_mint: Pubkey,

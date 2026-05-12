@@ -1,9 +1,8 @@
 use anchor_lang::prelude::*;
 
 /// Template registered on-chain. PDA seeded `[b"template", template_id]`.
-/// Mirrors EVM `FactoryLibrary.Template` — declares the module set, ACL graph,
-/// and default value configs that `instantiate_template` will replay against
-/// every fresh TRUST.
+/// Declares the module set, ACL graph, and default value configs that
+/// `instantiate_template` will replay against every fresh TRUST.
 #[account]
 pub struct Template {
     pub template_id: [u8; 32],
@@ -13,8 +12,8 @@ pub struct Template {
     pub bump: u8,
 }
 
-/// Module slot declaration in a template. The `program_id` points at a
-/// concrete module program (aeqi_role, aeqi_token, aeqi_governance, …) and
+/// Module declaration in a template. `program_id` points at a concrete
+/// module program (aeqi_role, aeqi_token, aeqi_governance, …) and
 /// `trust_acl` is the bit-flag mask granted to the module.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
 pub struct ModuleSpec {
@@ -41,6 +40,6 @@ impl Template {
         + 32 // admin
         + 4 + num_modules * ModuleSpec::INIT_SPACE
         + 4 + num_edges * AclEdgeSpec::INIT_SPACE
-        + 1  // bump
+        + 1 // bump
     }
 }

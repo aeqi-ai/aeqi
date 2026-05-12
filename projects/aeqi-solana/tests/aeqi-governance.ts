@@ -198,6 +198,99 @@ describe("aeqi_governance", () => {
     expect(threw).to.eq(true);
   });
 
+  it("rejects propose when the config id does not match the chosen config", async () => {
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xec;
+
+    const [cfgPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(cfgId)],
+      program.programId,
+    );
+
+    await program.methods
+      .registerConfig(Array.from(cfgId), {
+        proposalThreshold: new anchor.BN(0),
+        quorumBps: 4000,
+        supportBps: 5000,
+        votingPeriod: new anchor.BN(60),
+        executionDelay: new anchor.BN(0),
+        allowEarlyEnact: false,
+      })
+      .accounts({
+        trust: fakeTrust,
+        moduleState: modulePda,
+        governanceConfig: cfgPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xac;
+    const wrongConfigId = new Uint8Array(32);
+    wrongConfigId[0] = 0xad;
+
+    const [proposalPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(proposalId)],
+      program.programId,
+    );
+
+    let threw = false;
+    try {
+      await program.methods
+        .propose(Array.from(proposalId), Array.from(wrongConfigId), Array.from(new Uint8Array(64)))
+        .accounts({
+          trust: fakeTrust,
+          moduleState: modulePda,
+          governanceConfig: cfgPda,
+          proposal: proposalPda,
+          proposer: provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/ConfigMismatch/);
+    }
+    expect(threw).to.eq(true);
+  });
+
+  it("rejects zero-weight votes", async () => {
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xab;
+
+    const [proposalPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(proposalId)],
+      program.programId,
+    );
+    const [votePda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vote"),
+        fakeTrust.toBuffer(),
+        Buffer.from(proposalId),
+        provider.wallet.publicKey.toBuffer(),
+      ],
+      program.programId,
+    );
+
+    let threw = false;
+    try {
+      await program.methods
+        .castVote(1, new anchor.BN(0))
+        .accounts({
+          proposal: proposalPda,
+          vote: votePda,
+          voter: provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/ZeroWeight/);
+    }
+    expect(threw).to.eq(true);
+  });
+
   it("execute_proposal advances state when quorum + support met (early enact)", async () => {
     // Fresh config that allows early enact, fresh proposal, single For vote.
     const cfgId = new Uint8Array(32);
@@ -365,6 +458,95 @@ describe("aeqi_governance", () => {
     } catch (e: any) {
       threw = true;
       expect(e.toString()).to.match(/QuorumNotMet/);
+    }
+    expect(threw).to.eq(true);
+  });
+
+  it("execute_proposal rejects when the config account does not match the proposal", async () => {
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xab;
+    const [cfgPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(cfgId)],
+      program.programId,
+    );
+
+    const propId = new Uint8Array(32);
+    propId[0] = 0xaf;
+    const [propPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(propId)],
+      program.programId,
+    );
+
+    await program.methods
+      .propose(Array.from(propId), Array.from(cfgId), Array.from(new Uint8Array(64)))
+      .accounts({
+        trust: fakeTrust,
+        moduleState: modulePda,
+        governanceConfig: cfgPda,
+        proposal: propPda,
+        proposer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const wrongCfgId = new Uint8Array(32);
+    wrongCfgId[0] = 0xba;
+    const [wrongCfgPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(wrongCfgId)],
+      program.programId,
+    );
+
+    await program.methods
+      .registerConfig(Array.from(wrongCfgId), {
+        proposalThreshold: new anchor.BN(0),
+        quorumBps: 4000,
+        supportBps: 5000,
+        votingPeriod: new anchor.BN(60),
+        executionDelay: new anchor.BN(0),
+        allowEarlyEnact: true,
+      })
+      .accounts({
+        trust: fakeTrust,
+        moduleState: modulePda,
+        governanceConfig: wrongCfgPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const [votePda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vote"),
+        fakeTrust.toBuffer(),
+        Buffer.from(propId),
+        provider.wallet.publicKey.toBuffer(),
+      ],
+      program.programId,
+    );
+
+    await program.methods
+      .castVote(1, new anchor.BN(1000))
+      .accounts({
+        proposal: propPda,
+        vote: votePda,
+        voter: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    let threw = false;
+    try {
+      await program.methods
+        .executeProposal(new anchor.BN(1000))
+        .accounts({
+          proposal: propPda,
+          governanceConfig: wrongCfgPda,
+          executor: provider.wallet.publicKey,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/ConfigMismatch/);
     }
     expect(threw).to.eq(true);
   });

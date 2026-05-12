@@ -155,4 +155,21 @@ describe("aeqi_trust", () => {
     }
     expect(threw).to.eq(true);
   });
+
+  it("rejects finalize once creation mode is already closed", async () => {
+    let threw = false;
+    try {
+      await program.methods
+        .finalize()
+        .accounts({
+          trust: trustPda,
+          authority: provider.wallet.publicKey,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/AlreadyFinalized/);
+    }
+    expect(threw).to.eq(true);
+  });
 });

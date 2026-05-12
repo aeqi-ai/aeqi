@@ -1,7 +1,6 @@
-//! aeqi_unifutures — bonding curves, commitment sales, exits.
+//! aeqi_unifutures — bonding curves, commitment sales, exits, liquidity pools.
 //!
-//! Ports `modules/Unifutures.module.sol` + position managers. Three
-//! primitives in the EVM original; this crate ships them incrementally:
+//! Three primitives ship here incrementally:
 //!
 //! - **BondingCurve** ← this iteration: state PDA + math + create_curve.
 //!   Buy/sell ixes follow.
@@ -16,6 +15,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
     burn, transfer_checked, Burn, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
+use core::cmp::min;
 
 pub mod curve;
 pub use curve::CurveType;
@@ -32,13 +32,13 @@ pub mod aeqi_unifutures {
         m.trust = ctx.accounts.trust.key();
         m.curve_count = 0;
         m.bump = ctx.bumps.module_state;
+        m.pool_count = 0;
         Ok(())
     }
 
     /// Create a bonding curve. Curve config is immutable after creation.
-    /// Validates `start_price < end_price` (rising curves are the typical
-    /// case) is NOT enforced — falling curves are allowed; the math handles
-    /// either direction. `max_supply > 0` is enforced.
+    /// `max_supply > 0` is enforced. Rising and falling curves are both
+    /// supported by the math.
     pub fn create_curve(
         ctx: Context<CreateCurve>,
         curve_id: [u8; 32],
@@ -90,11 +90,14 @@ pub mod aeqi_unifutures {
     /// creator can call any time if `proceeds_collected >= target_quote`.
     pub fn finalize_sale(ctx: Context<FinalizeSale>) -> Result<()> {
         let s = &mut ctx.accounts.sale;
-        require!(s.status == SaleStatus::Active as u8, UnifuturesError::SaleNotActive);
+        require!(
+            s.status == SaleStatus::Active as u8,
+            UnifuturesError::SaleNotActive
+        );
 
         let now = Clock::get()?.unix_timestamp;
-        let voluntary = ctx.accounts.signer.key() == s.creator
-            && s.proceeds_collected >= s.target_quote;
+        let voluntary =
+            ctx.accounts.signer.key() == s.creator && s.proceeds_collected >= s.target_quote;
         let elapsed = now >= s.end_time;
         require!(voluntary || elapsed, UnifuturesError::CannotFinalizeYet);
 
@@ -110,12 +113,14 @@ pub mod aeqi_unifutures {
     }
 
     /// Claim a buyer's pro-rata asset allocation from a Completed sale.
-    /// allocation = commitment.amount * asset_amount / commitments_collected
-    /// Mints asset by transferring from the pre-loaded sale_asset_vault
-    /// (premined supply model — vault must be funded before finalize).
+    /// allocation = commitment.amount * asset_amount / commitments_collected.
+    /// Assets are transferred from the pre-loaded sale_asset_vault.
     pub fn claim_allocation(ctx: Context<ClaimAllocation>) -> Result<()> {
         let s = &ctx.accounts.sale;
-        require!(s.status == SaleStatus::Completed as u8, UnifuturesError::SaleNotCompleted);
+        require!(
+            s.status == SaleStatus::Completed as u8,
+            UnifuturesError::SaleNotCompleted
+        );
 
         let c = &mut ctx.accounts.commitment;
         require_keys_eq!(
@@ -152,11 +157,7 @@ pub mod aeqi_unifutures {
             authority: ctx.accounts.sale_authority.to_account_info(),
         };
         transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                cpi,
-                seeds,
-            ),
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi, seeds),
             allocation,
             ctx.accounts.asset_mint.decimals,
         )?;
@@ -178,16 +179,16 @@ pub mod aeqi_unifutures {
     /// holders can then claim_pro_rata by burning their cap-table tokens.
     pub fn settle_exit(ctx: Context<SettleExit>) -> Result<()> {
         let e = &ctx.accounts.exit;
-        require!(e.status == SaleStatus::Active as u8, UnifuturesError::SaleNotActive);
+        require!(
+            e.status == SaleStatus::Active as u8,
+            UnifuturesError::SaleNotActive
+        );
         require_keys_eq!(
             ctx.accounts.creator.key(),
             e.creator,
             UnifuturesError::Unauthorized
         );
-        require!(
-            e.proceeds_collected == 0,
-            UnifuturesError::AlreadySettled
-        );
+        require!(e.proceeds_collected == 0, UnifuturesError::AlreadySettled);
 
         let cpi = TransferChecked {
             from: ctx.accounts.creator_quote_ta.to_account_info(),
@@ -220,7 +221,10 @@ pub mod aeqi_unifutures {
         require!(burn_amount > 0, UnifuturesError::ZeroAmount);
         let e = &ctx.accounts.exit;
         require!(e.proceeds_collected > 0, UnifuturesError::NotSettled);
-        require!(e.status == SaleStatus::Active as u8, UnifuturesError::SaleNotActive);
+        require!(
+            e.status == SaleStatus::Active as u8,
+            UnifuturesError::SaleNotActive
+        );
 
         let share_u128 = (burn_amount as u128)
             .checked_mul(e.exit_quote as u128)
@@ -264,11 +268,7 @@ pub mod aeqi_unifutures {
             authority: ctx.accounts.exit_authority.to_account_info(),
         };
         transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                cpi,
-                seeds,
-            ),
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi, seeds),
             share,
             ctx.accounts.quote_mint.decimals,
         )?;
@@ -289,7 +289,6 @@ pub mod aeqi_unifutures {
     /// Create an Exit — pro-rata redemption event. The acquirer (creator)
     /// commits `exit_quote` upfront; existing token holders burn their
     /// cap-table tokens to claim their pro-rata share of the proceeds pool.
-    /// Mirrors EVM `Unifutures.module.createExit`.
     /// Settle/claim ixes follow.
     pub fn create_exit(
         ctx: Context<CreateExit>,
@@ -332,8 +331,7 @@ pub mod aeqi_unifutures {
 
     /// Create a CommitmentSale — fixed-price pre-sale. Buyers commit quote
     /// during the active phase; on finalization, allocations are computed
-    /// against the target. Mirrors EVM `Unifutures.module.createCommitmentSale`.
-    /// Buy/finalize/claim ixes follow.
+    /// against the target. Buy/finalize/claim ixes follow.
     pub fn create_commitment_sale(
         ctx: Context<CreateCommitmentSale>,
         sale_id: [u8; 32],
@@ -383,13 +381,15 @@ pub mod aeqi_unifutures {
     /// Commit quote to a CommitmentSale during its active phase. Transfers
     /// `amount` of quote to the sale's vault and records the buyer's
     /// commitment so they can claim asset allocations at finalize.
-    /// Mirrors EVM `Unifutures.module.commit*`.
     pub fn commit_to_sale(ctx: Context<CommitToSale>, amount: u64) -> Result<()> {
         require!(amount > 0, UnifuturesError::ZeroAmount);
 
         let s = &mut ctx.accounts.sale;
         let now = Clock::get()?.unix_timestamp;
-        require!(s.status == SaleStatus::Active as u8, UnifuturesError::SaleNotActive);
+        require!(
+            s.status == SaleStatus::Active as u8,
+            UnifuturesError::SaleNotActive
+        );
         require!(now < s.end_time, UnifuturesError::SaleClosed);
         require!(
             s.proceeds_collected.checked_add(amount).unwrap() <= s.overflow_quote,
@@ -459,7 +459,9 @@ pub mod aeqi_unifutures {
             token_amount as u128,
         )
         .ok_or_else(|| error!(UnifuturesError::MathOverflow))?;
-        let cost: u64 = cost_u128.try_into().map_err(|_| error!(UnifuturesError::MathOverflow))?;
+        let cost: u64 = cost_u128
+            .try_into()
+            .map_err(|_| error!(UnifuturesError::MathOverflow))?;
         require!(cost <= max_cost, UnifuturesError::SlippageExceeded);
 
         // 1. buyer pays quote → curve_quote_vault (buyer signs)
@@ -530,7 +532,10 @@ pub mod aeqi_unifutures {
         let ct = CurveType::from_u8(c.curve_type)
             .ok_or_else(|| error!(UnifuturesError::InvalidCurveType))?;
 
-        require!(token_amount <= c.current_supply, UnifuturesError::ExceedsSupply);
+        require!(
+            token_amount <= c.current_supply,
+            UnifuturesError::ExceedsSupply
+        );
 
         let return_u128 = curve::sale_return(
             ct,
@@ -545,7 +550,10 @@ pub mod aeqi_unifutures {
         let return_amount: u64 = return_u128
             .try_into()
             .map_err(|_| error!(UnifuturesError::MathOverflow))?;
-        require!(return_amount >= min_return, UnifuturesError::SlippageExceeded);
+        require!(
+            return_amount >= min_return,
+            UnifuturesError::SlippageExceeded
+        );
         require!(
             (return_amount as u128) <= c.reserve_balance,
             UnifuturesError::InsufficientReserve
@@ -624,6 +632,485 @@ pub mod aeqi_unifutures {
         .ok_or_else(|| error!(UnifuturesError::MathOverflow))?;
         Ok(cost)
     }
+
+    /// Create a constant-product liquidity pool. The vault token accounts are
+    /// PDA-owned ATAs created off-chain or in tests; the pool records them as
+    /// the canonical reserves for this pair.
+    pub fn create_liquidity_pool(
+        ctx: Context<CreateLiquidityPool>,
+        pool_id: [u8; 32],
+        fee_bps: u16,
+    ) -> Result<()> {
+        require!(fee_bps <= 1_000, UnifuturesError::InvalidFeeBps);
+        require_keys_neq!(
+            ctx.accounts.base_mint.key(),
+            ctx.accounts.quote_mint.key(),
+            UnifuturesError::InvalidPoolPair
+        );
+        require!(
+            ctx.accounts.base_vault.mint == ctx.accounts.base_mint.key(),
+            UnifuturesError::InvalidPoolMint
+        );
+        require!(
+            ctx.accounts.quote_vault.mint == ctx.accounts.quote_mint.key(),
+            UnifuturesError::InvalidPoolMint
+        );
+        require!(
+            ctx.accounts.base_vault.owner == ctx.accounts.pool_authority.key(),
+            UnifuturesError::InvalidPoolAuthority
+        );
+        require!(
+            ctx.accounts.quote_vault.owner == ctx.accounts.pool_authority.key(),
+            UnifuturesError::InvalidPoolAuthority
+        );
+
+        let p = &mut ctx.accounts.pool;
+        p.trust = ctx.accounts.trust.key();
+        p.pool_id = pool_id;
+        p.base_mint = ctx.accounts.base_mint.key();
+        p.quote_mint = ctx.accounts.quote_mint.key();
+        p.base_vault = ctx.accounts.base_vault.key();
+        p.quote_vault = ctx.accounts.quote_vault.key();
+        p.total_shares = 0;
+        p.base_reserve = 0;
+        p.quote_reserve = 0;
+        p.fee_bps = fee_bps;
+        p.bump = ctx.bumps.pool;
+
+        let m = &mut ctx.accounts.module_state;
+        m.pool_count = m.pool_count.checked_add(1).unwrap();
+
+        emit!(LiquidityPoolCreated {
+            trust: p.trust,
+            pool_id,
+            base_mint: p.base_mint,
+            quote_mint: p.quote_mint,
+            fee_bps,
+        });
+        Ok(())
+    }
+
+    /// Add liquidity at the pool's current ratio. The first deposit seeds the
+    /// pool and mints shares from `sqrt(base * quote)`.
+    pub fn add_liquidity(
+        ctx: Context<AddLiquidity>,
+        base_amount: u64,
+        quote_amount: u64,
+    ) -> Result<()> {
+        require!(base_amount > 0, UnifuturesError::ZeroAmount);
+        require!(quote_amount > 0, UnifuturesError::ZeroAmount);
+
+        let p = &mut ctx.accounts.pool;
+        require!(
+            ctx.accounts.base_mint.key() == p.base_mint
+                && ctx.accounts.quote_mint.key() == p.quote_mint,
+            UnifuturesError::InvalidPoolPair
+        );
+
+        let minted_shares = if p.total_shares == 0 {
+            integer_sqrt(
+                (base_amount as u128)
+                    .checked_mul(quote_amount as u128)
+                    .ok_or_else(|| error!(UnifuturesError::MathOverflow))?,
+            )
+        } else {
+            let base_shares = (base_amount as u128)
+                .checked_mul(p.total_shares)
+                .ok_or_else(|| error!(UnifuturesError::MathOverflow))?
+                .checked_div(p.base_reserve)
+                .ok_or_else(|| error!(UnifuturesError::MathOverflow))?;
+            let quote_shares = (quote_amount as u128)
+                .checked_mul(p.total_shares)
+                .ok_or_else(|| error!(UnifuturesError::MathOverflow))?
+                .checked_div(p.quote_reserve)
+                .ok_or_else(|| error!(UnifuturesError::MathOverflow))?;
+            min(base_shares, quote_shares)
+        };
+        require!(minted_shares > 0, UnifuturesError::ZeroLiquidityMinted);
+
+        let position = &mut ctx.accounts.position;
+        if position.provider == Pubkey::default() {
+            position.trust = p.trust;
+            position.pool_id = p.pool_id;
+            position.provider = ctx.accounts.provider.key();
+            position.shares = 0;
+            position.bump = ctx.bumps.position;
+        } else {
+            require_keys_eq!(
+                position.provider,
+                ctx.accounts.provider.key(),
+                UnifuturesError::Unauthorized
+            );
+            require!(
+                position.pool_id == p.pool_id,
+                UnifuturesError::InvalidPoolPair
+            );
+        }
+
+        if p.total_shares > 0 {
+            let expected_quote = (base_amount as u128)
+                .checked_mul(p.quote_reserve)
+                .ok_or_else(|| error!(UnifuturesError::MathOverflow))?
+                .checked_div(p.base_reserve)
+                .ok_or_else(|| error!(UnifuturesError::MathOverflow))?;
+            require!(
+                expected_quote == quote_amount as u128,
+                UnifuturesError::InvalidLiquidityRatio
+            );
+        }
+
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.provider_base_ta.to_account_info(),
+                    mint: ctx.accounts.base_mint.to_account_info(),
+                    to: ctx.accounts.base_vault.to_account_info(),
+                    authority: ctx.accounts.provider.to_account_info(),
+                },
+            ),
+            base_amount,
+            ctx.accounts.base_mint.decimals,
+        )?;
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.provider_quote_ta.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.quote_vault.to_account_info(),
+                    authority: ctx.accounts.provider.to_account_info(),
+                },
+            ),
+            quote_amount,
+            ctx.accounts.quote_mint.decimals,
+        )?;
+
+        position.shares = position
+            .shares
+            .checked_add(minted_shares)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.total_shares = p
+            .total_shares
+            .checked_add(minted_shares)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.base_reserve = p
+            .base_reserve
+            .checked_add(base_amount as u128)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.quote_reserve = p
+            .quote_reserve
+            .checked_add(quote_amount as u128)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+
+        emit!(LiquidityAdded {
+            trust: p.trust,
+            pool_id: p.pool_id,
+            provider: ctx.accounts.provider.key(),
+            base_amount,
+            quote_amount,
+            shares: minted_shares,
+        });
+        Ok(())
+    }
+
+    /// Remove liquidity by burning a share amount from the provider's
+    /// position and returning proportional reserves.
+    pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, share_amount: u128) -> Result<()> {
+        require!(share_amount > 0, UnifuturesError::ZeroShares);
+
+        let p = &mut ctx.accounts.pool;
+        let pos = &mut ctx.accounts.position;
+        require_keys_eq!(
+            pos.provider,
+            ctx.accounts.provider.key(),
+            UnifuturesError::Unauthorized
+        );
+        require!(
+            share_amount <= pos.shares,
+            UnifuturesError::InsufficientShares
+        );
+        require!(p.total_shares > 0, UnifuturesError::InsufficientLiquidity);
+
+        let base_out = p
+            .base_reserve
+            .checked_mul(share_amount)
+            .ok_or(error!(UnifuturesError::MathOverflow))?
+            .checked_div(p.total_shares)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let quote_out = p
+            .quote_reserve
+            .checked_mul(share_amount)
+            .ok_or(error!(UnifuturesError::MathOverflow))?
+            .checked_div(p.total_shares)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        require!(
+            base_out > 0 && quote_out > 0,
+            UnifuturesError::ShareTooSmall
+        );
+
+        let seeds: &[&[&[u8]]] = &[&[
+            b"pool_authority",
+            p.trust.as_ref(),
+            p.pool_id.as_ref(),
+            &[ctx.bumps.pool_authority],
+        ]];
+
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.base_vault.to_account_info(),
+                    mint: ctx.accounts.base_mint.to_account_info(),
+                    to: ctx.accounts.provider_base_ta.to_account_info(),
+                    authority: ctx.accounts.pool_authority.to_account_info(),
+                },
+                seeds,
+            ),
+            base_out
+                .try_into()
+                .map_err(|_| error!(UnifuturesError::MathOverflow))?,
+            ctx.accounts.base_mint.decimals,
+        )?;
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.quote_vault.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
+                    to: ctx.accounts.provider_quote_ta.to_account_info(),
+                    authority: ctx.accounts.pool_authority.to_account_info(),
+                },
+                seeds,
+            ),
+            quote_out
+                .try_into()
+                .map_err(|_| error!(UnifuturesError::MathOverflow))?,
+            ctx.accounts.quote_mint.decimals,
+        )?;
+
+        pos.shares = pos
+            .shares
+            .checked_sub(share_amount)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.total_shares = p
+            .total_shares
+            .checked_sub(share_amount)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.base_reserve = p
+            .base_reserve
+            .checked_sub(base_out)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.quote_reserve = p
+            .quote_reserve
+            .checked_sub(quote_out)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+
+        emit!(LiquidityRemoved {
+            trust: p.trust,
+            pool_id: p.pool_id,
+            provider: ctx.accounts.provider.key(),
+            base_amount: base_out
+                .try_into()
+                .map_err(|_| error!(UnifuturesError::MathOverflow))?,
+            quote_amount: quote_out
+                .try_into()
+                .map_err(|_| error!(UnifuturesError::MathOverflow))?,
+            shares: share_amount,
+        });
+        Ok(())
+    }
+
+    /// Swap one side of the pool for the other using constant-product math.
+    pub fn swap_exact_in(
+        ctx: Context<SwapExactIn>,
+        amount_in: u64,
+        min_out: u64,
+        base_to_quote: bool,
+    ) -> Result<()> {
+        require!(amount_in > 0, UnifuturesError::ZeroAmount);
+        let p = &mut ctx.accounts.pool;
+        require!(p.total_shares > 0, UnifuturesError::InsufficientLiquidity);
+
+        let (reserve_in, reserve_out, in_mint, out_mint, in_from, out_to) = if base_to_quote {
+            (
+                p.base_reserve,
+                p.quote_reserve,
+                ctx.accounts.base_mint.to_account_info(),
+                ctx.accounts.quote_mint.to_account_info(),
+                ctx.accounts.provider_base_ta.to_account_info(),
+                ctx.accounts.provider_quote_ta.to_account_info(),
+            )
+        } else {
+            (
+                p.quote_reserve,
+                p.base_reserve,
+                ctx.accounts.quote_mint.to_account_info(),
+                ctx.accounts.base_mint.to_account_info(),
+                ctx.accounts.provider_quote_ta.to_account_info(),
+                ctx.accounts.provider_base_ta.to_account_info(),
+            )
+        };
+
+        let fee_factor = 10_000u128
+            .checked_sub(p.fee_bps as u128)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let effective_in = (amount_in as u128)
+            .checked_mul(fee_factor)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let numerator = effective_in
+            .checked_mul(reserve_out)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let denominator = reserve_in
+            .checked_mul(10_000)
+            .ok_or(error!(UnifuturesError::MathOverflow))?
+            .checked_add(effective_in)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let amount_out = numerator
+            .checked_div(denominator)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        require!(
+            amount_out >= min_out as u128,
+            UnifuturesError::SlippageExceeded
+        );
+        require!(amount_out > 0, UnifuturesError::ShareTooSmall);
+
+        let seeds: &[&[&[u8]]] = &[&[
+            b"pool_authority",
+            p.trust.as_ref(),
+            p.pool_id.as_ref(),
+            &[ctx.bumps.pool_authority],
+        ]];
+
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: in_from,
+                    mint: in_mint,
+                    to: if base_to_quote {
+                        ctx.accounts.base_vault.to_account_info()
+                    } else {
+                        ctx.accounts.quote_vault.to_account_info()
+                    },
+                    authority: ctx.accounts.provider.to_account_info(),
+                },
+            ),
+            amount_in,
+            if base_to_quote {
+                ctx.accounts.base_mint.decimals
+            } else {
+                ctx.accounts.quote_mint.decimals
+            },
+        )?;
+
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: if base_to_quote {
+                        ctx.accounts.quote_vault.to_account_info()
+                    } else {
+                        ctx.accounts.base_vault.to_account_info()
+                    },
+                    mint: out_mint,
+                    to: out_to,
+                    authority: ctx.accounts.pool_authority.to_account_info(),
+                },
+                seeds,
+            ),
+            amount_out
+                .try_into()
+                .map_err(|_| error!(UnifuturesError::MathOverflow))?,
+            if base_to_quote {
+                ctx.accounts.quote_mint.decimals
+            } else {
+                ctx.accounts.base_mint.decimals
+            },
+        )?;
+
+        if base_to_quote {
+            p.base_reserve = p
+                .base_reserve
+                .checked_add(amount_in as u128)
+                .ok_or(error!(UnifuturesError::MathOverflow))?;
+            p.quote_reserve = p
+                .quote_reserve
+                .checked_sub(amount_out)
+                .ok_or(error!(UnifuturesError::MathOverflow))?;
+        } else {
+            p.quote_reserve = p
+                .quote_reserve
+                .checked_add(amount_in as u128)
+                .ok_or(error!(UnifuturesError::MathOverflow))?;
+            p.base_reserve = p
+                .base_reserve
+                .checked_sub(amount_out)
+                .ok_or(error!(UnifuturesError::MathOverflow))?;
+        }
+
+        emit!(LiquiditySwapped {
+            trust: p.trust,
+            pool_id: p.pool_id,
+            trader: ctx.accounts.provider.key(),
+            amount_in,
+            amount_out: amount_out
+                .try_into()
+                .map_err(|_| error!(UnifuturesError::MathOverflow))?,
+            base_to_quote,
+        });
+        Ok(())
+    }
+
+    /// Read-only quote for a pool swap.
+    pub fn quote_swap_exact_in(
+        ctx: Context<QuoteSwapExactIn>,
+        amount_in: u64,
+        base_to_quote: bool,
+    ) -> Result<u64> {
+        let p = &ctx.accounts.pool;
+        require!(amount_in > 0, UnifuturesError::ZeroAmount);
+        require!(p.total_shares > 0, UnifuturesError::InsufficientLiquidity);
+
+        let (reserve_in, reserve_out) = if base_to_quote {
+            (p.base_reserve, p.quote_reserve)
+        } else {
+            (p.quote_reserve, p.base_reserve)
+        };
+        let fee_factor = 10_000u128
+            .checked_sub(p.fee_bps as u128)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let effective_in = (amount_in as u128)
+            .checked_mul(fee_factor)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let numerator = effective_in
+            .checked_mul(reserve_out)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let denominator = reserve_in
+            .checked_mul(10_000)
+            .ok_or(error!(UnifuturesError::MathOverflow))?
+            .checked_add(effective_in)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        let amount_out = numerator
+            .checked_div(denominator)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        Ok(amount_out
+            .try_into()
+            .map_err(|_| error!(UnifuturesError::MathOverflow))?)
+    }
+}
+
+fn integer_sqrt(n: u128) -> u128 {
+    if n <= 1 {
+        return n;
+    }
+    let mut x0 = n / 2 + 1;
+    let mut x1 = (x0 + n / x0) / 2;
+    while x1 < x0 {
+        x0 = x1;
+        x1 = (x0 + n / x0) / 2;
+    }
+    x0
 }
 
 // -----------------------------------------------------------------------------
@@ -637,6 +1124,7 @@ pub struct UnifuturesModuleState {
     pub curve_count: u64,
     pub sale_count: u64,
     pub exit_count: u64,
+    pub pool_count: u64,
     pub bump: u8,
 }
 
@@ -707,6 +1195,32 @@ pub struct BondingCurve {
     pub bump: u8,
 }
 
+#[account]
+#[derive(InitSpace)]
+pub struct LiquidityPool {
+    pub trust: Pubkey,
+    pub pool_id: [u8; 32],
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
+    pub base_vault: Pubkey,
+    pub quote_vault: Pubkey,
+    pub total_shares: u128,
+    pub base_reserve: u128,
+    pub quote_reserve: u128,
+    pub fee_bps: u16,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LiquidityPosition {
+    pub trust: Pubkey,
+    pub pool_id: [u8; 32],
+    pub provider: Pubkey,
+    pub shares: u128,
+    pub bump: u8,
+}
+
 // -----------------------------------------------------------------------------
 // Account contexts
 // -----------------------------------------------------------------------------
@@ -755,6 +1269,128 @@ pub struct CreateCurve<'info> {
 #[derive(Accounts)]
 pub struct QuoteBuy<'info> {
     pub curve: Account<'info, BondingCurve>,
+}
+
+#[derive(Accounts)]
+#[instruction(pool_id: [u8; 32])]
+pub struct CreateLiquidityPool<'info> {
+    /// CHECK: trust pda
+    pub trust: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"unifutures_module", trust.key().as_ref()],
+        bump = module_state.bump,
+    )]
+    pub module_state: Account<'info, UnifuturesModuleState>,
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + LiquidityPool::INIT_SPACE,
+        seeds = [b"pool", trust.key().as_ref(), pool_id.as_ref()],
+        bump,
+    )]
+    pub pool: Account<'info, LiquidityPool>,
+    /// CHECK: PDA signer for pool vault transfers
+    #[account(seeds = [b"pool_authority", trust.key().as_ref(), pool_id.as_ref()], bump)]
+    pub pool_authority: UncheckedAccount<'info>,
+    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        constraint = base_vault.mint == base_mint.key() @ UnifuturesError::InvalidPoolMint,
+        constraint = base_vault.owner == pool_authority.key() @ UnifuturesError::InvalidPoolAuthority,
+    )]
+    pub base_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        constraint = quote_vault.mint == quote_mint.key() @ UnifuturesError::InvalidPoolMint,
+        constraint = quote_vault.owner == pool_authority.key() @ UnifuturesError::InvalidPoolAuthority,
+    )]
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub creator: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(base_amount: u64, quote_amount: u64)]
+pub struct AddLiquidity<'info> {
+    #[account(mut)]
+    pub pool: Account<'info, LiquidityPool>,
+    /// CHECK: PDA signer
+    #[account(seeds = [b"pool_authority", pool.trust.as_ref(), pool.pool_id.as_ref()], bump)]
+    pub pool_authority: UncheckedAccount<'info>,
+    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, constraint = base_vault.key() == pool.base_vault)]
+    pub base_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, constraint = quote_vault.key() == pool.quote_vault)]
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        payer = provider,
+        space = 8 + LiquidityPosition::INIT_SPACE,
+        seeds = [b"pool_position", pool.key().as_ref(), provider.key().as_ref()],
+        bump,
+    )]
+    pub position: Account<'info, LiquidityPosition>,
+    #[account(mut)]
+    pub provider: Signer<'info>,
+    #[account(mut, constraint = provider_base_ta.mint == base_mint.key())]
+    pub provider_base_ta: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, constraint = provider_quote_ta.mint == quote_mint.key())]
+    pub provider_quote_ta: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RemoveLiquidity<'info> {
+    #[account(mut)]
+    pub pool: Account<'info, LiquidityPool>,
+    /// CHECK: PDA signer
+    #[account(seeds = [b"pool_authority", pool.trust.as_ref(), pool.pool_id.as_ref()], bump)]
+    pub pool_authority: UncheckedAccount<'info>,
+    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, constraint = base_vault.key() == pool.base_vault)]
+    pub base_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, constraint = quote_vault.key() == pool.quote_vault)]
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, seeds = [b"pool_position", pool.key().as_ref(), provider.key().as_ref()], bump = position.bump)]
+    pub position: Account<'info, LiquidityPosition>,
+    #[account(mut)]
+    pub provider: Signer<'info>,
+    #[account(mut, constraint = provider_base_ta.mint == base_mint.key())]
+    pub provider_base_ta: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, constraint = provider_quote_ta.mint == quote_mint.key())]
+    pub provider_quote_ta: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct SwapExactIn<'info> {
+    #[account(mut)]
+    pub pool: Account<'info, LiquidityPool>,
+    /// CHECK: PDA signer
+    #[account(seeds = [b"pool_authority", pool.trust.as_ref(), pool.pool_id.as_ref()], bump)]
+    pub pool_authority: UncheckedAccount<'info>,
+    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, constraint = base_vault.key() == pool.base_vault)]
+    pub base_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, constraint = quote_vault.key() == pool.quote_vault)]
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub provider: Signer<'info>,
+    #[account(mut, constraint = provider_base_ta.mint == base_mint.key())]
+    pub provider_base_ta: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, constraint = provider_quote_ta.mint == quote_mint.key())]
+    pub provider_quote_ta: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct QuoteSwapExactIn<'info> {
+    pub pool: Account<'info, LiquidityPool>,
 }
 
 #[derive(Accounts)]
@@ -1058,6 +1694,45 @@ pub struct ProRataClaimed {
     pub share: u64,
 }
 
+#[event]
+pub struct LiquidityPoolCreated {
+    pub trust: Pubkey,
+    pub pool_id: [u8; 32],
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
+    pub fee_bps: u16,
+}
+
+#[event]
+pub struct LiquidityAdded {
+    pub trust: Pubkey,
+    pub pool_id: [u8; 32],
+    pub provider: Pubkey,
+    pub base_amount: u64,
+    pub quote_amount: u64,
+    pub shares: u128,
+}
+
+#[event]
+pub struct LiquidityRemoved {
+    pub trust: Pubkey,
+    pub pool_id: [u8; 32],
+    pub provider: Pubkey,
+    pub base_amount: u64,
+    pub quote_amount: u64,
+    pub shares: u128,
+}
+
+#[event]
+pub struct LiquiditySwapped {
+    pub trust: Pubkey,
+    pub pool_id: [u8; 32],
+    pub trader: Pubkey,
+    pub amount_in: u64,
+    pub amount_out: u64,
+    pub base_to_quote: bool,
+}
+
 #[error_code]
 pub enum UnifuturesError {
     #[msg("max_supply must be > 0")]
@@ -1102,4 +1777,22 @@ pub enum UnifuturesError {
     SaleNotCompleted,
     #[msg("commitment already claimed")]
     AlreadyClaimed,
+    #[msg("invalid liquidity pool fee bps")]
+    InvalidFeeBps,
+    #[msg("invalid liquidity pool pair")]
+    InvalidPoolPair,
+    #[msg("invalid liquidity pool mint")]
+    InvalidPoolMint,
+    #[msg("invalid liquidity pool authority")]
+    InvalidPoolAuthority,
+    #[msg("liquidity ratio is invalid for this pool")]
+    InvalidLiquidityRatio,
+    #[msg("no liquidity could be minted for this deposit")]
+    ZeroLiquidityMinted,
+    #[msg("liquidity pool is empty or too small")]
+    InsufficientLiquidity,
+    #[msg("provider does not have enough pool shares")]
+    InsufficientShares,
+    #[msg("zero liquidity shares requested")]
+    ZeroShares,
 }

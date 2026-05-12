@@ -1,10 +1,9 @@
 //! aeqi_token — cap-table token, SPL Token-2022 mint authority.
 //!
-//! Ports `modules/Token.module.sol`. Each TRUST gets one Token-2022 mint
-//! whose authority is a PDA of this program seeded
-//! `[b"token_authority", trust]`. Module finalize decodes
-//! `(name, symbol, decimals, max_supply, allocations[])` from
-//! TRUST `BytesConfig` slot `TOKEN_TRUST_CONFIG_KEY` and creates the mint +
+//! Each TRUST gets one Token-2022 mint whose authority is a PDA of this
+//! program seeded `[b"token_authority", trust]`. Module finalize decodes
+//! `(name, symbol, decimals, max_supply, allocations[])` from the trust's
+//! `BytesConfig` slot `TOKEN_TRUST_CONFIG_KEY` and creates the mint +
 //! initial allocation accounts.
 //!
 //! This iteration: `init` stores the TokenModuleState PDA. Mint creation via
@@ -23,8 +22,8 @@ pub const AEQI_TRUST_ID: Pubkey =
     anchor_lang::pubkey!("4CtmLZSLR3t1nKa3A2XD7F2awU5WajiNMxvHCiEDoBnD");
 
 /// Stable PDA-key suffix the factory writes the token's borsh-encoded
-/// `TokenInitConfig` blob under, in trust's BytesConfig slot. Each module
-/// owns a distinct prefix byte so config-bytes PDAs never collide.
+/// `TokenInitConfig` blob under, in the trust's BytesConfig slot. Each
+/// module owns a distinct prefix byte so config-bytes PDAs never collide.
 pub const TOKEN_CONFIG_KEY: [u8; 32] = {
     let mut k = [0u8; 32];
     k[0] = 1;
@@ -44,9 +43,7 @@ pub struct BytesConfigData {
 }
 
 /// Borsh-serialized config the factory writes to the trust BytesConfig slot
-/// at `TOKEN_CONFIG_KEY` before invoking `aeqi_token::finalize`. Mirrors the
-/// EVM `Token.module.finalizeModule` `abi.decode(getBytesConfig(KEY), ...)`
-/// dispatch pattern.
+/// at `TOKEN_CONFIG_KEY` before invoking `aeqi_token::finalize`.
 #[derive(AnchorDeserialize, AnchorSerialize)]
 pub struct TokenInitConfig {
     pub decimals: u8,
@@ -74,12 +71,10 @@ pub mod aeqi_token {
     }
 
     /// Module finalize — decodes the config bytes the factory wrote into the
-    /// trust's BytesConfig slot under `TOKEN_CONFIG_KEY`. Mirrors EVM
-    /// `Token.module.finalizeModule`'s
-    /// `abi.decode(getBytesConfig(TOKEN_TRUST_CONFIG), (decimals, maxSupply))`
-    /// step. Cross-program account read — the BytesConfig PDA's owner is
-    /// validated against AEQI_TRUST_ID, then the 8-byte discriminator is
-    /// skipped and the bytes are borsh-deserialized into the mirror struct.
+    /// trust's BytesConfig slot under `TOKEN_CONFIG_KEY`. Cross-program
+    /// account read — the BytesConfig PDA's owner is validated against
+    /// AEQI_TRUST_ID, then the 8-byte discriminator is skipped and the bytes
+    /// are borsh-deserialized into the mirror struct.
     pub fn finalize(ctx: Context<FinalizeToken>) -> Result<()> {
         let module = &mut ctx.accounts.module_state;
         require!(
@@ -126,10 +121,7 @@ pub mod aeqi_token {
             from: ctx.accounts.owner_ta.to_account_info(),
             authority: ctx.accounts.owner.to_account_info(),
         };
-        let cpi_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            cpi_accounts,
-        );
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
         burn(cpi_ctx, amount)?;
 
         emit!(TokensBurned {

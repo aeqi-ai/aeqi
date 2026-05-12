@@ -18,4 +18,6 @@ pub enum AeqiRoleError {
     CheckpointAfterQuery,
     #[msg("prev_checkpoint required when re-delegating away from a prior delegatee")]
     PrevCheckpointRequired,
+    #[msg("math overflow")]
+    MathOverflow,
 }

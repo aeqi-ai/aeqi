@@ -251,14 +251,12 @@ describe("aeqi_factory", () => {
   });
 
   it("create_company_full atomically spawns trust + registers + inits 3 modules in ONE tx", async () => {
-    // This is the EVM Factory._createTRUST shape — atomic orchestration.
-    // Currently 4 of the 5 EVM steps run in one tx:
+    // Atomic orchestration:
     //   1. trust.initialize
     //   2. trust.register_module ×3 (role / token / governance)
     //   3. each module's init (creates module-state PDA)
     //   4. trust.finalize
-    // Step 5 (each module's finalize with config bytes) lands when the
-    // BytesConfig dispatch flow ships.
+    //   5. each module's finalize with config bytes via BytesConfig dispatch
 
     const trustId = new Uint8Array(32);
     trustId[0] = 0x99;

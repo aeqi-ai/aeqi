@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "AEQI Unifutures — bonding curves, commitment sales, exits"
+description = "AEQI Unifutures — bonding curves, commitment sales, exits, liquidity pools"
 
 [lib]
 crate-type = ["cdylib", "lib"]

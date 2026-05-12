@@ -1,6 +1,6 @@
 //! aeqi_role — role DAG, role types, delegations, vote checkpoints.
 //!
-//! Ports `modules/Role.module.sol`. Roles form a parent-child DAG with
+//! Roles form a parent-child DAG with
 //! per-role-type hierarchy levels. Authority is computed by walking parent
 //! pointers — on Solana the walk is bounded and the off-chain client provides
 //! the path of parent role PDAs in `remaining_accounts` so each PDA is loaded
@@ -29,7 +29,7 @@ pub mod aeqi_role {
     use super::*;
 
     /// Module init — called by `aeqi_factory` during template instantiation.
-    /// Stores the parent TRUST and CPIs into `aeqi_trust::ack_module_init`.
+    /// Stores the parent TRUST and initializes the module state PDA.
     pub fn init(ctx: Context<InitModule>) -> Result<()> {
         let module = &mut ctx.accounts.module_state;
         module.trust = ctx.accounts.trust.key();
@@ -40,7 +40,7 @@ pub mod aeqi_role {
 
     /// Module finalize — borsh-deserializes the role-module config from the
     /// TRUST `BytesConfig` slot under `ROLE_CONFIG_KEY` and pre-creates any
-    /// role types declared at template time. Mirrors EVM `finalizeModule`.
+    /// role types declared at template time.
     pub fn finalize(_ctx: Context<FinalizeModule>) -> Result<()> {
         // Real impl: read trust BytesConfig at ROLE_CONFIG_KEY, borsh-decode
         // into Vec<RoleTypeInit>, create the RoleType PDAs declared at
@@ -48,8 +48,8 @@ pub mod aeqi_role {
         Ok(())
     }
 
-    /// Define a role type. Mirrors EVM `Role.module.createRoleType`.
-    /// Hierarchy lower number = higher authority (0 = founder/admin).
+    /// Define a role type. Lower hierarchy numbers mean higher authority
+    /// (0 = founder/admin).
     pub fn create_role_type(
         ctx: Context<CreateRoleType>,
         role_type_id: [u8; 32],
@@ -108,7 +108,7 @@ pub mod aeqi_role {
         role.bump = ctx.bumps.role;
 
         let rt = &mut ctx.accounts.role_type;
-        rt.role_count = rt.role_count.checked_add(1).unwrap();
+        bump_role_count(rt)?;
 
         emit!(RoleCreated {
             trust: role.trust,
@@ -120,7 +120,7 @@ pub mod aeqi_role {
     }
 
     /// Assign an account to a vacant role. Sets status = Occupied and
-    /// auto-self-delegates voting power. Mirrors EVM `assignToRole`.
+    /// auto-self-delegates voting power.
     pub fn assign_role(ctx: Context<AssignRole>, account: Pubkey) -> Result<()> {
         let role = &mut ctx.accounts.role;
         require!(
@@ -148,9 +148,8 @@ pub mod aeqi_role {
     }
 
     /// Resign from an Occupied role. Status → Resigned, decrement checkpoint
-    /// for the prior holder. Mirrors EVM `Role.module.resignRole`. The role
-    /// stays on-chain but is no longer Occupied; an authorized parent can
-    /// re-assign or remove it.
+    /// for the prior holder. The role stays on-chain but is no longer
+    /// Occupied; an authorized parent can re-assign or remove it.
     pub fn resign_role(ctx: Context<ResignRole>) -> Result<()> {
         let role = &mut ctx.accounts.role;
         require!(
@@ -185,7 +184,7 @@ pub mod aeqi_role {
 
     /// Transfer an Occupied role from the current holder to a new account.
     /// Decrements the prior holder's checkpoint, increments the new holder's
-    /// checkpoint. Mirrors EVM `Role.module.transferRole`.
+    /// checkpoint.
     pub fn transfer_role(ctx: Context<TransferRole>, new_account: Pubkey) -> Result<()> {
         let role = &mut ctx.accounts.role;
         require!(
@@ -252,12 +251,7 @@ pub mod aeqi_role {
                 .prev_checkpoint
                 .as_mut()
                 .ok_or(AeqiRoleError::PrevCheckpointRequired)?;
-            bump_checkpoint(
-                prev_ckpt,
-                prev,
-                ctx.accounts.role_type.role_type_id,
-                -1,
-            )?;
+            bump_checkpoint(prev_ckpt, prev, ctx.accounts.role_type.role_type_id, -1)?;
         }
         bump_checkpoint(
             &mut ctx.accounts.new_checkpoint,
@@ -279,15 +273,9 @@ pub mod aeqi_role {
     /// `role_type` at the given slot. Used by `aeqi_governance` at vote-cast
     /// time. The client passes the most-recent checkpoint with `slot <=
     /// query_slot`; the program verifies its `slot` field is correct.
-    pub fn get_past_role_votes(
-        ctx: Context<GetPastRoleVotes>,
-        query_slot: u64,
-    ) -> Result<u64> {
+    pub fn get_past_role_votes(ctx: Context<GetPastRoleVotes>, query_slot: u64) -> Result<u64> {
         let ckpt = &ctx.accounts.checkpoint;
-        require!(
-            ckpt.slot <= query_slot,
-            AeqiRoleError::CheckpointAfterQuery
-        );
+        require!(ckpt.slot <= query_slot, AeqiRoleError::CheckpointAfterQuery);
         Ok(ckpt.count)
     }
 }
@@ -309,8 +297,8 @@ fn check_authority_walk<'info>(
     }
     let mut expected_id = *target_role_id;
     for (i, acc) in remaining.iter().take(MAX_AUTHORITY_WALK).enumerate() {
-        let role: Account<Role> = Account::try_from(acc)
-            .map_err(|_| AeqiRoleError::InvalidAuthorityWalk)?;
+        let role: Account<Role> =
+            Account::try_from(acc).map_err(|_| AeqiRoleError::InvalidAuthorityWalk)?;
         require!(
             role.trust == caller_role.trust,
             AeqiRoleError::InvalidAuthorityWalk
@@ -344,10 +332,24 @@ fn bump_checkpoint(
     ckpt.role_type_id = role_type_id;
     ckpt.slot = Clock::get()?.slot;
     if delta >= 0 {
-        ckpt.count = ckpt.count.checked_add(delta as u64).unwrap();
+        ckpt.count = ckpt
+            .count
+            .checked_add(delta as u64)
+            .ok_or(error!(AeqiRoleError::MathOverflow))?;
     } else {
-        ckpt.count = ckpt.count.checked_sub((-delta) as u64).unwrap();
+        ckpt.count = ckpt
+            .count
+            .checked_sub((-delta) as u64)
+            .ok_or(error!(AeqiRoleError::MathOverflow))?;
     }
+    Ok(())
+}
+
+fn bump_role_count(role_type: &mut Account<RoleType>) -> Result<()> {
+    role_type.role_count = role_type
+        .role_count
+        .checked_add(1)
+        .ok_or(error!(AeqiRoleError::MathOverflow))?;
     Ok(())
 }
 

@@ -1,15 +1,9 @@
 //! aeqi_trust — core protocol program.
 //!
-//! Ports `core/TRUST.sol` from the EVM framework. The TRUST PDA is the canonical
-//! identity + module registry + config store + authority gate for an AEQI
-//! company. Every module program CPIs into this program to verify its caller
-//! holds the right ACL bit and to read its config.
-//!
-//! Equivalent EVM concepts:
-//! - SlotArrays storage versioning   → automatic via PDA seeds
-//! - Beacon multi-source delegation  → per-Trust `Module.program_id` field
-//! - Two-phase init                  → `creation_mode` flag flipped by `finalize`
-//! - Bit-flag ACLs                   → unchanged: `u64` with `(acl >> flag) & 1`
+//! The TRUST PDA is the authority root for an AEQI organization.
+//! It owns the module registry and config store. Creation mode is the only
+//! phase where the authority can register modules; once finalized, the trust
+//! becomes live and config writes remain authority-gated in this iteration.
 
 use anchor_lang::prelude::*;
 
@@ -47,10 +41,8 @@ pub mod aeqi_trust {
     }
 
     /// Register a module program against this TRUST. Stores the module's
-    /// program ID + initial ACL bit-flags. Mirrors EVM `Factory._createModules`
-    /// + `TRUST.replaceModule`. Restricted to the TRUST authority during
-    /// creation mode; afterwards requires the caller to hold the
-    /// `REPLACE_MODULE` flag.
+    /// program ID + initial ACL bit-flags. This is creation-mode only; live
+    /// module replacement is not enabled in this iteration.
     pub fn register_module(
         ctx: Context<RegisterModule>,
         module_id: [u8; 32],
@@ -60,13 +52,7 @@ pub mod aeqi_trust {
         let trust = &mut ctx.accounts.trust;
         require!(!trust.paused, AeqiTrustError::TrustPaused);
 
-        if !trust.creation_mode {
-            // Live mode: caller must be a module that holds REPLACE_MODULE.
-            return err!(AeqiTrustError::NotInCreationMode);
-            // (Live-mode module-driven module replacement is implemented in a
-            // follow-up ix that takes the calling module PDA as a signer; see
-            // `replace_module` below.)
-        }
+        require!(trust.creation_mode, AeqiTrustError::NotInCreationMode);
         require_keys_eq!(
             ctx.accounts.authority.key(),
             trust.authority,
@@ -81,7 +67,7 @@ pub mod aeqi_trust {
         module.initialized = ModuleInitState::Pending as u8;
         module.bump = ctx.bumps.module;
 
-        trust.module_count = trust.module_count.checked_add(1).unwrap();
+        bump_module_count(trust)?;
 
         emit!(ModuleRegistered {
             trust: trust.key(),
@@ -92,9 +78,8 @@ pub mod aeqi_trust {
         Ok(())
     }
 
-    /// Set the ACL bitmask between two modules — mirrors
-    /// `TRUST.setAclBetweenModules`. Used by Factory after all modules are
-    /// deployed but before finalize, to wire cross-module permissions.
+    /// Set the ACL bitmask between two modules. Authority-only in this
+    /// iteration; live module-signed ACL mutation is not enabled yet.
     pub fn set_module_acl(
         ctx: Context<SetModuleAcl>,
         target_module_id: [u8; 32],
@@ -103,8 +88,6 @@ pub mod aeqi_trust {
         let trust = &ctx.accounts.trust;
         require!(!trust.paused, AeqiTrustError::TrustPaused);
 
-        // MVP hardening: live module-signed ACL mutation is intentionally
-        // closed until the module signer model is implemented end-to-end.
         require_keys_eq!(
             ctx.accounts.authority.key(),
             trust.authority,
@@ -127,43 +110,7 @@ pub mod aeqi_trust {
         Ok(())
     }
 
-    /// Mark that a module program has completed its `init` step. Called by the
-    /// module program itself via CPI immediately after the module PDA is
-    /// created. Equivalent to EVM `IModule.initializeModule(trust)`.
-    pub fn ack_module_init(ctx: Context<AckModuleInit>) -> Result<()> {
-        let module = &mut ctx.accounts.module;
-        require_keys_eq!(
-            ctx.accounts.module_signer.key(),
-            module.program_id,
-            AeqiTrustError::Unauthorized
-        );
-        require!(
-            module.initialized == ModuleInitState::Pending as u8,
-            AeqiTrustError::ModuleAlreadyInitialized
-        );
-        module.initialized = ModuleInitState::Initialized as u8;
-        Ok(())
-    }
-
-    /// Mark that a module program has completed its `finalize` step. Called by
-    /// the module program itself via CPI after it has decoded its config.
-    /// Equivalent to EVM `IModule.finalizeModule()`.
-    pub fn ack_module_finalize(ctx: Context<AckModuleFinalize>) -> Result<()> {
-        let module = &mut ctx.accounts.module;
-        require_keys_eq!(
-            ctx.accounts.module_signer.key(),
-            module.program_id,
-            AeqiTrustError::Unauthorized
-        );
-        require!(
-            module.initialized == ModuleInitState::Initialized as u8,
-            AeqiTrustError::ModuleNotInitialized
-        );
-        module.initialized = ModuleInitState::Finalized as u8;
-        Ok(())
-    }
-
-    /// Exit creation mode — ACL checks become live. Mirrors EVM `TRUST.finalize`.
+    /// Exit creation mode — ACL checks become live.
     pub fn finalize(ctx: Context<Finalize>) -> Result<()> {
         let trust = &mut ctx.accounts.trust;
         require_keys_eq!(
@@ -180,17 +127,13 @@ pub mod aeqi_trust {
         Ok(())
     }
 
-    /// Set a numeric config slot (u128). Used by both factory (during creation
-    /// mode) and modules (in live mode, gated by SET_NUMERIC_CONFIG).
+    /// Set a numeric config slot (u128). Authority-only in this iteration.
     pub fn set_numeric_config(
         ctx: Context<SetNumericConfig>,
         key: [u8; 32],
         value: u128,
     ) -> Result<()> {
-        gate_config_write(
-            &ctx.accounts.trust,
-            ctx.accounts.authority.key(),
-        )?;
+        gate_config_write(&ctx.accounts.trust, ctx.accounts.authority.key())?;
         let cfg = &mut ctx.accounts.config;
         cfg.trust = ctx.accounts.trust.key();
         cfg.key = key;
@@ -199,16 +142,13 @@ pub mod aeqi_trust {
         Ok(())
     }
 
-    /// Set an address config slot (Pubkey).
+    /// Set an address config slot (Pubkey). Authority-only in this iteration.
     pub fn set_address_config(
         ctx: Context<SetAddressConfig>,
         key: [u8; 32],
         value: Pubkey,
     ) -> Result<()> {
-        gate_config_write(
-            &ctx.accounts.trust,
-            ctx.accounts.authority.key(),
-        )?;
+        gate_config_write(&ctx.accounts.trust, ctx.accounts.authority.key())?;
         let cfg = &mut ctx.accounts.config;
         cfg.trust = ctx.accounts.trust.key();
         cfg.key = key;
@@ -217,19 +157,17 @@ pub mod aeqi_trust {
         Ok(())
     }
 
-    /// Set a bytes config slot (Vec<u8>). Modules read these in `finalize`
-    /// to decode their borsh-serialized config (analog of EVM
-    /// `abi.decode(getBytesConfig(KEY), (T1, T2, T3))`).
+    /// Set a bytes config slot (Vec<u8>). Authority-only in this iteration.
     pub fn set_bytes_config(
         ctx: Context<SetBytesConfig>,
         key: [u8; 32],
         value: Vec<u8>,
     ) -> Result<()> {
-        require!(value.len() <= MAX_BYTES_CONFIG, AeqiTrustError::ConfigTooLarge);
-        gate_config_write(
-            &ctx.accounts.trust,
-            ctx.accounts.authority.key(),
-        )?;
+        require!(
+            value.len() <= MAX_BYTES_CONFIG,
+            AeqiTrustError::ConfigTooLarge
+        );
+        gate_config_write(&ctx.accounts.trust, ctx.accounts.authority.key())?;
         let cfg = &mut ctx.accounts.config;
         cfg.trust = ctx.accounts.trust.key();
         cfg.key = key;
@@ -259,15 +197,19 @@ pub mod aeqi_trust {
 // Helpers
 // -----------------------------------------------------------------------------
 
-/// Gate logic shared by every config-write ix. During creation mode the TRUST
-/// authority signs directly. In live mode, the caller must be a module PDA
-/// holding the appropriate flag in its `trust_acl`.
-fn gate_config_write(
-    trust: &Account<Trust>,
-    signer: Pubkey,
-) -> Result<()> {
+/// Gate logic shared by every config-write ix. Config mutation is authority-only
+/// in this iteration.
+fn gate_config_write(trust: &Account<Trust>, signer: Pubkey) -> Result<()> {
     require!(!trust.paused, AeqiTrustError::TrustPaused);
     require_keys_eq!(signer, trust.authority, AeqiTrustError::Unauthorized);
+    Ok(())
+}
+
+fn bump_module_count(trust: &mut Account<Trust>) -> Result<()> {
+    trust.module_count = trust
+        .module_count
+        .checked_add(1)
+        .ok_or(error!(AeqiTrustError::MathOverflow))?;
     Ok(())
 }
 
@@ -342,25 +284,6 @@ pub struct SetModuleAcl<'info> {
 }
 
 #[derive(Accounts)]
-pub struct AckModuleInit<'info> {
-    #[account(mut, has_one = trust)]
-    pub module: Account<'info, Module>,
-    pub trust: Account<'info, Trust>,
-    /// CHECK: program-derived signer for the module program; equality with
-    /// `module.program_id` is enforced inside the handler.
-    pub module_signer: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct AckModuleFinalize<'info> {
-    #[account(mut, has_one = trust)]
-    pub module: Account<'info, Module>,
-    pub trust: Account<'info, Trust>,
-    /// CHECK: enforced in handler via key equality.
-    pub module_signer: Signer<'info>,
-}
-
-#[derive(Accounts)]
 pub struct Finalize<'info> {
     #[account(
         mut,
@@ -387,7 +310,7 @@ pub struct SetNumericConfig<'info> {
         bump,
     )]
     pub config: Account<'info, NumericConfig>,
-    /// Optional: the calling module PDA, present only in live mode.
+    /// Reserved for future live-mode module-auth wiring.
     pub source_module: Option<Account<'info, Module>>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -410,6 +333,7 @@ pub struct SetAddressConfig<'info> {
         bump,
     )]
     pub config: Account<'info, AddressConfig>,
+    /// Reserved for future live-mode module-auth wiring.
     pub source_module: Option<Account<'info, Module>>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -432,6 +356,7 @@ pub struct SetBytesConfig<'info> {
         bump,
     )]
     pub config: Account<'info, BytesConfig>,
+    /// Reserved for future live-mode module-auth wiring.
     pub source_module: Option<Account<'info, Module>>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -446,6 +371,7 @@ pub struct SetPaused<'info> {
         bump = trust.bump,
     )]
     pub trust: Account<'info, Trust>,
+    /// Reserved for future live-mode module-auth wiring.
     pub source_module: Option<Account<'info, Module>>,
     pub authority: Signer<'info>,
 }

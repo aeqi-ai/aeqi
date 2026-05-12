@@ -1,12 +1,12 @@
 # aeqi-solana
 
-The on-chain protocol for AEQI on Solana. Replaces the EVM-Base stack at `aeqi-core/` (Solidity).
+The on-chain protocol for AEQI on Solana. Canonical Solana implementation of the AEQI trust, factory, module, and capital stack.
 
-> **Decision: 2026-05-07.** Full rewrite, EVM-Base canonical → Solana canonical. Single coherent chain, no L1/L2 fragmentation tax, native fee payer, native session keys, secp256r1 passkey precompile. AEQI becomes the standard primitive on Solana — not a thin layer over Squads/Realms.
+> **Decision: 2026-05-07.** Full rewrite, EVM-Base canonical → Solana canonical. Single coherent chain, no L1/L2 fragmentation tax, native fee payer, native session keys, secp256r1 passkey precompile. AEQI becomes the standard primitive on Solana.
 
 ## Architecture
 
-Modular DAO framework, ported faithfully from the Solidity design at `~/projects/aeqi-core/contracts/`.
+Solana-native modular DAO framework. The EVM system at `~/projects/aeqi-core/contracts/` is the semantic reference, but the implementation here is native to Solana.
 
 ### Programs
 
@@ -17,7 +17,7 @@ Modular DAO framework, ported faithfully from the Solidity design at `~/projects
 | `aeqi_role` | `modules/Role.module.sol` | Role DAG (parent walk), role types, delegations, vote checkpoints |
 | `aeqi_governance` | `modules/Governance.module.sol` | Proposals, voting — token-weighted + per-role-multisig modes |
 | `aeqi_token` | `modules/Token.module.sol` | Cap-table SPL Token-2022 mint authority + allocations |
-| `aeqi_unifutures` | `modules/Unifutures.module.sol` | Bonding curve / commitment sale / exit primitives |
+| `aeqi_unifutures` | `modules/Unifutures.module.sol` | Bonding curve / commitment sale / exit / liquidity pool primitives |
 | `aeqi_fund` | `modules/Fund.module.sol` | NAV-based fund accounting, LP shares, carry |
 | `aeqi_funding` | `modules/Funding.module.sol` | Capital raise orchestration via Unifutures |
 | `aeqi_budget` | `modules/Budget.module.sol` | Hierarchical treasury allocations per role |

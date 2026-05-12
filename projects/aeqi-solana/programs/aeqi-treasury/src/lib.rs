@@ -1,7 +1,6 @@
 //! aeqi_treasury — USDC vault for an AEQI company.
 //!
-//! Ports `modules/Fund.module.sol` + treasury bits of the EVM framework. A
-//! treasury holds USDC (or other SPL tokens) in a program-controlled vault
+//! A treasury holds USDC (or other SPL tokens) in a program-controlled vault
 //! ATA. Deposits are permissionless. Withdrawals are gated by either the
 //! TRUST authority (creation mode) or a successful governance proposal CPI
 //! (live mode) — for now this skeleton accepts the trust authority signing
@@ -71,11 +70,8 @@ pub mod aeqi_treasury {
             to: ctx.accounts.recipient_ta.to_account_info(),
             authority: ctx.accounts.vault_authority.to_account_info(),
         };
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            cpi,
-            seeds,
-        );
+        let cpi_ctx =
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi, seeds);
         transfer_checked(cpi_ctx, amount, ctx.accounts.mint.decimals)?;
 
         emit!(TreasuryWithdrew {

@@ -13,9 +13,9 @@ pub struct Trust {
 }
 
 /// Per-module record under a TRUST. PDA seeded
-/// `[b"module", trust, module_id]`. Holds the program ID that implements this
-/// module slot (the Solana equivalent of EVM beacon-proxy implementation
-/// pointers) and the bit-flag ACL for module → TRUST permissions.
+/// `[b"module", trust, module_id]`. Holds the program ID that currently
+/// implements this module slot and the bit-flag ACL for module → TRUST
+/// permissions.
 #[account]
 #[derive(InitSpace)]
 pub struct Module {
@@ -35,9 +35,7 @@ pub enum ModuleInitState {
 }
 
 /// Edge in the inter-module ACL graph. PDA seeded
-/// `[b"acl_edge", trust, source_module_id, target_module_id]`. Mirrors the EVM
-/// `Module.moduleAcls` mapping but keyed on module IDs rather than addresses
-/// so the edge survives module program-id swaps.
+/// `[b"acl_edge", trust, source_module_id, target_module_id]`.
 #[account]
 #[derive(InitSpace)]
 pub struct ModuleAclEdge {

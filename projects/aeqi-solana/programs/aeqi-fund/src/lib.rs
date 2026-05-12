@@ -1,8 +1,8 @@
 //! aeqi_fund — NAV-based fund accounting, LP shares, deposits, redeems.
 //!
-//! Ports `modules/Fund.module.sol`. Each Fund accepts deposits in a quote
-//! asset (USDC), issues LP shares (1:1 at first deposit, NAV-based after),
-//! and tracks gross NAV across positions for redemption pricing.
+//! Each Fund accepts deposits in a quote asset (USDC), issues LP shares
+//! (1:1 at first deposit, NAV-based after), and tracks gross NAV across
+//! positions for redemption pricing.
 //!
 //! Skeleton scope (this iteration):
 //! - Fund + LpShare PDAs
@@ -11,7 +11,7 @@
 //!   to current NAV — at first deposit, share_price = 1)
 //! - redeem (LP burns shares, receives quote pro-rata to current NAV)
 //!
-//! Full EVM Fund.module features still pending in subsequent iterations:
+//! Full Fund-module features still pending in subsequent iterations:
 //! - NAV-batch processing (`_processNAVAndCarryBatched`)
 //! - Position-manager `markPosition()` CPI iteration
 //! - Carry calculation on outperformance vs high-water mark
@@ -42,11 +42,7 @@ pub mod aeqi_fund {
     /// Create a fund. The manager defines the quote_mint (USDC etc.). The
     /// fund starts with NAV=0, total_shares=0; share price is 1:1 at first
     /// deposit and adjusts based on NAV thereafter.
-    pub fn create_fund(
-        ctx: Context<CreateFund>,
-        fund_id: [u8; 32],
-        carry_bps: u16,
-    ) -> Result<()> {
+    pub fn create_fund(ctx: Context<CreateFund>, fund_id: [u8; 32], carry_bps: u16) -> Result<()> {
         require!(carry_bps <= 10_000, FundError::InvalidBps);
         let f = &mut ctx.accounts.fund;
         f.trust = ctx.accounts.trust.key();
@@ -139,11 +135,7 @@ pub mod aeqi_fund {
     /// vault valuation, not LP-attributable. Carry is split off here.
     pub fn update_nav(ctx: Context<UpdateNav>, new_gross_nav: u64) -> Result<()> {
         let f = &mut ctx.accounts.fund;
-        require_keys_eq!(
-            ctx.accounts.manager.key(),
-            f.manager,
-            FundError::NotManager
-        );
+        require_keys_eq!(ctx.accounts.manager.key(), f.manager, FundError::NotManager);
 
         // Subtract already-accrued carry so we're working in LP terms.
         let lp_nav = new_gross_nav
@@ -181,11 +173,7 @@ pub mod aeqi_fund {
     /// `accrued_carry` to zero. Vault → manager TA, PDA-signed.
     pub fn claim_carry(ctx: Context<ClaimCarry>) -> Result<()> {
         let f = &mut ctx.accounts.fund;
-        require_keys_eq!(
-            ctx.accounts.manager.key(),
-            f.manager,
-            FundError::NotManager
-        );
+        require_keys_eq!(ctx.accounts.manager.key(), f.manager, FundError::NotManager);
         let carry = f.accrued_carry;
         require!(carry > 0, FundError::NoCarry);
 
@@ -205,11 +193,7 @@ pub mod aeqi_fund {
             authority: ctx.accounts.fund_authority.to_account_info(),
         };
         transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                cpi,
-                seeds,
-            ),
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi, seeds),
             carry,
             ctx.accounts.quote_mint.decimals,
         )?;
@@ -233,11 +217,7 @@ pub mod aeqi_fund {
         require!(f.total_shares > 0, FundError::EmptyFund);
 
         let s = &mut ctx.accounts.lp_share;
-        require_keys_eq!(
-            ctx.accounts.lp.key(),
-            s.lp,
-            FundError::Unauthorized
-        );
+        require_keys_eq!(ctx.accounts.lp.key(), s.lp, FundError::Unauthorized);
         require!(shares <= s.shares, FundError::InsufficientShares);
 
         let quote_out_u128 = (shares as u128)
@@ -267,11 +247,7 @@ pub mod aeqi_fund {
             authority: ctx.accounts.fund_authority.to_account_info(),
         };
         transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                cpi,
-                seeds,
-            ),
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi, seeds),
             quote_out,
             ctx.accounts.quote_mint.decimals,
         )?;

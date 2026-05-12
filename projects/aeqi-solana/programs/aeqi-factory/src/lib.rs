@@ -1,32 +1,32 @@
 //! aeqi_factory — on-chain DAO factory.
 //!
-//! Ports `core/Factory.sol`. Template registry + instantiate flow. The
-//! canonical create flow mirrors EVM `_createTRUST`:
+//! Template registry + trust instantiation flow.
 //!
-//! 1. Create the TRUST PDA (CPI into `aeqi_trust::initialize`).
-//! 2. For each module in the template, register it on TRUST + CPI the module
-//!    program's `init`.
+//! The canonical create flow is:
+//!
+//! 1. Create the TRUST PDA.
+//! 2. Register every module declared by the template.
 //! 3. Wire ACL edges between modules.
-//! 4. CPI each module's `finalize` so it loads its config.
-//! 5. CPI `aeqi_trust::finalize` to exit creation mode.
+//! 4. Finalize each module so it loads its config.
+//! 5. Finalize TRUST to exit creation mode.
 //!
-//! `create_company` ships step 1 as a standalone helper (proves CPI). The
-//! full template-driven instantiate is the staged pipeline above; templates
-//! land on-chain via `register_template` and get replayed by
-//! `instantiate_template` in the next iteration.
+//! `create_company` ships step 1 as a standalone helper. The full template
+//! pipeline is `instantiate_template`: templates land on-chain via
+//! `register_template` and are replayed against a fresh TRUST by the next
+//! provisioning step.
 
-use anchor_lang::prelude::*;
-use aeqi_trust::cpi::accounts::{
-    Finalize as TrustFinalize, Initialize as TrustInitialize, RegisterModule as TrustRegisterModule,
-    SetBytesConfig as TrustSetBytesConfig,
-};
-use aeqi_trust::program::AeqiTrust;
+use aeqi_governance::cpi::accounts::{FinalizeGovernance, InitGovernance};
+use aeqi_governance::program::AeqiGovernance;
 use aeqi_role::cpi::accounts::{FinalizeModule as RoleFinalize, InitModule as RoleInit};
 use aeqi_role::program::AeqiRole;
 use aeqi_token::cpi::accounts::{FinalizeToken, InitToken};
 use aeqi_token::program::AeqiToken;
-use aeqi_governance::cpi::accounts::{FinalizeGovernance, InitGovernance};
-use aeqi_governance::program::AeqiGovernance;
+use aeqi_trust::cpi::accounts::{
+    Finalize as TrustFinalize, Initialize as TrustInitialize,
+    RegisterModule as TrustRegisterModule, SetBytesConfig as TrustSetBytesConfig,
+};
+use aeqi_trust::program::AeqiTrust;
+use anchor_lang::prelude::*;
 
 declare_id!("4VvrC3pQ2hTUNJ7i5TnYzr9xnAU2P6T5ULwbbZnJES4T");
 
@@ -39,14 +39,17 @@ pub mod aeqi_factory {
 
     /// Skeleton create flow — initializes a fresh TRUST PDA via CPI into
     /// `aeqi_trust::initialize`. The caller becomes the trust authority.
-    /// Module registration / finalize / etc. follow in `instantiate_template`.
+    /// Module registration and finalization follow in `instantiate_template`.
     pub fn create_company(ctx: Context<CreateCompany>, trust_id: [u8; 32]) -> Result<()> {
         let cpi_accounts = TrustInitialize {
             trust: ctx.accounts.trust.to_account_info(),
             authority: ctx.accounts.authority.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
         };
-        let cpi_ctx = CpiContext::new(ctx.accounts.aeqi_trust_program.to_account_info(), cpi_accounts);
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.aeqi_trust_program.to_account_info(),
+            cpi_accounts,
+        );
         aeqi_trust::cpi::initialize(cpi_ctx, trust_id)?;
 
         emit!(CompanyCreated {
@@ -58,8 +61,7 @@ pub mod aeqi_factory {
     }
 
     /// Atomic spawn — full company creation flow in one tx, skipping module
-    /// init/finalize CPIs (those land once each module program implements
-    /// its `init` cleanly). Steps:
+    /// init/finalize CPIs. Steps:
     ///
     ///   1. CPI `aeqi_trust::initialize` (creates Trust PDA in creation mode).
     ///   2. For each `ModuleSpec` in `modules`, CPI `aeqi_trust::register_module`.
@@ -67,8 +69,8 @@ pub mod aeqi_factory {
     ///      grouped pairwise as (module_pda, system_program) per module.
     ///   3. CPI `aeqi_trust::finalize` (exits creation mode).
     ///
-    /// `remaining_accounts` layout: for each module spec, push:
-    ///   - the module PDA (writable, will be init'd by aeqi_trust)
+    /// `remaining_accounts` layout: for each module spec, push the module PDA
+    /// (writable, will be initialized by `aeqi_trust`).
     ///
     /// The caller (the `authority`) signs all CPIs as the trust authority.
     pub fn create_with_modules<'info>(
@@ -135,9 +137,8 @@ pub mod aeqi_factory {
         Ok(())
     }
 
-    /// Full atomic spawn — closes the gap where the EVM Factory orchestrates
-    /// everything in one tx. Runs all 5 steps of `Factory._createTRUST`
-    /// for the canonical 3-module configuration (role + token + governance):
+    /// Full atomic spawn — runs the canonical 3-module configuration
+    /// (role + token + governance) in one tx:
     ///
     ///   1. CPI `aeqi_trust::initialize` (creates trust PDA, creation mode)
     ///   2. CPI `aeqi_trust::register_module` ×3 (one per module slot)
@@ -145,7 +146,7 @@ pub mod aeqi_factory {
     ///      to the trust)
     ///   4. CPI `aeqi_trust::finalize` (exits creation mode)
     ///
-    /// Module finalize CPIs (config-bytes decode) are NOT yet called here —
+    /// Module finalize CPIs (config-bytes decode) are NOT yet called here;
     /// that requires the BytesConfig dispatch flow which follows.
     /// Tx size: ~13 accounts; should fit comfortably in 1232 bytes.
     pub fn create_company_full(
@@ -245,8 +246,7 @@ pub mod aeqi_factory {
         ))?;
 
         // 3a. Write the per-module config blobs to TRUST's BytesConfig PDAs
-        // before each module finalize reads them. Mirrors EVM
-        // `Factory._createTRUST`'s pre-finalize setBytesConfig sweep.
+        // before each module finalize reads them.
         let token_init_cfg = aeqi_token::TokenInitConfig {
             decimals: token_decimals,
             max_supply_cap: token_max_supply_cap,
@@ -311,7 +311,6 @@ pub mod aeqi_factory {
 
     /// Register a template — stores the module set, ACL graph, and admin so
     /// `instantiate_template` can later replay this against a fresh TRUST.
-    /// Mirrors EVM `Factory.registerTemplate` + `FactoryLibrary.Template`.
     pub fn register_template(
         ctx: Context<RegisterTemplate>,
         template_id: [u8; 32],
@@ -339,8 +338,7 @@ pub mod aeqi_factory {
     }
 
     /// Full template-driven create flow: reads a registered Template PDA and
-    /// replays its module set against a fresh TRUST. Mirrors EVM
-    /// `Factory._createTRUST` reading from `Factory.templates[templateId]`.
+    /// replays its module set against a fresh TRUST.
     ///
     /// `remaining_accounts` layout: one Module PDA per module in the
     /// template, in declaration order. The aeqi_trust program will init them
@@ -358,10 +356,7 @@ pub mod aeqi_factory {
         trust_id: [u8; 32],
     ) -> Result<()> {
         let template = &ctx.accounts.template;
-        require!(
-            !template.modules.is_empty(),
-            FactoryError::EmptyModuleSet
-        );
+        require!(!template.modules.is_empty(), FactoryError::EmptyModuleSet);
         require!(
             ctx.remaining_accounts.len() == template.modules.len(),
             FactoryError::ModuleAccountCountMismatch

@@ -1,6 +1,6 @@
 //! aeqi_budget — role-bound treasury allocations + spend tracking.
 //!
-//! Ports `modules/Budget.module.sol`. Each Budget allocates an `amount` to a
+//! Each budget allocates an `amount` to a
 //! `target_role_id`; spends decrement the budget's `spent` counter against
 //! the cap. Budgets can be frozen/unfrozen by their grantor, and have an
 //! optional expiry. Authorization to spend is gated by role authority —
@@ -30,8 +30,8 @@ pub mod aeqi_budget {
 
     /// Create a budget allocation for a role. The grantor (typically a
     /// treasury authority or governance signer) signs to lock the
-    /// allocation. Budget can be sourced from TRUST (no parent) or
-    /// from a parent budget (which the grantor must control).
+    /// allocation. A budget can be sourced from TRUST (no parent) or from
+    /// a parent budget (which the grantor must control).
     pub fn create_budget(
         ctx: Context<CreateBudget>,
         budget_id: [u8; 32],
@@ -82,7 +82,10 @@ pub mod aeqi_budget {
             let now = Clock::get()?.unix_timestamp;
             require!(now < b.expiry, BudgetError::BudgetExpired);
         }
-        let new_spent = b.spent.checked_add(amount).ok_or(error!(BudgetError::MathOverflow))?;
+        let new_spent = b
+            .spent
+            .checked_add(amount)
+            .ok_or(error!(BudgetError::MathOverflow))?;
         require!(new_spent <= b.amount, BudgetError::ExceedsAllocation);
         b.spent = new_spent;
 

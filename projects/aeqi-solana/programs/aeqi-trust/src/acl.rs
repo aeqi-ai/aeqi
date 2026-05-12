@@ -1,7 +1,6 @@
-//! Bit-flag access control. Direct port of EVM
-//! `core/libraries/AclLibrary.sol`. Each module's `trust_acl: u64` carries
-//! one bit per `AclFlag`; `has_acl(acl, flag)` does the same `(acl >> flag) & 1`
-//! check the EVM `_hasPermission` helper does.
+//! Bit-flag access control for trust permissions. Each module's
+//! `trust_acl: u64` carries one bit per `AclFlag`; `has_acl(acl, flag)` checks
+//! the matching bit.
 
 #[repr(u8)]
 #[derive(Clone, Copy)]
@@ -59,11 +58,7 @@ mod tests {
         let acl = add_acl(0, AclFlag::ResetModules);
         assert!(has_acl(acl, AclFlag::ResetModules));
         // Bit 13 should NOT trigger any earlier flags.
-        for f in [
-            AclFlag::SetNumericConfig,
-            AclFlag::Execute,
-            AclFlag::Pause,
-        ] {
+        for f in [AclFlag::SetNumericConfig, AclFlag::Execute, AclFlag::Pause] {
             assert!(!has_acl(acl, f));
         }
     }

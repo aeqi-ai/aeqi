@@ -1,7 +1,6 @@
 //! aeqi_governance — proposal lifecycle + voting.
 //!
-//! Ports `modules/Governance.module.sol`. Two voting modes selected per
-//! proposal via `governance_config_id`:
+//! Two voting modes selected per proposal via `governance_config_id`:
 //!
 //! - `governance_config_id == [0u8; 32]` → token-weighted voting (CPI into
 //!   `aeqi_token` for vote power at proposal start slot).
@@ -62,7 +61,6 @@ pub mod aeqi_governance {
     }
 
     /// Register a governance config (one per voting mode the trust supports).
-    /// Mirrors EVM `Governance.module.registerGovernanceConfig`.
     pub fn register_config(
         ctx: Context<RegisterConfig>,
         governance_config_id: [u8; 32],
@@ -90,7 +88,7 @@ pub mod aeqi_governance {
         g.bump = ctx.bumps.governance_config;
 
         let m = &mut ctx.accounts.module_state;
-        m.config_count = m.config_count.checked_add(1).unwrap();
+        bump_config_count(m)?;
 
         emit!(ConfigRegistered {
             trust: g.trust,
@@ -101,8 +99,7 @@ pub mod aeqi_governance {
         Ok(())
     }
 
-    /// Execute a proposal that has succeeded. Mirrors EVM
-    /// `Governance.module._execute`. Validates:
+    /// Execute a proposal that has succeeded. Validates:
     ///   - voting period has ended (or early enact + thresholds met)
     ///   - quorum: (for + abstain) ≥ totalVoteSupply * quorum_bps / 10000
     ///   - support: for ≥ (for + against) * support_bps / 10000
@@ -114,10 +111,7 @@ pub mod aeqi_governance {
     /// On-chain ix dispatch (running the proposed action via remaining_accounts)
     /// is reserved for a follow-up — this iteration just transitions
     /// Proposal.executed → true after threshold gate.
-    pub fn execute_proposal(
-        ctx: Context<ExecuteProposal>,
-        total_vote_supply: u128,
-    ) -> Result<()> {
+    pub fn execute_proposal(ctx: Context<ExecuteProposal>, total_vote_supply: u128) -> Result<()> {
         let cfg = &ctx.accounts.governance_config;
         let p = &mut ctx.accounts.proposal;
 
@@ -129,7 +123,7 @@ pub mod aeqi_governance {
         );
 
         let now = Clock::get()?.unix_timestamp;
-        let vote_end = p.vote_start.checked_add(p.vote_duration).unwrap();
+        let vote_end = proposal_vote_end(p)?;
 
         // Allow early enact if config permits AND thresholds already met.
         let voting_ended = now >= vote_end;
@@ -137,33 +131,52 @@ pub mod aeqi_governance {
         require!(voting_ended || early_ok, GovernanceError::VotingNotClosed);
 
         // Quorum: (for + abstain) ≥ supply * quorum_bps / 10000
-        let participating = p.for_votes.checked_add(p.abstain_votes).unwrap();
+        let participating = p
+            .for_votes
+            .checked_add(p.abstain_votes)
+            .ok_or(error!(GovernanceError::MathOverflow))?;
         let quorum_required = total_vote_supply
             .checked_mul(cfg.quorum_bps as u128)
-            .unwrap()
+            .ok_or(error!(GovernanceError::MathOverflow))?
             .checked_div(10_000)
-            .unwrap();
-        require!(participating >= quorum_required, GovernanceError::QuorumNotMet);
+            .ok_or(error!(GovernanceError::MathOverflow))?;
+        require!(
+            participating >= quorum_required,
+            GovernanceError::QuorumNotMet
+        );
 
         // Support: for ≥ (for + against) * support_bps / 10000
-        let decisive = p.for_votes.checked_add(p.against_votes).unwrap();
+        let decisive = p
+            .for_votes
+            .checked_add(p.against_votes)
+            .ok_or(error!(GovernanceError::MathOverflow))?;
         require!(decisive > 0, GovernanceError::NoDecisiveVotes);
         let support_required = decisive
             .checked_mul(cfg.support_bps as u128)
-            .unwrap()
+            .ok_or(error!(GovernanceError::MathOverflow))?
             .checked_div(10_000)
-            .unwrap();
-        require!(p.for_votes >= support_required, GovernanceError::SupportNotMet);
+            .ok_or(error!(GovernanceError::MathOverflow))?;
+        require!(
+            p.for_votes >= support_required,
+            GovernanceError::SupportNotMet
+        );
 
         // Optional execution delay: enforce now ≥ vote_end + execution_delay
         if cfg.execution_delay > 0 {
+            let execution_ready_at = vote_end
+                .checked_add(cfg.execution_delay)
+                .ok_or(error!(GovernanceError::MathOverflow))?;
             require!(
-                now >= vote_end.checked_add(cfg.execution_delay).unwrap(),
+                now >= execution_ready_at,
                 GovernanceError::ExecutionDelayNotMet
             );
         }
 
-        p.succeeded_at = if p.succeeded_at == 0 { now } else { p.succeeded_at };
+        p.succeeded_at = if p.succeeded_at == 0 {
+            now
+        } else {
+            p.succeeded_at
+        };
         p.executed = true;
 
         emit!(ProposalExecuted {
@@ -182,8 +195,6 @@ pub mod aeqi_governance {
     /// proposal's governance_config_id. The checkpoint PDA is owned by
     /// `aeqi_role`; we validate its `account` field == voter.
     pub fn cast_vote_role(ctx: Context<CastVoteRole>, choice: u8) -> Result<()> {
-        require!(choice <= 2, GovernanceError::InvalidVoteChoice);
-
         // Validate the cross-program account: must be owned by aeqi_role and
         // its PDA derivation is enforced by Anchor's seeds::program constraint.
         let acct_info = &ctx.accounts.voter_checkpoint;
@@ -214,84 +225,43 @@ pub mod aeqi_governance {
 
         let p = &mut ctx.accounts.proposal;
         let now = Clock::get()?.unix_timestamp;
-        require!(!p.executed, GovernanceError::ProposalAlreadyExecuted);
-        require!(!p.canceled, GovernanceError::ProposalCanceled);
-        require!(now >= p.vote_start, GovernanceError::VotingNotStarted);
-        require!(
-            now < p.vote_start.checked_add(p.vote_duration).unwrap(),
-            GovernanceError::VotingClosed
-        );
+        require_vote_open(p, now)?;
 
+        apply_vote_tally(p, choice, weight)?;
         let v = &mut ctx.accounts.vote;
-        v.trust = p.trust;
-        v.proposal_id = p.proposal_id;
-        v.voter = ctx.accounts.voter.key();
-        v.choice = choice;
-        v.weight = weight;
-        v.bump = ctx.bumps.vote;
-
-        match choice {
-            0 => p.against_votes = p.against_votes.checked_add(weight).unwrap(),
-            1 => p.for_votes = p.for_votes.checked_add(weight).unwrap(),
-            2 => p.abstain_votes = p.abstain_votes.checked_add(weight).unwrap(),
-            _ => unreachable!(),
-        }
-
-        emit!(VoteCast {
-            trust: p.trust,
-            proposal_id: p.proposal_id,
-            voter: v.voter,
+        record_vote(
+            v,
+            p,
+            ctx.accounts.voter.key(),
             choice,
             weight,
-        });
+            ctx.bumps.vote,
+        );
         Ok(())
     }
 
     /// Cast a token-weighted vote. Vote power = `voter_token_account.amount`,
     /// validated to be owned by the voter. The caller MUST pass the trust's
     /// canonical Token-2022 cap-table account; mint validation against the
-    /// `[b"mint", trust]` PDA is the production hardening — currently the
-    /// caller passes the right account and ownership-of-account is enforced.
-    /// Replaces the legacy `cast_vote` (which took weight as a param) for
-    /// real token-mode governance.
+    /// `[b"mint", trust]` PDA keeps the voting source canonical.
     pub fn cast_vote_token(ctx: Context<CastVoteToken>, choice: u8) -> Result<()> {
-        require!(choice <= 2, GovernanceError::InvalidVoteChoice);
-
         let weight = ctx.accounts.voter_token_account.amount as u128;
         require!(weight > 0, GovernanceError::ZeroWeight);
 
         let p = &mut ctx.accounts.proposal;
         let now = Clock::get()?.unix_timestamp;
-        require!(!p.executed, GovernanceError::ProposalAlreadyExecuted);
-        require!(!p.canceled, GovernanceError::ProposalCanceled);
-        require!(now >= p.vote_start, GovernanceError::VotingNotStarted);
-        require!(
-            now < p.vote_start.checked_add(p.vote_duration).unwrap(),
-            GovernanceError::VotingClosed
-        );
+        require_vote_open(p, now)?;
 
+        apply_vote_tally(p, choice, weight)?;
         let v = &mut ctx.accounts.vote;
-        v.trust = p.trust;
-        v.proposal_id = p.proposal_id;
-        v.voter = ctx.accounts.voter.key();
-        v.choice = choice;
-        v.weight = weight;
-        v.bump = ctx.bumps.vote;
-
-        match choice {
-            0 => p.against_votes = p.against_votes.checked_add(weight).unwrap(),
-            1 => p.for_votes = p.for_votes.checked_add(weight).unwrap(),
-            2 => p.abstain_votes = p.abstain_votes.checked_add(weight).unwrap(),
-            _ => unreachable!(),
-        }
-
-        emit!(VoteCast {
-            trust: p.trust,
-            proposal_id: p.proposal_id,
-            voter: v.voter,
+        record_vote(
+            v,
+            p,
+            ctx.accounts.voter.key(),
             choice,
             weight,
-        });
+            ctx.bumps.vote,
+        );
         Ok(())
     }
 
@@ -300,53 +270,28 @@ pub mod aeqi_governance {
     /// passed in for now; the next iteration replaces this with a CPI to
     /// `aeqi_token::get_past_votes` (token mode) or
     /// `aeqi_role::get_past_role_votes` (per-role multisig).
-    pub fn cast_vote(
-        ctx: Context<CastVote>,
-        choice: u8,
-        weight: u128,
-    ) -> Result<()> {
-        require!(choice <= 2, GovernanceError::InvalidVoteChoice);
+    pub fn cast_vote(ctx: Context<CastVote>, choice: u8, weight: u128) -> Result<()> {
         require!(weight > 0, GovernanceError::ZeroWeight);
 
         let p = &mut ctx.accounts.proposal;
         let now = Clock::get()?.unix_timestamp;
-        require!(!p.executed, GovernanceError::ProposalAlreadyExecuted);
-        require!(!p.canceled, GovernanceError::ProposalCanceled);
-        require!(now >= p.vote_start, GovernanceError::VotingNotStarted);
-        require!(
-            now < p.vote_start.checked_add(p.vote_duration).unwrap(),
-            GovernanceError::VotingClosed
-        );
+        require_vote_open(p, now)?;
 
-        // Record vote — VoteRecord PDA init enforces uniqueness per voter.
+        apply_vote_tally(p, choice, weight)?;
         let v = &mut ctx.accounts.vote;
-        v.trust = p.trust;
-        v.proposal_id = p.proposal_id;
-        v.voter = ctx.accounts.voter.key();
-        v.choice = choice;
-        v.weight = weight;
-        v.bump = ctx.bumps.vote;
-
-        match choice {
-            0 => p.against_votes = p.against_votes.checked_add(weight).unwrap(),
-            1 => p.for_votes = p.for_votes.checked_add(weight).unwrap(),
-            2 => p.abstain_votes = p.abstain_votes.checked_add(weight).unwrap(),
-            _ => unreachable!(),
-        }
-
-        emit!(VoteCast {
-            trust: p.trust,
-            proposal_id: p.proposal_id,
-            voter: v.voter,
+        record_vote(
+            v,
+            p,
+            ctx.accounts.voter.key(),
             choice,
             weight,
-        });
+            ctx.bumps.vote,
+        );
         Ok(())
     }
 
     /// Create a proposal under a registered governance config. Per-proposal
-    /// mode selection via `governance_config_id`. Mirrors EVM
-    /// `Governance.module.propose`.
+    /// mode selection via `governance_config_id`.
     pub fn propose(
         ctx: Context<Propose>,
         proposal_id: [u8; 32],
@@ -378,7 +323,10 @@ pub mod aeqi_governance {
         p.bump = ctx.bumps.proposal;
 
         let m = &mut ctx.accounts.module_state;
-        m.proposal_count = m.proposal_count.checked_add(1).unwrap();
+        m.proposal_count = m
+            .proposal_count
+            .checked_add(1)
+            .ok_or(error!(GovernanceError::MathOverflow))?;
 
         emit!(ProposalCreated {
             trust: p.trust,
@@ -390,6 +338,70 @@ pub mod aeqi_governance {
         });
         Ok(())
     }
+}
+
+fn proposal_vote_end(p: &Proposal) -> Result<i64> {
+    p.vote_start
+        .checked_add(p.vote_duration)
+        .ok_or(error!(GovernanceError::MathOverflow))
+}
+
+fn require_vote_open(p: &Proposal, now: i64) -> Result<()> {
+    require!(!p.executed, GovernanceError::ProposalAlreadyExecuted);
+    require!(!p.canceled, GovernanceError::ProposalCanceled);
+    require!(now >= p.vote_start, GovernanceError::VotingNotStarted);
+    require!(now < proposal_vote_end(p)?, GovernanceError::VotingClosed);
+    Ok(())
+}
+
+fn record_vote(
+    vote: &mut Account<VoteRecord>,
+    proposal: &Proposal,
+    voter: Pubkey,
+    choice: u8,
+    weight: u128,
+    bump: u8,
+) {
+    vote.trust = proposal.trust;
+    vote.proposal_id = proposal.proposal_id;
+    vote.voter = voter;
+    vote.choice = choice;
+    vote.weight = weight;
+    vote.bump = bump;
+}
+
+fn apply_vote_tally(proposal: &mut Account<Proposal>, choice: u8, weight: u128) -> Result<()> {
+    require!(choice <= 2, GovernanceError::InvalidVoteChoice);
+    match choice {
+        0 => {
+            proposal.against_votes = proposal
+                .against_votes
+                .checked_add(weight)
+                .ok_or(error!(GovernanceError::MathOverflow))?
+        }
+        1 => {
+            proposal.for_votes = proposal
+                .for_votes
+                .checked_add(weight)
+                .ok_or(error!(GovernanceError::MathOverflow))?
+        }
+        2 => {
+            proposal.abstain_votes = proposal
+                .abstain_votes
+                .checked_add(weight)
+                .ok_or(error!(GovernanceError::MathOverflow))?
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
+}
+
+fn bump_config_count(module_state: &mut Account<GovernanceModuleState>) -> Result<()> {
+    module_state.config_count = module_state
+        .config_count
+        .checked_add(1)
+        .ok_or(error!(GovernanceError::MathOverflow))?;
+    Ok(())
 }
 
 // -----------------------------------------------------------------------------
@@ -405,7 +417,7 @@ pub struct GovernanceModuleState {
     pub bump: u8,
 }
 
-/// One per voting mode. Mirrors EVM `GovernanceConfig`.
+/// One per voting mode.
 #[account]
 #[derive(InitSpace)]
 pub struct GovernanceConfig {
@@ -724,4 +736,6 @@ pub enum GovernanceError {
     CheckpointVoterMismatch,
     #[msg("voter_checkpoint is not owned by aeqi_role or has invalid layout")]
     InvalidCheckpoint,
+    #[msg("math overflow")]
+    MathOverflow,
 }

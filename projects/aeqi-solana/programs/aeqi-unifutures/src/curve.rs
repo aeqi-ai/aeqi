@@ -1,4 +1,4 @@
-//! Bonding curve math — port of `BondingCurveMath.library.sol`.
+//! Bonding curve math for AEQI Unifutures.
 //!
 //! Two curve shapes:
 //! - Linear: `price(supply) = startPrice + (endPrice - startPrice) * (supply / maxSupply)`
@@ -7,8 +7,8 @@
 //! Purchase cost over a range (avg-price integration):
 //! `cost(amount) = amount * (price(start) + price(start + amount)) / 2`
 //!
-//! All math in `u128` with `PRECISION = 1e18` to match the EVM port. No
-//! floating point. `saturating_*` semantics on overflow paths.
+//! All math in `u128` with `PRECISION = 1e18`. No floating point.
+//! Overflow paths use saturating or checked arithmetic.
 
 pub const PRECISION: u128 = 1_000_000_000_000_000_000; // 1e18
 
@@ -48,9 +48,7 @@ pub fn price_at(
 
     let scale = match curve_type {
         CurveType::Linear => progress,
-        CurveType::Exponential => progress
-            .saturating_mul(progress)
-            .saturating_div(PRECISION),
+        CurveType::Exponential => progress.saturating_mul(progress).saturating_div(PRECISION),
     };
 
     if end_price >= start_price {
@@ -63,8 +61,7 @@ pub fn price_at(
 }
 
 /// Cost to buy `token_amount` starting at `current_supply`. Approximates the
-/// integral via the trapezoidal rule (avg of start + end prices). Direct
-/// port of the EVM `_calculatePurchaseCost`.
+/// integral via the trapezoidal rule (avg of start + end prices).
 pub fn purchase_cost(
     curve_type: CurveType,
     start_price: u128,
@@ -76,7 +73,13 @@ pub fn purchase_cost(
     if token_amount == 0 {
         return Some(0);
     }
-    let p_start = price_at(curve_type, start_price, end_price, max_supply, current_supply);
+    let p_start = price_at(
+        curve_type,
+        start_price,
+        end_price,
+        max_supply,
+        current_supply,
+    );
     let p_end = price_at(
         curve_type,
         start_price,
@@ -89,9 +92,9 @@ pub fn purchase_cost(
     token_amount.checked_mul(avg_price)?.checked_div(PRECISION)
 }
 
-/// Return (in quote) for selling `token_amount` from `current_supply` —
-/// applies an optional `reserve_ratio_ppm` (parts-per-million, 1_000_000 =
-/// 100% — the EVM default of 90% is `900_000`).
+/// Return (in quote) for selling `token_amount` from `current_supply`.
+/// Applies an optional `reserve_ratio_ppm` (parts-per-million, 1_000_000 =
+/// 100%).
 pub fn sale_return(
     curve_type: CurveType,
     start_price: u128,
@@ -106,9 +109,17 @@ pub fn sale_return(
     }
     let new_supply = current_supply.checked_sub(token_amount)?;
     let p_end = price_at(curve_type, start_price, end_price, max_supply, new_supply);
-    let p_start = price_at(curve_type, start_price, end_price, max_supply, current_supply);
+    let p_start = price_at(
+        curve_type,
+        start_price,
+        end_price,
+        max_supply,
+        current_supply,
+    );
     let avg_price = p_end.checked_add(p_start)? / 2;
-    let gross = token_amount.checked_mul(avg_price)?.checked_div(PRECISION)?;
+    let gross = token_amount
+        .checked_mul(avg_price)?
+        .checked_div(PRECISION)?;
     Some(
         gross
             .checked_mul(reserve_ratio_ppm as u128)?
