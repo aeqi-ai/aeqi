@@ -4,8 +4,8 @@ const TOKENS = [
   { name: "--radius-xs", usage: "Key pills, tight chips" },
   { name: "--radius-sm", usage: "Badges, tags" },
   { name: "--radius-md", usage: "Inputs, buttons" },
-  { name: "--radius-lg", usage: "Panels, cards" },
-  { name: "--radius-xl", usage: "Modals" },
+  { name: "--radius-lg", usage: "Modals" },
+  { name: "--radius-xl", usage: "Reserved for rare hero/editor surfaces" },
   { name: "--radius-full", usage: "Pills, avatars" },
 ];
 

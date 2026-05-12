@@ -1081,7 +1081,9 @@
   background: var(--bg-row);
   border-left: 2px solid var(--color-border-hover);
   border-radius: var(--radius-md);
-  transition: var(--transition-normal);
+  transition:
+    background var(--transition-normal),
+    border-color var(--transition-normal);
 }
 .asv-trail:hover {
   border-color: var(--border);
@@ -1119,7 +1121,9 @@
   color: var(--color-text-muted);
   text-align: left;
   border-radius: calc(var(--radius-md) - 1px);
-  transition: var(--transition-normal);
+  transition:
+    background var(--transition-normal),
+    color var(--transition-normal);
 }
 .asv-trail-toggle:hover {
   background: var(--state-hover);
@@ -1975,12 +1979,15 @@
   padding: var(--space-3);
   background: var(--bg-surface);
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .dash-agent-card:hover {

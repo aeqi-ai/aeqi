@@ -1,0 +1,214 @@
+.frame {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: var(--space-6);
+  background: var(--color-paper);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-paper);
+  border-right: 1px solid var(--color-border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.wordmark {
+  font-family: var(--font-brand);
+  font-size: var(--font-size-xl);
+  color: var(--color-accent);
+}
+
+.railGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.railLabel,
+.sectionLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.railItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--sidebar-row-h);
+  padding: 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-sm);
+}
+
+.railItemActive {
+  color: var(--color-text-primary);
+  background: var(--color-card-elevated);
+}
+
+.content {
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.toolbarSearch {
+  flex: 1;
+  min-width: 220px;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  gap: var(--space-4);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.titleGroup {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+.copy {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+}
+
+.meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.metric {
+  padding: var(--space-3);
+  background: var(--color-card-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.metricValue {
+  margin-top: var(--space-1);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.6fr);
+  gap: var(--space-3);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.reviewNote {
+  padding: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  background: var(--color-card-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.tableCellStrong {
+  font-weight: var(--font-weight-medium);
+}
+
+.tableCellMuted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+@media (max-width: 860px) {
+  .shell,
+  .mainGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbarSearch {
+    min-width: 0;
+  }
+}

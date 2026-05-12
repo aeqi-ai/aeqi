@@ -20,7 +20,7 @@ const preview: Preview = {
         method: "alphabetical",
         order: [
           "Get Started",
-          ["Welcome", "Component Library"],
+          ["Welcome", "System Coherence", "Component Library"],
           "Foundations",
           [
             "Principles",

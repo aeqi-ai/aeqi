@@ -10,7 +10,12 @@
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
   flex-shrink: 0;
   padding: 0;
   line-height: 1;
