@@ -346,7 +346,6 @@ export default function CompanySetupPage() {
             <div className="plan-grid launch-plan-grid" role="list" aria-label="Launch plans">
               {LAUNCH_PLANS.map((item) => {
                 const selected = item.id === plan;
-                const isGrowth = item.id === "growth";
                 return (
                   <button
                     key={item.id}
@@ -358,28 +357,30 @@ export default function CompanySetupPage() {
                     aria-pressed={selected}
                   >
                     {item.recommended && <span className="plan-card-badge">Recommended</span>}
-                    {selected && <span className="plan-card-selected">Selected</span>}
-                    <div className="plan-card-name">{item.name}</div>
-                    <div className="plan-card-price">
-                      <span className="plan-card-price-amount">
-                        {isGrowth ? "$69" : item.price}
-                      </span>
-                      <span className="plan-card-price-cadence">
-                        {isGrowth ? "first month" : item.cadence}
+                    <div className="plan-card-top">
+                      <div className="plan-card-name">{item.name}</div>
+                      <span className="plan-card-check" aria-hidden="true">
+                        {selected ? "✓" : ""}
                       </span>
                     </div>
-                    {isGrowth && (
-                      <p className="plan-card-price-note">
-                        then <strong>{item.price}</strong>
-                        {item.cadence}
-                      </p>
-                    )}
+                    <div className="plan-card-price">
+                      <span className="plan-card-price-amount">
+                        {item.id === "growth" ? item.dueToday : item.price}
+                      </span>
+                      <span className="plan-card-price-cadence">
+                        {item.id === "growth"
+                          ? `first month · then ${item.price}${item.cadence}`
+                          : item.cadence}
+                      </span>
+                    </div>
                     <p className="plan-card-blurb">{item.blurb}</p>
-                    <ul className="plan-card-features">
+                    <div className="plan-card-features">
                       {item.features.map((feature) => (
-                        <li key={feature}>{feature}</li>
+                        <span key={feature} className="plan-card-feature">
+                          {feature}
+                        </span>
                       ))}
-                    </ul>
+                    </div>
                   </button>
                 );
               })}
@@ -395,11 +396,7 @@ export default function CompanySetupPage() {
               ? `Due today ${selectedLaunchPlan.dueToday} · Pro · 20M LLM tokens / month · 8 vCPU runtime`
               : `Due today ${selectedLaunchPlan.dueToday} · Standard · 5M LLM tokens / month · 2 vCPU runtime`}
           </p>
-          <p className="launch-footer-meta">
-            {selectedLaunchPlan.id === "growth"
-              ? `Then ${selectedLaunchPlan.price}${selectedLaunchPlan.cadence} · full organization · unlimited agents`
-              : "Full organization · unlimited agents"}
-          </p>
+          <p className="launch-footer-meta">Full organization · unlimited agents</p>
         </div>
         <Button
           variant="primary"
