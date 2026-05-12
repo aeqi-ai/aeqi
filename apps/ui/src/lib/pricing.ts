@@ -60,7 +60,7 @@ export const LAUNCH_PLANS: LaunchPlan[] = [
     cadence: "/mo",
     intro: "Launch month included.",
     blurb: "For a focused organization with one clear operating lane.",
-    features: ["1 organization", "1x inference", "4 vCPU runtime", "Ownership + governance"],
+    features: ["1 organization", "1x execution", "4 vCPU runtime", "Ownership + governance"],
   },
   {
     id: "growth",
@@ -69,7 +69,7 @@ export const LAUNCH_PLANS: LaunchPlan[] = [
     cadence: "/mo",
     intro: "$69 first month.",
     blurb: "For heavier execution, more agents, and broader coordination.",
-    features: ["Everything in Standard", "4x inference", "8 vCPU runtime", "Priority runs"],
+    features: ["Everything in Standard", "4x execution", "8 vCPU runtime", "Priority runs"],
     recommended: true,
   },
 ];
@@ -78,7 +78,7 @@ export const DEFAULT_LAUNCH_PLAN: LaunchPlanId = "growth";
 
 export const RESOURCE_PACK = {
   inferenceUsd: `$${INFERENCE_CREDIT_USD}`,
-  inferenceLabel: "4x inference",
+  inferenceLabel: "4x execution",
   cpu: "4 vCPU",
   ram: "8 GB",
   storage: "80 GB",

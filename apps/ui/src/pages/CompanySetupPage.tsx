@@ -330,9 +330,6 @@ export default function CompanySetupPage() {
                 <p className="start-section-kicker">3. Choose your execution tier</p>
                 <h3 className="start-section-title">Pick the launch tier.</h3>
               </div>
-              <p className="start-help">
-                Pro is recommended if you want more agents and higher execution from day one.
-              </p>
             </div>
 
             <div className="plan-grid launch-plan-grid" role="list" aria-label="Launch plans">
@@ -365,9 +362,7 @@ export default function CompanySetupPage() {
                         {item.cadence}
                       </p>
                     )}
-                    <p className="plan-card-blurb">
-                      {item.intro} {item.blurb}
-                    </p>
+                    <p className="plan-card-blurb">{item.blurb}</p>
                     <ul className="plan-card-features">
                       {item.features.map((feature) => (
                         <li key={feature}>{feature}</li>
@@ -382,19 +377,11 @@ export default function CompanySetupPage() {
       </section>
 
       <div className="launch-footer">
-        <div className="launch-footer-copy">
-          <p className="start-help">
-            No organization is created before payment succeeds. You can change tiers or switch
-            blueprints before launching.
-          </p>
-          <p className="launch-footer-meta">
-            {selectedLaunchPlan.id === "growth" ? "$69 today, then $149/mo" : "$49/mo"}
-            {" · "}
-            {selectedLaunchPlan.id === "growth"
-              ? "4x inference · 2x compute"
-              : "1x inference · 1x compute"}
-          </p>
-        </div>
+        <p className="launch-footer-note">
+          {selectedLaunchPlan.id === "growth"
+            ? "Pro · $69 today · then $149/mo · 4x execution · 2x compute"
+            : "Standard · $49/mo · 1x execution · 1x compute"}
+        </p>
         <Button
           variant="primary"
           size="lg"
