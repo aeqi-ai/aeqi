@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { AeqiBudget } from "../target/types/aeqi_budget";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { expect } from "chai";
+import { expectTxFail, fundKeypair } from "./support";
 
 describe("aeqi_budget", () => {
   const provider = anchor.AnchorProvider.env();
@@ -202,31 +203,19 @@ describe("aeqi_budget", () => {
       })
       .rpc();
 
-    const attacker = Keypair.generate();
-    const sig = await provider.connection.requestAirdrop(
-      attacker.publicKey,
-      2 * anchor.web3.LAMPORTS_PER_SOL,
-    );
-    const latest = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction(
-      { signature: sig, ...latest },
-      "confirmed",
-    );
+    const attacker = await fundKeypair(provider);
 
-    let threw = false;
-    try {
-      await program.methods
-        .freeze()
-        .accounts({
-          budget: budgetPda,
-          grantor: attacker.publicKey,
-        })
-        .signers([attacker])
-        .rpc();
-    } catch (e: any) {
-      threw = true;
-      expect(e.toString()).to.match(/Unauthorized/);
-    }
-    expect(threw).to.eq(true);
+    await expectTxFail(
+      async () =>
+        program.methods
+          .freeze()
+          .accounts({
+            budget: budgetPda,
+            grantor: attacker.publicKey,
+          })
+          .signers([attacker])
+          .rpc(),
+      /Unauthorized/,
+    );
   });
 });

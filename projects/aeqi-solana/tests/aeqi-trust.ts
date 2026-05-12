@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { AeqiTrust } from "../target/types/aeqi_trust";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { expect } from "chai";
+import { expectTxFail, fundKeypair } from "./support";
 
 describe("aeqi_trust", () => {
   const provider = anchor.AnchorProvider.env();
@@ -118,16 +119,7 @@ describe("aeqi_trust", () => {
   });
 
   it("rejects post-finalize config writes from non-authority even with a high-ACL module account", async () => {
-    const attacker = Keypair.generate();
-    const sig = await provider.connection.requestAirdrop(
-      attacker.publicKey,
-      2 * anchor.web3.LAMPORTS_PER_SOL,
-    );
-    const latest = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction(
-      { signature: sig, ...latest },
-      "confirmed",
-    );
+    const attacker = await fundKeypair(provider);
 
     const key = new Uint8Array(32).fill(0);
     key[0] = 0x99;
@@ -136,24 +128,21 @@ describe("aeqi_trust", () => {
       program.programId,
     );
 
-    let threw = false;
-    try {
-      await program.methods
-        .setNumericConfig(Array.from(key), new anchor.BN(42))
-        .accounts({
-          trust: trustPda,
-          config: configPda,
-          sourceModule: modulePda,
-          authority: attacker.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .signers([attacker])
-        .rpc();
-    } catch (e: any) {
-      threw = true;
-      expect(e.toString()).to.match(/Unauthorized/);
-    }
-    expect(threw).to.eq(true);
+    await expectTxFail(
+      async () =>
+        program.methods
+          .setNumericConfig(Array.from(key), new anchor.BN(42))
+          .accounts({
+            trust: trustPda,
+            config: configPda,
+            sourceModule: modulePda,
+            authority: attacker.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([attacker])
+          .rpc(),
+      /Unauthorized/,
+    );
   });
 
   it("rejects finalize once creation mode is already closed", async () => {

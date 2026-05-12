@@ -10,6 +10,7 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
+import { expectTxFail } from "./support";
 
 describe("aeqi_token", () => {
   const provider = anchor.AnchorProvider.env();
@@ -248,7 +249,12 @@ describe("aeqi_token", () => {
       })
       .rpc();
 
-    let acct = await getAccount(provider.connection, ata, undefined, TOKEN_2022_PROGRAM_ID);
+    let acct = await getAccount(
+      provider.connection,
+      ata,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(acct.amount.toString()).to.eq("5000");
 
     await program.methods
@@ -263,8 +269,69 @@ describe("aeqi_token", () => {
       })
       .rpc();
 
-    acct = await getAccount(provider.connection, ata, undefined, TOKEN_2022_PROGRAM_ID);
+    acct = await getAccount(
+      provider.connection,
+      ata,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(acct.amount.toString()).to.eq("3500");
+  });
+
+  it("create_mint rejects a second mint for the same trust", async () => {
+    const fakeTrust = Keypair.generate().publicKey;
+    const [moduleStatePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token_module"), fakeTrust.toBuffer()],
+      program.programId,
+    );
+    const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token_authority"), fakeTrust.toBuffer()],
+      program.programId,
+    );
+    const [mintPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("mint"), fakeTrust.toBuffer()],
+      program.programId,
+    );
+
+    await program.methods
+      .init()
+      .accounts({
+        trust: fakeTrust,
+        moduleState: moduleStatePda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .createMint(9)
+      .accounts({
+        trust: fakeTrust,
+        moduleState: moduleStatePda,
+        mintAuthority: mintAuthorityPda,
+        mint: mintPda,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    await expectTxFail(
+      async () =>
+        program.methods
+          .createMint(9)
+          .accounts({
+            trust: fakeTrust,
+            moduleState: moduleStatePda,
+            mintAuthority: mintAuthorityPda,
+            mint: mintPda,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
+            payer: provider.wallet.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .rpc(),
+      /MintAlreadyCreated/,
+    );
   });
 
   // The finalize→Finalized transition is now covered end-to-end by the

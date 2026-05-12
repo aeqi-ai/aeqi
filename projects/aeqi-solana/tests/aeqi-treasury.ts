@@ -12,6 +12,7 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
+import { expectTxFail, fundKeypair } from "./support";
 
 describe("aeqi_treasury", () => {
   const provider = anchor.AnchorProvider.env();
@@ -120,7 +121,12 @@ describe("aeqi_treasury", () => {
 
   it("withdraw transfers from the vault PDA to a recipient ATA", async () => {
     // Verify vault has 5000 before withdraw
-    let vaultPre = await getAccount(provider.connection, vaultAta, undefined, TOKEN_2022_PROGRAM_ID);
+    let vaultPre = await getAccount(
+      provider.connection,
+      vaultAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultPre.amount.toString()).to.eq("5000");
 
     await program.methods
@@ -137,10 +143,20 @@ describe("aeqi_treasury", () => {
       })
       .rpc();
 
-    const vaultPost = await getAccount(provider.connection, vaultAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultPost = await getAccount(
+      provider.connection,
+      vaultAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultPost.amount.toString()).to.eq("3000");
 
-    const recPost = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const recPost = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(recPost.amount.toString()).to.eq("2000");
   });
 
@@ -158,8 +174,18 @@ describe("aeqi_treasury", () => {
       TOKEN_2022_PROGRAM_ID,
     );
 
-    const vaultPre = await getAccount(provider.connection, vaultAta, undefined, TOKEN_2022_PROGRAM_ID);
-    const recPre = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultPre = await getAccount(
+      provider.connection,
+      vaultAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const recPre = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
 
     await program.methods
       .deposit(new anchor.BN(1500))
@@ -175,39 +201,43 @@ describe("aeqi_treasury", () => {
       })
       .rpc();
 
-    const vaultPost = await getAccount(provider.connection, vaultAta, undefined, TOKEN_2022_PROGRAM_ID);
-    const recPost = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultPost = await getAccount(
+      provider.connection,
+      vaultAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const recPost = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
 
     expect((vaultPost.amount - vaultPre.amount).toString()).to.eq("1500");
     expect((recPre.amount - recPost.amount).toString()).to.eq("1500");
   });
 
   it("withdraw rejects unauthorized signer", async () => {
-    const intruder = Keypair.generate();
-    // Fund intruder so they can pay for tx
-    const sig = await provider.connection.requestAirdrop(intruder.publicKey, 1e9);
-    await provider.connection.confirmTransaction(sig);
+    const intruder = await fundKeypair(provider, 1e9);
 
-    let threw = false;
-    try {
-      await program.methods
-        .withdraw(new anchor.BN(100))
-        .accounts({
-          trust: fakeTrust,
-          moduleState: modulePda,
-          vaultAuthority,
-          mint,
-          vault: vaultAta,
-          recipientTa: recipientAta,
-          authority: intruder.publicKey,
-          tokenProgram: TOKEN_2022_PROGRAM_ID,
-        })
-        .signers([intruder])
-        .rpc();
-    } catch (e: any) {
-      threw = true;
-      expect(e.toString()).to.match(/Unauthorized/);
-    }
-    expect(threw).to.eq(true);
+    await expectTxFail(
+      async () =>
+        program.methods
+          .withdraw(new anchor.BN(100))
+          .accounts({
+            trust: fakeTrust,
+            moduleState: modulePda,
+            vaultAuthority,
+            mint,
+            vault: vaultAta,
+            recipientTa: recipientAta,
+            authority: intruder.publicKey,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
+          })
+          .signers([intruder])
+          .rpc(),
+      /Unauthorized/,
+    );
   });
 });
