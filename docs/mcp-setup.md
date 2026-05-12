@@ -84,7 +84,7 @@ Hosted SaaS clients that support HTTP JSON-RPC can call the platform-hosted MCP
 endpoint directly:
 
 ```http
-POST https://app.aeqi.ai/api/mcp
+POST https://<host>/api/mcp
 Authorization: Bearer sk_company_xxxxx
 X-Api-Key: ak_account_xxxxx
 Content-Type: application/json

@@ -99,14 +99,10 @@
     },
     "inlineStyle": {
       "label": "inline style object",
-      "count": 467,
+      "count": 425,
       "topFiles": [
         {
           "file": "apps/ui/src/pages/OwnershipPage.tsx",
-          "count": 43
-        },
-        {
-          "file": "apps/ui/src/pages/TreasuryPage.tsx",
           "count": 43
         },
         {
@@ -131,6 +127,10 @@
         },
         {
           "file": "apps/ui/src/components/BudgetsBlock.tsx",
+          "count": 24
+        },
+        {
+          "file": "apps/ui/src/components/TestTriggerPanel.tsx",
           "count": 24
         }
       ]
@@ -311,6 +311,44 @@
         },
         {
           "file": "apps/ui/src/styles/templates.css",
+          "count": 1
+        }
+      ]
+    },
+    "primitiveSubpathImport": {
+      "label": "primitive subpath import",
+      "count": 14,
+      "topFiles": [
+        {
+          "file": "apps/ui/src/pages/OwnershipPage.tsx",
+          "count": 4
+        },
+        {
+          "file": "apps/ui/src/pages/GovernancePage.tsx",
+          "count": 3
+        },
+        {
+          "file": "apps/ui/src/components/sessions/AddParticipantModal.tsx",
+          "count": 2
+        },
+        {
+          "file": "apps/ui/src/App.tsx",
+          "count": 1
+        },
+        {
+          "file": "apps/ui/src/components/BudgetsBlock.tsx",
+          "count": 1
+        },
+        {
+          "file": "apps/ui/src/components/shell/HelpMenu.tsx",
+          "count": 1
+        },
+        {
+          "file": "apps/ui/src/pages/BlueprintDetailPage.tsx",
+          "count": 1
+        },
+        {
+          "file": "apps/ui/src/pages/BlueprintsPage.tsx",
           "count": 1
         }
       ]

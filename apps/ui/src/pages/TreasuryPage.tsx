@@ -3,11 +3,20 @@ import { useBalance } from "wagmi";
 import { anvil } from "wagmi/chains";
 
 import BudgetsBlock from "@/components/BudgetsBlock";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Spinner } from "@/components/ui/Spinner";
-import { Table, type TableColumn } from "@/components/ui/Table";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  MetricCard,
+  MetricGrid,
+  Page,
+  PageBody,
+  PageHeader,
+  PageSection,
+  Spinner,
+  Table,
+  type TableColumn,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { indexerEnabled } from "@/lib/indexer";
 import { formatCents, launchPlanById, launchPlanResourceItems } from "@/lib/pricing";
@@ -126,74 +135,57 @@ export default function TreasuryPage({ entityId, agentId }: TreasuryPageProps) {
 
   if (billing === undefined) {
     return (
-      <div
-        className="asv-main"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "var(--space-xl)",
-        }}
-      >
+      <Page className={`asv-main ${styles.loadingPage}`} width="full" padding="lg">
         <Spinner />
-      </div>
+      </Page>
     );
   }
 
   return (
-    <div className="asv-main" style={{ padding: "var(--space-lg)" }}>
-      <header style={{ marginBottom: "var(--space-lg)" }}>
-        <h2 style={{ margin: 0 }}>Treasury</h2>
-        <p style={{ color: "var(--color-text-muted)", margin: "var(--space-xs) 0 0 0" }}>
-          {agentId
+    <Page className="asv-main" width="full" padding="md" gap="6">
+      <PageHeader
+        title="Treasury"
+        description={
+          agentId
             ? "Lifetime inference spend and recent calls for this agent."
-            : "Subscription, resources, and on-chain balances for this Company."}
-        </p>
-      </header>
+            : "Subscription, resources, and on-chain balances for this Company."
+        }
+      />
 
-      {agentId && <InferenceZone agentId={agentId} />}
+      <PageBody gap="6">
+        {agentId && <InferenceZone agentId={agentId} />}
 
-      {trustAddress && indexerEnabled() && <ContractInfoRow trustAddress={trustAddress} />}
+        {trustAddress && indexerEnabled() && <ContractInfoRow trustAddress={trustAddress} />}
 
-      {(indexerEnabled() || trustAddress) && (
-        <OnChainHoldings trustAddress={trustAddress} trustId={trustId} />
-      )}
+        {(indexerEnabled() || trustAddress) && (
+          <OnChainHoldings trustAddress={trustAddress} trustId={trustId} />
+        )}
 
-      {!agentId && trustId && <BudgetsBlock trustId={trustId} />}
+        {!agentId && trustId && <BudgetsBlock trustId={trustId} />}
 
-      {billingError && (
-        <div
-          style={{
-            padding: "var(--space-sm) var(--space-md)",
-            background: "var(--color-card)",
-            borderRadius: "var(--radius-md)",
-            marginBottom: "var(--space-md)",
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-size-sm)",
-          }}
-        >
-          Couldn't load billing: {billingError}
-        </div>
-      )}
+        {billingError && (
+          <div className={styles.billingError}>Couldn't load billing: {billingError}</div>
+        )}
 
-      {!billing && !billingError && (
-        <EmptyState
-          title="No active plan"
-          description="Add a plan to this Company to unlock inference and on-chain features."
-        />
-      )}
+        {!billing && !billingError && (
+          <EmptyState
+            title="No active plan"
+            description="Add a plan to this Company to unlock inference and on-chain features."
+          />
+        )}
 
-      {billing && (
-        <BillingCard
-          billing={billing}
-          paymentLast4={paymentLast4}
-          onManage={openPortal}
-          portalBusy={portalBusy}
-        />
-      )}
+        {billing && (
+          <BillingCard
+            billing={billing}
+            paymentLast4={paymentLast4}
+            onManage={openPortal}
+            portalBusy={portalBusy}
+          />
+        )}
 
-      <ResourcePack planId={billing?.plan} />
-    </div>
+        <ResourcePack planId={billing?.plan} />
+      </PageBody>
+    </Page>
   );
 }
 
@@ -204,45 +196,20 @@ function ContractInfoRow({ trustAddress }: { trustAddress: string }) {
   const explorerUrl = CHAIN_EXPLORER ? `${CHAIN_EXPLORER}/${trustAddress}` : null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-sm)",
-        padding: "var(--space-xs) var(--space-md)",
-        background: "var(--color-card)",
-        borderRadius: "var(--radius-md)",
-        marginBottom: "var(--space-md)",
-        fontSize: "var(--font-size-sm)",
-        color: "var(--color-text-muted)",
-      }}
-    >
+    <div className={styles.contractRow}>
       <span>Treasury contract</span>
-      <code
-        style={{
-          fontFamily: "var(--font-mono)",
-          color: "var(--color-text)",
-          fontSize: "var(--font-size-xs)",
-        }}
-      >
-        {short}
-      </code>
+      <code className={styles.contractCode}>{short}</code>
       {explorerUrl ? (
         <a
           href={explorerUrl}
           target="_blank"
           rel="noopener noreferrer"
-          style={{
-            color: "var(--color-text-muted)",
-            fontSize: "var(--font-size-xs)",
-            textDecoration: "underline",
-            textUnderlineOffset: "2px",
-          }}
+          className={styles.chainLink}
         >
           {CHAIN_NAME}
         </a>
       ) : (
-        <span style={{ fontSize: "var(--font-size-xs)" }}>{CHAIN_NAME}</span>
+        <span className={styles.chainName}>{CHAIN_NAME}</span>
       )}
     </div>
   );
@@ -274,50 +241,33 @@ function OnChainHoldings({ trustAddress, trustId }: { trustAddress?: string; tru
   );
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h3
-      style={{
-        margin: "0 0 var(--space-sm) 0",
-        fontSize: "var(--font-size-sm)",
-        color: "var(--color-text-muted)",
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
-      }}
-    >
-      {children}
-    </h3>
-  );
-}
-
 // ── Skeleton row ──────────────────────────────────────────────────────────────
 
 function SkeletonRow({ widths }: { widths: string[] }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "var(--space-md)",
-        padding: "var(--space-sm) var(--space-md)",
-        alignItems: "center",
-      }}
-    >
+    <div className={styles.skeletonRow}>
       {widths.map((w, i) => (
-        <div
-          key={i}
-          style={{
-            height: "var(--space-md)",
-            width: w,
-            background: "var(--color-card)",
-            borderRadius: "var(--radius-sm)",
-            opacity: 0.6,
-          }}
-        />
+        <div key={i} className={`${styles.skeletonCell} ${skeletonWidthClass(w)}`} />
       ))}
     </div>
   );
+}
+
+function skeletonWidthClass(width: string): string {
+  switch (width) {
+    case "48px":
+      return styles.skeletonWidth48;
+    case "60px":
+      return styles.skeletonWidth60;
+    case "70px":
+      return styles.skeletonWidth70;
+    case "80px":
+      return styles.skeletonWidth80;
+    case "120px":
+      return styles.skeletonWidth120;
+    default:
+      return "";
+  }
 }
 
 // ── Holdings section ──────────────────────────────────────────────────────────
@@ -382,57 +332,25 @@ function HoldingsSection({
   ];
 
   return (
-    <section style={{ marginBottom: "var(--space-lg)" }}>
-      <SectionLabel>Holdings</SectionLabel>
-
-      <div
-        style={{
-          background: "var(--color-card)",
-          borderRadius: "var(--radius-md)",
-          overflow: "hidden",
-        }}
-      >
+    <PageSection title="Holdings">
+      <div className={styles.tableSurface}>
         {loading && !nativeEth ? (
           <>
             <SkeletonRow widths={["60px", "120px", "80px"]} />
             <SkeletonRow widths={["60px", "120px", "80px"]} />
           </>
         ) : !hasAny ? (
-          <div
-            style={{
-              padding: "var(--space-lg) var(--space-md)",
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 500,
-                fontSize: "var(--font-size-base)",
-                marginBottom: "var(--space-xs)",
-              }}
-            >
-              0 ETH · 0 USDC
-            </div>
-            <div
-              style={{
-                color: "var(--color-text-muted)",
-                fontSize: "var(--font-size-sm)",
-              }}
-            >
+          <div className={styles.emptyPanel}>
+            <div className={styles.emptyTitle}>0 ETH · 0 USDC</div>
+            <div className={styles.emptyText}>
               Nothing here yet — fund this Treasury to get started.
             </div>
             {trustAddress && (
-              <div
-                style={{
-                  marginTop: "var(--space-md)",
-                  color: "var(--color-text-muted)",
-                  fontSize: "var(--font-size-xs)",
-                }}
-              >
+              <div className={styles.emptyHint}>
                 Send ETH or USDC to{" "}
-                <code style={{ fontFamily: "var(--font-mono)" }}>
-                  {`${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`}
-                </code>{" "}
+                <code
+                  className={styles.inlineCode}
+                >{`${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`}</code>{" "}
                 to fund this Treasury.
               </div>
             )}
@@ -447,7 +365,7 @@ function HoldingsSection({
           />
         )}
       </div>
-    </section>
+    </PageSection>
   );
 }
 
@@ -496,16 +414,8 @@ function TransfersSection({
   ];
 
   return (
-    <section style={{ marginBottom: "var(--space-lg)" }}>
-      <SectionLabel>Recent transfers</SectionLabel>
-
-      <div
-        style={{
-          background: "var(--color-card)",
-          borderRadius: "var(--radius-md)",
-          overflow: "hidden",
-        }}
-      >
+    <PageSection title="Recent transfers">
+      <div className={styles.tableSurface}>
         {loading ? (
           <>
             <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
@@ -513,16 +423,7 @@ function TransfersSection({
             <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
           </>
         ) : !transfers || transfers.length === 0 ? (
-          <div
-            style={{
-              padding: "var(--space-lg) var(--space-md)",
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-              textAlign: "center",
-            }}
-          >
-            No transfers yet.
-          </div>
+          <div className={styles.emptyPanelCompact}>No transfers yet.</div>
         ) : (
           <Table
             columns={columns}
@@ -533,7 +434,7 @@ function TransfersSection({
           />
         )}
       </div>
-    </section>
+    </PageSection>
   );
 }
 
@@ -557,26 +458,11 @@ function BillingCard({ billing, paymentLast4, onManage, portalBusy }: BillingCar
     : "—";
 
   return (
-    <section
-      style={{
-        background: "var(--color-card)",
-        borderRadius: "var(--radius-md)",
-        padding: "var(--space-md)",
-        marginBottom: "var(--space-lg)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--space-md)",
-          flexWrap: "wrap",
-        }}
-      >
+    <PageSection className={styles.billingCard}>
+      <div className={styles.billingContent}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
-            <span style={{ fontWeight: 500 }}>Company subscription</span>
+          <div className={styles.billingTitleRow}>
+            <span className={styles.billingTitle}>Company subscription</span>
             <Badge variant={STATUS_VARIANT[billing.status]} size="sm">
               {STATUS_LABEL[billing.status]}
             </Badge>
@@ -584,13 +470,7 @@ function BillingCard({ billing, paymentLast4, onManage, portalBusy }: BillingCar
               {plan.name}
             </Badge>
           </div>
-          <div
-            style={{
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-              marginTop: "var(--space-xs)",
-            }}
-          >
+          <div className={styles.billingDetail}>
             {billing.status === "trialing"
               ? `${plan.dueToday} first month, then ${formatCents(plan.monthlyCents)} / month`
               : `${formatCents(plan.monthlyCents)} / month`}
@@ -604,7 +484,7 @@ function BillingCard({ billing, paymentLast4, onManage, portalBusy }: BillingCar
           {portalBusy ? "Opening…" : "Manage billing"}
         </Button>
       </div>
-    </section>
+    </PageSection>
   );
 }
 
@@ -614,32 +494,13 @@ function ResourcePack({ planId }: { planId?: string | null }) {
   const items = launchPlanResourceItems(planId);
 
   return (
-    <section style={{ marginBottom: "var(--space-lg)" }}>
-      <SectionLabel>Resource pack</SectionLabel>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: "var(--space-sm)",
-        }}
-      >
+    <PageSection title="Resource pack">
+      <MetricGrid>
         {items.map((it) => (
-          <div
-            key={it.label}
-            style={{
-              background: "var(--color-card)",
-              borderRadius: "var(--radius-md)",
-              padding: "var(--space-md)",
-            }}
-          >
-            <div style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-              {it.label}
-            </div>
-            <div style={{ fontWeight: 500, marginTop: "var(--space-xs)" }}>{it.value}</div>
-          </div>
+          <MetricCard key={it.label} label={it.label} value={it.value} />
         ))}
-      </div>
-    </section>
+      </MetricGrid>
+    </PageSection>
   );
 }
 
@@ -727,82 +588,23 @@ function InferenceZone({ agentId }: { agentId: string }) {
   ];
 
   return (
-    <section style={{ marginBottom: "var(--space-lg)" }}>
-      <SectionLabel>Inference</SectionLabel>
+    <PageSection title="Inference">
+      <MetricGrid columns={2}>
+        <MetricCard
+          label="Lifetime spend"
+          value={<span className={styles.metricMonoValue}>{formatSpendUsd(lifetime)}</span>}
+        />
+        <MetricCard
+          label="Tokens"
+          value={
+            <span className={styles.metricMonoValueCompact}>{totalTokens.toLocaleString()}</span>
+          }
+        />
+      </MetricGrid>
 
-      {/* Lifetime stat card */}
-      <div
-        style={{
-          background: "var(--color-card)",
-          borderRadius: "var(--radius-md)",
-          padding: "var(--space-md)",
-          marginBottom: "var(--space-md)",
-          display: "flex",
-          alignItems: "baseline",
-          gap: "var(--space-md)",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-              marginBottom: "var(--space-xs)",
-            }}
-          >
-            Lifetime spend
-          </div>
-          <div
-            style={{
-              fontSize: "var(--font-size-2xl, 24px)",
-              fontWeight: 600,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {formatSpendUsd(lifetime)}
-          </div>
-        </div>
-        <div style={{ marginLeft: "auto", textAlign: "right" }}>
-          <div
-            style={{
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-              marginBottom: "var(--space-xs)",
-            }}
-          >
-            Tokens
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--font-size-base)",
-            }}
-          >
-            {totalTokens.toLocaleString()}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent calls table */}
-      <div
-        style={{
-          background: "var(--color-card)",
-          borderRadius: "var(--radius-md)",
-          overflow: "hidden",
-        }}
-      >
+      <div className={styles.tableSurface}>
         {error ? (
-          <div
-            style={{
-              padding: "var(--space-lg) var(--space-md)",
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-              textAlign: "center",
-            }}
-          >
-            {error}
-          </div>
+          <div className={styles.emptyPanelCompact}>{error}</div>
         ) : calls === null ? (
           <>
             <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
@@ -810,16 +612,7 @@ function InferenceZone({ agentId }: { agentId: string }) {
             <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
           </>
         ) : calls.length === 0 ? (
-          <div
-            style={{
-              padding: "var(--space-lg) var(--space-md)",
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-sm)",
-              textAlign: "center",
-            }}
-          >
-            No inference calls yet.
-          </div>
+          <div className={styles.emptyPanelCompact}>No inference calls yet.</div>
         ) : (
           <>
             <Table
@@ -847,7 +640,7 @@ function InferenceZone({ agentId }: { agentId: string }) {
           </>
         )}
       </div>
-    </section>
+    </PageSection>
   );
 }
 

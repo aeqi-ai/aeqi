@@ -43,7 +43,7 @@ single read:
 | **Elevation**    | Canonical lifted card vs alternatives                  |
 | **Feedback**     | Spinner, ThinkingDot, EmptyState, ErrorBoundary        |
 | **Inputs**       | Input, Textarea, Select, Combobox — decision matrix    |
-| **Layout**       | Stack, Inline — vertical and horizontal composition    |
+| **Layout**       | Page, Stack, Inline — page shells and composition      |
 | **Motion**       | Three cadences you can play side-by-side               |
 | **Overlays**     | Modal, Popover, Tooltip — z-index stack, focus rules   |
 | **Principles**   | Ratios, restraint rules, the four primitives           |
@@ -54,17 +54,17 @@ single read:
 
 ### Primitives
 
-The 24 primitives, grouped by purpose so you don't scan a flat list:
+The shared primitives, grouped by purpose so you don't scan a flat list:
 
-| Bucket           | What lives here                                                          |
-| ---------------- | ------------------------------------------------------------------------ |
-| **Actions**      | `Button`, `CardTrigger`, `ChipClose`, `IconButton`, `Menu`, `TabTrigger` |
-| **Inputs**       | `Input`, `Textarea`, `Select`, `SelectOption`, `Combobox`                |
-| **Containers**   | `Card`, `Tabs`                                                           |
-| **Data Display** | `Badge`, `DetailField`, `Icon`, `TagList`                                |
-| **Overlays**     | `Modal`, `Popover`, `Tooltip`                                            |
-| **Feedback**     | `Spinner`, `ThinkingDot`, `EmptyState`, `ErrorBoundary`                  |
-| **Layout**       | `Stack`, `Inline`                                                        |
+| Bucket           | What lives here                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Actions**      | `Button`, `CardTrigger`, `ChipClose`, `IconButton`, `Menu`, `TabTrigger`                                      |
+| **Inputs**       | `Input`, `Textarea`, `Select`, `SelectOption`, `Combobox`                                                     |
+| **Containers**   | `Card`, `Tabs`                                                                                                |
+| **Data Display** | `Badge`, `DetailField`, `Icon`, `TagList`                                                                     |
+| **Overlays**     | `Modal`, `Popover`, `Tooltip`                                                                                 |
+| **Feedback**     | `Spinner`, `ThinkingDot`, `EmptyState`, `ErrorBoundary`                                                       |
+| **Layout**       | `Page`, `PageHeader`, `PageBody`, `PageSection`, `PageToolbar`, `MetricGrid`, `MetricCard`, `Stack`, `Inline` |
 
 Every primitive carries `autodocs`, so each entry has a generated
 **Docs** tab with prop tables alongside the hand-written stories.
@@ -77,7 +77,7 @@ Use these as starting templates, not as fixed screenshots.
 | Pattern             | What it composes                                                                                                             |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | **Toolbar**         | Search + sort/filter/view + Button — the canonical primitive-page header, chrome/paper/ink tier rules, variant decision tree |
-| **Layout**          | Stack + Inline — the canonical replacements for ad-hoc flex                                                                  |
+| **Layout**          | Page primitives first, Stack + Inline inside local component bodies                                                          |
 | **Agent Card**      | Card + Badge + DetailField + TagList + Button                                                                                |
 | **Quest Row**       | Badge + IconButton (dense list rhythm)                                                                                       |
 | **Empty Dashboard** | EmptyState + Button (first-run, zero-data)                                                                                   |
@@ -101,6 +101,10 @@ Use these as starting templates, not as fixed screenshots.
   so the primitive folder stays scannable.
 - Use real strings from the dashboard ("Create Quest", "Assign Agent")
   in examples, not "Lorem ipsum".
+- For app screens, start from `Page`, `PageHeader`, `PageBody`,
+  `PageSection`, `PageToolbar`, `MetricGrid`, and `MetricCard`. Do not
+  teach future agents to rebuild page measure, section rhythm, toolbars,
+  or metric grids with inline layout.
 - Never hardcode hex, radius, or transition values in a story — reach
   for a token. The **Foundations → Color / Radii / Motion** pages are
   the source of truth.

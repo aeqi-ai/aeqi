@@ -87,5 +87,26 @@ export type { StackProps, StackAlign, SpaceToken } from "./Stack";
 export { Inline } from "./Inline";
 export type { InlineProps, InlineAlign, InlineJustify } from "./Inline";
 
+export {
+  MetricCard,
+  MetricGrid,
+  Page,
+  PageBody,
+  PageHeader,
+  PageSection,
+  PageToolbar,
+} from "./Page";
+export type {
+  MetricCardProps,
+  MetricGridProps,
+  PageBodyProps,
+  PageHeaderProps,
+  PagePadding,
+  PageProps,
+  PageSectionProps,
+  PageToolbarProps,
+  PageWidth,
+} from "./Page";
+
 export { Table } from "./Table";
 export type { TableProps, TableColumn } from "./Table";

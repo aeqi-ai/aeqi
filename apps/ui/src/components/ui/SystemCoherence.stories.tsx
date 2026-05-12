@@ -2,11 +2,20 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { Badge } from "./Badge";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
-import { Card, CardHeader } from "./Card";
+import { Card } from "./Card";
 import { DetailField } from "./DetailField";
 import { EmptyState } from "./EmptyState";
 import { IconButton } from "./IconButton";
 import { Input } from "./Input";
+import {
+  MetricCard,
+  MetricGrid,
+  Page,
+  PageBody,
+  PageHeader,
+  PageSection,
+  PageToolbar,
+} from "./Page";
 import { Select } from "./Select";
 import { StatusRow } from "./StatusRow";
 import { Table, type TableColumn } from "./Table";
@@ -127,132 +136,129 @@ export const ReviewCanvas: Story = {
           <StatusRow dot="warning" label="Billing review" status="pending" />
         </aside>
 
-        <section className={styles.content}>
-          <div className={styles.toolbar}>
-            <div className={styles.toolbarSearch}>
+        <Page className={styles.content} width="full" padding="none" gap="5">
+          <PageHeader
+            title="Launch cockpit"
+            description="A dense operating surface using the same field, badge, table, card, action, and page language."
+            actions={
+              <Badge variant="info" dot>
+                In Review
+              </Badge>
+            }
+          />
+
+          <PageBody gap="5">
+            <PageToolbar
+              aria-label="Launch work controls"
+              grow
+              actions={
+                <>
+                  <IconButton aria-label="Refresh launch work" variant="bordered" size="sm">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                      <path d="M13 3v4H9" />
+                      <path d="M3 13V9h4" />
+                      <path d="M12.1 6A4.5 4.5 0 0 0 4.4 4.4L3 5.8" />
+                      <path d="M3.9 10A4.5 4.5 0 0 0 11.6 11.6L13 10.2" />
+                    </svg>
+                  </IconButton>
+                  <Button variant="primary" size="sm">
+                    New Quest
+                  </Button>
+                </>
+              }
+            >
               <Input size="sm" placeholder="Search launch work" aria-label="Search launch work" />
-            </div>
-            <Select
-              size="sm"
-              value="all"
-              onChange={() => {}}
-              aria-label="Filter owner"
-              options={[
-                { value: "all", label: "All owners" },
-                { value: "runtime", label: "Runtime" },
-                { value: "docs", label: "Docs" },
-              ]}
-            />
-            <IconButton aria-label="Refresh launch work" variant="bordered" size="sm">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-                <path d="M13 3v4H9" />
-                <path d="M3 13V9h4" />
-                <path d="M12.1 6A4.5 4.5 0 0 0 4.4 4.4L3 5.8" />
-                <path d="M3.9 10A4.5 4.5 0 0 0 11.6 11.6L13 10.2" />
-              </svg>
-            </IconButton>
-            <Button variant="primary" size="sm">
-              New Quest
-            </Button>
-          </div>
+              <Select
+                size="sm"
+                value="all"
+                onChange={() => {}}
+                aria-label="Filter owner"
+                options={[
+                  { value: "all", label: "All owners" },
+                  { value: "runtime", label: "Runtime" },
+                  { value: "docs", label: "Docs" },
+                ]}
+              />
+            </PageToolbar>
 
-          <div className={styles.mainGrid}>
-            <div className={styles.stack}>
-              <Card padding="md">
-                <div className={styles.cardHeader}>
-                  <div className={styles.titleGroup}>
-                    <h2 className={styles.title}>Launch cockpit</h2>
-                    <p className={styles.copy}>
-                      A dense operating surface using the same field, badge, table, card, and action
-                      language.
-                    </p>
-                  </div>
-                  <Badge variant="info" dot>
-                    In Review
-                  </Badge>
-                </div>
+            <div className={styles.mainGrid}>
+              <div className={styles.stack}>
+                <Card padding="md">
+                  <PageSection
+                    title="Launch queue"
+                    description="Current work grouped for scan-first review."
+                  >
+                    <MetricGrid columns={3}>
+                      <MetricCard label="Open" value="18" />
+                      <MetricCard label="Blocked" value="2" />
+                      <MetricCard label="Today" value="7" />
+                    </MetricGrid>
 
-                <div className={styles.panelBody}>
-                  <div className={styles.metrics}>
-                    <div className={styles.metric}>
-                      <span className={styles.sectionLabel}>Open</span>
-                      <div className={styles.metricValue}>18</div>
-                    </div>
-                    <div className={styles.metric}>
-                      <span className={styles.sectionLabel}>Blocked</span>
-                      <div className={styles.metricValue}>2</div>
-                    </div>
-                    <div className={styles.metric}>
-                      <span className={styles.sectionLabel}>Today</span>
-                      <div className={styles.metricValue}>7</div>
-                    </div>
-                  </div>
+                    <Banner kind="info">
+                      This canvas should feel like the app, not a component showroom.
+                    </Banner>
 
-                  <Banner kind="info">
-                    This canvas should feel like the app, not a component showroom.
-                  </Banner>
-
-                  <Table
-                    columns={columns}
-                    data={rows}
-                    rowKey={(row) => row.id}
-                    density="compact"
-                    ariaLabel="Launch quest review"
-                  />
-                </div>
-              </Card>
-
-              <Card padding="md" variant="surface">
-                <CardHeader title="Create a follow-up" />
-                <div className={styles.panelBody}>
-                  <div className={styles.formGrid}>
-                    <Input label="Quest" placeholder="Review activation email" />
-                    <Select
-                      value="launch"
-                      onChange={() => {}}
-                      aria-label="Quest scope"
-                      options={[
-                        { value: "launch", label: "Launch" },
-                        { value: "runtime", label: "Runtime" },
-                        { value: "docs", label: "Docs" },
-                      ]}
+                    <Table
+                      columns={columns}
+                      data={rows}
+                      rowKey={(row) => row.id}
+                      density="compact"
+                      ariaLabel="Launch quest review"
                     />
-                  </div>
-                  <div className={styles.actions}>
-                    <Button variant="secondary">Cancel</Button>
-                    <Button variant="primary">Create</Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
+                  </PageSection>
+                </Card>
 
-            <div className={styles.stack}>
-              <Card padding="md">
-                <CardHeader
-                  title="System fit"
-                  actions={<Badge variant="success">Coherent</Badge>}
-                />
-                <div className={styles.panelBody}>
-                  <DetailField label="Surface ladder">{"paper -> card -> elevated"}</DetailField>
-                  <DetailField label="Control rhythm">28 / 32 / 40 px</DetailField>
-                  <DetailField label="Radius rule">8 px cards, 12 px modals</DetailField>
-                  <TagList items={["graphite", "quiet", "dense", "tokenized"]} />
-                  <div className={styles.reviewNote}>
-                    If a primitive looks louder here than it does alone, its token balance is wrong.
-                  </div>
-                </div>
-              </Card>
+                <Card padding="md" variant="surface">
+                  <PageSection title="Create a follow-up">
+                    <div className={styles.formGrid}>
+                      <Input label="Quest" placeholder="Review activation email" />
+                      <Select
+                        value="launch"
+                        onChange={() => {}}
+                        aria-label="Quest scope"
+                        options={[
+                          { value: "launch", label: "Launch" },
+                          { value: "runtime", label: "Runtime" },
+                          { value: "docs", label: "Docs" },
+                        ]}
+                      />
+                    </div>
+                    <div className={styles.actions}>
+                      <Button variant="secondary">Cancel</Button>
+                      <Button variant="primary">Create</Button>
+                    </div>
+                  </PageSection>
+                </Card>
+              </div>
 
-              <Card padding="md">
-                <EmptyState
-                  title="No visual exceptions"
-                  description="New UI should compose from this surface before inventing another class."
-                  action={<Button variant="secondary">Open Inventory</Button>}
-                />
-              </Card>
+              <div className={styles.stack}>
+                <Card padding="md">
+                  <PageSection
+                    title="System fit"
+                    actions={<Badge variant="success">Coherent</Badge>}
+                  >
+                    <DetailField label="Surface ladder">{"paper -> card -> elevated"}</DetailField>
+                    <DetailField label="Control rhythm">28 / 32 / 40 px</DetailField>
+                    <DetailField label="Radius rule">8 px cards, 12 px modals</DetailField>
+                    <TagList items={["graphite", "quiet", "dense", "tokenized"]} />
+                    <div className={styles.reviewNote}>
+                      If a primitive looks louder here than it does alone, its token balance is
+                      wrong.
+                    </div>
+                  </PageSection>
+                </Card>
+
+                <Card padding="md">
+                  <EmptyState
+                    title="No visual exceptions"
+                    description="New UI should compose from this surface before inventing another class."
+                    action={<Button variant="secondary">Open Inventory</Button>}
+                  />
+                </Card>
+              </div>
             </div>
-          </div>
-        </section>
+          </PageBody>
+        </Page>
       </div>
     </main>
   ),

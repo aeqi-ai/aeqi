@@ -26,6 +26,7 @@ const EXCLUDED_PREFIXES = [
 ];
 
 const EXCLUDED_SUFFIXES = [".stories.tsx", ".test.ts", ".test.tsx"];
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".css"];
 
 const RULES = [
   {
@@ -113,16 +114,24 @@ const RULES = [
     pattern: /\b-?backdrop-filter\s*:/g,
     guidance: "Avoid glassmorphism; use Modal/Popover elevation tokens.",
   },
+  {
+    key: "primitiveSubpathImport",
+    label: "primitive subpath import",
+    applies: (file) => file.endsWith(".ts") || file.endsWith(".tsx"),
+    pattern: /\b(?:from\s+|import\s+|import\s*\(\s*)["']@\/components\/ui\/[^"']+["']/g,
+    guidance: "Import primitives from the components/ui barrel: @/components/ui.",
+  },
 ];
 
 function trackedSourceFiles() {
-  const out = execSync(
-    "git ls-files -- 'apps/ui/src/**/*.ts' 'apps/ui/src/**/*.tsx' 'apps/ui/src/**/*.css'",
-    { cwd: REPO_ROOT, encoding: "utf-8" },
-  );
+  const out = execSync("git ls-files --cached -- 'apps/ui/src'", {
+    cwd: REPO_ROOT,
+    encoding: "utf-8",
+  });
   return out
     .split("\n")
     .filter(Boolean)
+    .filter((file) => SOURCE_EXTENSIONS.some((extension) => file.endsWith(extension)))
     .filter((file) => !EXCLUDED_PREFIXES.some((prefix) => file.startsWith(prefix)))
     .filter((file) => !EXCLUDED_SUFFIXES.some((suffix) => file.endsWith(suffix)));
 }
@@ -183,9 +192,19 @@ function exportedPrimitiveModules() {
 }
 
 function missingPrimitiveStories() {
+  const trackedStories = new Set(
+    execSync("git ls-files --cached -- 'apps/ui/src/components/ui/*.stories.tsx'", {
+      cwd: REPO_ROOT,
+      encoding: "utf-8",
+    })
+      .split("\n")
+      .filter(Boolean),
+  );
+
   return exportedPrimitiveModules().filter((moduleName) => {
     const story = path.join(UI_ROOT, `src/components/ui/${moduleName}.stories.tsx`);
-    return !existsSync(story);
+    const repoStory = path.relative(REPO_ROOT, story);
+    return !existsSync(story) || !trackedStories.has(repoStory);
   });
 }
 
@@ -269,7 +288,7 @@ function main() {
 
   for (const moduleName of missingStories) {
     failures.push(
-      `Primitive ${moduleName} is exported from components/ui but has no Storybook story.`,
+      `Primitive ${moduleName} is exported from components/ui but has no tracked/staged Storybook story.`,
     );
   }
 

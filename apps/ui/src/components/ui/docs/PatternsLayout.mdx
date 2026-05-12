@@ -1,23 +1,41 @@
 import { Meta } from "@storybook/blocks";
+import {
+  MetricCard,
+  MetricGrid,
+  Page,
+  PageBody,
+  PageHeader,
+  PageSection,
+  PageToolbar,
+} from "../Page";
 import { Stack } from "../Stack";
 import { Inline } from "../Inline";
 import { Button } from "../Button";
+import { Badge } from "../Badge";
+import { Input } from "../Input";
 
 <Meta title="Patterns/Layout" />
 
 # Layout
 
-`<Stack>` and `<Inline>` are the canonical replacements for the
-`style={{ display: 'flex', gap: ... }}` pattern scattered across the
-codebase. They keep token values in CSS, keep props out of component
-bodies, and give the type system a contract: gap values are always a
-valid `--space-N` token, never an ad-hoc pixel count.
+`<Page>` and its companion primitives are the canonical starting point
+for app screens. `<Stack>` and `<Inline>` are still the right local
+composition tools inside a card, form, or small component body. Together
+they replace the `style={{ display: 'flex', gap: ... }}` and one-off
+page wrapper patterns scattered across the codebase.
+
+Use Page primitives for page measure, header actions, toolbar zones,
+section rhythm, and metric summaries. Use Stack and Inline for local
+vertical or horizontal grouping after the page shell already exists.
 
 ## When to use
 
-- **Page layouts** — a main content area stacked top to bottom.
+- **Page layouts** — `Page` + `PageHeader` + `PageBody` for screens.
+- **Page sections** — `PageSection` for section titles, descriptions,
+  actions, and body rhythm.
+- **Toolbar rows** — `PageToolbar` for search/filter/action chrome.
+- **Metrics** — `MetricGrid` + `MetricCard` for stat summaries.
 - **Card internals** — header, body, and footer as a `<Stack gap="4">`.
-- **Toolbars** — action groups in an `<Inline justify="between">`.
 - **Form sections** — label + input pairs stacked with `<Stack gap="1">`,
   the whole form with `<Stack gap="4">`.
 
@@ -35,108 +53,130 @@ valid `--space-N` token, never an ad-hoc pixel count.
 
 ## Examples
 
-### 1 — Form actions row
+### 1 — Internal app page
 
-`<Inline justify="end" gap="2">` pushes the action group to the trailing
-edge of its container. Cancel lands left of Submit because DOM order is
-preserved. The white demo surface shows the elevated tier of the v5.1
-four-tier ladder.
+Start new dashboard screens with Page primitives. This gives future
+agents the right page measure, header rhythm, toolbar grouping, section
+spacing, and metric grid without custom wrapper CSS.
 
-<div
-  style={{
-    maxWidth: 480,
-    padding: "24px",
-    border: "1px solid rgba(0,0,0,0.06)",
-    borderRadius: 12,
-    background: "#ffffff",
-    margin: "24px 0",
-  }}
->
-  <Inline justify="end" gap="2">
-    <Button variant="ghost">Cancel</Button>
-    <Button variant="primary">Submit</Button>
-  </Inline>
-</div>
-
-### 2 — Card header
-
-`<Inline justify="between" align="center">` puts the title on the left
-and the badge on the right without any spacer divs or margin hacks.
-
-<div
-  style={{
-    maxWidth: 420,
-    padding: "16px 20px",
-    border: "1px solid rgba(0,0,0,0.06)",
-    borderRadius: 12,
-    background: "#ffffff",
-    margin: "24px 0",
-  }}
->
-  <Inline justify="between" align="center">
-    <span style={{ fontSize: 15, fontWeight: 600, color: "rgba(10,10,11,0.92)" }}>
-      Research Lead
-    </span>
-    <span
-      style={{
-        padding: "3px 8px",
-        fontSize: 12,
-        fontWeight: 500,
-        color: "#2e8f71",
-        background: "rgba(46,143,113,0.1)",
-        border: "1px solid rgba(46,143,113,0.22)",
-        borderRadius: 999,
-      }}
+<Page width="wide">
+  <PageHeader
+    title="Operations"
+    description="Runtime work across active company agents, grouped for scan-first review."
+    meta={<Badge variant="accent">Company Scope</Badge>}
+    actions={
+      <>
+        <Button variant="secondary" size="sm">
+          Export
+        </Button>
+        <Button variant="primary" size="sm">
+          New Quest
+        </Button>
+      </>
+    }
+  />
+  <PageBody>
+    <PageToolbar
+      aria-label="Operations controls"
+      grow
+      actions={
+        <Button variant="primary" size="sm">
+          Assign
+        </Button>
+      }
     >
-      active
-    </span>
-  </Inline>
-</div>
+      <Input aria-label="Search quests" placeholder="Search quests" size="sm" />
+    </PageToolbar>
+    <MetricGrid columns={3}>
+      <MetricCard label="Active quests" value="18" detail="Across six agents" />
+      <MetricCard label="Blocked" value="2" detail="Needs operator review" />
+      <MetricCard label="Done today" value="7" trend="+3" detail="Since 09:00" />
+    </MetricGrid>
+    <PageSection
+      title="Quest queue"
+      description="Sorted by the work most likely to need operator attention."
+      actions={
+        <Button variant="secondary" size="sm">
+          View all
+        </Button>
+      }
+    >
+      <Stack gap="2">
+        {[
+          { quest: "Normalize launch flow", owner: "founder-ops", status: "Working" },
+          { quest: "Review billing webhook", owner: "runtime", status: "Blocked" },
+          { quest: "Publish operator docs", owner: "docs", status: "Done" },
+        ].map(({ quest, owner, status }) => (
+          <Inline key={quest} justify="between" align="center" gap="3">
+            <Stack gap="0">
+              <strong>{quest}</strong>
+              <span>{owner}</span>
+            </Stack>
+            <Badge
+              variant={status === "Blocked" ? "warning" : status === "Done" ? "success" : "info"}
+              size="sm"
+              dot
+            >
+              {status}
+            </Badge>
+          </Inline>
+        ))}
+      </Stack>
+    </PageSection>
+  </PageBody>
+</Page>
 
-### 3 — Detail ladder
+### 2 — Section with actions
 
-`<Stack gap="2">` creates an evenly-spaced column of label-value pairs.
-Each row is itself an `<Inline>` if the label and value sit side by side.
+Use `PageSection` instead of hand-writing section headers with flex,
+spacer divs, or margin rules. The primitive owns heading/action alignment
+and responsive collapse.
 
-<div
-  style={{
-    maxWidth: 420,
-    padding: "20px 24px",
-    border: "1px solid rgba(0,0,0,0.06)",
-    borderRadius: 12,
-    background: "#ffffff",
-    margin: "24px 0",
-  }}
->
-  <Stack gap="2">
-    {[
-      { label: "Parent", value: "orchestrator" },
-      { label: "Quests in flight", value: "3" },
-      { label: "Last event", value: "2 minutes ago" },
-    ].map(({ label, value }) => (
-      <div
-        key={label}
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-      >
-        <span style={{ fontSize: 13, color: "rgba(10,10,11,0.54)" }}>{label}</span>
-        <span
-          style={{
-            fontSize: 13,
-            fontFamily: "var(--font-sans)",
-            color: "rgba(10,10,11,0.85)",
-          }}
-        >
-          {value}
-        </span>
-      </div>
-    ))}
-  </Stack>
-</div>
+<Page width="default">
+  <PageSection
+    title="Integrations"
+    description="Compact section rhythm for settings pages."
+    actions={
+      <Button variant="secondary" size="sm">
+        Add integration
+      </Button>
+    }
+  >
+    <MetricGrid columns={3}>
+      <MetricCard label="Connected" value="5" />
+      <MetricCard label="Needs review" value="1" />
+      <MetricCard label="Disabled" value="0" />
+    </MetricGrid>
+  </PageSection>
+</Page>
+
+### 3 — Local rows inside a section
+
+Once the page shell is in place, use `<Stack>` and `<Inline>` for local
+row composition. They are still the right way to avoid ad-hoc flex in
+small bodies.
+
+<Page width="default">
+  <PageSection title="Agent detail">
+    <Stack gap="2">
+      {[
+        { label: "Parent", value: "orchestrator" },
+        { label: "Quests in flight", value: "3" },
+        { label: "Last event", value: "2 minutes ago" },
+      ].map(({ label, value }) => (
+        <Inline key={label} justify="between" align="center" gap="3">
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </Inline>
+      ))}
+    </Stack>
+  </PageSection>
+</Page>
 
 ## Token mapping
 
-The `gap` prop is a key into the spacing scale. Values outside this table
-are a type error.
+The `gap` prop on Page, PageBody, PageSection, Stack, and Inline is a key
+into the spacing scale. Values outside this table are a type error.
 
 | `gap` prop | CSS token   | Computed value |
 | ---------- | ----------- | -------------- |
@@ -157,3 +197,4 @@ are a type error.
 
 - **Primitives → Containers → Stack** — vertical flex, full API and all variants.
 - **Primitives → Containers → Inline** — horizontal flex, full API and all variants.
+- **Primitives → Layout → Page** — app page shell, toolbar, section, and metric primitives.
