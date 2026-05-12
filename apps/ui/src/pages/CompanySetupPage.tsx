@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
-import { entityPath } from "@/lib/entityPath";
 import { DEFAULT_LAUNCH_PLAN, LAUNCH_PLANS, type LaunchPlanId } from "@/lib/pricing";
 import { RECOMMENDED_BLUEPRINTS } from "@/lib/recommendedBlueprints";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
@@ -227,19 +226,17 @@ export default function CompanySetupPage() {
         await fetchEntities();
         const match = useDaemonStore.getState().entities.find((entity) => entity.id === launchId);
         if (match) {
-          const launchState = match.launch_state ?? match.placement_status ?? "";
-          const isReady =
-            launchState === "complete" || launchState === "ready" || match.status === "active";
-          if (isReady) {
+          if (match.trust_address) {
             setSearchParams(new URLSearchParams(), { replace: true });
-            navigate(entityPath(match), { replace: true });
+            navigate(`/trust/${encodeURIComponent(match.trust_address)}`, { replace: true });
             return;
           }
+          const launchState = match.launch_state ?? match.placement_status ?? "";
           if (launchState === "failed") {
             setProvisioning(false);
             setSubmitError(
               match.launch_error ||
-                "Launch failed while provisioning. Refresh to keep watching the state.",
+                "Launch failed while provisioning. Refresh to keep watching the trust state.",
             );
             return;
           }
@@ -333,6 +330,7 @@ export default function CompanySetupPage() {
     navigate,
     organizationName,
     plan,
+    setSearchParams,
   ]);
 
   if (loading && !blueprint) {
@@ -373,9 +371,11 @@ export default function CompanySetupPage() {
             ? "Provisioning trust"
             : launchState === "runtime_provisioning"
               ? "Installing runtime"
-              : launchState === "complete" || launchState === "ready"
-                ? "Organization ready"
-                : "Provisioning";
+              : activeLaunchEntity?.trust_address
+                ? "Trust ready"
+                : launchState === "complete" || launchState === "ready"
+                  ? "Organization ready"
+                  : "Provisioning";
 
     const launchSteps = [
       { key: "checkout_completed", label: "Payment received" },
@@ -399,6 +399,7 @@ export default function CompanySetupPage() {
                 launchState === step.key ||
                 (step.key === "checkout_completed" && launchState === "checkout_pending");
               const done =
+                Boolean(activeLaunchEntity?.trust_address) ||
                 launchState === "complete" ||
                 launchState === "ready" ||
                 (step.key === "checkout_completed" && launchState !== "checkout_pending") ||
