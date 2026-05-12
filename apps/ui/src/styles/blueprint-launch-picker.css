@@ -431,6 +431,31 @@
   padding: var(--space-4);
 }
 
+.launch-plan-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.launch-plan-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+}
+
+.launch-plan-line--muted {
+  color: var(--color-text-secondary);
+}
+
+.launch-plan-line-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--color-text-secondary);
+}
+
 .plan-card-summary {
   margin: 0;
   font-size: 13px;

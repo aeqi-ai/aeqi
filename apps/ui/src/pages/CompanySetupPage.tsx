@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { BrainCircuit, CheckCircle2, Server } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
@@ -11,6 +12,7 @@ import { isSingleBlueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { Banner, Button, Card, EmptyState, Input, Spinner, Textarea } from "@/components/ui";
+import { Icon } from "@/components/ui/Icon";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import { BlueprintSeedCounts } from "@/components/blueprints/BlueprintSeedCounts";
 import "@/styles/blueprints-store.css";
@@ -389,9 +391,44 @@ export default function CompanySetupPage() {
                     {selected ? "✓" : ""}
                   </span>
                 </div>
-                <p className="plan-card-summary">
-                  {item.id === "growth" ? "4x Standard" : "Standard capacity"}
-                </p>
+                <div className="plan-card-price">
+                  <span className="plan-card-price-amount">
+                    {item.id === "growth" ? item.dueToday : item.price}
+                  </span>
+                  <span className="plan-card-price-cadence">
+                    {item.id === "growth"
+                      ? `first month · then ${item.price}${item.cadence}`
+                      : item.cadence}
+                  </span>
+                </div>
+                <div className="launch-plan-lines">
+                  <div className="launch-plan-line">
+                    <Icon
+                      icon={BrainCircuit}
+                      size="sm"
+                      decorative
+                      className="launch-plan-line-icon"
+                    />
+                    <span>{item.id === "growth" ? "20M LLM tokens" : "5M LLM tokens"}</span>
+                  </div>
+                  <div className="launch-plan-line">
+                    <Icon icon={Server} size="sm" decorative className="launch-plan-line-icon" />
+                    <span>
+                      {item.id === "growth"
+                        ? "8 vCPU · 16 GB RAM · 160 GB storage"
+                        : "2 vCPU · 4 GB RAM · 40 GB storage"}
+                    </span>
+                  </div>
+                  <div className="launch-plan-line launch-plan-line--muted">
+                    <Icon
+                      icon={CheckCircle2}
+                      size="sm"
+                      decorative
+                      className="launch-plan-line-icon"
+                    />
+                    <span>aeqi runtime installed · trust created</span>
+                  </div>
+                </div>
               </button>
             );
           })}
