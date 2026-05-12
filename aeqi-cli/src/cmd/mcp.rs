@@ -324,8 +324,8 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         eprintln!("[aeqi-mcp] agent scope: {name}");
     }
 
-    // Hosted/platform keys get first chance so local dogfood and hosted
-    // SaaS share the same actor envelope. Self-hosted runtimes without a
+    // Hosted/platform keys get first chance so local and hosted deployments
+    // share the same actor envelope. Self-hosted runtimes without a
     // platform key still use the local socket as an operator boundary.
     let local_sock = config.data_dir().join("rm.sock");
     let hosted_auth = if let Ok(secret_key) = std::env::var("AEQI_SECRET_KEY") {
