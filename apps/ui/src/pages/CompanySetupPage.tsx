@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
-import { entityPath } from "@/lib/entityPath";
-import { DEFAULT_LAUNCH_PLAN, LAUNCH_PLANS, RESOURCE_PACK, type LaunchPlanId } from "@/lib/pricing";
+import { entityPath, entityPathFromId } from "@/lib/entityPath";
+import { DEFAULT_LAUNCH_PLAN, LAUNCH_PLANS, type LaunchPlanId } from "@/lib/pricing";
 import { RECOMMENDED_BLUEPRINTS } from "@/lib/recommendedBlueprints";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
 import { isSingleBlueprint } from "@/lib/types";
@@ -26,10 +26,6 @@ function pickInitialBlueprintId(
   }
   if (byBlueprintId.has(DEFAULT_BLUEPRINT_SLUG)) return DEFAULT_BLUEPRINT_SLUG;
   return blueprints[0] ? blueprintId(blueprints[0]) : null;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function CompanySetupPage() {
@@ -183,19 +179,7 @@ export default function CompanySetupPage() {
         });
 
         await fetchEntities();
-        const deadline = Date.now() + PROVISION_POLL_TIMEOUT_MS;
-        let trustAddr: string | null = null;
-        while (Date.now() < deadline) {
-          await fetchEntities();
-          const entity = useDaemonStore.getState().entities.find((e) => e.id === resp.entity_id);
-          if (entity?.trust_address) {
-            trustAddr = entity.trust_address;
-            break;
-          }
-          await sleep(PROVISION_POLL_INTERVAL_MS);
-        }
-
-        navigate(entityPath({ id: resp.entity_id, trust_address: trustAddr ?? undefined }), {
+        navigate(entityPathFromId(useDaemonStore.getState().entities, resp.entity_id), {
           replace: true,
         });
         return;
@@ -395,69 +379,29 @@ export default function CompanySetupPage() {
             </div>
           </Card>
         </div>
-
-        <aside className="launch-side">
-          <Card variant="default" padding="lg" className="launch-side-card">
-            <div className="launch-side-head">
-              <p className="start-section-kicker">Launch summary</p>
-              <h2 className="launch-side-title">{organizationName.trim() || blueprint.name}</h2>
-              <p className="launch-side-sub">
-                {mission.trim() ||
-                  blueprint.tagline ||
-                  "This organization will be created from the selected blueprint."}
-              </p>
-            </div>
-
-            <dl className="launch-summary">
-              <div>
-                <dt>Blueprint</dt>
-                <dd>{blueprint.name}</dd>
-              </div>
-              <div>
-                <dt>Plan</dt>
-                <dd>
-                  {selectedLaunchPlan.name} · {selectedLaunchPlan.intro}
-                </dd>
-              </div>
-              <div>
-                <dt>Due today</dt>
-                <dd>{selectedLaunchPlan.id === "growth" ? "$69" : "$49"}</dd>
-              </div>
-              <div>
-                <dt>Renews</dt>
-                <dd>{selectedLaunchPlan.id === "growth" ? "$149/mo" : "$49/mo"}</dd>
-              </div>
-              <div>
-                <dt>Inference</dt>
-                <dd>{RESOURCE_PACK.inferenceUsd} credit included</dd>
-              </div>
-              <div>
-                <dt>Runtime</dt>
-                <dd>
-                  {RESOURCE_PACK.cpu} · {RESOURCE_PACK.ram} · {RESOURCE_PACK.storage}
-                </dd>
-              </div>
-              <div>
-                <dt>State</dt>
-                <dd>Draft now, live after checkout succeeds.</dd>
-              </div>
-            </dl>
-          </Card>
-        </aside>
       </section>
 
       <div className="launch-footer">
-        <p className="start-help">
-          No organization is created before payment succeeds. You can change tiers or switch
-          blueprints before launching.
-        </p>
+        <div className="launch-footer-copy">
+          <p className="start-help">
+            No organization is created before payment succeeds. You can change tiers or switch
+            blueprints before launching.
+          </p>
+          <p className="launch-footer-meta">
+            {selectedLaunchPlan.id === "growth" ? "$69 today, then $149/mo" : "$49/mo"}
+            {" · "}
+            {selectedLaunchPlan.id === "growth"
+              ? "4x inference · 2x compute"
+              : "1x inference · 1x compute"}
+          </p>
+        </div>
         <Button
           variant="primary"
           size="lg"
           onClick={() => void handleLaunch()}
           disabled={submitting || !organizationName.trim()}
           loading={submitting}
-          loadingLabel="Launching"
+          loadingLabel="Creating"
         >
           {canSkipCheckout ? "Launch organization" : "Pay & launch organization"}
         </Button>
