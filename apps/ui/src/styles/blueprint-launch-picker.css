@@ -382,16 +382,6 @@
   font-weight: 600;
 }
 
-.launch-field-divider {
-  margin: var(--space-1) 0 calc(var(--space-1) * -1);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
 .launch-plan-card {
   text-align: left;
   min-height: 100%;
@@ -502,13 +492,14 @@
 
 .launch-footer-action {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
 }
 
 .launch-footer .button {
-  min-width: 260px;
+  width: 100%;
+  min-width: 0;
 }
 
 .launch-provisioning-card {
@@ -555,7 +546,6 @@
   }
 
   .launch-footer .button {
-    min-width: 0;
     width: 100%;
   }
 }

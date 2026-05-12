@@ -319,7 +319,7 @@ export default function CompanySetupPage() {
 
             <div className="launch-fields">
               <label className="launch-field launch-field--name">
-                <span className="launch-field-label">Registered name</span>
+                <span className="launch-field-label">Name</span>
                 <Input
                   value={organizationName}
                   onChange={(e) => setOrganizationName(e.target.value)}
@@ -327,10 +327,6 @@ export default function CompanySetupPage() {
                   size="lg"
                 />
               </label>
-
-              <p className="launch-field-divider" aria-hidden="true">
-                Mission
-              </p>
 
               <label className="launch-field">
                 <span className="launch-field-label">Mission</span>
@@ -431,7 +427,8 @@ export default function CompanySetupPage() {
           </div>
           <Button
             variant="primary"
-            size="xl"
+            size="lg"
+            fullWidth
             onClick={() => void handleLaunch()}
             disabled={submitting || !organizationName.trim()}
             loading={submitting}
