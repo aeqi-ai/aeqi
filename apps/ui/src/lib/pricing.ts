@@ -60,8 +60,8 @@ export const LAUNCH_PLANS: LaunchPlan[] = [
     price: "$49",
     cadence: "/mo",
     dueToday: "$49",
-    intro: "Focused launch.",
-    blurb: "Launch with the core capacity for one organization.",
+    intro: "Focused launch capacity.",
+    blurb: "Best for starting focused.",
     features: [
       "Full organization + unlimited agents",
       "5M LLM tokens / month",
@@ -75,8 +75,8 @@ export const LAUNCH_PLANS: LaunchPlan[] = [
     price: "$149",
     cadence: "/mo",
     dueToday: "$69",
-    intro: "$69 first month.",
-    blurb: "More capacity from day one.",
+    intro: "4x more capacity from day one.",
+    blurb: "Best for heavier agent work.",
     features: [
       "Full organization + unlimited agents",
       "20M LLM tokens / month",

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { BrainCircuit, CheckCircle2, Server } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
@@ -12,7 +11,6 @@ import { isSingleBlueprint } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { Banner, Button, Card, EmptyState, Input, Spinner, Textarea } from "@/components/ui";
-import { Icon } from "@/components/ui/Icon";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
 import "@/styles/blueprints-store.css";
 import "@/styles/blueprint-launch-picker.css";
@@ -428,6 +426,14 @@ export default function CompanySetupPage() {
       </section>
 
       <div className="launch-footer">
+        <div className="launch-footer-meta">
+          <p className="start-section-kicker">Choose execution capacity</p>
+          <p className="launch-footer-note">
+            Both plans include the full organization and unlimited agents. Pro gives you 4x more LLM
+            capacity and 4x more runtime.
+          </p>
+        </div>
+
         <div className="launch-footer-plans" role="list" aria-label="Launch plans">
           {LAUNCH_PLANS.map((item) => {
             const selected = item.id === plan;
@@ -458,41 +464,22 @@ export default function CompanySetupPage() {
                       : item.cadence}
                   </span>
                 </div>
-                <div className="launch-plan-lines">
-                  <div className="launch-plan-line">
-                    <Icon
-                      icon={BrainCircuit}
-                      size="sm"
-                      decorative
-                      className="launch-plan-line-icon"
-                    />
-                    <span>{item.id === "growth" ? "20M LLM tokens" : "5M LLM tokens"}</span>
-                  </div>
-                  <div className="launch-plan-line">
-                    <Icon icon={Server} size="sm" decorative className="launch-plan-line-icon" />
-                    <span>
-                      {item.id === "growth"
-                        ? "8 vCPU · 16 GB RAM · 160 GB storage"
-                        : "2 vCPU · 4 GB RAM · 40 GB storage"}
-                    </span>
-                  </div>
-                  <div className="launch-plan-line launch-plan-line--muted">
-                    <Icon
-                      icon={CheckCircle2}
-                      size="sm"
-                      decorative
-                      className="launch-plan-line-icon"
-                    />
-                    <span>aeqi runtime installed · trust created</span>
-                  </div>
-                </div>
+                <p className="launch-plan-intro">{item.intro}</p>
+                <ul className="launch-plan-bullets">
+                  {item.features.map((feature) => (
+                    <li key={feature} className="launch-plan-bullet">
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <p className="launch-plan-footer">{item.blurb}</p>
               </button>
             );
           })}
         </div>
         <div className="launch-footer-action">
           <div className="launch-footer-copy">
-            <p className="launch-footer-note">Due today {selectedLaunchPlan.dueToday}</p>
+            <p className="launch-footer-note">Due today: {selectedLaunchPlan.dueToday}</p>
           </div>
           <Button
             variant="primary"
@@ -507,6 +494,10 @@ export default function CompanySetupPage() {
               ? "Launch organization"
               : `Pay ${selectedLaunchPlan.dueToday} and launch`}
           </Button>
+          <p className="launch-footer-support">
+            Your organization is created automatically after checkout succeeds. You can change
+            capacity later.
+          </p>
         </div>
       </div>
     </div>
