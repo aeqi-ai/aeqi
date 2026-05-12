@@ -4,7 +4,7 @@ import { useNav } from "@/hooks/useNav";
 import * as channelsApi from "@/api/channels";
 import type { AllowedChat, ChannelEntry } from "@/api/channels";
 import { useAgentChannels, useAgentChannelsCache, useChannelSessions } from "@/queries/channels";
-import { Button, CardTrigger, EmptyState, TabTrigger } from "./ui";
+import { Button, CardTrigger, EmptyState, Select, TabTrigger } from "./ui";
 import { BaileysPairingPanel } from "./BaileysPairingPanel";
 
 // Stable empty-array reference — see selector-hygiene.test.ts.
@@ -25,6 +25,12 @@ const CHANNEL_FIELDS: Record<string, { label: string; placeholder: string; type?
   // Baileys pairs via QR after row creation — no pre-pair inputs needed.
   "whatsapp-baileys": [],
 };
+
+const CHAT_MODE_OPTIONS = [
+  { value: "auto", label: "Auto-reply" },
+  { value: "read", label: "Read-only" },
+  { value: "off", label: "Off" },
+];
 
 function fieldKey(label: string): string {
   return label.toLowerCase().replace(/\s+/g, "_");
@@ -447,24 +453,21 @@ export default function AgentChannelsTab({ agentId }: { agentId: string }) {
                   )}
                 </div>
                 {whitelist ? (
-                  <select
+                  <Select
                     aria-label={`Reply mode for ${s.chat_id}`}
-                    className="agent-settings-input"
-                    style={{ fontSize: 11, padding: "2px 6px", width: "auto" }}
+                    className="channel-reply-mode-select"
+                    size="sm"
+                    options={CHAT_MODE_OPTIONS}
                     value={mode}
-                    onChange={(e) => {
-                      const next = e.target.value as ChatMode;
+                    onChange={(nextValue) => {
+                      const next = nextValue as ChatMode;
                       updateAllowed(selected.id, (current) => {
                         const without = current.filter((v) => v.chat_id !== s.chat_id);
                         if (next === "off") return without;
                         return [...without, { chat_id: s.chat_id, reply_allowed: next === "auto" }];
                       });
                     }}
-                  >
-                    <option value="auto">Auto-reply</option>
-                    <option value="read">Read-only</option>
-                    <option value="off">Off</option>
-                  </select>
+                  />
                 ) : (
                   <span style={{ fontSize: 10, color: "var(--color-text-muted)" }}>Allowed</span>
                 )}

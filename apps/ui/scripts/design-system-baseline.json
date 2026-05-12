@@ -79,12 +79,8 @@
     },
     "rawSelect": {
       "label": "raw <select>",
-      "count": 2,
+      "count": 1,
       "topFiles": [
-        {
-          "file": "apps/ui/src/components/AgentChannelsTab.tsx",
-          "count": 1
-        },
         {
           "file": "apps/ui/src/components/ideas/IdeaPropertyChips.tsx",
           "count": 1
@@ -107,7 +103,7 @@
     },
     "inlineStyle": {
       "label": "inline style object",
-      "count": 505,
+      "count": 504,
       "topFiles": [
         {
           "file": "apps/ui/src/pages/TreasuryPage.tsx",

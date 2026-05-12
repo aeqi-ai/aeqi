@@ -5285,6 +5285,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.channel-reply-mode-select {
+  min-width: 116px;
+}
+
 /* ------------------------------------------------------------------
    Tools tab — grouped catalogue with on/off state
    ------------------------------------------------------------------ */
