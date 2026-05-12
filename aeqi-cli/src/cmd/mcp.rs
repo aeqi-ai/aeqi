@@ -193,16 +193,13 @@ impl McpAuthContext {
         }
     }
 
-    fn apply_to_ipc(&self, request: &mut serde_json::Value, enforce_legacy_tenancy: bool) {
+    fn apply_to_ipc(&self, request: &mut serde_json::Value) {
         request["actor"] = serde_json::json!(self.actor);
         if let Some(user_id) = self.user_id.as_deref() {
             request["caller_user_id"] = serde_json::json!(user_id);
         }
         if let Some(entity_id) = self.entity_id.as_deref() {
             request["caller_entity_id"] = serde_json::json!(entity_id);
-        }
-        if enforce_legacy_tenancy && !self.allowed_roots.is_empty() {
-            request["allowed_roots"] = serde_json::json!(self.allowed_roots);
         }
     }
 
@@ -346,7 +343,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         None
     };
 
-    let (mut auth_context, sock_path) = if let Some(auth) = hosted_auth {
+    let (auth_context, sock_path) = if let Some(auth) = hosted_auth {
         auth
     } else if local_sock.exists() {
         eprintln!(
@@ -363,25 +360,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
             local_sock.display()
         );
     };
-    if auth_context.mode == "platform" {
-        for project in &config.agent_spawns {
-            if !auth_context
-                .allowed_roots
-                .iter()
-                .any(|p| p == &project.name)
-            {
-                auth_context.allowed_roots.push(project.name.clone());
-            }
-        }
-    }
-
     let call_ipc = |request: &serde_json::Value| -> Result<serde_json::Value> {
         let mut request = request.clone();
-        let enforce_legacy_tenancy = matches!(
-            std::env::var("AEQI_MCP_ENFORCE_TENANCY").ok().as_deref(),
-            Some("1" | "true" | "yes")
-        );
-        auth_context.apply_to_ipc(&mut request, enforce_legacy_tenancy);
+        auth_context.apply_to_ipc(&mut request);
         ipc_request_sync(&sock_path, &request)
     };
 
@@ -1462,17 +1443,17 @@ mod tests {
         let (auth, _) = McpAuthContext::from_platform_response(&parsed).unwrap();
         let mut request = serde_json::json!({"cmd": "create_quest", "project": "aeqi"});
 
-        auth.apply_to_ipc(&mut request, true);
+        auth.apply_to_ipc(&mut request);
 
         assert_eq!(request["caller_user_id"], "user-1");
         assert_eq!(request["caller_entity_id"], "entity-1");
-        assert_eq!(request["allowed_roots"], serde_json::json!(["entity-1"]));
         assert_eq!(request["actor"]["kind"], "user");
         assert_eq!(request["actor"]["user_id"], "user-1");
+        assert!(request.get("allowed_roots").is_none());
     }
 
     #[test]
-    fn auth_context_leaves_legacy_tenancy_off_by_default() {
+    fn auth_context_keeps_authorized_roots_in_profile_only() {
         let parsed = serde_json::json!({
             "ok": true,
             "root": "entity-1",
@@ -1483,11 +1464,8 @@ mod tests {
             }
         });
         let (auth, _) = McpAuthContext::from_platform_response(&parsed).unwrap();
-        let mut request = serde_json::json!({"cmd": "quests", "project": "aeqi"});
+        let profile = auth.public_json();
 
-        auth.apply_to_ipc(&mut request, false);
-
-        assert_eq!(request["actor"]["user_id"], "user-1");
-        assert!(request.get("allowed_roots").is_none());
+        assert_eq!(profile["allowed_roots"], serde_json::json!(["entity-1"]));
     }
 }
