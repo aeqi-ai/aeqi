@@ -4416,6 +4416,20 @@
   min-width: 0;
 }
 
+.admin-entity-cell {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.admin-entity-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--color-text-muted);
+}
+
 .admin-trust-cell {
   flex-wrap: wrap;
 }

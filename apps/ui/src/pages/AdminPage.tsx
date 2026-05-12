@@ -405,43 +405,25 @@ export default function AdminPage() {
   const placementColumns = useMemo<Array<TableColumn<PlacementRow>>>(
     () => [
       {
-        key: "entity",
-        header: "Entity",
+        key: "organization",
+        header: "Organization",
         cell: (p) => (
-          <span className="admin-mono-cell" title={p.entity_id}>
-            {shortId(p.entity_id)}
-          </span>
+          <div className="admin-entity-cell">
+            <span className="admin-primary-cell">{valueOrDash(p.display_name)}</span>
+            <span className="admin-entity-meta">
+              <span className="admin-runtime-kind">
+                <Server size={14} aria-hidden="true" />
+                {labelize(p.placement_type)}
+              </span>
+              <span className="admin-mono-cell" title={p.entity_id}>
+                {shortId(p.entity_id)}
+              </span>
+            </span>
+          </div>
         ),
-        width: "96px",
+        width: "240px",
         sortable: true,
-        sortAccessor: (p) => p.entity_id,
-      },
-      {
-        key: "name",
-        header: "Name",
-        cell: (p) => <span className="admin-primary-cell">{valueOrDash(p.display_name)}</span>,
-        sortable: true,
-        sortAccessor: (p) => p.display_name,
-      },
-      {
-        key: "user",
-        header: "User",
-        cell: (p) => valueOrDash(p.user_email ?? p.owner_email ?? shortId(p.user_id)),
-        sortable: true,
-        sortAccessor: (p) => p.user_email ?? p.owner_email ?? p.user_id,
-      },
-      {
-        key: "type",
-        header: "Type",
-        cell: (p) => (
-          <span className="admin-runtime-kind">
-            <Server size={14} aria-hidden="true" />
-            {labelize(p.placement_type)}
-          </span>
-        ),
-        width: "132px",
-        sortable: true,
-        sortAccessor: (p) => p.placement_type,
+        sortAccessor: (p) => p.display_name || p.entity_id,
       },
       {
         key: "lifecycle",
@@ -487,18 +469,10 @@ export default function AdminPage() {
         sortAccessor: (p) => `${p.target_host ?? ""}:${p.target_port ?? ""}`,
       },
       {
-        key: "plan",
-        header: "Plan",
-        cell: (p) => planLabel(p.plan),
-        width: "100px",
-        sortable: true,
-        sortAccessor: (p) => p.plan,
-      },
-      {
         key: "service",
         header: "Service",
         cell: (p) => <span className="admin-mono-cell">{valueOrDash(p.service_name)}</span>,
-        width: "220px",
+        width: "240px",
         sortable: true,
         sortAccessor: (p) => p.service_name,
       },
@@ -506,7 +480,7 @@ export default function AdminPage() {
         key: "created",
         header: "Created",
         cell: (p) => fmtDate(p.created_at),
-        width: "180px",
+        width: "150px",
         sortable: true,
         sortAccessor: (p) => new Date(p.created_at),
       },
