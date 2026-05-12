@@ -363,7 +363,14 @@ export default function CompanySetupPage() {
   return (
     <div className="launch-page">
       <header className="launch-head">
-        <h1 className="page-title">Launch your organization.</h1>
+        <div className="start-head-copy">
+          <h1 className="page-title">Launch your organization.</h1>
+        </div>
+        <div className="start-head-actions">
+          <Link to="/blueprints" className="start-secondary-link">
+            Browse blueprints
+          </Link>
+        </div>
       </header>
 
       {submitError && (
@@ -434,9 +441,6 @@ export default function CompanySetupPage() {
             <div className="launch-blueprint-actions">
               <Link to={blueprintPath} className="launch-secondary-link">
                 Customize blueprint
-              </Link>
-              <Link to="/blueprints" className="launch-secondary-link">
-                Change blueprint
               </Link>
             </div>
           </Card>
