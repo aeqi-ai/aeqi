@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+} from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { launchPlanDisplayName } from "@/lib/pricing";
@@ -30,14 +39,27 @@ interface PlacementRow {
   entity_id: string;
   display_name: string;
   user_id: string;
-  user_email: string | null;
+  user_email?: string | null;
+  owner_email?: string | null;
   placement_type: string;
-  status: string;
+  status?: string | null;
+  placement_status?: string | null;
+  org_lifecycle?: string | null;
+  trust_status?: string | null;
+  trust_id?: string | null;
+  trust_address?: string | null;
+  creator_address?: string | null;
+  target_host?: string | null;
   target_port: number | null;
+  runtime_id?: string | null;
   plan: string;
   service_name: string | null;
   stripe_subscription_id: string | null;
+  trust_error?: string | null;
+  runtime_error?: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
+  updated_at?: string;
 }
 
 interface InviteRow {
@@ -60,6 +82,34 @@ interface Overview {
   placements: PlacementRow[];
   invite_codes: InviteRow[];
   waitlist: WaitlistRow[];
+  health: AdminHealth | null;
+}
+
+interface AdminHealth {
+  overall?: string;
+  trust?: {
+    active?: number;
+    provisioning?: number;
+    failed?: number;
+    missing_trust_address?: number;
+    active_without_trust?: string[];
+  };
+  runtime?: {
+    placements_total?: number;
+    by_type?: Record<string, number>;
+    by_status?: Record<string, number>;
+    missing_target?: string[];
+    failed?: string[];
+  };
+  postgres?: {
+    enabled?: boolean;
+    status?: string;
+    latency_ms?: number;
+    runtime_placements_source?: string;
+  };
+  placement?: {
+    by_lifecycle?: Record<string, number>;
+  };
 }
 
 function fmtDate(s: string | null): string {
@@ -98,6 +148,15 @@ function labelize(s: string | null | undefined): string {
     .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
+function placementStatus(p: PlacementRow): string {
+  return p.placement_status || p.status || "unknown";
+}
+
+function compactAddress(s: string | null | undefined): string {
+  if (!s) return "—";
+  return s.length <= 18 ? s : `${s.slice(0, 8)}…${s.slice(-6)}`;
+}
+
 function statusVariant(status: string | null | undefined): BadgeVariant {
   if (!status) return "muted";
   const normalized = status.toLowerCase();
@@ -115,6 +174,13 @@ function StatusPill({ value }: { value: string | null | undefined }) {
       {labelize(value)}
     </Badge>
   );
+}
+
+function overallVariant(status: string | null | undefined): BadgeVariant {
+  if (status === "critical") return "error";
+  if (status === "warning") return "warning";
+  if (status === "ok") return "success";
+  return "neutral";
 }
 
 function matchesQuery(values: Array<string | number | null | undefined>, query: string): boolean {
@@ -152,6 +218,7 @@ export default function AdminPage() {
           placements: (res.placements as unknown as PlacementRow[]) ?? [],
           invite_codes: (res.invite_codes as unknown as InviteRow[]) ?? [],
           waitlist: (res.waitlist as unknown as WaitlistRow[]) ?? [],
+          health: (res.health as AdminHealth | undefined) ?? null,
         });
         setLastLoadedAt(new Date());
       })
@@ -168,7 +235,13 @@ export default function AdminPage() {
   const normalizedQuery = query.trim().toLowerCase();
 
   const filtered = useMemo(() => {
-    const empty: Overview = { users: [], placements: [], invite_codes: [], waitlist: [] };
+    const empty: Overview = {
+      users: [],
+      placements: [],
+      invite_codes: [],
+      waitlist: [],
+      health: null,
+    };
     if (!data) return empty;
     return {
       users: data.users.filter((u) =>
@@ -192,8 +265,13 @@ export default function AdminPage() {
             p.display_name,
             p.user_id,
             p.user_email,
+            p.owner_email,
             p.placement_type,
-            p.status,
+            placementStatus(p),
+            p.org_lifecycle,
+            p.trust_status,
+            p.trust_address,
+            p.target_host,
             p.target_port,
             p.plan,
             p.service_name,
@@ -233,17 +311,23 @@ export default function AdminPage() {
       ];
     }
     const admins = data.users.filter((u) => u.is_admin).length;
-    const activePlacements = data.placements.filter(
-      (p) => p.status.toLowerCase() === "active",
-    ).length;
+    const activePlacements = data.placements.filter((p) => p.org_lifecycle === "active").length;
+    const trustActive =
+      data.health?.trust?.active ??
+      data.placements.filter((p) => p.trust_status === "active").length;
     const openInvites = data.invite_codes.filter((c) => !c.used_at && !c.used_by_email).length;
     const pendingWaitlist = data.waitlist.filter((w) => !w.confirmed_at && w.pending_token).length;
     return [
       { label: "Users", value: String(data.users.length), detail: `${admins} admins` },
       {
-        label: "Runtime",
+        label: "Organizations",
         value: String(data.placements.length),
         detail: `${activePlacements} active`,
+      },
+      {
+        label: "Trust",
+        value: String(trustActive),
+        detail: `${data.health?.trust?.provisioning ?? 0} provisioning`,
       },
       { label: "Invites", value: String(data.invite_codes.length), detail: `${openInvites} open` },
       {
@@ -342,34 +426,65 @@ export default function AdminPage() {
       {
         key: "user",
         header: "User",
-        cell: (p) => valueOrDash(p.user_email ?? shortId(p.user_id)),
+        cell: (p) => valueOrDash(p.user_email ?? p.owner_email ?? shortId(p.user_id)),
         sortable: true,
-        sortAccessor: (p) => p.user_email ?? p.user_id,
+        sortAccessor: (p) => p.user_email ?? p.owner_email ?? p.user_id,
       },
       {
         key: "type",
         header: "Type",
-        cell: (p) => labelize(p.placement_type),
-        width: "120px",
+        cell: (p) => (
+          <span className="admin-runtime-kind">
+            <Server size={14} aria-hidden="true" />
+            {labelize(p.placement_type)}
+          </span>
+        ),
+        width: "132px",
         sortable: true,
         sortAccessor: (p) => p.placement_type,
       },
       {
-        key: "status",
-        header: "Status",
-        cell: (p) => <StatusPill value={p.status} />,
-        width: "120px",
+        key: "lifecycle",
+        header: "Lifecycle",
+        cell: (p) => <StatusPill value={p.org_lifecycle ?? placementStatus(p)} />,
+        width: "150px",
         sortable: true,
-        sortAccessor: (p) => p.status,
+        sortAccessor: (p) => p.org_lifecycle ?? placementStatus(p),
       },
       {
-        key: "port",
-        header: "Port",
-        cell: (p) => p.target_port ?? "—",
-        width: "88px",
-        align: "end",
+        key: "trust",
+        header: "Trust",
+        cell: (p) => (
+          <div className="admin-trust-cell">
+            <StatusPill value={p.trust_status ?? (p.trust_address ? "active" : "pending")} />
+            <span className="admin-mono-cell" title={p.trust_address ?? undefined}>
+              {compactAddress(p.trust_address)}
+            </span>
+          </div>
+        ),
+        width: "180px",
         sortable: true,
-        sortAccessor: (p) => p.target_port,
+        sortAccessor: (p) => p.trust_status ?? p.trust_address,
+      },
+      {
+        key: "runtime",
+        header: "Runtime",
+        cell: (p) => <StatusPill value={placementStatus(p)} />,
+        width: "120px",
+        sortable: true,
+        sortAccessor: (p) => placementStatus(p),
+      },
+      {
+        key: "host",
+        header: "Target",
+        cell: (p) => (
+          <span className="admin-mono-cell">
+            {p.target_host && p.target_port ? `${p.target_host}:${p.target_port}` : "—"}
+          </span>
+        ),
+        width: "172px",
+        sortable: true,
+        sortAccessor: (p) => `${p.target_host ?? ""}:${p.target_port ?? ""}`,
       },
       {
         key: "plan",
@@ -383,7 +498,7 @@ export default function AdminPage() {
         key: "service",
         header: "Service",
         cell: (p) => <span className="admin-mono-cell">{valueOrDash(p.service_name)}</span>,
-        width: "160px",
+        width: "220px",
         sortable: true,
         sortAccessor: (p) => p.service_name,
       },
@@ -611,6 +726,7 @@ export default function AdminPage() {
             </span>
           )}
           <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw size={14} aria-hidden="true" />
             {loading ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
@@ -626,6 +742,8 @@ export default function AdminPage() {
 
       {data && (
         <>
+          <ProtocolHealth health={data.health} placements={data.placements} />
+
           <div className="admin-metrics" aria-label="Admin summary">
             {stats.map((stat) => (
               <div key={stat.label} className="admin-metric">
@@ -659,6 +777,157 @@ export default function AdminPage() {
       )}
     </div>
   );
+}
+
+function ProtocolHealth({
+  health,
+  placements,
+}: {
+  health: AdminHealth | null;
+  placements: PlacementRow[];
+}) {
+  const overall = health?.overall ?? "unknown";
+  const lifecycle = health?.placement?.by_lifecycle ?? countBy(placements, (p) => p.org_lifecycle);
+  const runtimeTypes = health?.runtime?.by_type ?? countBy(placements, (p) => p.placement_type);
+  const runtimeStatuses = health?.runtime?.by_status ?? countBy(placements, placementStatus);
+  const warnings = [
+    ...(health?.trust?.active_without_trust ?? []).map((id) => ({
+      code: "active_without_trust",
+      entity: id,
+      severity: "critical" as const,
+    })),
+    ...(health?.runtime?.missing_target ?? []).map((id) => ({
+      code: "ready_without_target",
+      entity: id,
+      severity: "critical" as const,
+    })),
+    ...(health?.runtime?.failed ?? []).map((id) => ({
+      code: "runtime_failed",
+      entity: id,
+      severity: "warning" as const,
+    })),
+  ];
+
+  return (
+    <section className="admin-health" aria-label="Protocol health">
+      <div className="admin-health-head">
+        <div>
+          <h2 className="admin-health-title">Protocol health</h2>
+          <p className="admin-health-subtitle">
+            Organization readiness is Trust plus runtime. Transitional rows stay visible here.
+          </p>
+        </div>
+        <Badge variant={overallVariant(overall)} size="sm" dot>
+          {labelize(overall)}
+        </Badge>
+      </div>
+
+      <div className="admin-health-grid">
+        <HealthTile
+          icon={<ShieldCheck size={18} aria-hidden="true" />}
+          label="Trust"
+          value={health?.trust?.active ?? 0}
+          detail={`${health?.trust?.provisioning ?? 0} provisioning · ${
+            health?.trust?.failed ?? 0
+          } failed`}
+        />
+        <HealthTile
+          icon={<Server size={18} aria-hidden="true" />}
+          label="Runtime"
+          value={health?.runtime?.placements_total ?? placements.length}
+          detail={formatMap(runtimeTypes)}
+        />
+        <HealthTile
+          icon={<Activity size={18} aria-hidden="true" />}
+          label="Lifecycle"
+          value={lifecycle.active ?? 0}
+          detail={formatMap(lifecycle)}
+        />
+        <HealthTile
+          icon={<Database size={18} aria-hidden="true" />}
+          label="Postgres"
+          value={labelize(health?.postgres?.status ?? "unknown")}
+          detail={`${health?.postgres?.runtime_placements_source ?? "unknown"} · ${
+            health?.postgres?.latency_ms ?? "—"
+          }ms`}
+        />
+      </div>
+
+      <div className="admin-health-status">
+        <div className="admin-health-status-row">
+          <span>Runtime status</span>
+          <span>{formatMap(runtimeStatuses)}</span>
+        </div>
+        <div className="admin-health-status-row">
+          <span>Missing Trust addresses</span>
+          <span>{health?.trust?.missing_trust_address ?? 0}</span>
+        </div>
+      </div>
+
+      {warnings.length > 0 ? (
+        <div className="admin-warning-list" role="status">
+          {warnings.map((warning) => (
+            <div key={`${warning.code}:${warning.entity}`} className="admin-warning-row">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <span>{labelize(warning.code)}</span>
+              <span className="admin-mono-cell">{shortId(warning.entity)}</span>
+              <Badge variant={warning.severity === "critical" ? "error" : "warning"} size="sm">
+                {labelize(warning.severity)}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="admin-health-clear">
+          <CheckCircle2 size={16} aria-hidden="true" />
+          <span>No protocol health warnings</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HealthTile({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div className="admin-health-tile">
+      <div className="admin-health-tile-icon">{icon}</div>
+      <div>
+        <span className="admin-health-tile-label">{label}</span>
+        <strong className="admin-health-tile-value">{value}</strong>
+        <span className="admin-health-tile-detail">{detail}</span>
+      </div>
+    </div>
+  );
+}
+
+function countBy<T>(
+  rows: T[],
+  select: (row: T) => string | null | undefined,
+): Record<string, number> {
+  return rows.reduce<Record<string, number>>((acc, row) => {
+    const key = select(row) || "unknown";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function formatMap(map: Record<string, number>): string {
+  const entries = Object.entries(map).filter(([, count]) => count > 0);
+  if (entries.length === 0) return "—";
+  return entries
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, count]) => `${count} ${labelize(key)}`)
+    .join(" · ");
 }
 
 function Section({

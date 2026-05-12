@@ -123,6 +123,7 @@ export const api = {
       placements: Array<Record<string, unknown>>;
       invite_codes: Array<Record<string, unknown>>;
       waitlist: Array<Record<string, unknown>>;
+      health?: Record<string, unknown>;
     }>("/admin/overview"),
 
   getMe: () => request<Record<string, unknown>>("/auth/me"),
