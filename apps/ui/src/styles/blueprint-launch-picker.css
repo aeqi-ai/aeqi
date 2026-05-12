@@ -287,7 +287,7 @@
   flex-direction: column;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
-  background: linear-gradient(180deg, var(--color-card), var(--color-card-elevated));
+  background: var(--color-card);
 }
 
 .launch-blueprint-picker {
@@ -320,7 +320,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  background: linear-gradient(180deg, var(--color-card), var(--color-card-elevated));
+  background: var(--color-card);
 }
 
 .launch-card-head {
@@ -411,13 +411,20 @@
   min-height: 100%;
 }
 
+.plan-card-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
 .launch-preview-card {
   position: sticky;
   top: var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  background: linear-gradient(180deg, var(--color-card), var(--color-card-elevated));
+  background: var(--color-card);
 }
 
 .launch-preview-head {
@@ -428,7 +435,7 @@
 }
 
 .launch-preview-sub {
-  max-width: 42ch;
+  max-width: 38ch;
 }
 
 .launch-preview-card .bp-summary-pills {
@@ -444,13 +451,13 @@
   bottom: var(--space-4);
   z-index: 20;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, var(--color-card), var(--color-card-elevated));
+  background: var(--color-card);
   box-shadow: var(--shadow-sm);
 }
 
@@ -463,18 +470,10 @@
 
 .launch-footer-note {
   margin: 0;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   line-height: 1.45;
   color: var(--color-text-primary);
-  max-width: 52ch;
-}
-
-.launch-footer-meta {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  line-height: 1.45;
-  color: var(--color-text-secondary);
   max-width: 52ch;
 }
 

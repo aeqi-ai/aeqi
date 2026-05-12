@@ -278,10 +278,7 @@ export default function CompanySetupPage() {
       <header className="launch-head">
         <div className="launch-head-copy">
           <p className="start-eyebrow">Launch</p>
-          <h1 className="page-title">Launch an organization.</h1>
-          <p className="start-sub">
-            Give it a name, a mission, and the execution capacity it starts with.
-          </p>
+          <h1 className="page-title">Launch your organization.</h1>
         </div>
       </header>
 
@@ -307,17 +304,12 @@ export default function CompanySetupPage() {
             <Card variant="default" padding="lg" interactive className="launch-blueprint-card">
               <div className="launch-blueprint-head">
                 <div>
-                  <p className="start-section-kicker">1. Selected blueprint</p>
+                  <p className="start-section-kicker">Blueprint</p>
                   <h2 className="start-section-title">{blueprint.name}</h2>
-                  <p className="start-sub">{blueprint.tagline || blueprint.description || ""}</p>
                 </div>
                 <span className="launch-blueprint-link" aria-hidden>
-                  Change blueprint →
+                  Change →
                 </span>
-              </div>
-              <div className="launch-blueprint-meta">
-                <span className="launch-blueprint-pill">{blueprintMode.label}</span>
-                <span className="launch-blueprint-meta-text">{blueprintMode.meta}</span>
               </div>
             </Card>
           </Link>
@@ -325,8 +317,8 @@ export default function CompanySetupPage() {
           <Card variant="default" padding="lg" className="launch-card">
             <div className="launch-card-head">
               <div>
-                <p className="start-section-kicker">2. Define the organization</p>
-                <h3 className="start-section-title">Name it. Give it a mission.</h3>
+                <p className="start-section-kicker">Name</p>
+                <h3 className="start-section-title">Give it a name and mission.</h3>
               </div>
             </div>
 
@@ -353,12 +345,9 @@ export default function CompanySetupPage() {
 
             <div className="launch-plan-head">
               <div>
-                <p className="start-section-kicker">3. Choose your execution tier</p>
-                <h3 className="start-section-title">Pick the launch tier.</h3>
-                <p className="start-sub">
-                  Both tiers include the full organization and unlimited agents. Pro gives 4x more
-                  LLM capacity and 4x more runtime.
-                </p>
+                <p className="start-section-kicker">Capacity</p>
+                <h3 className="start-section-title">Standard or Pro.</h3>
+                <p className="start-sub">Pro gives 4x tokens and 4x runtime.</p>
               </div>
             </div>
 
@@ -392,13 +381,11 @@ export default function CompanySetupPage() {
                           : item.cadence}
                       </span>
                     </div>
-                    <div className="plan-card-features">
-                      {item.features.map((feature) => (
-                        <span key={feature} className="plan-card-feature">
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
+                    <p className="plan-card-summary">
+                      {item.id === "growth"
+                        ? "4x tokens · 4x runtime"
+                        : "5M tokens · 2 vCPU runtime"}
+                    </p>
                   </button>
                 );
               })}
@@ -411,11 +398,13 @@ export default function CompanySetupPage() {
             <div className="launch-preview-head">
               <div>
                 <p className="start-section-kicker">Preview</p>
-                <h3 className="start-section-title">What launches.</h3>
+                <h3 className="start-section-title">{blueprint.name}</h3>
               </div>
               <span className="launch-preview-type">{blueprintMode.label}</span>
             </div>
-            <p className="start-sub launch-preview-sub">{blueprintMode.meta}</p>
+            <p className="start-sub launch-preview-sub">
+              {blueprint.tagline || blueprint.description || blueprintMode.meta}
+            </p>
             <BlueprintSeedCounts template={blueprint} />
             <BlueprintTreePreview template={blueprint} />
           </Card>
@@ -424,12 +413,7 @@ export default function CompanySetupPage() {
 
       <div className="launch-footer">
         <div className="launch-footer-copy">
-          <p className="launch-footer-note">
-            {selectedLaunchPlan.id === "growth"
-              ? `Due today ${selectedLaunchPlan.dueToday} · Pro · 20M LLM tokens / month · 8 vCPU runtime`
-              : `Due today ${selectedLaunchPlan.dueToday} · Standard · 5M LLM tokens / month · 2 vCPU runtime`}
-          </p>
-          <p className="launch-footer-meta">Full organization · unlimited agents</p>
+          <p className="launch-footer-note">Due today {selectedLaunchPlan.dueToday}</p>
         </div>
         <Button
           variant="primary"
