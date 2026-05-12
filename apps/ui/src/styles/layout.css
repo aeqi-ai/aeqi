@@ -798,9 +798,7 @@
   display: block;
 }
 
-/* Brand wordmark in the sidebar header — Link wrapping <Wordmark>.
- * Mirrors .sidebar-public-brand's shape so the authed and unauthed
- * shells share the same brand rhythm. */
+/* Brand wordmark in the sidebar header — Link wrapping <Wordmark>. */
 .sidebar-brand {
   display: inline-flex;
   align-items: center;
@@ -1181,77 +1179,6 @@
 }
 .left-sidebar.collapsed .sidebar-help-btn {
   display: none;
-}
-
-/* ── Public sidebar (unauthed) ──
-   Shares the rail's geometry: wordmark in the header, Launch in the
-   first nav zone, Sign in / Sign up in the account zone
-   (Sign in as a ghost row, Launch as the filled-graphite CTA that
-   mirrors the landing page hero). Collapse toggle works the same as
-   on the authed rail; collapsed state shows the brandmark on rest and
-   morphs to the panel-glyph on hover. */
-.public-sidebar .sidebar-public-brand {
-  display: inline-flex;
-  align-items: center;
-  height: var(--sidebar-row-h);
-  padding: 0 4px;
-  text-decoration: none;
-  color: var(--color-accent);
-  border-radius: var(--radius-md);
-  transition: opacity 0.12s ease;
-  flex: 1;
-  min-width: 0;
-}
-.public-sidebar .sidebar-public-brand:hover {
-  opacity: 0.85;
-}
-
-/* Collapsed brand-toggle — rest shows the wordmark (keeps the brand
-   present even when the rail is shrunken); hover morphs to the
-   panel-glyph (telegraphs "click to expand"). Same target both times,
-   so the cursor never has to chase. */
-.sidebar-public-brand-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  color: var(--color-accent);
-  cursor: pointer;
-  position: relative;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.sidebar-public-brand-toggle:hover,
-.sidebar-public-brand-toggle:focus-visible {
-  border-color: var(--border-hover);
-  background: var(--state-hover);
-  outline: none;
-}
-.sidebar-public-brand-toggle-rest,
-.sidebar-public-brand-toggle-hover {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: absolute;
-  inset: 0;
-  transition: opacity 0.14s ease;
-}
-.sidebar-public-brand-toggle-hover {
-  opacity: 0;
-}
-.sidebar-public-brand-toggle:hover .sidebar-public-brand-toggle-rest,
-.sidebar-public-brand-toggle:focus-visible .sidebar-public-brand-toggle-rest {
-  opacity: 0;
-}
-.sidebar-public-brand-toggle:hover .sidebar-public-brand-toggle-hover,
-.sidebar-public-brand-toggle:focus-visible .sidebar-public-brand-toggle-hover {
-  opacity: 1;
 }
 
 /* ── Content column — stacks the content card above the compact
@@ -6552,8 +6479,8 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 
 /* ── Account dropdown ─────────────────────────────────────────────────
    Pinned at the bottom of the sidebar. The row IS the popover trigger:
-   click anywhere on the row opens the menu (Account, Notifications,
-   Billing, Log out). The "Account" item navigates to /me; the row
+   click anywhere on the row opens the menu (Account, Billing, Log out).
+   The "Account" item navigates to /account; the row
    itself does not navigate. One affordance, no chevron. */
 .account-dropdown-row {
   position: relative;

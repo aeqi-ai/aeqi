@@ -18,10 +18,9 @@ export interface ShellSurface {
   /** `/launch` — company formation surface. Left composer + right canvas. */
   isLaunch: boolean;
   isDrive: boolean;
-  isStart: boolean;
   /** True when the path doesn't match any known shell surface — drives the
-   *  in-shell 404 dispatch. Stays false for `/me/...`, `/start`,
-   *  `/launch/...` and `/blueprints/...`. */
+   *  in-shell 404 dispatch. Stays false for `/me/...`, `/launch/...`,
+   *  `/blueprints/...`, and `/c/:entityId/...`. */
   isNotFound: boolean;
   /** `/admin` — operator dashboard. Backend gates on is_admin; the page
    *  itself returns null + bounces non-admins. */
@@ -40,7 +39,6 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isAccount = path === "/account" || path.startsWith("/account/");
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
-    const isStart = path === "/start" || path.startsWith("/start/");
     const isDrive = tab === "drive";
 
     // In-shell role sub-pages. Matches both entity route shapes.
@@ -57,8 +55,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // segments (`/foo`) that would otherwise fall through to a stale
     // active-entity render.
     const isCompanyRoute = /^\/c\/[^/]+(\/|$)/.test(path) || /^\/trust\/[^/]+(\/|$)/.test(path);
-    const isKnownShellRoute =
-      isCompanyRoute || isAccount || isBlueprints || isLaunch || isStart || isAdmin;
+    const isKnownShellRoute = isCompanyRoute || isAccount || isBlueprints || isLaunch || isAdmin;
     const isNotFound = !isKnownShellRoute;
 
     return {
@@ -66,7 +63,6 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
       isBlueprints,
       isLaunch,
       isDrive,
-      isStart,
       isNotFound,
       isAdmin,
       isRolesNew,

@@ -45,9 +45,7 @@ const RESERVED_SLUGS = new Set([
   "account",
   "c",
   "trust",
-  "start",
   "launch",
-  "studio",
   "blueprints",
   "signup",
   "login",
@@ -68,8 +66,8 @@ const RESERVED_SLUGS = new Set([
  * Public-profile route wrapper. Renders the profile page only when the
  * URL segment is NOT a reserved slug; reserved slugs (auth pages, app
  * shell paths, asset prefixes) delegate to the authed protected tree so
- * `/account`, `/admin`, `/start`, etc. continue to render the in-shell
- * app surface for authenticated users (and bounce to /login for
+ * `/account`, `/admin`, etc. continue to render the in-shell app
+ * surface for authenticated users (and bounce to /login for
  * everyone else, the same as before this route existed). Without this
  * delegation react-router would prefer `/:slug` over `/*` and shadow
  * `/account` for authenticated users.
@@ -135,7 +133,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  * `/blueprints`. Authed visitors hit the full AppLayout, which dispatches
  * the matching page from the URL. Unauthed visitors bounce to /login — the
  * public-marketing variants of these surfaces are paused until they're
- * production-ready; PublicLayout stays in the tree for when we revive them.
+ * production-ready.
  */
 function GatedAppShell() {
   const location = useLocation();
@@ -217,7 +215,7 @@ function RootRouteSwitch() {
  */
 export default function App() {
   // Protected app shell — extracted so the public-profile route can
-  // delegate to it for reserved slugs (`/account`, `/admin`, `/start`,
+  // delegate to it for reserved slugs (`/account`, `/admin`,
   // etc.) without router-shadowing collisions.
   const protectedTree = (
     <ProtectedRoute>
@@ -239,8 +237,6 @@ export default function App() {
           <Route path="admin" element={null} />
           <Route path="launch" element={null} />
           <Route path="launch/:blueprintId" element={null} />
-          <Route path="start" element={null} />
-          <Route path="start/:blueprintId" element={null} />
           <Route path="trust/:trustAddress" element={null}>
             <Route index element={null} />
             <Route path="agents/:agentId" element={null}>
@@ -295,15 +291,9 @@ export default function App() {
           <Route path="/login" element={<WelcomePage mode="login" />} />
           <Route path="/signup" element={<WelcomePage mode="signup" />} />
           <Route path="/welcome" element={<WelcomePage mode="welcome" />} />
-          {/* `/launch` is the in-shell Company-launch surface — the
-              launch flow lives in the shell, and `/launch/<blueprintId>` (with
-              `/start` aliases kept live) routes to CompanySetupPage.
+          {/* `/launch` is the sole in-shell Company-launch surface.
               Routes through GatedAppShell so the LeftSidebar stays
-              mounted and unauth visitors bounce to /login. AppLayout
-              dispatches `isLaunch` / `isStart` to StartPage /
-              CompanySetupPage. */}
-          <Route path="/start" element={<GatedAppShell />} />
-          <Route path="/start/:blueprintId" element={<GatedAppShell />} />
+              mounted and unauth visitors bounce to /login. */}
           <Route path="/waitlist" element={<Navigate to="/signup" replace />} />
           <Route path="/verify" element={<VerifyEmailPage />} />
           <Route path="/auth/magic" element={<MagicLinkPage />} />
@@ -316,8 +306,6 @@ export default function App() {
               they have one. Users without a company go straight to
               `/launch`. */}
           <Route path="/" element={<RootRouteSwitch />} />
-          <Route path="/studio" element={<Navigate to="/launch" replace />} />
-          <Route path="/studio/*" element={<Navigate to="/launch" replace />} />
 
           {/* Blueprints — top-level destination, auth-gated end-to-end.
               GatedAppShell dispatches AppLayout for authed visitors and

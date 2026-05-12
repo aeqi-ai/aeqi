@@ -31,7 +31,7 @@ const PlusIcon = () => (
 /**
  * Top-of-rail workspace switcher. The user can be in two contexts:
  *
- * - **User scope** (`/`, `/account`, `/account/<sub>`, `/launch`, `/start`,
+ * - **User scope** (`/`, `/account`, `/account/<sub>`, `/launch`,
  *   `/sessions/<id>`): the trigger renders the user's avatar + name; launch
  *   and account settings live here.
  * - **Entity scope** (anything under `/c/<entity_id>/...`): the trigger

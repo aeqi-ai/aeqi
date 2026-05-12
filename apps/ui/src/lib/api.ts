@@ -658,8 +658,7 @@ export const api = {
     ),
 
   // Resolves the operator-configured default Blueprint
-  // (`[blueprints] default` in aeqi.toml). Used by `/start` when the
-  // user lands there without a `?blueprintId=` query param.
+  // (`[blueprints] default` in aeqi.toml).
   getDefaultBlueprint: () => request<{ ok: boolean; blueprint: Blueprint }>("/blueprints/default"),
 
   /** `role_overrides` lets the operator stage occupants before the spawn
@@ -958,7 +957,7 @@ export const api = {
   // metadata for provisioning and billing display.
   createCheckoutSession: (data: {
     blueprint?: string;
-    // not entity_id — entity is minted post-checkout when user lands on /start.
+    // not entity_id — entity is minted post-checkout when launch resumes.
     display_name?: string;
     mission?: string;
     plan?: LaunchPlanId | string;

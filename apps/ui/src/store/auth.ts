@@ -9,8 +9,7 @@ import { readConsent, writeConsent } from "@/lib/analytics/consent";
 export type AuthMode = "none" | "secret" | "accounts" | null;
 
 /** Default analytics consent to "all" on first successful auth. The user
- * accepted the privacy policy at signup, so opt-in is implicit; the
- * Preferences panel lets them flip back to "essential" any time. Only
+ * accepted the privacy policy at signup, so opt-in is implicit. Only
  * fires when consent is null — never overrides an explicit user choice. */
 function defaultAnalyticsConsentOnAuth() {
   if (readConsent() === null) writeConsent("all");
@@ -220,9 +219,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       clearSessionData();
       const resp = await api.signup(email, password, name, inviteCode, invitationToken);
-      // Signup no longer auto-creates a root agent — the user spawns
-      // their first company explicitly on `/start`. The active-root
-      // assignment happens when that spawn returns.
+      // Signup no longer auto-creates a root agent — the user launches
+      // their first company explicitly. The active-root assignment
+      // happens when that spawn returns.
       if (resp.ok && resp.pending_verification) {
         if (resp.token) {
           localStorage.setItem("aeqi_token", resp.token);

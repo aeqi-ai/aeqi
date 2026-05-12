@@ -196,7 +196,6 @@ export default function AppLayout() {
     isBlueprints,
     isLaunch,
     isDrive,
-    isStart,
     isNotFound,
     isAdmin,
     isRolesNew,
@@ -356,13 +355,9 @@ export default function AppLayout() {
     if (isRoleInvite) return <RoleInvitePage />;
     if (isRoleEdit) return <RoleEditPage />;
     if (isRoleDetail) return <RoleDetailPage />;
-    if (isLaunch || isStart) {
-      // /launch and /start both mount the same setup page. When the
-      // URL omits a blueprint id, CompanySetupPage resolves the default
-      // blueprint internally so the launch surface is a single wizard.
-      if (path === "/launch/studio" || path === "/start/studio") {
-        return <Navigate to="/launch" replace />;
-      }
+    if (isLaunch) {
+      // When the URL omits a blueprint id, CompanySetupPage resolves the
+      // default blueprint internally so the launch surface is a single wizard.
       return <CompanySetupPage />;
     }
     if (isAdmin) return <AdminPage />;
@@ -418,7 +413,6 @@ export default function AppLayout() {
     !isAccount &&
     !isAdmin &&
     !isLaunch &&
-    !isStart &&
     !isBlueprints &&
     isAgentChatDefault;
   const showComposer = sessionsMounted;

@@ -139,7 +139,7 @@ describe("BlueprintsPage (catalog)", () => {
 
     // Detail page renders the blueprint name as h1, the seed counts list,
     // and the "Use this Blueprint" CTA — but no spawn form (that lives
-    // exclusively on /start now).
+    // exclusively on /launch now).
     expect(
       await screen.findByRole("heading", { level: 1, name: "Solo Founder" }),
     ).toBeInTheDocument();
@@ -214,8 +214,6 @@ describe("BlueprintDetailPage", () => {
             <Route path="/blueprints/:blueprintId" element={<BlueprintDetailPage />} />
             <Route path="/launch" element={<Probe />} />
             <Route path="/launch/:blueprintId" element={<Probe />} />
-            <Route path="/start" element={<Probe />} />
-            <Route path="/start/:blueprintId" element={<Probe />} />
           </Routes>
         </MemoryRouter>
       </StrictMode>,

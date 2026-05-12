@@ -1,57 +1,13 @@
-/* BlueprintLaunchPicker — shared shell for `/start` (in-shell page) and
-   the `+ New agent` modal. Three sections stacked: Start blank, Recommended
-   grid, Browse all link. No bespoke colors or sizes — surfaces, padding,
-   radii, shadows all come from tokens; card chrome from the <Card> primitive. */
+/* BlueprintLaunchPicker — shared picker used by launch and the `+ New agent`
+   modal. Three sections stacked: Start blank, Recommended grid, Browse all
+   link. No bespoke colors or sizes — surfaces, padding, radii, shadows all
+   come from tokens; card chrome from the <Card> primitive. */
 
 .bp-launch {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
   min-width: 0;
-}
-
-/* ── /start in-shell wrapper ────────────────────── */
-
-/* `/start` is the company studio. It renders as a full-screen surface
-   inside the authenticated app shell, but without the normal sidebar chrome.
-   The page uses a wider canvas so the composer + live blueprint canvas can
-   breathe side by side on desktop. */
-.start-page {
-  width: 100%;
-  max-width: 1560px;
-  margin: 0 auto;
-  padding: var(--space-8) var(--space-6) var(--space-12);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-7);
-}
-
-.start-page--studio {
-  min-height: 100%;
-}
-
-.start-shell {
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  background: var(--color-background);
-}
-
-.start-shell-main {
-  width: 100%;
-}
-
-.start-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.start-head--studio {
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-5);
-  max-width: none;
 }
 
 .start-head-copy {
@@ -86,66 +42,8 @@
   max-width: 60ch;
 }
 
-.start-step-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.start-step {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 999px;
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1;
-}
-
 .start-banner {
   max-width: 84ch;
-}
-
-.start-studio-grid {
-  display: grid;
-  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.1fr);
-  gap: var(--space-7);
-  align-items: start;
-}
-
-.start-session-pane,
-.start-canvas-pane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-.start-session-pane {
-  position: sticky;
-  top: var(--space-6);
-  align-self: start;
-}
-
-.start-brief-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, var(--color-card), var(--color-card-elevated));
-  box-shadow: var(--shadow-sm);
-}
-
-.start-help {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  line-height: 1.45;
-  color: var(--color-text-muted);
 }
 
 .start-secondary-link {
@@ -161,75 +59,6 @@
   text-decoration: none;
   font-size: var(--font-size-sm);
   font-weight: 600;
-}
-
-.start-page--launch {
-  max-width: 1280px;
-}
-
-.start-launch-minimal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  max-width: 620px;
-}
-
-.start-selected-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.start-selected-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.start-selected-card-label {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.start-selected-card-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--color-text-muted);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.start-selected-card-name {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--font-size-2xl);
-  line-height: 1.2;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
-}
-
-.start-selected-card-tagline {
-  margin: 0;
-  font-size: var(--font-size-base);
-  line-height: 1.55;
-  color: var(--color-text-secondary);
-}
-
-.start-launch-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
 }
 
 .launch-page {
@@ -373,13 +202,6 @@
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: var(--color-text-secondary);
-}
-
-.plan-card-summary {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
   color: var(--color-text-secondary);
 }
 
@@ -663,48 +485,11 @@
   color: var(--color-text-primary);
 }
 
-.start-section-sub {
-  margin: 0;
-  max-width: 60ch;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-
-@media (min-width: 1100px) {
-  .start-page {
-    gap: var(--space-8);
-  }
-}
-
 @media (max-width: 960px) {
-  .start-head--studio {
-    flex-direction: column;
-  }
-
   .start-head-actions {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
-  }
-
-  .start-studio-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .start-session-pane {
-    position: static;
-  }
-
-  .start-canvas-head,
-  .start-session-foot,
-  .start-canvas-foot {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .start-canvas-meta {
-    align-items: flex-start;
-    text-align: left;
   }
 }
 
@@ -846,148 +631,8 @@
   color: var(--color-text-primary);
 }
 
-/* ── /start/<slug> CompanySetupPage ──────────────── */
-
-.company-setup {
-  width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: var(--space-8) var(--space-6) var(--space-12);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-7);
-}
-.company-setup-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.company-setup-eyebrow {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.company-setup-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -0.015em;
-  color: var(--color-text-primary);
-  line-height: 1.15;
-  text-transform: lowercase;
-}
-.company-setup-sub {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  max-width: 60ch;
-  line-height: 1.55;
-}
-.company-setup-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: none;
-  margin-top: var(--space-1);
-}
-.company-setup-section:first-of-type {
-  border-top: 0;
-  padding-top: 0;
-}
-.company-setup-section-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.company-setup-section-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-.company-setup-section-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  background: var(--color-text-primary);
-  color: var(--bg-paper);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-}
-.company-setup-section-sub {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  line-height: 1.55;
-}
-.company-setup-counts {
-  margin-top: calc(-1 * var(--space-2));
-}
-.company-setup-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding-top: var(--space-2);
-}
-
 /* ── Plan picker ─────────────────────────────────── */
 
-.plan-interval-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: var(--color-card);
-  border-radius: var(--radius-sm);
-  align-self: flex-start;
-  margin-bottom: var(--space-2);
-}
-.plan-interval-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px 14px;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.plan-interval-btn:hover {
-  color: var(--color-text-primary);
-}
-.plan-interval-btn--active {
-  background: var(--bg-paper);
-  color: var(--color-text-primary);
-}
-.plan-interval-save {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  text-transform: lowercase;
-}
-.plan-interval-btn--active .plan-interval-save {
-  color: var(--color-text-secondary);
-}
 .plan-card {
   position: relative;
 }
@@ -1009,20 +654,6 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-.plan-card-feature-soon {
-  color: var(--color-text-muted);
-  font-style: italic;
-  font-size: 10px;
-}
-
-.plan-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-3);
 }
 .plan-card {
   display: flex;
@@ -1079,31 +710,6 @@
   font-size: 12px;
   color: var(--color-text-muted);
   text-transform: lowercase;
-}
-.plan-card-blurb {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  line-height: 1.45;
-  margin: 0;
-}
-.plan-card-features {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: var(--space-1);
-}
-.plan-card-feature {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--color-text-secondary);
 }
 .plan-card-check {
   display: inline-flex;

@@ -31,13 +31,6 @@ const BillingIcon = () => (
   </svg>
 );
 
-const NotificationsIcon = () => (
-  <svg {...iconProps}>
-    <path d="M8 2a2 2 0 0 1 2 2v.5c1.5.5 2.5 2 2.5 3.5H3.5C3.5 6.5 4.5 5 6 4.5V4a2 2 0 0 1 2-2z" />
-    <path d="M5.5 12a2.5 2.5 0 0 0 5 0" />
-  </svg>
-);
-
 const SignOutIcon = () => (
   <svg {...iconProps}>
     <path d="M9 3H3v10h6" />
@@ -135,14 +128,6 @@ export default function AccountDropdown() {
             leadingIcon={<AccountIcon />}
           >
             Account
-          </SelectOption>
-          <SelectOption
-            disabled
-            leadingIcon={<NotificationsIcon />}
-            trailingHint="soon"
-            title="Coming soon"
-          >
-            Notifications
           </SelectOption>
           <SelectOption
             selected={isBilling}

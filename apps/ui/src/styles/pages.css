@@ -2167,12 +2167,6 @@
   padding: 3px var(--space-2);
 }
 
-/* Empty-state container for the Preferences tab — placeholder until the
-   backend persists per-user email preferences. */
-.account-prefs-empty {
-  padding: var(--space-2) 0;
-}
-
 /* Settings → API key tab. Tokenized replacements for the inline
    marginTop / display:flex blocks the panel previously used. */
 .account-field-stack {
