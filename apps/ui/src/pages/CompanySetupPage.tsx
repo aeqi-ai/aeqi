@@ -283,18 +283,24 @@ export default function CompanySetupPage() {
 
       <section className="launch-grid">
         <div className="launch-main">
-          <Card variant="default" padding="lg" className="launch-blueprint-card">
-            <div className="launch-blueprint-head">
-              <div>
-                <p className="start-section-kicker">1. Selected blueprint</p>
-                <h2 className="start-section-title">{blueprint.name}</h2>
-                <p className="start-sub">{blueprint.tagline || blueprint.description || ""}</p>
+          <Link
+            to="/blueprints"
+            className="launch-blueprint-picker"
+            aria-label={`Change selected blueprint. Current blueprint: ${blueprint.name}`}
+          >
+            <Card variant="default" padding="lg" interactive className="launch-blueprint-card">
+              <div className="launch-blueprint-head">
+                <div>
+                  <p className="start-section-kicker">1. Selected blueprint</p>
+                  <h2 className="start-section-title">{blueprint.name}</h2>
+                  <p className="start-sub">{blueprint.tagline || blueprint.description || ""}</p>
+                </div>
+                <span className="launch-blueprint-link" aria-hidden>
+                  Change blueprint →
+                </span>
               </div>
-              <Link to="/blueprints" className="launch-blueprint-link">
-                Change blueprint
-              </Link>
-            </div>
-          </Card>
+            </Card>
+          </Link>
 
           <Card variant="default" padding="lg" className="launch-card">
             <div className="launch-card-head">

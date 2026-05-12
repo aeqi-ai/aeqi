@@ -289,6 +289,25 @@
   background: linear-gradient(180deg, var(--color-card), var(--color-card-elevated));
 }
 
+.launch-blueprint-picker {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-xl);
+}
+
+.launch-blueprint-picker:focus-visible {
+  outline: none;
+}
+
+.launch-blueprint-picker:focus-visible .launch-blueprint-card {
+  box-shadow: var(--focus-ring);
+}
+
+.launch-blueprint-picker:hover .launch-blueprint-card {
+  background: var(--color-card-elevated);
+}
+
 .launch-blueprint-head {
   display: flex;
   align-items: flex-start;
@@ -322,6 +341,10 @@
 
 .launch-blueprint-link:hover,
 .launch-browse-link:hover {
+  color: var(--color-text-primary);
+}
+
+.launch-blueprint-picker:hover .launch-blueprint-link {
   color: var(--color-text-primary);
 }
 
@@ -422,6 +445,12 @@
   .launch-footer .button {
     min-width: 0;
     width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .launch-blueprint-head {
+    flex-direction: column;
   }
 }
 
