@@ -55,21 +55,6 @@ export interface LaunchPlan {
 
 export const LAUNCH_PLANS: LaunchPlan[] = [
   {
-    id: "starter",
-    name: "Standard",
-    price: "$49",
-    cadence: "/mo",
-    dueToday: "$49",
-    intro: "Focused launch capacity.",
-    blurb: "Best for starting focused.",
-    features: [
-      "Full organization + unlimited agents",
-      "5M LLM tokens / month",
-      "2 vCPU runtime",
-      "4 GB RAM · 40 GB storage",
-    ],
-  },
-  {
     id: "growth",
     name: "Pro",
     price: "$149",
@@ -78,12 +63,27 @@ export const LAUNCH_PLANS: LaunchPlan[] = [
     intro: "4x more capacity from day one.",
     blurb: "Best for heavier agent work.",
     features: [
-      "Full organization + unlimited agents",
       "20M LLM tokens / month",
       "8 vCPU runtime",
       "16 GB RAM · 160 GB storage",
+      "Full organization + unlimited agents",
     ],
     recommended: true,
+  },
+  {
+    id: "starter",
+    name: "Standard",
+    price: "$49",
+    cadence: "/mo",
+    dueToday: "$49",
+    intro: "Focused launch capacity.",
+    blurb: "Best for starting focused.",
+    features: [
+      "5M LLM tokens / month",
+      "2 vCPU runtime",
+      "4 GB RAM · 40 GB storage",
+      "Full organization + unlimited agents",
+    ],
   },
 ];
 
@@ -91,7 +91,7 @@ export const DEFAULT_LAUNCH_PLAN: LaunchPlanId = "growth";
 
 export const RESOURCE_PACK = {
   inferenceUsd: `$${INFERENCE_CREDIT_USD}`,
-  inferenceLabel: "4x execution",
+  inferenceLabel: "4× execution",
   cpu: "4 vCPU",
   ram: "8 GB",
   storage: "80 GB",

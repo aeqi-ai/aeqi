@@ -307,13 +307,33 @@
 }
 
 .launch-field--name {
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .launch-field--name input {
-  height: var(--input-h-lg);
+  height: calc(var(--input-h-lg) + 6px);
   font-size: var(--font-size-lg);
   font-weight: 600;
+}
+
+.launch-field-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-lg);
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.launch-field-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.launch-field textarea {
+  min-height: 132px;
 }
 
 .launch-plan-card {
@@ -381,6 +401,23 @@
 
 .launch-preview-sub {
   max-width: 38ch;
+}
+
+.launch-preview-structure {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.launch-preview-structure-copy {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+  color: var(--color-text-secondary);
 }
 
 .launch-blueprint-actions {

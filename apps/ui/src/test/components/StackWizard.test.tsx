@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { StrictMode } from "react";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { StackWizard, formatRelationship } from "@/components/StackWizard";
@@ -233,8 +233,8 @@ describe("StackWizard", () => {
 
     // Rename the holdco slot.
     const holdcoInput = screen.getByLabelText("holdco");
-    await user.clear(holdcoInput);
-    await user.type(holdcoInput, "Acme Corp");
+    fireEvent.change(holdcoInput, { target: { value: "Acme Corp" } });
+    expect((holdcoInput as HTMLInputElement).value).toBe("Acme Corp");
 
     await user.click(screen.getByRole("button", { name: /review/i }));
     await user.click(screen.getByRole("button", { name: /deploy stack/i }));

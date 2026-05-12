@@ -125,16 +125,28 @@ export default function CompanySetupPage() {
 
   const blueprintMode = useMemo(() => {
     if (!blueprint) {
-      return { label: "Company", meta: "cap table · standard launch" };
+      return {
+        label: "Company",
+        meta: "A flexible organization that adapts as your mission evolves.",
+      };
     }
     const category = blueprint.category ?? "company";
     if (category === "foundation") {
-      return { label: "Foundation", meta: "multisig · grant flows" };
+      return {
+        label: "Foundation",
+        meta: "A flexible organization that adapts as your mission evolves.",
+      };
     }
     if (category === "fund") {
-      return { label: "Fund", meta: "pro rata · tokenized capital" };
+      return {
+        label: "Fund",
+        meta: "A flexible organization that adapts as your mission evolves.",
+      };
     }
-    return { label: "Company", meta: "cap table · standard launch" };
+    return {
+      label: "Company",
+      meta: "A flexible organization that adapts as your mission evolves.",
+    };
   }, [blueprint]);
 
   const blueprintPath = useMemo(() => {
@@ -147,20 +159,20 @@ export default function CompanySetupPage() {
       case "checking":
         return "Checking availability…";
       case "available":
-        return nameCheck.message;
+        return "Name is available.";
       case "error":
         return nameCheck.message;
       case "taken":
         return undefined;
       case "idle":
       default:
-        return "This becomes the registered name.";
+        return "This can be changed later.";
     }
   }, [nameCheck]);
 
   const nameError = useMemo(() => {
     if (nameCheck.status === "taken" || nameCheck.status === "error") {
-      return nameCheck.message;
+      return nameCheck.status === "taken" ? "Already taken." : nameCheck.message;
     }
     return undefined;
   }, [nameCheck]);
@@ -180,8 +192,8 @@ export default function CompanySetupPage() {
         if (seq !== nameCheckSeq.current) return;
         setNameCheck(
           resp.available
-            ? { status: "available", message: "Available in your workspace." }
-            : { status: "taken", message: "Already used in your workspace." },
+            ? { status: "available", message: "Available." }
+            : { status: "taken", message: "Already taken." },
         );
       } catch {
         if (seq !== nameCheckSeq.current) return;
@@ -375,24 +387,26 @@ export default function CompanySetupPage() {
 
             <div className="launch-fields">
               <div className="launch-field launch-field--name">
+                <p className="launch-field-title">Organization name</p>
                 <Input
-                  label="Organization name"
+                  aria-label="Organization name"
                   hint={nameHint}
                   error={nameError}
                   value={organizationName}
                   onChange={(e) => setOrganizationName(e.target.value)}
-                  placeholder="Registered name"
+                  placeholder="Enter a name"
                   size="lg"
                 />
+                <p className="launch-field-note">This becomes the registered name.</p>
               </div>
 
               <div className="launch-field">
                 <Textarea
                   label="Mission"
-                  hint="One short sentence is enough."
+                  hint="One sentence is enough."
                   value={mission}
                   onChange={(e) => setMission(e.target.value)}
-                  rows={3}
+                  rows={2}
                   placeholder="What should this organization do?"
                 />
               </div>
@@ -412,13 +426,17 @@ export default function CompanySetupPage() {
             <p className="start-sub launch-preview-sub">
               {blueprint.tagline || blueprint.description || blueprintMode.meta}
             </p>
+            <p className="launch-preview-structure">Starting structure</p>
+            <p className="launch-preview-structure-copy">
+              Includes a default lead agent. Roles can be edited later.
+            </p>
             <BlueprintTreePreview template={blueprint} />
             <div className="launch-blueprint-actions">
               <Link to={blueprintPath} className="launch-secondary-link">
-                Edit this blueprint
+                Customize blueprint
               </Link>
               <Link to="/blueprints" className="launch-secondary-link">
-                Browse others
+                Change blueprint
               </Link>
             </div>
           </Card>
@@ -429,8 +447,8 @@ export default function CompanySetupPage() {
         <div className="launch-footer-meta">
           <p className="start-section-kicker">Choose execution capacity</p>
           <p className="launch-footer-note">
-            Both plans include the full organization and unlimited agents. Pro gives you 4x more LLM
-            capacity and 4x more runtime.
+            Both plans include the full organization and unlimited agents. Pro gives you 4× more LLM
+            capacity and 4× more runtime.
           </p>
         </div>
 
@@ -490,13 +508,10 @@ export default function CompanySetupPage() {
             loading={submitting}
             loadingLabel="Creating"
           >
-            {canSkipCheckout
-              ? "Launch organization"
-              : `Pay ${selectedLaunchPlan.dueToday} and launch`}
+            {`Pay ${selectedLaunchPlan.dueToday} and launch`}
           </Button>
           <p className="launch-footer-support">
-            Your organization is created automatically after checkout succeeds. You can change
-            capacity later.
+            Created automatically after checkout succeeds. You can change capacity later.
           </p>
         </div>
       </div>
