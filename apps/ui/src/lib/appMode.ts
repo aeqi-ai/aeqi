@@ -11,13 +11,13 @@ export function isPlatformAppMode(mode: AppMode | null | undefined): mode is "pl
 
 /**
  * Resolve the routing key (`X-Entity` header / WS `?root=`) for the current
- * URL. The canonical shell is `/c/:entityId/...`; user-scope routes
+ * URL. The canonical shell is `/trust/:trustAddress/...`; user-scope routes
  * (`/account`, `/launch`, `/sessions/:id`, …) return "" so the
  * caller falls back to the cached active entity.
  */
 export function getScopedEntity(): string {
   const path = window.location.pathname;
-  const match = path.match(/^\/c\/([^/]+)/);
+  const match = path.match(/^\/trust\/([^/]+)/);
   if (match) return decodeURIComponent(match[1]);
 
   const stored = localStorage.getItem("aeqi_entity");

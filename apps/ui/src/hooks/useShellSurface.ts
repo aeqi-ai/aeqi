@@ -20,7 +20,7 @@ export interface ShellSurface {
   isDrive: boolean;
   /** True when the path doesn't match any known shell surface — drives the
    *  in-shell 404 dispatch. Stays false for `/me/...`, `/launch/...`,
-   *  `/blueprints/...`, and `/c/:entityId/...`. */
+   *  `/blueprints/...`, and other non-organization routes. */
   isNotFound: boolean;
   /** `/admin` — operator dashboard. Backend gates on is_admin; the page
    *  itself returns null + bounces non-admins. */
@@ -41,8 +41,8 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
     const isDrive = tab === "drive";
 
-    // In-shell role sub-pages. Matches both entity route shapes.
-    const rolePathMatch = path.match(/^\/(?:c\/[^/]+|trust\/[^/]+)\/roles\/(.+)$/);
+    // In-shell role sub-pages on the canonical trust route.
+    const rolePathMatch = path.match(/^\/trust\/[^/]+\/roles\/(.+)$/);
     const roleSuffix = rolePathMatch ? rolePathMatch[1] : null;
     const isRolesNew = roleSuffix === "new";
     const isRoleInvite = !isRolesNew && !!roleSuffix && roleSuffix.endsWith("/invite");
@@ -54,7 +54,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     // surfaces. Anything else is a 404 — including bogus top-level
     // segments (`/foo`) that would otherwise fall through to a stale
     // active-entity render.
-    const isCompanyRoute = /^\/c\/[^/]+(\/|$)/.test(path) || /^\/trust\/[^/]+(\/|$)/.test(path);
+    const isCompanyRoute = /^\/trust\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute = isCompanyRoute || isAccount || isBlueprints || isLaunch || isAdmin;
     const isNotFound = !isKnownShellRoute;
 

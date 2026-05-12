@@ -34,8 +34,8 @@ const PlusIcon = () => (
  * - **User scope** (`/`, `/account`, `/account/<sub>`, `/launch`,
  *   `/sessions/<id>`): the trigger renders the user's avatar + name; launch
  *   and account settings live here.
- * - **Entity scope** (anything under `/c/<entity_id>/...`): the trigger
- *   renders the active company's avatar + name.
+ * - **Entity scope** (anything under `/trust/<trust_address>/...`): the
+ *   trigger renders the active organization's avatar + name.
  *
  * The dropdown always carries three groups: the user themselves (so
  * pivoting from a company back to "yourself" is one click), every
@@ -52,15 +52,13 @@ export default function CompanySwitcher() {
   const activeEntity = useActiveEntity(activeEntityId);
   const [open, setOpen] = useState(false);
 
-  // Entity scope = `/c/<entity_id>/...` or `/trust/<addr>/...`.
-  const isEntityScope = pathname.startsWith("/c/") || pathname.startsWith("/trust/");
+  // Entity scope = `/trust/<addr>/...`.
+  const isEntityScope = pathname.startsWith("/trust/");
 
   const select = useCallback(
     (entity: Entity) => {
       setActiveEntity(entity.id);
-      // Navigate to the canonical URL for the entity — /trust/<addr> for
-      // on-chain companies, /c/<id> for pending ones. Going straight
-      // avoids a server 301 round-trip.
+      // Navigate to the canonical URL for the entity — /trust/<addr>.
       navigate(entityPath(entity));
       setOpen(false);
     },

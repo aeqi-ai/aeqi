@@ -14,7 +14,7 @@ import BlockAvatar from "./BlockAvatar";
 import "@/styles/overview.css";
 
 /**
- * `/c/<entity>/overview` — Company cockpit.
+ * `/trust/<addr>/overview` — Organization cockpit.
  *
  * Founder-locked direction (2026-05-08): Overview answers
  * "what's happening now," not "what does the P&L look like."
@@ -166,10 +166,10 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
     [subtreeAgents],
   );
 
-  // basePath is canonical: /trust/<addr> when on-chain, /c/<id> otherwise.
+  // basePath is canonical: /trust/<addr>.
   // trustPath here is the same — kept as a separate name for the
   // signers stat tile to read clearly.
-  const basePath = entity ? entityBasePath(entity) : `/c/${encodeURIComponent(entityId)}`;
+  const basePath = entity ? entityBasePath(entity) : "/launch";
   const trustPath = basePath;
 
   return (

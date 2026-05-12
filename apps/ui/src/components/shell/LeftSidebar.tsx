@@ -185,7 +185,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
   );
 
   // Derive canonical base path for sidebar tabs.
-  // On-chain entities: /trust/<trustAddress>. Pending: /c/<entityId>.
   const entities = useDaemonStore((s) => s.entities);
   const activeEntityObj = entityId ? (entities.find((e) => e.id === entityId) ?? null) : null;
   const base = activeEntityObj ? entityBasePath(activeEntityObj) : "";
@@ -193,12 +192,10 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
   const navHref = (id: string) => `${base}/${id}`;
 
-  // The Organization cockpit row stays lit ONLY at the bare `/c/<entity>`
-  // overview URL — Phase 1 promotes Treasury / Ownership / Governance /
-  // Roles to top-level rows, so they own their own "active" state and
-  // shouldn't double-light Organization. (Compare to the previous shape where
-  // those were sub-tabs of CompanyPage and Company stayed lit across
-  // them.)
+  // The Organization cockpit row stays lit ONLY at the bare trust URL —
+  // Phase 1 promotes Treasury / Ownership / Governance / Roles to
+  // top-level rows, so they own their own "active" state and shouldn't
+  // double-light Organization.
   const isActiveTab = (id: string) => {
     if (!base) return false;
     return path === `${base}/${id}` || path.startsWith(`${base}/${id}/`);

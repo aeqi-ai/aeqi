@@ -198,14 +198,14 @@ function RootRouteSwitch() {
   return <Navigate to="/launch" replace />;
 }
 
-// `/` is only the user-scope landing before an entity exists. Once an entity
-// exists, AppLayout canonicalizes the shell to `/c/:entityId` so sidebar tabs
-// never generate bogus top-level paths like `/quests`.
+// `/` is only the user-scope landing before an organization exists. Once an
+// organization exists, AppLayout keeps the shell on the trust route so
+// sidebar tabs never generate bogus top-level paths like `/quests`.
 
 /**
  * Entity-root URL architecture. The app shell lives at
- * `/trust/:trustAddress/...` (canonical) or `/c/:entityId/...` (pending
- * fallback); the sidebar always navigates inside that entity. Child
+ * `/trust/:trustAddress/...` (canonical); the sidebar always navigates
+ * inside that entity. Child
  * agents remain addressable at `/trust/<addr>/agents/:agentId/...`.
  * The user's account-level surface (login profile, billing, settings)
  * lives at `/account` — it's user-scoped, not entity-scoped. There is
@@ -237,7 +237,6 @@ export default function App() {
           <Route path="admin" element={null} />
           <Route path="launch" element={null} />
           <Route path="launch/:blueprintId" element={null} />
-          <Route path="c/*" element={<Navigate to="/launch" replace />} />
           <Route path="trust/:trustAddress" element={null}>
             <Route index element={null} />
             <Route path="agents/:agentId" element={null}>

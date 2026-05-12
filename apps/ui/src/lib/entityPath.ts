@@ -3,25 +3,22 @@ import type { Entity } from "@/lib/types";
 /**
  * Canonical URL base for an entity.
  *
- * - Trust-backed entities: canonical trust route
- * - Unprovisioned entities: id-based fallback route
- *
- * Use this everywhere a link or navigation targets a company entity so
- * the trust route stays canonical once provisioning lands.
+ * Trust-backed entities use the trust route. Anything without a trust
+ * address should not be treated as a live organization surface.
  */
 export function entityBasePath(entity: Pick<Entity, "id" | "trust_address">): string {
   if (entity.trust_address) {
     return `/trust/${entity.trust_address}`;
   }
-  return `/c/${encodeURIComponent(entity.id)}`;
+  return "/launch";
 }
 
 /**
  * Full path for an entity + optional sub-path.
  * e.g. entityPath(entity, "roles") → trust route + "/roles".
  * `entityPath(entity)` (no segments) → bare base; the bare URL IS the
- * company cockpit, so don't pass an "overview" segment — that route
- * 308-redirects back to the bare URL via AppLayout.
+ * organization cockpit, so don't pass an "overview" segment — that
+ * route redirects back to the bare URL via AppLayout.
  */
 export function entityPath(
   entity: Pick<Entity, "id" | "trust_address">,
@@ -35,8 +32,8 @@ export function entityPath(
 /**
  * Build a canonical path when the call site only has the entity id (not
  * the full Entity object). Resolves to the trust route when the entities
- * lookup hits a row with `trust_address`; otherwise falls back to the
- * id route.
+ * lookup hits a row with `trust_address`; otherwise returns the launch
+ * surface rather than inventing a legacy route.
  *
  * Use this in components that hold `entityId: string` and have access to
  * the daemon store's `entities` array. Prefer `entityPath(entity, ...)`
@@ -50,9 +47,7 @@ export function entityPathFromId(
 ): string {
   const entity = entities.find((e) => e.id === id);
   if (entity) return entityPath(entity, ...segments);
-  const base = `/c/${encodeURIComponent(id)}`;
-  if (segments.length === 0) return base;
-  return `${base}/${segments.join("/")}`;
+  return "/launch";
 }
 
 /** Same as `entityBasePath` but keyed by id with an entities-array lookup. */

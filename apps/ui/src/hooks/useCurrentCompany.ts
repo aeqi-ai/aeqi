@@ -6,10 +6,7 @@ import type { Entity } from "@/lib/types";
 /**
  * Resolves the active company entity from the current route.
  *
- * Two route shapes are supported:
- *   - `/trust/:trustAddress/...`  — on-chain canonical; resolves by trust_address
- *   - `/c/:entityId/...`          — legacy/pending; resolves by id
- *
+ * The canonical route shape is `/trust/:trustAddress/...`.
  * Returns null when neither param is present (e.g. non-company routes)
  * or when the entity cannot be found in the local store.
  */

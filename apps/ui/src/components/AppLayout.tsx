@@ -34,8 +34,7 @@ const RoleEditPage = lazy(() => import("@/pages/RoleEditPage"));
 const RoleInvitePage = lazy(() => import("@/pages/RoleInvitePage"));
 const AgentSettingsPage = lazy(() => import("@/pages/AgentSettingsPage"));
 
-// Tab segments that used to live at `/c/<eid>/agents/<aid>/<tab>`
-// and are now relocated under `/c/<eid>/agents/<aid>/settings/<tab>`.
+// Tab segments that moved under `/trust/<addr>/agents/<aid>/settings/<tab>`.
 // These trigger a SPA replace-navigate (the closest equivalent to a
 // 308) so existing bookmarks survive the relocation.
 const RELOCATED_AGENT_TABS = new Set([
@@ -60,12 +59,12 @@ const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ide
 // the rest map 1:1 to the sidebar's Organization + Settings groups.
 //
 // The four primitive tabs (agents/events/quests/ideas) ALSO route through
-// CompanyPage at the entity scope. Without this, `/c/<eid>/agents` falls
-// through to AgentPage(rootAgent) — which ignores its `tab` prop and
+// CompanyPage at the entity scope. Without this, `/trust/<addr>/agents`
+// falls through to AgentPage(rootAgent) — which ignores its `tab` prop and
 // renders the root agent's chat surface instead of the entity-scope LIST.
 // Dispatch hole fix: 2026-05-09. The drilled-agent route
-// `/c/<eid>/agents/<aid>/...` is unaffected — that path has a non-null
-// `routeAgentId` and bypasses CompanyPage entirely upstream.
+// `/trust/<addr>/agents/<aid>/...` is unaffected — that path has a
+// non-null `routeAgentId` and bypasses CompanyPage entirely upstream.
 const COMPANY_PAGE_TABS = new Set([
   "overview",
   "inbox",
@@ -108,16 +107,15 @@ export default function AppLayout() {
 
   const surface = useShellSurface(path, tab);
 
-  // Resolve entity from either /trust/:trustAddress or /c/:entityId.
-  // useCurrentCompany handles both route shapes and returns a stable id.
+  // Resolve entity from the canonical trust route and return a stable id.
   const { entityId: resolvedEntityId } = useCurrentCompany();
-  // The effective route entity id — prefer the resolved id (covers trust
-  // route) and fall back to the raw route token (covers /c/:entityId).
+  // The effective route entity id — prefer the resolved id from the trust
+  // route and fall back to any raw route token only if one was somehow present.
   const effectiveRouteEntityId = resolvedEntityId || routeEntityId;
 
   // The entity's root-agent record is the placeholder we synthesize from
   // `/api/entities` — its `entity_id` matches the route token. Every
-  // company surface (`/c/<entity>/quests`, `/c/<entity>/events`, …)
+  // company surface (`/trust/<addr>/quests`, `/trust/<addr>/events`, …)
   // resolves through this record.
   const rootAgent = useMemo(
     () =>
@@ -127,7 +125,7 @@ export default function AppLayout() {
     [agents, effectiveRouteEntityId],
   );
 
-  // When `/c/<entity>/agents/<agent>/...` is open, the inner agentId
+  // When `/trust/<addr>/agents/<agent>/...` is open, the inner agentId
   // is a direct lookup — no fuzzy matching, agents are entity-owned.
   const drilledAgent = useMemo(
     () => (routeAgentId ? (agents.find((a) => a.id === routeAgentId) ?? null) : null),
@@ -211,7 +209,7 @@ export default function AppLayout() {
 
   // Stale entity ref after a data reset would point at a non-existent
   // entity. Bounce home; the user picks (or creates) a fresh entity from
-  // there. Applies to both /c/:entityId and /trust/:trustAddress shapes.
+  // there. Applies to the trust route.
   //
   // Welcome users land on `/trust/<addr>/` immediately after auth, BEFORE
   // any aeqi-host runtime is provisioned for their company — `/api/agents`
@@ -219,7 +217,7 @@ export default function AppLayout() {
   // shell as soon as entities is settled and the entity is known. Surfaces
   // that need an agent (drilled-agent routes, sessions) handle their own
   // empty state.
-  if (routeEntityId || routeTrustAddress) {
+  if (routeTrustAddress) {
     const entityKnown = effectiveRouteEntityId
       ? entities.some((e) => e.id === effectiveRouteEntityId)
       : false;
@@ -238,29 +236,26 @@ export default function AppLayout() {
   }
 
   // The agent surface mounts on either the entity-root agent (company
-  // tabs: /c/<entity>/quests, /c/<entity>/events, …) or the drilled
-  // agent (per-agent tab: /c/<entity>/agents/<agent>/…). The active id
+  // tabs: /trust/<addr>/quests, /trust/<addr>/events, …) or the drilled
+  // agent (per-agent tab: /trust/<addr>/agents/<agent>/…). The active id
   // is the agent record's id — what AgentPage and the sub-tabs expect.
   const activeAgent = drilledAgent ?? rootAgent;
   const activeAgentId = activeAgent?.id ?? "";
 
-  // base: use /trust/ for on-chain entities, /c/ for pending ones.
-  // This keeps internal navigation (ComposerRow, agentRailBase) on the
-  // canonical URL shape once an entity is on-chain.
+  // Base path for the current entity. Everything is trust-scoped now.
   const base = (() => {
-    if (!encodedEntityId) return "/";
     if (routeTrustAddress) return `/trust/${routeTrustAddress}`;
-    return `/c/${encodedEntityId}`;
+    return "";
   })();
   // No-tab default at entity scope = "overview" (the company
   // dashboard is the canonical landing). `/` is served outside this
   // shell as the public Discover page, so it never reaches AppLayout.
   //
   // Drilled-agent default is the inbox/chat shape (no rail) — bare
-  // `/c/<eid>/agents/<aid>/` opens the agent into the chat surface.
-  // The settings sub-surface lives at `/c/<eid>/agents/<aid>/settings`
+  // `/trust/<addr>/agents/<aid>/` opens the agent into the chat surface.
+  // The settings sub-surface lives at `/trust/<addr>/agents/<aid>/settings`
   // with the rail; clicking ⚙ on the agent header navigates there.
-  const isEntityRoute = !!(routeEntityId || routeTrustAddress);
+  const isEntityRoute = !!routeTrustAddress;
   // Are we on the agent's settings sub-surface? The route shape is
   // `agents/:agentId/settings[/:settingsTab[/:itemId]]`. We detect via
   // the path segment so the sub-surface dispatches before any
@@ -278,7 +273,7 @@ export default function AppLayout() {
     return <Navigate to="/" replace />;
   }
 
-  // Bare `/c/<entity>` doesn't render independently — `effectiveTab`
+  // Bare `/trust/<addr>` doesn't render independently — `effectiveTab`
   // defaults to "overview" so CompanyPage handles the bare URL with
   // tab="overview". The "Company" sidebar row points at this bare URL
   // and lights up only when no sub-tab is active.
@@ -289,12 +284,7 @@ export default function AppLayout() {
     return <Navigate to={`${base}${search}`} replace />;
   }
 
-  // Backward-compat: the drilled-agent inbox URL was previously
-  // `/c/<entity>/agents/<agent>/sessions[/<sid>]`. The canonical
-  // shape is now `/inbox` instead of `/sessions`. Replace-navigate
-  // any stale links/bookmarks onto the new shape — the closest
-  // thing to a 308 in a SPA. Mirrors the company-scope `/sessions`
-  // case as well (no drilled agent, root-agent inbox).
+  // The drilled-agent inbox URL is `/trust/<addr>/agents/<agent>/inbox[/<sid>]`.
   if (tab === "sessions" && encodedEntityId) {
     const suffix = itemId ? `/inbox/${encodeURIComponent(itemId)}` : "/inbox";
     const agentSeg = drilledAgent ? `/agents/${encodeURIComponent(drilledAgent.id)}` : "";
@@ -304,10 +294,7 @@ export default function AppLayout() {
   // Personality was dropped from the agent settings rail 2026-05-08 —
   // Ideas (HOW per the four W-primitives) is the canonical surface for
   // an agent's identity/instructions/memories. Replace-navigate any
-  // stale `/personality` URL onto `/settings/ideas` — the closest
-  // thing to a 308 in a SPA. Catches both the old flat shape
-  // (`/c/<eid>/agents/<aid>/personality`) and the relocated shape
-  // (`/c/<eid>/agents/<aid>/settings/personality`).
+  // stale `/personality` URL onto `/settings/ideas`.
   if (
     drilledAgent &&
     (tab === "personality" || (agentSettingsSegment && settingsTab === "personality"))
@@ -316,12 +303,9 @@ export default function AppLayout() {
     return <Navigate to={`${base}${agentSeg}/settings/ideas${search}`} replace />;
   }
 
-  // Backward-compat: the drilled-agent rail tabs (Overview, Quests,
-  // Events, Ideas, Channels, Treasury, Tools, Integrations) used to
-  // live at `/c/<entity>/agents/<agent>/<tab>`. They moved under the
-  // settings sub-surface 2026-05-08 (the agent default surface is now
-  // chat with no rail; settings owns the rail). Replace-navigate stale
-  // bookmarks to the new shape — the closest thing to a 308 in a SPA.
+  // The drilled-agent rail tabs (Overview, Quests, Events, Ideas,
+  // Channels, Treasury, Tools, Integrations) now live under
+  // `/trust/<addr>/agents/<agent>/settings/<tab>`.
   if (drilledAgent && tab && RELOCATED_AGENT_TABS.has(tab) && !agentSettingsSegment) {
     const agentSeg = `/agents/${encodeURIComponent(drilledAgent.id)}`;
     const sub = `/settings/${tab}`;
@@ -331,20 +315,16 @@ export default function AppLayout() {
 
   // Channels are an agent-rail primitive only — see
   // `apps/ui/CLAUDE.md` "Channels are an agent-rail primitive only".
-  // The company-scope `/c/<id>/channels` and trust-scope
-  // `/trust/<addr>/channels` URLs were briefly shipped 2026-05-07
-  // and reverted same day. Redirect any stale link/bookmark to the
-  // entity overview. The drilled-agent path
-  // `/c/<id>/agents/<aid>/channels` is the canonical surface and is
-  // unaffected (gated by `!drilledAgent` here).
+  // The company-scope `/trust/<addr>/channels` URL is not a surface.
+  // The drilled-agent path `/trust/<addr>/agents/<aid>/channels` is the
+  // canonical surface and is unaffected (gated by `!drilledAgent` here).
   if (tab === "channels" && isEntityRoute && !drilledAgent) {
     return <Navigate to={`${base}${search}`} replace />;
   }
 
-  // The bare `/c/<id>` / `/trust/<addr>` URL IS the company cockpit —
-  // there is no separate `/overview` segment. Replace-navigate any stale
-  // link/bookmark onto the bare URL so the sidebar's "Company" row
-  // (which lights up only at `path === base`) activates correctly.
+  // The bare `/trust/<addr>` URL IS the company cockpit — there is no
+  // separate `/overview` segment. Replace-navigate any stale link/bookmark
+  // onto the bare URL so the sidebar's "Company" row activates correctly.
   if (tab === "overview" && isEntityRoute && !drilledAgent) {
     return <Navigate to={`${base}${search}`} replace />;
   }
@@ -385,7 +365,7 @@ export default function AppLayout() {
       );
     }
     // Drilled-agent settings sub-surface — dedicated page that owns
-    // the PageRail. Bare `/c/<id>/agents/<aid>/settings` defaults to
+    // the PageRail. Bare trust-scope `/agents/<aid>/settings` defaults to
     // the Overview sub-tab.
     if (drilledAgent && agentSettingsSegment) {
       return <AgentSettingsPage agentId={activeAgentId} />;
@@ -398,7 +378,7 @@ export default function AppLayout() {
   })();
 
   // The chat composer + sessions rail belong on the drilled-agent
-  // default surface (`/c/<entity>/agents/<id>/[inbox/<sid>]`). The
+  // default surface (`/trust/<addr>/agents/<id>/[inbox/<sid>]`). The
   // entity-scope inbox (`/trust/<addr>/inbox`) embeds
   // `<SessionDetail>` (which mounts its own composer against the
   // inbox-store POST path) — it must not also mount the AppLayout
