@@ -46,6 +46,7 @@ export interface LaunchPlan {
   name: string;
   price: string;
   cadence: string;
+  dueToday: string;
   intro: string;
   blurb: string;
   features: string[];
@@ -58,18 +59,30 @@ export const LAUNCH_PLANS: LaunchPlan[] = [
     name: "Standard",
     price: "$49",
     cadence: "/mo",
-    intro: "Launch month included.",
-    blurb: "For a focused organization with one clear operating lane.",
-    features: ["1 organization", "1x execution", "4 vCPU runtime", "Ownership + governance"],
+    dueToday: "$49",
+    intro: "Focused launch.",
+    blurb: "Launch with the core capacity for one organization.",
+    features: [
+      "Full organization + unlimited agents",
+      "5M LLM tokens / month",
+      "2 vCPU runtime",
+      "4 GB RAM · 40 GB storage",
+    ],
   },
   {
     id: "growth",
     name: "Pro",
     price: "$149",
     cadence: "/mo",
+    dueToday: "$69",
     intro: "$69 first month.",
-    blurb: "For heavier execution, more agents, and broader coordination.",
-    features: ["Everything in Standard", "4x execution", "8 vCPU runtime", "Priority runs"],
+    blurb: "More capacity from day one.",
+    features: [
+      "Full organization + unlimited agents",
+      "20M LLM tokens / month",
+      "8 vCPU runtime",
+      "16 GB RAM · 160 GB storage",
+    ],
     recommended: true,
   },
 ];
@@ -94,7 +107,6 @@ export const FEATURES: Feature[] = [
   { text: `Run up to ${WORKSPACE_COMPANY_CAP} autonomous companies` },
   { text: "Unlimited agents" },
   { text: "Managed hosting + custom domain" },
-  { text: "Built-in ownership & governance" },
   {
     text: `${RESOURCE_PACK.inferenceLabel} / compute baseline in the launch tier`,
     highlight: true,

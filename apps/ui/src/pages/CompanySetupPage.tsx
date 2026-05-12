@@ -264,7 +264,8 @@ export default function CompanySetupPage() {
           <p className="start-eyebrow">Launch · first organization</p>
           <h1 className="page-title">Launch your first AI-native organization.</h1>
           <p className="start-sub">
-            Create the workspace where agents, ownership, treasury, and governance live together.
+            Give it a name, define its mission, and choose how much execution capacity it starts
+            with.
           </p>
         </div>
       </header>
@@ -335,6 +336,10 @@ export default function CompanySetupPage() {
               <div>
                 <p className="start-section-kicker">3. Choose your execution tier</p>
                 <h3 className="start-section-title">Pick the launch tier.</h3>
+                <p className="start-sub">
+                  Both tiers include the full organization and unlimited agents. Pro gives 4x more
+                  LLM capacity and 4x more runtime.
+                </p>
               </div>
             </div>
 
@@ -353,6 +358,7 @@ export default function CompanySetupPage() {
                     aria-pressed={selected}
                   >
                     {item.recommended && <span className="plan-card-badge">Recommended</span>}
+                    {selected && <span className="plan-card-selected">Selected</span>}
                     <div className="plan-card-name">{item.name}</div>
                     <div className="plan-card-price">
                       <span className="plan-card-price-amount">
@@ -383,11 +389,18 @@ export default function CompanySetupPage() {
       </section>
 
       <div className="launch-footer">
-        <p className="launch-footer-note">
-          {selectedLaunchPlan.id === "growth"
-            ? "Pro · $69 today · then $149/mo · 4x execution · 2x compute"
-            : "Standard · $49/mo · 1x execution · 1x compute"}
-        </p>
+        <div className="launch-footer-copy">
+          <p className="launch-footer-note">
+            {selectedLaunchPlan.id === "growth"
+              ? `Due today ${selectedLaunchPlan.dueToday} · Pro · 20M LLM tokens / month · 8 vCPU runtime`
+              : `Due today ${selectedLaunchPlan.dueToday} · Standard · 5M LLM tokens / month · 2 vCPU runtime`}
+          </p>
+          <p className="launch-footer-meta">
+            {selectedLaunchPlan.id === "growth"
+              ? `Then ${selectedLaunchPlan.price}${selectedLaunchPlan.cadence} · full organization · unlimited agents`
+              : "Full organization · unlimited agents"}
+          </p>
+        </div>
         <Button
           variant="primary"
           size="lg"
@@ -396,7 +409,9 @@ export default function CompanySetupPage() {
           loading={submitting}
           loadingLabel="Creating"
         >
-          {canSkipCheckout ? "Launch organization" : "Pay & launch organization"}
+          {canSkipCheckout
+            ? "Launch organization"
+            : `Pay ${selectedLaunchPlan.dueToday} and launch`}
         </Button>
       </div>
     </div>

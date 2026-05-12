@@ -384,6 +384,9 @@
 }
 
 .launch-footer {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: 6;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -395,7 +398,23 @@
   box-shadow: var(--shadow-sm);
 }
 
+.launch-footer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .launch-footer-note {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+  max-width: 52ch;
+}
+
+.launch-footer-meta {
   margin: 0;
   font-size: var(--font-size-sm);
   line-height: 1.45;
@@ -439,6 +458,10 @@
   }
 
   .launch-footer-note {
+    max-width: none;
+  }
+
+  .launch-footer-meta {
     max-width: none;
   }
 
@@ -917,6 +940,20 @@
   box-shadow:
     0 0 0 1px var(--color-text-primary) inset,
     0 16px 40px color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+}
+
+.plan-card-selected {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-text-primary);
+  color: var(--bg-paper);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .plan-card-name {
   font-family: var(--font-sans);
