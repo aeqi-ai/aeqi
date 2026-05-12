@@ -2,6 +2,9 @@
 
 Get AEQI running locally with the daemon, web server, and dashboard.
 
+This quickstart is for the source-available runtime in this repository. The
+hosted SaaS control plane is separate.
+
 ## Install
 
 ### Option A: Install Script
@@ -30,7 +33,7 @@ Run setup. It is non-interactive: it detects your environment (workspace if you'
 aeqi setup
 ```
 
-Setup prints the dashboard URL and the generated secret — copy the secret; you'll paste it on the dashboard sign-in screen. SQLite databases are created in `~/.aeqi/` on first daemon boot. No external database required.
+Setup prints the dashboard URL and the generated secret — copy the secret; you'll paste it on the dashboard sign-in screen. Runtime SQLite databases are created in `~/.aeqi/` on first daemon boot. No external database is required for the local runtime.
 
 Set your provider key (one of):
 
@@ -77,3 +80,6 @@ npm run ui:dev
 ```
 
 This serves the frontend on `http://127.0.0.1:5173` and proxies `/api/*` to AEQI on `:8400`.
+
+For persistent private servers, continue with [self-hosting.md](self-hosting.md)
+and [deployment.md](deployment.md).

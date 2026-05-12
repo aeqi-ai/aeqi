@@ -1,11 +1,11 @@
 # ── Stage 1: Build dashboard UI ──
 FROM node:22-slim AS ui
-WORKDIR /build/apps/ui
-COPY apps/ui/package.json apps/ui/package-lock.json ./
-RUN npm ci --silent
-COPY apps/ui/ ./
-COPY apps/shared/ /build/apps/shared/
-RUN npm run build
+WORKDIR /build
+COPY apps/ui/package.json apps/ui/package-lock.json apps/ui/
+RUN cd apps/ui && npm ci --silent
+COPY apps/ui/ apps/ui/
+COPY packages/ packages/
+RUN cd apps/ui && npm run build
 
 # ── Stage 2: Build Rust binary ──
 FROM rust:1-slim AS build
@@ -15,6 +15,7 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY aeqi-cli/Cargo.toml aeqi-cli/Cargo.toml
 COPY crates/ crates/
+COPY presets/ presets/
 # Stub main.rs so cargo can resolve the workspace.
 RUN mkdir -p aeqi-cli/src && echo "fn main(){}" > aeqi-cli/src/main.rs
 RUN cargo build --release -p aeqi 2>/dev/null || true
@@ -27,8 +28,8 @@ RUN cargo build --release -p aeqi
 FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/target/release/aeqi /usr/local/bin/aeqi
-# No hardcoded USER — aeqi-cloud passes --user uid:gid matching the host
-# so bind-mounted /data is writable without chown.
+# No hardcoded USER: container orchestrators can pass --user uid:gid matching
+# the host so bind-mounted data directories stay writable without chown.
 WORKDIR /
 EXPOSE 8400
 ENTRYPOINT ["aeqi"]

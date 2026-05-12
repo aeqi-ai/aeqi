@@ -3,6 +3,7 @@
 ## Start here
 
 - [quickstart.md](quickstart.md) — install, set up, run the daemon and dashboard.
+- [self-hosting.md](self-hosting.md) — honest operator guide for running your own runtime.
 - [local-demo.md](local-demo.md) — end-to-end walkthrough with no API key (uses local Ollama).
 - [vision.md](vision.md) — product north star and design principles.
 - [product-contract.md](product-contract.md) — shared runtime vocabulary and UX rules.

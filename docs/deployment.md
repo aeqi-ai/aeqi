@@ -1,6 +1,10 @@
 # Deployment
 
-AEQI ships as a single static binary with the dashboard UI embedded via `rust-embed`. SQLite is the only storage dependency. Inter-process communication between the daemon and web server uses a Unix domain socket under `data_dir`.
+AEQI runtime deployment is simple by design: one binary, embedded dashboard,
+local runtime databases, and an HTTP/WebSocket API.
+
+This document covers the runtime in this repository. Hosted accounts, billing,
+fleet provisioning, and managed placement belong to `aeqi-platform`.
 
 ## Architecture
 
@@ -11,109 +15,92 @@ AEQI ships as a single static binary with the dashboard UI embedded via `rust-em
                               |
                   +-----------v-----------+
                   |       aeqi start      |
-                  |  (daemon + web + UI)  |
+                  |  daemon + API + UI    |
                   +-----------+-----------+
                               |
                   +-----------v-----------+
-                  |    ~/.aeqi/aeqi.db    |
-                  |    ~/.aeqi/ipc.sock   |
+                  |   runtime data dir    |
+                  |  SQLite + secrets     |
                   +-----------------------+
 ```
 
-`aeqi start` launches the daemon and web server in a single process. The web server serves both the API (`/api`) and the embedded dashboard UI (all other routes). No separate frontend build or hosting is required.
+`aeqi start` launches the daemon and web server in a single process. The web
+server serves both `/api` and the embedded dashboard UI. No separate frontend
+host is required.
 
-For production environments that need independent service management (e.g., restart the web layer without interrupting running workers), run them separately:
+## Build Or Install
 
-```
-aeqi daemon start   # orchestration, workers, background jobs
-aeqi web start      # HTTP API + embedded UI
-```
-
-## Production Deployment
-
-### Build
-
-The deploy script at `scripts/deploy.sh` handles the full build:
-
-1. Builds the dashboard UI (`apps/ui`) via npm
-2. Compiles the release binary with the UI embedded
-3. Restarts systemd services
-
-Run it manually or wire it into your CI:
+Install a published binary:
 
 ```bash
-./scripts/deploy.sh            # build + restart
-./scripts/deploy.sh --no-restart  # build only
+curl -fsSL https://raw.githubusercontent.com/aeqi-ai/aeqi/main/scripts/install.sh | sh
 ```
 
-### systemd -- Single Service
+Or build from source:
 
-For most deployments, a single service is simplest:
+```bash
+git clone https://github.com/aeqi-ai/aeqi.git
+cd aeqi
+cargo build --release -p aeqi
+install -m 755 target/release/aeqi /usr/local/bin/aeqi
+```
+
+## First Runtime
+
+```bash
+aeqi setup
+aeqi secrets set OPENROUTER_API_KEY <key>
+aeqi doctor --strict
+aeqi start
+```
+
+`aeqi setup` writes config and prints the dashboard secret. Keep that secret
+private.
+
+## systemd
+
+For most servers, run the single process under systemd:
 
 ```ini
 [Unit]
-Description=AEQI
+Description=AEQI runtime
 After=network.target
 
 [Service]
+Type=simple
+User=aeqi
+Group=aeqi
+Environment=AEQI_CONFIG=/var/lib/aeqi/config/aeqi.toml
 ExecStart=/usr/local/bin/aeqi start
-User=aeqi
-Environment=AEQI_CONFIG=/home/aeqi/config/aeqi.toml
 Restart=on-failure
 RestartSec=5
+WorkingDirectory=/var/lib/aeqi
+ReadWritePaths=/var/lib/aeqi
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### systemd -- Split Services
+Create the user and directories:
 
-If you need to restart the daemon and web server independently:
-
-```ini
-# /etc/systemd/system/aeqi-daemon.service
-[Unit]
-Description=AEQI Daemon
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/aeqi daemon start
-User=aeqi
-Environment=AEQI_CONFIG=/home/aeqi/config/aeqi.toml
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo useradd --system --home /var/lib/aeqi --shell /usr/sbin/nologin aeqi
+sudo install -d -o aeqi -g aeqi /var/lib/aeqi /var/lib/aeqi/config
 ```
 
-```ini
-# /etc/systemd/system/aeqi-web.service
-[Unit]
-Description=AEQI Web
-After=aeqi-daemon.service
-Requires=aeqi-daemon.service
-
-[Service]
-ExecStart=/usr/local/bin/aeqi web start
-User=aeqi
-Environment=AEQI_CONFIG=/home/aeqi/config/aeqi.toml
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
+Run `aeqi setup` once as the same user, or copy a reviewed config into
+`/var/lib/aeqi/config/aeqi.toml`.
 
 ## Reverse Proxy
 
-AEQI binds to `0.0.0.0:8400` by default (configurable via `[web].bind`). Put nginx or Caddy in front for TLS termination.
+AEQI binds to the address in `[web].bind`, commonly `127.0.0.1:8400` behind a
+TLS reverse proxy.
 
 ### Caddy
 
-```
+```caddy
 aeqi.example.com {
-    reverse_proxy localhost:8400
+    reverse_proxy 127.0.0.1:8400
 }
 ```
 
@@ -139,45 +126,30 @@ server {
 }
 ```
 
-The `Connection: upgrade` headers are required for WebSocket support on the dashboard.
+The `Upgrade` and `Connection` headers are required for dashboard WebSocket
+traffic.
 
-## Configuration
+## Docker Compose
 
-Copy `config/aeqi.example.toml` to `config/aeqi.toml` and edit it. Key sections:
-
-| Section | Purpose |
-|---|---|
-| `[aeqi]` | Instance name, data directory |
-| `[providers.*]` | LLM provider API keys and default models |
-| `[security]` | Autonomy level, cost limits |
-| `[web]` | Bind address, CORS, auth secret |
-| `[repos]` | Repository paths agents can access |
-| `[[agents]]` | Agent definitions, worker limits |
-
-### Secrets and environment variables
-
-API keys support `${ENV_VAR}` interpolation in the TOML file. For sensitive values, use AEQI's built-in encrypted secrets store:
+The root Compose file is a runtime convenience, not a hosted platform stack.
+Provide `config/aeqi.toml` before starting it:
 
 ```bash
-aeqi secrets set OPENROUTER_API_KEY
-aeqi secrets set AEQI_WEB_SECRET
+cp config/aeqi.example.toml config/aeqi.toml
+# edit config/aeqi.toml
+docker compose up --build
 ```
 
-Point the config at the right file with `AEQI_CONFIG=/path/to/aeqi.toml` or `--config`.
-
-### Embedded UI override
-
-The dashboard is embedded in the binary at compile time. To override it at runtime (useful during frontend development), set:
-
-```toml
-[web]
-ui_dist_dir = "/absolute/path/to/apps/ui/dist"
-```
-
-This is optional and not needed for production.
+The container maps port `8400` and stores runtime data in the `aeqi-data`
+volume.
 
 ## Updating
 
-1. Pull the latest source.
-2. Run `./scripts/deploy.sh` (builds UI, compiles binary, restarts services).
-3. SQLite migrations run automatically on startup.
+For binary installs:
+
+1. Install or build the new `aeqi` binary.
+2. Run `aeqi doctor --strict` with the deployed config.
+3. Restart the service.
+4. Check logs and open the dashboard.
+
+SQLite runtime migrations run automatically on startup.

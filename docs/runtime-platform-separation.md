@@ -48,6 +48,17 @@ The hosted platform owns:
 The platform may mount runtime pages, proxy runtime APIs, and provision runtime
 instances. It must not redefine the runtime primitives.
 
+## Self-Host Reality
+
+A self-hoster of this repository gets a runtime, not the hosted SaaS control
+plane. That is a feature of the boundary:
+
+- local/company runtime execution works without a hosted AEQI account
+- runtime data is owned by the runtime operator
+- hosted billing, account lifecycle, public domains, and fleet placement belong
+  to `aeqi-platform`
+- docs must not imply this repository starts the full hosted platform
+
 ## Boundary Contract
 
 Platform-to-runtime interaction should use explicit contracts:
