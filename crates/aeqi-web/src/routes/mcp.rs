@@ -156,11 +156,8 @@ fn mcp_context(scope: Option<&UserScope>, headers: &HeaderMap) -> McpHttpContext
     let agent = header_string(headers, "x-aeqi-agent");
     let agent_id = header_string(headers, "x-aeqi-agent-id");
     let allowed_roots = scope.map(|s| s.roots.clone()).unwrap_or_default();
-    let entity_id = header_string(headers, "x-aeqi-caller-entity-id")
-        .or_else(|| allowed_roots.first().cloned())
-        .or_else(|| header_string(headers, "x-aeqi-root"));
-    let user_id = header_string(headers, "x-aeqi-caller-user-id")
-        .or_else(|| scope.and_then(|s| s.user_id.clone()));
+    let entity_id = scope.and_then(|_| allowed_roots.first().cloned());
+    let user_id = scope.and_then(|s| s.user_id.clone());
 
     let actor = McpActorContext {
         kind: if user_id.is_some() {
@@ -820,13 +817,34 @@ mod tests {
 
     #[test]
     fn http_mcp_context_defaults_to_local_operator_without_scope() {
-        let headers = HeaderMap::new();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-aeqi-caller-user-id", "spoofed-user".parse().unwrap());
+        headers.insert("x-aeqi-caller-entity-id", "spoofed-entity".parse().unwrap());
 
         let ctx = mcp_context(None, &headers);
 
         assert_eq!(ctx.actor.kind, "local_operator");
         assert_eq!(ctx.actor.source, "self_hosted_local");
+        assert_eq!(ctx.actor.user_id, None);
+        assert_eq!(ctx.actor.entity_id, None);
         assert_eq!(ctx.actor.grants, vec!["*"]);
         assert!(ctx.allowed_roots.is_empty());
+    }
+
+    #[test]
+    fn http_mcp_context_uses_scope_instead_of_spoofable_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-aeqi-caller-user-id", "spoofed-user".parse().unwrap());
+        headers.insert("x-aeqi-caller-entity-id", "spoofed-entity".parse().unwrap());
+        let scope = UserScope {
+            roots: vec!["entity-1".to_string()],
+            user_id: Some("user-1".to_string()),
+        };
+
+        let ctx = mcp_context(Some(&scope), &headers);
+
+        assert_eq!(ctx.actor.kind, "user");
+        assert_eq!(ctx.actor.user_id.as_deref(), Some("user-1"));
+        assert_eq!(ctx.actor.entity_id.as_deref(), Some("entity-1"));
     }
 }
