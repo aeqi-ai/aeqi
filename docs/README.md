@@ -24,6 +24,7 @@
 - [context-injection.md](context-injection.md) — how agent input context is assembled per quest.
 - [agent-loop-parity.md](agent-loop-parity.md) — comparison with Claude Code's agent loop.
 - [project-model.md](project-model.md) — canonical model for projects, repositories, library items, agents, and quests.
+- [quest-evidence-contract.md](quest-evidence-contract.md) — evidence every meaningful quest should leave behind.
 - [ui-design.md](ui-design.md) — operator UI principles and information architecture.
 
 ## Roadmap

@@ -104,6 +104,7 @@ export type QuestStatus = "backlog" | "todo" | "in_progress" | "done" | "cancell
 export type QuestPriority = "critical" | "high" | "normal" | "low";
 
 export interface QuestOutcome {
+  /** Current minimum terminal outcome contract; see docs/quest-evidence-contract.md. */
   kind: string; // "done", "blocked", "failed", "handoff"
   summary: string;
   reason?: string;

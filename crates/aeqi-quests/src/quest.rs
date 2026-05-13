@@ -142,6 +142,8 @@ pub struct Checkpoint {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestOutcomeRecord {
+    /// Current minimum terminal outcome contract. See docs/quest-evidence-contract.md
+    /// for the richer evidence fields this record should grow next.
     pub kind: QuestOutcomeKind,
     pub summary: String,
     #[serde(default)]
