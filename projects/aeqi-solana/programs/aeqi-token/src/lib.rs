@@ -13,6 +13,7 @@
 // lints. Keep this crate's warning output focused on protocol code.
 #![allow(deprecated, unexpected_cfgs)]
 
+use aeqi_trust::state::Trust;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke_signed;
 use anchor_lang::solana_program::program_pack::Pack;
@@ -146,6 +147,12 @@ pub mod aeqi_token {
         require_token_2022(ctx.accounts.token_program.key())?;
         let module = &ctx.accounts.module_state;
         require!(module.mint == ctx.accounts.mint.key(), TokenError::MintMismatch);
+        require_keys_eq!(module.trust, ctx.accounts.trust.key(), TokenError::TrustMismatch);
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            ctx.accounts.trust.authority,
+            TokenError::UnauthorizedMintAuthority
+        );
 
         if module.max_supply_cap > 0 {
             let current_supply = ctx.accounts.mint.supply;
@@ -345,8 +352,12 @@ pub struct BurnTokens<'info> {
 
 #[derive(Accounts)]
 pub struct MintTokens<'info> {
-    /// CHECK: trust pda — used as the seed namespace.
-    pub trust: UncheckedAccount<'info>,
+    #[account(
+        seeds = [b"trust", trust.trust_id.as_ref()],
+        bump = trust.bump,
+        seeds::program = AEQI_TRUST_ID,
+    )]
+    pub trust: Account<'info, Trust>,
     #[account(
         seeds = [b"token_module", trust.key().as_ref()],
         bump = module_state.bump,
@@ -359,6 +370,7 @@ pub struct MintTokens<'info> {
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(mut)]
     pub recipient_ta: InterfaceAccount<'info, TokenAccount>,
+    pub authority: Signer<'info>,
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -405,4 +417,8 @@ pub enum TokenError {
     SupplyCapExceeded,
     #[msg("token program must be Token-2022")]
     InvalidTokenProgram,
+    #[msg("token module is not bound to the supplied trust")]
+    TrustMismatch,
+    #[msg("caller is not the trust authority for minting")]
+    UnauthorizedMintAuthority,
 }

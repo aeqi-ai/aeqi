@@ -2,6 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AeqiGovernance } from "../target/types/aeqi_governance";
 import { AeqiToken } from "../target/types/aeqi_token";
+import { AeqiTrust } from "../target/types/aeqi_trust";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -16,6 +17,7 @@ describe("aeqi_governance", () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.aeqiGovernance as Program<AeqiGovernance>;
+  const trustProgram = anchor.workspace.aeqiTrust as Program<AeqiTrust>;
 
   const fakeTrust = Keypair.generate().publicKey;
   let modulePda: PublicKey;
@@ -941,7 +943,21 @@ describe("aeqi_governance", () => {
     // governance.cast_vote_token reads voter's balance + validates the mint
     // is the canonical PDA via seeds::program = AEQI_TOKEN_ID.
     const aeqiToken = anchor.workspace.aeqiToken as anchor.Program<AeqiToken>;
-    const trustV = Keypair.generate().publicKey;
+    const trustId = new Uint8Array(32);
+    trustId[0] = 0xf0;
+    trustId[1] = 0x01;
+    const [trustV] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trust"), Buffer.from(trustId)],
+      trustProgram.programId,
+    );
+    await trustProgram.methods
+      .initialize(Array.from(trustId))
+      .accounts({
+        trust: trustV,
+        authority: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
 
     // Token module setup
     const [tokenModuleStatePda] = PublicKey.findProgramAddressSync(
@@ -1007,6 +1023,7 @@ describe("aeqi_governance", () => {
         mintAuthority: mintAuthorityPda,
         mint: mintPda,
         recipientTa: voterAta,
+        authority: provider.wallet.publicKey,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .rpc();

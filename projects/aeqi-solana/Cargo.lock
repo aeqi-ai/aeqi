@@ -66,6 +66,7 @@ dependencies = [
 name = "aeqi-token"
 version = "0.1.0"
 dependencies = [
+ "aeqi-trust",
  "anchor-lang",
  "anchor-spl",
  "solana-system-interface",

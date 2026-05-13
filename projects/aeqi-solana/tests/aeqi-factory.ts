@@ -395,7 +395,11 @@ describe("aeqi_factory", () => {
     const tokenConfigKey = new Uint8Array(32);
     tokenConfigKey[0] = 1;
     const [tokenBytesConfigPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("cfg_bytes"), trustPda.toBuffer(), Buffer.from(tokenConfigKey)],
+      [
+        Buffer.from("cfg_bytes"),
+        trustPda.toBuffer(),
+        Buffer.from(tokenConfigKey),
+      ],
       trust.programId,
     );
 
@@ -454,7 +458,8 @@ describe("aeqi_factory", () => {
     expect(ts.decimals).to.eq(9);
     expect(ts.maxSupplyCap.toString()).to.eq("1000000000");
 
-    const gs = await governance.account.governanceModuleState.fetch(govModuleStatePda);
+    const gs =
+      await governance.account.governanceModuleState.fetch(govModuleStatePda);
     expect(gs.trust.toBase58()).to.eq(trustPda.toBase58());
   });
 
@@ -470,9 +475,12 @@ describe("aeqi_factory", () => {
       [Buffer.from("trust"), Buffer.from(trustId)],
       trust.programId,
     );
-    const roleModuleId = new Uint8Array(32); roleModuleId[0] = 0x52;
-    const tokenModuleId = new Uint8Array(32); tokenModuleId[0] = 0x54;
-    const govModuleId = new Uint8Array(32); govModuleId[0] = 0x47;
+    const roleModuleId = new Uint8Array(32);
+    roleModuleId[0] = 0x52;
+    const tokenModuleId = new Uint8Array(32);
+    tokenModuleId[0] = 0x54;
+    const govModuleId = new Uint8Array(32);
+    govModuleId[0] = 0x47;
 
     const pdaModule = (id: Uint8Array) =>
       PublicKey.findProgramAddressSync(
@@ -499,7 +507,11 @@ describe("aeqi_factory", () => {
     const tokenConfigKey = new Uint8Array(32);
     tokenConfigKey[0] = 1;
     const [tokenBytesConfigPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("cfg_bytes"), trustPda.toBuffer(), Buffer.from(tokenConfigKey)],
+      [
+        Buffer.from("cfg_bytes"),
+        trustPda.toBuffer(),
+        Buffer.from(tokenConfigKey),
+      ],
       trust.programId,
     );
 
@@ -594,10 +606,16 @@ describe("aeqi_factory", () => {
         mintAuthority: mintAuthorityPda,
         mint: mintPda,
         recipientTa: ata,
+        authority: provider.wallet.publicKey,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .rpc();
-    let acct = await getAccount(provider.connection, ata, undefined, TOKEN_2022_PROGRAM_ID);
+    let acct = await getAccount(
+      provider.connection,
+      ata,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(acct.amount.toString()).to.eq("1500");
 
     // Mint 600 more (1500+600=2100 > 2000) — must fail.
@@ -611,6 +629,7 @@ describe("aeqi_factory", () => {
           mintAuthority: mintAuthorityPda,
           mint: mintPda,
           recipientTa: ata,
+          authority: provider.wallet.publicKey,
           tokenProgram: TOKEN_2022_PROGRAM_ID,
         })
         .rpc();
@@ -629,10 +648,16 @@ describe("aeqi_factory", () => {
         mintAuthority: mintAuthorityPda,
         mint: mintPda,
         recipientTa: ata,
+        authority: provider.wallet.publicKey,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .rpc();
-    acct = await getAccount(provider.connection, ata, undefined, TOKEN_2022_PROGRAM_ID);
+    acct = await getAccount(
+      provider.connection,
+      ata,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(acct.amount.toString()).to.eq("2000");
   });
 
@@ -675,14 +700,31 @@ describe("aeqi_factory", () => {
   // instantiation work; module init for the spawned trust is the next step
   // a real caller (or the platform bridge) would run.
   it("registers BASIC + VENTURE templates side-by-side and instantiates both", async () => {
-    const BASIC_ID = (() => { const k = new Uint8Array(32); k[0]=0x42; k[1]=0x53; k[2]=0x43; return k; })(); // 'BSC'
-    const VENTURE_ID = (() => { const k = new Uint8Array(32); k[0]=0x56; k[1]=0x4e; k[2]=0x54; return k; })(); // 'VNT'
+    const BASIC_ID = (() => {
+      const k = new Uint8Array(32);
+      k[0] = 0x42;
+      k[1] = 0x53;
+      k[2] = 0x43;
+      return k;
+    })(); // 'BSC'
+    const VENTURE_ID = (() => {
+      const k = new Uint8Array(32);
+      k[0] = 0x56;
+      k[1] = 0x4e;
+      k[2] = 0x54;
+      return k;
+    })(); // 'VNT'
 
-    const moduleIdR = new Uint8Array(32); moduleIdR[0] = 0x52;  // 'R' role
-    const moduleIdT = new Uint8Array(32); moduleIdT[0] = 0x54;  // 'T' token
-    const moduleIdG = new Uint8Array(32); moduleIdG[0] = 0x47;  // 'G' governance
-    const moduleIdY = new Uint8Array(32); moduleIdY[0] = 0x59;  // 'Y' treasury (no 'T' clash)
-    const moduleIdV = new Uint8Array(32); moduleIdV[0] = 0x56;  // 'V' vesting
+    const moduleIdR = new Uint8Array(32);
+    moduleIdR[0] = 0x52; // 'R' role
+    const moduleIdT = new Uint8Array(32);
+    moduleIdT[0] = 0x54; // 'T' token
+    const moduleIdG = new Uint8Array(32);
+    moduleIdG[0] = 0x47; // 'G' governance
+    const moduleIdY = new Uint8Array(32);
+    moduleIdY[0] = 0x59; // 'Y' treasury (no 'T' clash)
+    const moduleIdV = new Uint8Array(32);
+    moduleIdV[0] = 0x56; // 'V' vesting
 
     // BASIC: role + token + governance
     const [basicPda] = PublicKey.findProgramAddressSync(
@@ -693,9 +735,21 @@ describe("aeqi_factory", () => {
       .registerTemplate(
         Array.from(BASIC_ID),
         [
-          { moduleId: Array.from(moduleIdR), programId: role.programId,       trustAcl: new anchor.BN(0xff) },
-          { moduleId: Array.from(moduleIdT), programId: token.programId,      trustAcl: new anchor.BN(0xff) },
-          { moduleId: Array.from(moduleIdG), programId: governance.programId, trustAcl: new anchor.BN(0xff) },
+          {
+            moduleId: Array.from(moduleIdR),
+            programId: role.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
+          {
+            moduleId: Array.from(moduleIdT),
+            programId: token.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
+          {
+            moduleId: Array.from(moduleIdG),
+            programId: governance.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
         ],
         [],
       )
@@ -715,11 +769,31 @@ describe("aeqi_factory", () => {
       .registerTemplate(
         Array.from(VENTURE_ID),
         [
-          { moduleId: Array.from(moduleIdR), programId: role.programId,       trustAcl: new anchor.BN(0xff) },
-          { moduleId: Array.from(moduleIdT), programId: token.programId,      trustAcl: new anchor.BN(0xff) },
-          { moduleId: Array.from(moduleIdG), programId: governance.programId, trustAcl: new anchor.BN(0xff) },
-          { moduleId: Array.from(moduleIdY), programId: treasury.programId,   trustAcl: new anchor.BN(0xff) },
-          { moduleId: Array.from(moduleIdV), programId: vesting.programId,    trustAcl: new anchor.BN(0xff) },
+          {
+            moduleId: Array.from(moduleIdR),
+            programId: role.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
+          {
+            moduleId: Array.from(moduleIdT),
+            programId: token.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
+          {
+            moduleId: Array.from(moduleIdG),
+            programId: governance.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
+          {
+            moduleId: Array.from(moduleIdY),
+            programId: treasury.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
+          {
+            moduleId: Array.from(moduleIdV),
+            programId: vesting.programId,
+            trustAcl: new anchor.BN(0xff),
+          },
         ],
         [],
       )
@@ -736,16 +810,19 @@ describe("aeqi_factory", () => {
     expect(venture.modules.length).to.eq(5);
 
     // Instantiate BASIC against a fresh trust.
-    const trustIdBasic = new Uint8Array(32); trustIdBasic[0] = 0xb1; trustIdBasic[1] = 0x42;
+    const trustIdBasic = new Uint8Array(32);
+    trustIdBasic[0] = 0xb1;
+    trustIdBasic[1] = 0x42;
     const [trustPdaBasic] = PublicKey.findProgramAddressSync(
       [Buffer.from("trust"), Buffer.from(trustIdBasic)],
       trust.programId,
     );
-    const basicModulePdas = [moduleIdR, moduleIdT, moduleIdG].map((id) =>
-      PublicKey.findProgramAddressSync(
-        [Buffer.from("module"), trustPdaBasic.toBuffer(), Buffer.from(id)],
-        trust.programId,
-      )[0],
+    const basicModulePdas = [moduleIdR, moduleIdT, moduleIdG].map(
+      (id) =>
+        PublicKey.findProgramAddressSync(
+          [Buffer.from("module"), trustPdaBasic.toBuffer(), Buffer.from(id)],
+          trust.programId,
+        )[0],
     );
     await factory.methods
       .instantiateTemplate(Array.from(trustIdBasic))
@@ -757,7 +834,11 @@ describe("aeqi_factory", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .remainingAccounts(
-        basicModulePdas.map((p) => ({ pubkey: p, isWritable: true, isSigner: false })),
+        basicModulePdas.map((p) => ({
+          pubkey: p,
+          isWritable: true,
+          isSigner: false,
+        })),
       )
       .rpc();
 
@@ -765,25 +846,43 @@ describe("aeqi_factory", () => {
     expect(tBasic.creationMode).to.eq(false);
     expect(tBasic.moduleCount).to.eq(3);
     // Sanity: each module record points at the right program.
-    expect((await trust.account.module.fetch(basicModulePdas[0])).programId.toBase58())
-      .to.eq(role.programId.toBase58());
-    expect((await trust.account.module.fetch(basicModulePdas[1])).programId.toBase58())
-      .to.eq(token.programId.toBase58());
-    expect((await trust.account.module.fetch(basicModulePdas[2])).programId.toBase58())
-      .to.eq(governance.programId.toBase58());
+    expect(
+      (
+        await trust.account.module.fetch(basicModulePdas[0])
+      ).programId.toBase58(),
+    ).to.eq(role.programId.toBase58());
+    expect(
+      (
+        await trust.account.module.fetch(basicModulePdas[1])
+      ).programId.toBase58(),
+    ).to.eq(token.programId.toBase58());
+    expect(
+      (
+        await trust.account.module.fetch(basicModulePdas[2])
+      ).programId.toBase58(),
+    ).to.eq(governance.programId.toBase58());
 
     // Instantiate VENTURE against a different fresh trust — proves the same
     // factory can spawn distinct shapes from distinct registered templates.
-    const trustIdVent = new Uint8Array(32); trustIdVent[0] = 0xb2; trustIdVent[1] = 0x56;
+    const trustIdVent = new Uint8Array(32);
+    trustIdVent[0] = 0xb2;
+    trustIdVent[1] = 0x56;
     const [trustPdaVent] = PublicKey.findProgramAddressSync(
       [Buffer.from("trust"), Buffer.from(trustIdVent)],
       trust.programId,
     );
-    const ventureModulePdas = [moduleIdR, moduleIdT, moduleIdG, moduleIdY, moduleIdV].map((id) =>
-      PublicKey.findProgramAddressSync(
-        [Buffer.from("module"), trustPdaVent.toBuffer(), Buffer.from(id)],
-        trust.programId,
-      )[0],
+    const ventureModulePdas = [
+      moduleIdR,
+      moduleIdT,
+      moduleIdG,
+      moduleIdY,
+      moduleIdV,
+    ].map(
+      (id) =>
+        PublicKey.findProgramAddressSync(
+          [Buffer.from("module"), trustPdaVent.toBuffer(), Buffer.from(id)],
+          trust.programId,
+        )[0],
     );
     await factory.methods
       .instantiateTemplate(Array.from(trustIdVent))
@@ -795,16 +894,26 @@ describe("aeqi_factory", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .remainingAccounts(
-        ventureModulePdas.map((p) => ({ pubkey: p, isWritable: true, isSigner: false })),
+        ventureModulePdas.map((p) => ({
+          pubkey: p,
+          isWritable: true,
+          isSigner: false,
+        })),
       )
       .rpc();
 
     const tVent = await trust.account.trust.fetch(trustPdaVent);
     expect(tVent.creationMode).to.eq(false);
     expect(tVent.moduleCount).to.eq(5);
-    expect((await trust.account.module.fetch(ventureModulePdas[3])).programId.toBase58())
-      .to.eq(treasury.programId.toBase58());
-    expect((await trust.account.module.fetch(ventureModulePdas[4])).programId.toBase58())
-      .to.eq(vesting.programId.toBase58());
+    expect(
+      (
+        await trust.account.module.fetch(ventureModulePdas[3])
+      ).programId.toBase58(),
+    ).to.eq(treasury.programId.toBase58());
+    expect(
+      (
+        await trust.account.module.fetch(ventureModulePdas[4])
+      ).programId.toBase58(),
+    ).to.eq(vesting.programId.toBase58());
   });
 });

@@ -6,7 +6,7 @@ Use this file to start a fresh session on the Solana protocol work.
 
 - The Solana protocol stack is the canonical implementation target.
 - Governance is now explicit about loading config from `remaining_accounts`.
-- The full Anchor suite passed on the last run: `96 passing`.
+- The full Anchor suite passed on the last run: `97 passing`.
 - Anchor macro warning noise is intentionally suppressed at crate boundaries so
   real protocol warnings surface cleanly.
 
@@ -28,6 +28,9 @@ Use this file to start a fresh session on the Solana protocol work.
 - `aeqi_token`
   - token CPI entrypoints now require the Token-2022 program explicitly.
   - `create_mint` rejects the legacy SPL Token program with `InvalidTokenProgram`.
+  - `mint_tokens` now requires a real `aeqi_trust::Trust` account, verifies the
+    token module is bound to that TRUST, and requires the TRUST authority signer
+    before the program PDA mints cap-table tokens.
 - `aeqi_role`
   - `create_role` no longer permits arbitrary child-role creation without an
     occupied caller role.
@@ -38,14 +41,16 @@ Use this file to start a fresh session on the Solana protocol work.
 
 ## What To Work On Next
 
-1. Gate `aeqi_token::mint_tokens`; current code can still mint via PDA signer
-   without a trust/governance/module authority surface.
-2. Disable or replace generic `aeqi_governance::cast_vote(choice, weight)`;
+1. Disable or replace generic `aeqi_governance::cast_vote(choice, weight)`;
    typed token/role vote paths are safer than caller-supplied weight.
-3. Fix budget/fund/funding accounting invariants: quote-mint binding, spend
+2. Fix budget/fund/funding accounting invariants: quote-mint binding, spend
    authority, budget-backed funding activation, and creator/trust activation
    checks.
-4. Keep the Solana code readable and audit-friendly.
+3. Gate `aeqi_role::assign_role` behind the same occupied-role authority walk
+   now used by child-role creation.
+4. Replace the temporary TRUST-authority mint bridge with a governance/module
+   ACL mint execution path once proposal execution is wired to module actions.
+5. Keep the Solana code readable and audit-friendly.
 
 ## Working Rules
 
@@ -64,4 +69,6 @@ Use this file to start a fresh session on the Solana protocol work.
 
 ## Suggested Opening Prompt
 
-> Continue Solana protocol hardening from the current green state. Keep the work file-by-file, preserve behavior, and focus first on reducing Anchor warning noise while keeping trust, factory, governance, token, and Unifutures explicit and auditable.
+> Continue Solana protocol hardening from the current green state. Keep the work
+> file-by-file, preserve behavior, and close the next authority/accounting gap
+> with an adversarial test before moving on.

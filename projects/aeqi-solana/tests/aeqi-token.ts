@@ -1,6 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AeqiToken } from "../target/types/aeqi_token";
+import { AeqiTrust } from "../target/types/aeqi_trust";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -11,13 +12,35 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
-import { expectTxFail } from "./support";
+import { expectTxFail, fundKeypair } from "./support";
 
 describe("aeqi_token", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.aeqiToken as Program<AeqiToken>;
+  const trustProgram = anchor.workspace.aeqiTrust as Program<AeqiTrust>;
+
+  async function createTrust(seed0: number, seed1 = 0) {
+    const trustId = new Uint8Array(32);
+    trustId[0] = seed0;
+    trustId[1] = seed1;
+    const [trustPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trust"), Buffer.from(trustId)],
+      trustProgram.programId,
+    );
+
+    await trustProgram.methods
+      .initialize(Array.from(trustId))
+      .accounts({
+        trust: trustPda,
+        authority: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    return trustPda;
+  }
 
   it("init creates a TokenModuleState PDA bound to a trust", async () => {
     // Use a synthetic trust pubkey — for this isolated test the trust PDA
@@ -99,7 +122,7 @@ describe("aeqi_token", () => {
 
   it("mint_tokens issues 1000 tokens to a recipient ATA", async () => {
     // Spawn fresh trust + init + create_mint inline for isolation
-    const fakeTrust = Keypair.generate().publicKey;
+    const fakeTrust = await createTrust(0xa1);
     const [moduleStatePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_module"), fakeTrust.toBuffer()],
       program.programId,
@@ -166,6 +189,7 @@ describe("aeqi_token", () => {
         mintAuthority: mintAuthorityPda,
         mint: mintPda,
         recipientTa: ata,
+        authority: provider.wallet.publicKey,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .rpc();
@@ -184,7 +208,7 @@ describe("aeqi_token", () => {
 
   it("burn_tokens reduces supply when owner signs", async () => {
     // Spawn fresh trust + init + create_mint + ATA + mint 5000 + burn 1500
-    const fakeTrust = Keypair.generate().publicKey;
+    const fakeTrust = await createTrust(0xa2);
     const [moduleStatePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_module"), fakeTrust.toBuffer()],
       program.programId,
@@ -246,6 +270,7 @@ describe("aeqi_token", () => {
         mintAuthority: mintAuthorityPda,
         mint: mintPda,
         recipientTa: ata,
+        authority: provider.wallet.publicKey,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .rpc();
@@ -277,6 +302,81 @@ describe("aeqi_token", () => {
       TOKEN_2022_PROGRAM_ID,
     );
     expect(acct.amount.toString()).to.eq("3500");
+  });
+
+  it("mint_tokens rejects callers that are not the trust authority", async () => {
+    const fakeTrust = await createTrust(0xa3);
+    const [moduleStatePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token_module"), fakeTrust.toBuffer()],
+      program.programId,
+    );
+    const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token_authority"), fakeTrust.toBuffer()],
+      program.programId,
+    );
+    const [mintPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("mint"), fakeTrust.toBuffer()],
+      program.programId,
+    );
+
+    await program.methods
+      .init()
+      .accounts({
+        trust: fakeTrust,
+        moduleState: moduleStatePda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    await program.methods
+      .createMint(9)
+      .accounts({
+        trust: fakeTrust,
+        moduleState: moduleStatePda,
+        mintAuthority: mintAuthorityPda,
+        mint: mintPda,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const recipient = provider.wallet.publicKey;
+    const ata = getAssociatedTokenAddressSync(
+      mintPda,
+      recipient,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    const ataIx = createAssociatedTokenAccountInstruction(
+      provider.wallet.publicKey,
+      ata,
+      recipient,
+      mintPda,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    await provider.sendAndConfirm(new anchor.web3.Transaction().add(ataIx));
+
+    const attacker = await fundKeypair(provider);
+    await expectTxFail(
+      async () =>
+        program.methods
+          .mintTokens(new anchor.BN(1))
+          .accounts({
+            trust: fakeTrust,
+            moduleState: moduleStatePda,
+            mintAuthority: mintAuthorityPda,
+            mint: mintPda,
+            recipientTa: ata,
+            authority: attacker.publicKey,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
+          })
+          .signers([attacker])
+          .rpc(),
+      /UnauthorizedMintAuthority/,
+    );
   });
 
   it("create_mint rejects a second mint for the same trust", async () => {
