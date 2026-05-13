@@ -76,7 +76,7 @@ authorization is not client-specific.
 
 - `AEQI_SECRET_KEY` — identifies the company runtime for MCP
 - `AEQI_API_KEY` — identifies the user account
-- `AEQI_AGENT` — agent context for MCP tool operations, not the human account identity
+- `AEQI_AGENT` — client/agent hint for agent-scoped MCP operations, not the human account identity. It does not automatically own new quests or filter quest lists; pass `agent` explicitly when delegating to a specific runtime agent.
 
 ### Hosted HTTP MCP
 

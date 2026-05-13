@@ -314,11 +314,13 @@ fn validate_api_key(
 pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
     let (config, ..) = load_config(config_path)?;
 
-    // Resolve agent identity: AEQI_AGENT scopes all operations to a specific agent.
+    // Resolve client/agent hint. This is request context, not the authenticated
+    // principal. Tool handlers should only use it as a default where an
+    // agent-scoped operation requires one.
     let agent_name = std::env::var("AEQI_AGENT").ok();
     let agent_id = std::env::var("AEQI_AGENT_ID").ok();
     if let Some(ref name) = agent_name {
-        eprintln!("[aeqi-mcp] agent scope: {name}");
+        eprintln!("[aeqi-mcp] client agent hint: {name}");
     }
 
     // Hosted/platform keys get first chance so local and hosted deployments
@@ -431,7 +433,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                     "action": {
                         "type": "string",
                         "enum": ["create", "list", "show", "update", "close", "cancel"],
-                        "description": "create: new quest (needs subject). list: show quests (optional status, agent). show: details (needs quest_id). update: change status/priority (needs quest_id). close: complete (needs quest_id, result). cancel: abort (needs quest_id)."
+                        "description": "create: new quest (needs subject). list: show quests (optional status, explicit agent). show: details (needs quest_id). update: change status/priority (needs quest_id). close: complete (needs quest_id, result). cancel: abort (needs quest_id). AEQI_AGENT labels the MCP client and does not automatically own or filter quests."
                     },
                     "project": {"type": "string"},
                     "quest_id": {"type": "string", "description": "Quest ID (for show/update/close/cancel)"},
@@ -737,37 +739,11 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                             .unwrap_or("list");
                         match action {
                             "create" => {
-                                let mut ipc = args.clone();
-                                ipc["cmd"] = serde_json::json!("create_quest");
-                                // Default agent to AEQI_AGENT if not specified.
-                                if ipc.get("agent").and_then(|v| v.as_str()).is_none()
-                                    && let Some(ref aname) = agent_name
-                                {
-                                    ipc["agent"] = serde_json::json!(aname);
-                                }
-                                // Normalize depends_on: string → array
-                                if let Some(dep) = ipc.get("depends_on").cloned()
-                                    && dep.is_string()
-                                {
-                                    ipc["depends_on"] =
-                                        serde_json::json!([dep.as_str().unwrap_or("")]);
-                                }
+                                let ipc = quests_create_ipc_request(&args);
                                 call_ipc(&ipc)
                             }
                             "list" => {
-                                let mut ipc = serde_json::json!({
-                                    "cmd": "quests",
-                                    "project": args.get("project").and_then(|v| v.as_str()).unwrap_or(""),
-                                });
-                                if let Some(status) = args.get("status") {
-                                    ipc["status"] = status.clone();
-                                }
-                                // Default agent filter to AEQI_AGENT if not specified.
-                                if let Some(agent) = args.get("agent") {
-                                    ipc["agent"] = agent.clone();
-                                } else if let Some(ref aname) = agent_name {
-                                    ipc["agent"] = serde_json::json!(aname);
-                                }
+                                let ipc = quests_list_ipc_request(&args);
                                 call_ipc(&ipc)
                             }
                             "show" => call_ipc(&serde_json::json!({
@@ -1363,6 +1339,33 @@ fn agents_get_context_ipc_request(agent_hint: &str) -> serde_json::Value {
     })
 }
 
+fn quests_create_ipc_request(args: &serde_json::Value) -> serde_json::Value {
+    let mut ipc = args.clone();
+    ipc["cmd"] = serde_json::json!("create_quest");
+
+    if let Some(dep) = ipc.get("depends_on").cloned()
+        && dep.is_string()
+    {
+        ipc["depends_on"] = serde_json::json!([dep.as_str().unwrap_or("")]);
+    }
+
+    ipc
+}
+
+fn quests_list_ipc_request(args: &serde_json::Value) -> serde_json::Value {
+    let mut ipc = serde_json::json!({
+        "cmd": "quests",
+        "project": args.get("project").and_then(|v| v.as_str()).unwrap_or(""),
+    });
+    if let Some(status) = args.get("status") {
+        ipc["status"] = status.clone();
+    }
+    if let Some(agent) = args.get("agent") {
+        ipc["agent"] = agent.clone();
+    }
+    ipc
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1373,6 +1376,36 @@ mod tests {
         assert_eq!(req["cmd"], "trigger_event");
         assert_eq!(req["pattern"], "session:start");
         assert_eq!(req["agent"], "worker-1");
+    }
+
+    #[test]
+    fn quests_create_request_does_not_invent_agent_scope() {
+        let req = quests_create_ipc_request(&serde_json::json!({
+            "project": "aeqi",
+            "subject": "Fix MCP quest scope",
+            "depends_on": "67-026"
+        }));
+
+        assert_eq!(req["cmd"], "create_quest");
+        assert_eq!(req["depends_on"], serde_json::json!(["67-026"]));
+        assert!(req.get("agent").is_none());
+    }
+
+    #[test]
+    fn quests_list_request_only_filters_explicit_agent() {
+        let unfiltered = quests_list_ipc_request(&serde_json::json!({
+            "project": "aeqi",
+            "status": "todo"
+        }));
+        assert_eq!(unfiltered["cmd"], "quests");
+        assert_eq!(unfiltered["status"], "todo");
+        assert!(unfiltered.get("agent").is_none());
+
+        let filtered = quests_list_ipc_request(&serde_json::json!({
+            "project": "aeqi",
+            "agent": "operator"
+        }));
+        assert_eq!(filtered["agent"], "operator");
     }
 
     #[test]

@@ -433,23 +433,11 @@ async fn call_quests(
         .unwrap_or("list");
     match action {
         "create" => {
-            let mut req = args.clone();
-            req["cmd"] = serde_json::json!("create_quest");
-            default_agent_name(ctx, &mut req);
-            if let Some(dep) = req.get("depends_on").cloned()
-                && dep.is_string()
-            {
-                req["depends_on"] = serde_json::json!([dep.as_str().unwrap_or("")]);
-            }
+            let req = quests_create_ipc_request(&args);
             ipc(state, ctx, req).await
         }
         "list" => {
-            let mut req = serde_json::json!({
-                "cmd": "quests",
-                "project": args.get("project").and_then(|v| v.as_str()).unwrap_or(""),
-            });
-            copy_fields(&args, &mut req, &["status", "agent"]);
-            default_agent_name(ctx, &mut req);
+            let req = quests_list_ipc_request(&args);
             ipc(state, ctx, req).await
         }
         "show" => {
@@ -826,6 +814,26 @@ fn default_agent_name(ctx: &McpHttpContext, req: &mut serde_json::Value) {
     }
 }
 
+fn quests_create_ipc_request(args: &serde_json::Value) -> serde_json::Value {
+    let mut req = args.clone();
+    req["cmd"] = serde_json::json!("create_quest");
+    if let Some(dep) = req.get("depends_on").cloned()
+        && dep.is_string()
+    {
+        req["depends_on"] = serde_json::json!([dep.as_str().unwrap_or("")]);
+    }
+    req
+}
+
+fn quests_list_ipc_request(args: &serde_json::Value) -> serde_json::Value {
+    let mut req = serde_json::json!({
+        "cmd": "quests",
+        "project": args.get("project").and_then(|v| v.as_str()).unwrap_or(""),
+    });
+    copy_fields(args, &mut req, &["status", "agent"]);
+    req
+}
+
 fn copy_fields(from: &serde_json::Value, to: &mut serde_json::Value, fields: &[&str]) {
     for field in fields {
         if let Some(value) = from.get(*field) {
@@ -870,7 +878,7 @@ fn tool_defs() -> serde_json::Value {
         },
         {
             "name": "quests",
-            "description": "Track units of work with create, list, show, update, close, and cancel.",
+            "description": "Track units of work with create, list, show, update, close, and cancel. The client agent hint never implicitly owns or filters quests; pass agent explicitly when delegating.",
             "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["create", "list", "show", "update", "close", "cancel"]}, "project": {"type": "string"}}, "required": ["action", "project"]}
         },
         {
@@ -911,6 +919,36 @@ mod tests {
         assert_eq!(ctx.actor.entity_id.as_deref(), Some("entity-1"));
         assert_eq!(ctx.agent.as_deref(), Some("architect"));
         assert_eq!(ctx.allowed_roots, vec!["entity-1"]);
+    }
+
+    #[test]
+    fn http_mcp_quest_create_does_not_invent_agent_scope() {
+        let req = quests_create_ipc_request(&serde_json::json!({
+            "project": "aeqi",
+            "subject": "Fix MCP quest scope",
+            "depends_on": "67-026"
+        }));
+
+        assert_eq!(req["cmd"], "create_quest");
+        assert_eq!(req["depends_on"], serde_json::json!(["67-026"]));
+        assert!(req.get("agent").is_none());
+    }
+
+    #[test]
+    fn http_mcp_quest_list_only_filters_explicit_agent() {
+        let unfiltered = quests_list_ipc_request(&serde_json::json!({
+            "project": "aeqi",
+            "status": "todo"
+        }));
+        assert_eq!(unfiltered["cmd"], "quests");
+        assert_eq!(unfiltered["status"], "todo");
+        assert!(unfiltered.get("agent").is_none());
+
+        let filtered = quests_list_ipc_request(&serde_json::json!({
+            "project": "aeqi",
+            "agent": "operator"
+        }));
+        assert_eq!(filtered["agent"], "operator");
     }
 
     #[test]

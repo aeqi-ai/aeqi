@@ -66,7 +66,7 @@ pub async fn handle_quests(
                         .agent_id
                         .as_deref()
                         .map(|a| ids.contains(a))
-                        .unwrap_or(false),
+                        .unwrap_or(true),
                 })
                 .collect();
             let idea_ids: Vec<String> = visible.iter().filter_map(|q| q.idea_id.clone()).collect();
@@ -99,7 +99,7 @@ pub async fn handle_quests(
                         "assignee": quest.assignee,
                         "scope": quest.scope.as_str(),
                         "retry_count": quest.retry_count,
-                        "project": quest.agent_id.as_deref().unwrap_or(""),
+                        "project": quest.agent_id.as_deref().or(project_filter).unwrap_or(""),
                         "created_at": quest.created_at.to_rfc3339(),
                         "updated_at": quest.updated_at.map(|t| t.to_rfc3339()),
                         "closed_at": quest.closed_at.map(|t| t.to_rfc3339()),
@@ -207,27 +207,6 @@ pub async fn handle_create_quest(
         });
     }
 
-    let agent = if let Some(aid) = explicit_agent_id {
-        ctx.agent_registry.resolve_by_hint(aid).await.ok().flatten()
-    } else if let Some(name) = agent_name_hint {
-        ctx.agent_registry
-            .resolve_by_hint(name)
-            .await
-            .ok()
-            .flatten()
-    } else {
-        ctx.agent_registry
-            .default_agent(Some(project))
-            .await
-            .ok()
-            .flatten()
-    };
-
-    let agent = match agent {
-        Some(a) => a,
-        None => return serde_json::json!({"ok": false, "error": "no agent found for project"}),
-    };
-
     let idea_ids: Vec<String> = request
         .get("idea_ids")
         .and_then(|v| v.as_array())
@@ -246,9 +225,24 @@ pub async fn handle_create_quest(
                 .collect()
         })
         .unwrap_or_default();
-    let scope_for_quest = requested_scope.unwrap_or(aeqi_core::Scope::SelfScope);
-
     // ── Resolve / mint the linked idea (Flow A vs B vs legacy) ─────────
+    let agent = if let Some(aid) = explicit_agent_id {
+        ctx.agent_registry.resolve_by_hint(aid).await.ok().flatten()
+    } else if let Some(name) = agent_name_hint {
+        ctx.agent_registry
+            .resolve_by_hint(name)
+            .await
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
+    let scope_for_quest = requested_scope.unwrap_or(if agent.is_some() {
+        aeqi_core::Scope::SelfScope
+    } else {
+        aeqi_core::Scope::Global
+    });
+
     let linked_idea_id: Option<String> = match (&provided_idea_id, &idea_obj) {
         (Some(existing_id), _) => {
             // Flow B — validate the idea exists.
@@ -306,9 +300,9 @@ pub async fn handle_create_quest(
                 .get("agent_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| agent.id.clone());
+                .or_else(|| agent.as_ref().map(|agent| agent.id.clone()));
             match store
-                .store_with_scope(name, content, &tags, Some(owner.as_str()), idea_scope)
+                .store_with_scope(name, content, &tags, owner.as_deref(), idea_scope)
                 .await
             {
                 Ok(id) if !id.is_empty() => Some(id),
@@ -316,10 +310,7 @@ pub async fn handle_create_quest(
                     // Within-24h dedup short-circuit returned an empty id;
                     // resolve the active row by (agent_id, name) to keep the
                     // quest pointed at a real idea. Last resort: error.
-                    match store
-                        .get_active_id_by_name(name, Some(owner.as_str()))
-                        .await
-                    {
+                    match store.get_active_id_by_name(name, owner.as_deref()).await {
                         Ok(Some(id)) => Some(id),
                         Ok(None) => {
                             return serde_json::json!({
@@ -338,26 +329,39 @@ pub async fn handle_create_quest(
         (None, None) => None, // Legacy path — backfill mints later.
     };
 
-    // Pick the create path. With `linked_idea_id` resolved (Flow A/B) we
-    // skip the in-method mint that `create_task_v2_scoped` would otherwise
-    // do, keeping the quest pointed at the exact idea row the IPC layer
-    // resolved. Flow C (legacy) still hits the older path so the in-method
-    // mint covers callers that haven't been migrated yet.
-    let create_result = if let Some(ref iid) = linked_idea_id {
-        ctx.agent_registry
-            .create_task_with_idea_id(&agent.id, iid, &depends_on, parent_id, scope_for_quest)
-            .await
+    // Pick the create path. Explicit agent targets create agent-scoped quests.
+    // User-principal MCP calls without `agent` / `agent_id` create unbound
+    // global quests inside this tenant runtime instead of silently assigning
+    // work to the project/root agent.
+    let create_result = if let Some(agent) = agent.as_ref() {
+        if let Some(ref iid) = linked_idea_id {
+            ctx.agent_registry
+                .create_task_with_idea_id(&agent.id, iid, &depends_on, parent_id, scope_for_quest)
+                .await
+        } else {
+            ctx.agent_registry
+                .create_task_v2_scoped(
+                    &agent.id,
+                    subject,
+                    description,
+                    &idea_ids,
+                    &labels,
+                    &depends_on,
+                    parent_id,
+                    scope_for_quest,
+                )
+                .await
+        }
     } else {
         ctx.agent_registry
-            .create_task_v2_scoped(
-                &agent.id,
+            .create_unbound_task_scoped(
+                project,
                 subject,
                 description,
-                &idea_ids,
                 &labels,
+                linked_idea_id.as_deref(),
                 &depends_on,
                 parent_id,
-                scope_for_quest,
             )
             .await
     };
@@ -400,17 +404,19 @@ pub async fn handle_create_quest(
                 .as_ref()
                 .map(|i| i.name.as_str())
                 .unwrap_or(subject);
+            let agent_log_id = agent.as_ref().map(|a| a.id.as_str());
+            let agent_session_id = agent.as_ref().and_then(|a| a.session_id.as_deref());
             let _ = ctx
                 .activity_log
                 .emit(
                     "quest_created",
-                    Some(&agent.id),
-                    agent.session_id.as_deref(),
+                    agent_log_id,
+                    agent_session_id,
                     Some(&quest.id.0),
                     &serde_json::json!({
                         "subject": subject_for_log,
                         "project": project,
-                        "creator_session_id": agent.session_id,
+                        "creator_session_id": agent_session_id,
                         "parent": parent_id,
                         "depends_on": depends_on.iter().map(|d| &d.0).collect::<Vec<_>>(),
                         "idea_id": quest.idea_id,
@@ -462,6 +468,10 @@ pub async fn handle_get_quest(
         .or_else(|| request.get("task_id"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
+    let project = request
+        .get("project")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if quest_id.is_empty() {
         return serde_json::json!({"ok": false, "error": "id is required"});
@@ -471,7 +481,7 @@ pub async fn handle_get_quest(
         let ok = match ctx.agent_registry.get_task(quest_id).await {
             Ok(Some(q)) => match q.agent_id.as_deref() {
                 Some(aid) => check_agent_access(&ctx.agent_registry, allowed, aid).await,
-                None => false,
+                None => true,
             },
             _ => false,
         };
@@ -517,7 +527,7 @@ pub async fn handle_get_quest(
                     "assignee": quest.assignee,
                     "scope": quest.scope.as_str(),
                     "retry_count": quest.retry_count,
-                    "project": quest.agent_id.as_deref().unwrap_or(""),
+                    "project": quest.agent_id.as_deref().unwrap_or(project),
                     "created_at": quest.created_at.to_rfc3339(),
                     "updated_at": quest.updated_at.map(|t| t.to_rfc3339()),
                     "closed_at": quest.closed_at.map(|t| t.to_rfc3339()),
@@ -555,7 +565,7 @@ pub async fn handle_update_quest(
         let ok = match ctx.agent_registry.get_task(quest_id).await {
             Ok(Some(q)) => match q.agent_id.as_deref() {
                 Some(aid) => check_agent_access(&ctx.agent_registry, allowed, aid).await,
-                None => false,
+                None => true,
             },
             _ => false,
         };
@@ -733,7 +743,7 @@ pub async fn handle_close_quest(
         let ok = match ctx.agent_registry.get_task(quest_id).await {
             Ok(Some(q)) => match q.agent_id.as_deref() {
                 Some(aid) => check_agent_access(&ctx.agent_registry, allowed, aid).await,
-                None => false,
+                None => true,
             },
             _ => false,
         };
@@ -888,7 +898,7 @@ pub async fn handle_quest_traces(
         let ok = match ctx.agent_registry.get_task(quest_id).await {
             Ok(Some(q)) => match q.agent_id.as_deref() {
                 Some(aid) => check_agent_access(&ctx.agent_registry, allowed, aid).await,
-                None => false,
+                None => true,
             },
             _ => false,
         };

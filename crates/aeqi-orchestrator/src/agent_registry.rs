@@ -3246,6 +3246,92 @@ impl AgentRegistry {
         Ok(quest)
     }
 
+    pub async fn create_unbound_task_scoped(
+        &self,
+        project: &str,
+        subject: &str,
+        description: &str,
+        labels: &[String],
+        linked_idea_id: Option<&str>,
+        depends_on: &[aeqi_quests::QuestId],
+        parent_id: Option<&str>,
+    ) -> Result<aeqi_quests::Quest> {
+        let prefix = self.quest_prefix_for_project(project).await?;
+        let idea_id = match linked_idea_id {
+            Some(id) => id.to_string(),
+            None => {
+                self.mint_or_reuse_quest_idea(subject, description, labels, None, Scope::Global)
+                    .await?
+            }
+        };
+
+        let quest_id = if let Some(pid) = parent_id {
+            let sdb = self.sessions_db.lock().await;
+            let child_count: u32 = sdb.query_row(
+                "SELECT COUNT(*) FROM quests WHERE id LIKE ?1",
+                params![format!("{pid}.%")],
+                |row| row.get(0),
+            )?;
+            let parent_quest_id = aeqi_quests::QuestId(pid.to_string());
+            parent_quest_id.child(child_count + 1).0
+        } else {
+            let db = self.db.lock().await;
+            db.execute(
+                "INSERT OR IGNORE INTO quest_sequences (prefix, next_seq) VALUES (?1, 1)",
+                params![prefix],
+            )?;
+            db.query_row(
+                "UPDATE quest_sequences SET next_seq = next_seq + 1 WHERE prefix = ?1 RETURNING next_seq - 1",
+                params![prefix],
+                |row| row.get::<_, u32>(0),
+            )
+            .map(|seq| format!("{prefix}-{seq:03}"))?
+        };
+
+        let now = chrono::Utc::now();
+        let deps_json = serde_json::to_string(depends_on)?;
+        let mut quest =
+            aeqi_quests::Quest::with_agent(aeqi_quests::QuestId(quest_id.clone()), subject, None);
+        quest.idea_id = Some(idea_id.clone());
+        quest.depends_on = depends_on.to_vec();
+        quest.scope = Scope::Global;
+        quest.created_at = now;
+
+        let sdb = self.sessions_db.lock().await;
+        sdb.execute(
+            "INSERT INTO quests (id, idea_id, status, priority, agent_id, scope, depends_on, created_at)
+             VALUES (?1, ?2, 'todo', 'normal', NULL, 'global', ?3, ?4)",
+            params![quest_id, idea_id, deps_json, now.to_rfc3339()],
+        )?;
+
+        info!(quest = %quest_id, project, idea_id, parent = ?parent_id, "unbound quest created");
+        Ok(quest)
+    }
+
+    async fn quest_prefix_for_project(&self, project: &str) -> Result<String> {
+        if let Some(agent) = self.default_agent(Some(project)).await? {
+            if let Some(prefix) = agent.quest_prefix {
+                return Ok(prefix);
+            }
+            return Ok(Self::fallback_quest_prefix(&agent.name));
+        }
+        Ok(Self::fallback_quest_prefix(project))
+    }
+
+    fn fallback_quest_prefix(label: &str) -> String {
+        let normalized: String = label
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .take(2)
+            .flat_map(|c| c.to_lowercase())
+            .collect();
+        if normalized.is_empty() {
+            "q".to_string()
+        } else {
+            normalized
+        }
+    }
+
     /// Create a task with v2 features: depends_on, parent (child task) support.
     pub async fn create_task_v2(
         &self,
@@ -5056,6 +5142,37 @@ mod tests {
         assert_eq!(got.status, aeqi_quests::QuestStatus::Todo);
         assert_eq!(got.retry_count, 2);
         assert!(got.closed_at.is_none(), "Pending must not stamp closed_at");
+    }
+
+    #[tokio::test]
+    async fn create_unbound_task_scoped_stores_global_quest_without_agent() {
+        let reg = test_registry().await;
+        let default = reg.spawn("worker", None, None).await.unwrap();
+        reg.update_agent_ops(&default.id, None, None, None, Some("wk"), None)
+            .await
+            .unwrap();
+
+        let quest = reg
+            .create_unbound_task_scoped(
+                "aeqi",
+                "User-scoped MCP quest",
+                "desc",
+                &[],
+                None,
+                &[],
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(quest.id.0.starts_with("wk-"));
+        assert_eq!(quest.agent_id, None);
+        assert_eq!(quest.scope, Scope::Global);
+
+        let stored = reg.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.agent_id, None);
+        assert_eq!(stored.scope, Scope::Global);
+        assert!(stored.idea_id.is_some());
     }
 
     #[tokio::test]
