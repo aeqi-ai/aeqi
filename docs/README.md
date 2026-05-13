@@ -29,6 +29,8 @@
 ## Roadmap
 
 - [roadmap.md](roadmap.md) — current phases and what's next.
+- [company-kernel-release.md](company-kernel-release.md) — release brief,
+  demo contract, and first-pass gap audit for the Company Kernel release.
 
 ## Reference
 
