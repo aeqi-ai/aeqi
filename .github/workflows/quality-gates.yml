@@ -185,38 +185,30 @@ jobs:
           cargo +nightly udeps --workspace --all-targets
         continue-on-error: false
 
-      # 9. Code formatting check
-      - name: Code formatting check
-        run: |
-          echo "=== Checking Code Format ==="
-          cargo fmt --check --all
+      # 9. Formatting and strict clippy lints
+      - name: Rust strict lints
+        run: scripts/rust-strict-lints.sh
 
-      # 10. Linting with clippy
-      - name: Linting with clippy
-        run: |
-          echo "=== Running Clippy Lints ==="
-          cargo clippy --workspace -- -D warnings
-
-      # 11. Build verification
+      # 10. Build verification
       - name: Build verification
         run: |
           echo "=== Building Workspace ==="
           cargo build --workspace --verbose
 
-      # 12. Test execution
+      # 11. Test execution
       - name: Run tests
         run: |
           echo "=== Running Tests ==="
           cargo test --workspace --verbose
 
-      # 13. Code coverage with cargo-tarpaulin
+      # 12. Code coverage with cargo-tarpaulin
       - name: Code coverage with cargo-tarpaulin
         run: |
           echo "=== Measuring Code Coverage ==="
           cargo tarpaulin --workspace --out Lcov --output-dir ./coverage
         continue-on-error: false
 
-      # 14. Documentation generation
+      # 13. Documentation generation
       - name: Generate documentation
         run: |
           echo "=== Generating Documentation ==="
@@ -248,8 +240,7 @@ jobs:
           echo "✅ Security audit: cargo-audit"
           echo "✅ Dependency analysis: cargo-deny"
           echo "✅ Unused dependencies: cargo-udeps (nightly)"
-          echo "✅ Code formatting: cargo fmt"
-          echo "✅ Linting: cargo clippy"
+          echo "✅ Rust strict lints: fmt + clippy all targets/features"
           echo "✅ Build verification"
           echo "✅ Test execution"
           echo "✅ Code coverage: cargo-tarpaulin"

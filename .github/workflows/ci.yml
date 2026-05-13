@@ -114,11 +114,8 @@ jobs:
       - name: Baileys bridge install
         run: npm --prefix bridges/baileys ci
 
-      - name: Rust format check
-        run: cargo fmt --check
-
-      - name: Rust clippy (workspace)
-        run: cargo clippy --workspace -- -D warnings
+      - name: Rust strict lints
+        run: scripts/rust-strict-lints.sh
 
       - name: Rust build
         run: cargo build --workspace

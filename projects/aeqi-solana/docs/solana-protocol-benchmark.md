@@ -1,7 +1,7 @@
 # Solana Protocol Benchmark
 
-This document distills what `aeqi-solana` should learn from respected
-open-source Solana programs. The goal is not to copy their product surfaces. It
+This document distills what `aeqi-solana` should learn from respected public
+Solana programs. The goal is not to copy their product surfaces. It
 is to raise AEQI into a professional DAO framework: reliable protocol state,
 strong authority checks, first-party clients, reproducible releases, and a
 developer experience that makes the safe path the fast path.

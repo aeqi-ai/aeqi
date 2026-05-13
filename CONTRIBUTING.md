@@ -71,7 +71,7 @@ scripts/                   Install, deploy, and operator scripts
 | ----------------------------- | ---------------------------------------------- |
 | Build everything              | `cargo build --workspace`                      |
 | Run all Rust tests            | `cargo test --workspace`                       |
-| Lint Rust (warnings = errors) | `cargo clippy --workspace -- -D warnings`      |
+| Lint Rust (strict)            | `scripts/rust-strict-lints.sh`                 |
 | Format Rust                   | `cargo fmt --all`                              |
 | UI dev server                 | `npm run ui:dev` (proxies `/api` to `:8400`)   |
 | UI production build           | `npm run ui:build`                             |
@@ -86,7 +86,7 @@ scripts/                   Install, deploy, and operator scripts
 
 The repo ships a husky-managed pre-commit hook in `.husky/pre-commit`. It runs UI checks (typecheck, lint, vitest) **only when files under `apps/ui/` are staged**, so Rust-only commits stay fast.
 
-The full Rust suite (`fmt`, `clippy -- -D warnings`, `test --workspace`) is enforced in CI on every push and pull request. CI also runs `scripts/public-surface-scan.sh`, which blocks internal notes, local workstation paths, private deployment runbooks, and license wording drift from entering the public tree.
+The full Rust suite (`scripts/rust-strict-lints.sh`, `test --workspace`) is enforced in CI on every push and pull request. The strict lint script runs `cargo fmt --all --check` plus `cargo clippy --workspace --all-targets --all-features -- -D warnings`, so test/example and feature-gated Rust code are covered. CI also runs `scripts/public-surface-scan.sh`, which blocks internal notes, local workstation paths, private deployment runbooks, and license wording drift from entering the public tree.
 
 ## UI Visual QA
 

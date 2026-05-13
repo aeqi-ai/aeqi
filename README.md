@@ -157,8 +157,7 @@ npm --prefix apps/ui ci
 Core checks:
 
 ```bash
-cargo fmt --check
-cargo clippy --workspace -- -D warnings
+scripts/rust-strict-lints.sh
 cargo test --workspace
 npm --prefix apps/ui run check
 npm --prefix apps/ui run lint
