@@ -178,7 +178,8 @@ async fn mcp_post(
                     jsonrpc: "2.0".to_string(),
                     id,
                     result: Some(serde_json::json!({
-                        "content": [{"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}]
+                        "content": [{"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}],
+                        "structuredContent": data,
                     })),
                     error: None,
                 },
@@ -353,7 +354,6 @@ async fn call_ideas(
         "store" => {
             let mut req = args.clone();
             req["cmd"] = serde_json::json!("store_idea");
-            default_agent_id(ctx, &mut req);
             ipc(state, ctx, req).await
         }
         "search" => {
@@ -362,11 +362,16 @@ async fn call_ideas(
                 "query": args.get("query").and_then(|v| v.as_str()).unwrap_or(""),
                 "top_k": args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5),
             });
-            default_agent_id(ctx, &mut req);
             copy_fields(
                 &args,
                 &mut req,
-                &["tags", "explain", "route_hint", "include_superseded"],
+                &[
+                    "agent_id",
+                    "tags",
+                    "explain",
+                    "route_hint",
+                    "include_superseded",
+                ],
             );
             ipc(state, ctx, req).await
         }
@@ -392,7 +397,6 @@ async fn call_ideas(
         "link" => {
             let mut req = args.clone();
             req["cmd"] = serde_json::json!("link_idea");
-            default_agent_id(ctx, &mut req);
             ipc(state, ctx, req).await
         }
         "feedback" => {
@@ -401,8 +405,7 @@ async fn call_ideas(
                 "id": args.get("id").and_then(|v| v.as_str()).unwrap_or(""),
                 "signal": args.get("signal").and_then(|v| v.as_str()).unwrap_or(""),
             });
-            copy_fields(&args, &mut req, &["weight", "note"]);
-            default_agent_id(ctx, &mut req);
+            copy_fields(&args, &mut req, &["agent_id", "weight", "note"]);
             ipc(state, ctx, req).await
         }
         "walk" => {
@@ -413,9 +416,14 @@ async fn call_ideas(
             copy_fields(
                 &args,
                 &mut req,
-                &["max_hops", "relations", "strength_threshold", "limit"],
+                &[
+                    "agent_id",
+                    "max_hops",
+                    "relations",
+                    "strength_threshold",
+                    "limit",
+                ],
             );
-            default_agent_id(ctx, &mut req);
             ipc(state, ctx, req).await
         }
         _ => anyhow::bail!("unknown ideas action: {action}"),
@@ -798,14 +806,6 @@ async fn call_code(
     }
 }
 
-fn default_agent_id(ctx: &McpHttpContext, req: &mut serde_json::Value) {
-    if req.get("agent_id").and_then(|v| v.as_str()).is_none()
-        && let Some(agent_id) = ctx.agent_id.as_deref()
-    {
-        req["agent_id"] = serde_json::json!(agent_id);
-    }
-}
-
 fn default_agent_name(ctx: &McpHttpContext, req: &mut serde_json::Value) {
     if req.get("agent").and_then(|v| v.as_str()).is_none()
         && let Some(agent) = ctx.agent.as_deref()
@@ -868,33 +868,186 @@ fn tool_defs() -> serde_json::Value {
     serde_json::json!([
         {
             "name": "me",
-            "description": "Return the authenticated MCP actor, entity scope, runtime transport, and authorization envelope.",
-            "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["profile", "permissions"]}}}
+            "title": "AEQI Identity",
+            "description": "Inspect who this MCP connection is acting as. Use this first when you need to confirm the authenticated user, entity/company scope, runtime transport, and authorization envelope before reading or writing company context.",
+            "annotations": {
+                "title": "AEQI Identity",
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["profile", "permissions"],
+                        "description": "profile returns actor/runtime metadata. permissions returns the same envelope plus grants when available."
+                    }
+                }
+            }
         },
         {
             "name": "ideas",
-            "description": "Persistent knowledge store: store, search, update, delete, link, feedback, and graph walk ideas.",
-            "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["store", "search", "update", "delete", "link", "feedback", "walk"]}}, "required": ["action"]}
+            "title": "AEQI Ideas",
+            "description": "Company memory and idea graph. Use search before coding to recover prior decisions, store durable findings after useful work, link related ideas, and send feedback so retrieval improves. Search combines lexical/vector retrieval with ranking; writes are scoped to the authenticated entity unless an explicit agent_id is supplied.",
+            "annotations": {
+                "title": "AEQI Ideas",
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": false,
+                "openWorldHint": false
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["store", "search", "update", "delete", "link", "feedback", "walk"],
+                        "description": "store saves knowledge; search retrieves ideas by natural language query; update/delete mutate an idea by id; link connects ideas; feedback adjusts ranking; walk traverses the idea graph."
+                    },
+                    "id": {"type": "string", "description": "Idea ID for update, delete, or feedback."},
+                    "name": {"type": "string", "description": "Short human-readable idea name for store/update, for example 'mcp/user-principal-quests'."},
+                    "content": {"type": "string", "description": "Durable knowledge body to store or replace."},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags for classification and hard-filtered search, for example architecture, decision, procedure, bug, mcp, codegraph."},
+                    "query": {"type": "string", "description": "Natural language search query for search."},
+                    "limit": {"type": "integer", "description": "Maximum search/walk results. Defaults to the runtime action default."},
+                    "agent_id": {"type": "string", "description": "Optional explicit agent scope. Omit for entity/global memory owned by the authenticated user/company context."},
+                    "from": {"type": "string", "description": "Source idea ID for link or walk."},
+                    "to": {"type": "string", "description": "Target idea ID for link."},
+                    "relation": {"type": "string", "description": "Relationship type for link, usually link, mention, embed, supports, supersedes, or contradicts."},
+                    "strength": {"type": "number", "description": "Relationship strength for link, 0.0 to 1.0."},
+                    "signal": {"type": "string", "enum": ["used", "useful", "ignored", "corrected", "wrong", "pinned"], "description": "Feedback signal for retrieval quality."},
+                    "explain": {"type": "boolean", "description": "When true, include score/ranking explanation in search results."},
+                    "include_superseded": {"type": "boolean", "description": "When true, include archived or superseded ideas in search."},
+                    "max_hops": {"type": "integer", "description": "Maximum graph depth for walk."},
+                    "relations": {"type": "array", "items": {"type": "string"}, "description": "Optional relation filter for walk."}
+                },
+                "required": ["action"]
+            }
         },
         {
             "name": "quests",
-            "description": "Track units of work with create, list, show, update, close, and cancel. The client agent hint never implicitly owns or filters quests; pass agent explicitly when delegating.",
-            "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["create", "list", "show", "update", "close", "cancel"]}, "project": {"type": "string"}}, "required": ["action", "project"]}
+            "title": "AEQI Quests",
+            "description": "Task ledger for company work. Use quests to create, list, show, update, close, or cancel work even when no AEQI runtime agent is assigned. By default, unqualified MCP quests are user/entity scoped global quests; AEQI_AGENT only labels the MCP client. Pass agent or agent_id explicitly when you want to delegate to or filter for a specific AEQI agent.",
+            "annotations": {
+                "title": "AEQI Quests",
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": false,
+                "openWorldHint": false
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["create", "list", "show", "update", "close", "cancel"],
+                        "description": "create makes a quest; list shows quests; show returns details; update changes status/priority; close records a done outcome; cancel marks work cancelled."
+                    },
+                    "project": {"type": "string", "description": "Project name, for example aeqi or aeqi-platform."},
+                    "quest_id": {"type": "string", "description": "Quest ID for show, update, close, or cancel."},
+                    "subject": {"type": "string", "description": "Quest subject for create. Prefix with 'claim:' for atomic resource locking."},
+                    "description": {"type": "string", "description": "Quest description for create."},
+                    "agent": {"type": "string", "description": "Optional explicit agent name or hint for delegated/agent-scoped work. Omit for user/entity global quests."},
+                    "agent_id": {"type": "string", "description": "Optional explicit agent ID for delegated/agent-scoped work."},
+                    "idea_id": {"type": "string", "description": "Existing idea ID to attach to a new quest."},
+                    "idea": {"type": "object", "description": "Embedded idea to mint and attach while creating a quest; accepts name, content, tags, scope, and optional agent_id."},
+                    "labels": {"type": "array", "items": {"type": "string"}, "description": "Quest labels/tags for create."},
+                    "depends_on": {
+                        "oneOf": [
+                            {"type": "string", "description": "Single prerequisite quest ID."},
+                            {"type": "array", "items": {"type": "string"}, "description": "Prerequisite quest IDs."}
+                        ],
+                        "description": "Quest dependency or dependencies for create."
+                    },
+                    "parent": {"type": "string", "description": "Parent quest ID for child quest creation."},
+                    "status": {"type": "string", "enum": ["todo", "in_progress", "done", "backlog", "cancelled", "pending", "blocked"], "description": "Filter for list or new status for update."},
+                    "priority": {"type": "string", "enum": ["low", "normal", "high", "critical"], "description": "Priority for create or update."},
+                    "result": {"type": "string", "description": "Completion result for close."},
+                    "reason": {"type": "string", "description": "Cancellation reason for cancel."}
+                },
+                "required": ["action", "project"]
+            }
         },
         {
             "name": "agents",
-            "description": "Inspect and manage agents: get, list, hire, retire, and projects.",
-            "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["get", "hire", "retire", "list", "projects"]}}, "required": ["action"]}
+            "title": "AEQI Agents",
+            "description": "Optional AEQI runtime workers and project registry. Use this to inspect available agents/projects, get an agent profile/context, hire a new agent, or retire one. You do not need an AEQI agent to use ideas, quests, or code graph as the authenticated user.",
+            "annotations": {
+                "title": "AEQI Agents",
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": false,
+                "openWorldHint": false
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["get", "hire", "retire", "list", "projects"], "description": "get returns one agent plus context; list returns agents; projects returns configured MCP projects; hire spawns; retire deactivates."},
+                    "project": {"type": "string", "description": "Project name for project-specific operations."},
+                    "agent": {"type": "string", "description": "Agent name or ID for get or retire."},
+                    "template": {"type": "string", "description": "Agent template name for hire."},
+                    "parent_agent_id": {"type": "string", "description": "Optional parent agent ID for hire."},
+                    "status": {"type": "string", "enum": ["active", "paused", "retired", "all"], "description": "Status filter for list."}
+                },
+                "required": ["action"]
+            }
         },
         {
             "name": "events",
-            "description": "Manage event handlers and trigger lifecycle events.",
-            "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["create", "list", "enable", "disable", "delete", "trigger", "trace"]}}, "required": ["action"]}
+            "title": "AEQI Events",
+            "description": "Lifecycle automation for the runtime. Use events to list or manage handlers, manually trigger session/quest lifecycle context, and trace handler executions. Prefer read actions unless intentionally changing automation.",
+            "annotations": {
+                "title": "AEQI Events",
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": false,
+                "openWorldHint": false
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["create", "list", "enable", "disable", "delete", "trigger", "trace"], "description": "create/list/enable/disable/delete manage handlers; trigger fires a lifecycle event; trace inspects invocations."},
+                    "agent": {"type": "string", "description": "Optional agent name or ID for agent-scoped event context."},
+                    "name": {"type": "string", "description": "Event handler name for create."},
+                    "pattern": {"type": "string", "description": "Full event pattern, for example session:start, session:quest_end, or schedule:0 9 * * *."},
+                    "schedule": {"type": "string", "description": "Cron expression shorthand for schedule:<expr>."},
+                    "event_pattern": {"type": "string", "description": "Session event shorthand, for example start, quest_start, quest_end, or quest_result."},
+                    "idea_ids": {"type": "array", "items": {"type": "string"}, "description": "Idea IDs referenced by a handler."},
+                    "event_id": {"type": "string", "description": "Event handler ID for enable, disable, or delete."},
+                    "session_id": {"type": "string", "description": "Session ID for trace list."},
+                    "invocation_id": {"type": "integer", "description": "Invocation ID for detailed trace."},
+                    "limit": {"type": "integer", "description": "Maximum trace rows."}
+                },
+                "required": ["action"]
+            }
         },
         {
             "name": "code",
-            "description": "Code intelligence graph: index, search, context, impact, file, stats, diff_impact, file_summary, and incremental.",
-            "inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["search", "context", "impact", "file", "stats", "index", "diff_impact", "file_summary", "incremental"]}, "project": {"type": "string"}}, "required": ["action", "project"]}
+            "title": "AEQI Code Graph",
+            "description": "Code intelligence graph for configured company repositories. Use search to find symbols, context for callers/callees/implementors, impact or diff_impact before edits, file/file_summary for file-level understanding, stats to inspect index health, and index/incremental to refresh the graph.",
+            "annotations": {
+                "title": "AEQI Code Graph",
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": false,
+                "openWorldHint": false
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["search", "context", "impact", "file", "stats", "index", "diff_impact", "file_summary", "incremental"], "description": "search/context/impact/file/stats/diff_impact/file_summary are read actions; index and incremental refresh the graph."},
+                    "project": {"type": "string", "description": "Configured project name, for example aeqi or aeqi-platform."},
+                    "query": {"type": "string", "description": "Symbol/name search query for search."},
+                    "node_id": {"type": "string", "description": "Graph node ID for context or impact."},
+                    "file_path": {"type": "string", "description": "Repository-relative path for file or file_summary."},
+                    "depth": {"type": "integer", "description": "Traversal depth for impact or diff_impact."},
+                    "limit": {"type": "integer", "description": "Maximum search results."}
+                },
+                "required": ["action", "project"]
+            }
         }
     ])
 }
@@ -949,6 +1102,54 @@ mod tests {
             "agent": "operator"
         }));
         assert_eq!(filtered["agent"], "operator");
+    }
+
+    #[test]
+    fn http_mcp_tool_contracts_explain_user_workflow() {
+        let tools = tool_defs().as_array().cloned().unwrap();
+        let by_name = |name: &str| {
+            tools
+                .iter()
+                .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some(name))
+                .cloned()
+                .unwrap()
+        };
+
+        let quests = by_name("quests");
+        assert_eq!(quests["title"], "AEQI Quests");
+        assert!(
+            quests["description"]
+                .as_str()
+                .unwrap()
+                .contains("AEQI_AGENT only labels the MCP client")
+        );
+        assert_eq!(quests["annotations"]["openWorldHint"], false);
+        assert!(
+            quests["inputSchema"]["properties"]
+                .get("agent")
+                .and_then(|v| v.get("description"))
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .contains("Omit for user/entity global quests")
+        );
+
+        let ideas = by_name("ideas");
+        assert!(
+            ideas["description"]
+                .as_str()
+                .unwrap()
+                .contains("Company memory and idea graph")
+        );
+        assert!(ideas["inputSchema"]["properties"].get("query").is_some());
+
+        let code = by_name("code");
+        assert!(
+            code["description"]
+                .as_str()
+                .unwrap()
+                .contains("callers/callees/implementors")
+        );
+        assert!(code["inputSchema"]["properties"].get("node_id").is_some());
     }
 
     #[test]

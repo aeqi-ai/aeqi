@@ -30,7 +30,9 @@ struct McpResponse {
 #[derive(Debug, Serialize)]
 struct ToolDef {
     name: String,
+    title: String,
     description: String,
+    annotations: serde_json::Value,
     #[serde(rename = "inputSchema")]
     input_schema: serde_json::Value,
 }
@@ -371,7 +373,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
     let tools = vec![
         ToolDef {
             name: "me".to_string(),
+            title: "AEQI Identity".to_string(),
             description: "Return the authenticated MCP actor, entity scope, runtime transport, and tenancy envelope. This is the canonical first call for checking whether MCP is acting as a user principal, local operator, or future agent principal.".to_string(),
+            annotations: serde_json::json!({"title": "AEQI Identity", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -386,7 +390,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         // ── Ideas (unified: store | search | update | delete) ───────────────
         ToolDef {
             name: "ideas".to_string(),
-            description: "Persistent knowledge store. Search, store, update, delete, link, or give feedback on ideas. The search pipeline is tag-routed BM25+vector with MMR diversification, graph boosts, bi-temporal filtering, and hotness/feedback boosts. Results are served from a daemon-side recall cache that invalidates on writes, so MCP calls stay coherent across tools.".to_string(),
+            title: "AEQI Ideas".to_string(),
+            description: "Company memory and idea graph. Search before coding to recover prior decisions, store durable findings after useful work, link related ideas, and send feedback so retrieval improves. Search is tag-routed BM25+vector with MMR diversification, graph boosts, bi-temporal filtering, and hotness/feedback boosts.".to_string(),
+            annotations: serde_json::json!({"title": "AEQI Ideas", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -399,7 +405,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                     "name": {"type": "string", "description": "Short slug name, e.g. 'auth/jwt-rotation' (for store, update)."},
                     "content": {"type": "string", "description": "The knowledge to store or replace (for store, update)"},
                     "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags to classify the idea. Common: fact, procedure, preference, context, evergreen, skill, architecture. Multiple tags supported. On search, becomes a hard filter."},
-                    "agent_id": {"type": "string", "description": "Agent ID to scope the idea to. Defaults to the session's AEQI_AGENT_ID (entity scope). Omit to create/search global (agent_id=NULL) ideas."},
+                    "agent_id": {"type": "string", "description": "Optional explicit agent scope. Omit for entity/global memory owned by the authenticated user/company context."},
                     "query": {"type": "string", "description": "Natural language search query (for search). Uses tag-routed BM25 + vector similarity with MMR diversification."},
                     "limit": {"type": "integer", "description": "Max results (for search, default: 5)"},
                     "explain": {"type": "boolean", "description": "Include per-component score breakdown (bm25/vector/hotness/graph/confidence/decay/final_score) on each hit. Default false."},
@@ -426,7 +432,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         // ── Quests (unified: create | list | show | update | close | cancel) ──
         ToolDef {
             name: "quests".to_string(),
-            description: "Track units of work. Quests support dependencies, parent-child hierarchy, and priority. Use for multi-step tasks worth tracking. Each quest can own a git worktree branch.".to_string(),
+            title: "AEQI Quests".to_string(),
+            description: "Task ledger for company work. Use quests to create, list, show, update, close, or cancel work even when no AEQI runtime agent is assigned. By default, unqualified MCP quests are user/entity scoped global quests; AEQI_AGENT only labels the MCP client. Pass agent or agent_id explicitly when you want to delegate to or filter for a specific AEQI agent.".to_string(),
+            annotations: serde_json::json!({"title": "AEQI Quests", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false}),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -439,7 +447,8 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                     "quest_id": {"type": "string", "description": "Quest ID (for show/update/close/cancel)"},
                     "subject": {"type": "string", "description": "Quest subject (for create). Prefix with 'claim:' for atomic resource locking."},
                     "description": {"type": "string", "description": "Quest description (for create)"},
-                    "agent": {"type": "string", "description": "Agent name (for create, list)"},
+                    "agent": {"type": "string", "description": "Optional explicit agent name or hint for delegated/agent-scoped work. Omit for user/entity global quests."},
+                    "agent_id": {"type": "string", "description": "Optional explicit agent ID for delegated/agent-scoped work."},
                     "idea_ids": {"type": "array", "items": {"type": "string"}, "description": "Idea IDs to reference (for create)"},
                     "labels": {"type": "array", "items": {"type": "string"}, "description": "Tags for categorization (for create)"},
                     "depends_on": {
@@ -462,7 +471,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         // ── Agents (unified: hire | retire | list | delegate) ──────
         ToolDef {
             name: "agents".to_string(),
-            description: "Manage agents in the agent tree. get: full agent profile with assembled ideas (session primer). list: all agents. hire: spawn from template. retire: deactivate. delegate: assemble a subagent prompt with quest context. projects: list configured projects.".to_string(),
+            title: "AEQI Agents".to_string(),
+            description: "Optional AEQI runtime workers and project registry. Use this to inspect available agents/projects, get an agent profile/context, hire a new agent, or retire one. You do not need an AEQI agent to use ideas, quests, or code graph as the authenticated user.".to_string(),
+            annotations: serde_json::json!({"title": "AEQI Agents", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -482,7 +493,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         // ── Events (new: create | list | enable | disable | delete) ──
         ToolDef {
             name: "events".to_string(),
-            description: "Manage event handlers and trigger lifecycle events. Events bind ideas to lifecycle patterns (session:start, quest_start, etc.) or cron schedules. Use trigger to fire an event and receive the assembled ideas context.".to_string(),
+            title: "AEQI Events".to_string(),
+            description: "Lifecycle automation for the runtime. Use events to list or manage handlers, manually trigger session/quest lifecycle context, and trace handler executions. Prefer read actions unless intentionally changing automation.".to_string(),
+            annotations: serde_json::json!({"title": "AEQI Events", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false}),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -509,7 +522,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         // ── Code (unified graph intelligence) ──────────────────────
         ToolDef {
             name: "code".to_string(),
-            description: "Code intelligence graph. Search symbols, get 360° context (callers/callees/implementors), analyze blast radius of changes before refactoring. Use diff_impact to see what your uncommitted changes affect. Use incremental to re-index after code changes.".to_string(),
+            title: "AEQI Code Graph".to_string(),
+            description: "Code intelligence graph for configured company repositories. Use search to find symbols, context for callers/callees/implementors, impact or diff_impact before edits, file/file_summary for file-level understanding, stats to inspect index health, and index/incremental to refresh the graph.".to_string(),
+            annotations: serde_json::json!({"title": "AEQI Code Graph", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false}),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -602,20 +617,11 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                             "store" => {
                                 let mut ipc = args.clone();
                                 ipc["cmd"] = serde_json::json!("store_idea");
-                                if ipc.get("agent_id").and_then(|v| v.as_str()).is_none()
-                                    && let Some(ref aid) = agent_id
-                                {
-                                    ipc["agent_id"] = serde_json::json!(aid);
-                                }
                                 call_ipc(&ipc)
                             }
                             "search" => {
                                 let query =
                                     args.get("query").and_then(|v| v.as_str()).unwrap_or("");
-                                let search_agent_id = args
-                                    .get("agent_id")
-                                    .and_then(|v| v.as_str())
-                                    .or(agent_id.as_deref());
                                 let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5);
 
                                 let mut ipc = serde_json::json!({
@@ -623,7 +629,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                     "query": query,
                                     "top_k": limit,
                                 });
-                                if let Some(aid) = search_agent_id {
+                                if let Some(aid) = args.get("agent_id").and_then(|v| v.as_str()) {
                                     ipc["agent_id"] = serde_json::json!(aid);
                                 }
                                 if let Some(tags) = args.get("tags") {
@@ -672,11 +678,6 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                 // tool calls that want to assert a relation.
                                 let mut ipc = args.clone();
                                 ipc["cmd"] = serde_json::json!("link_idea");
-                                if ipc.get("agent_id").and_then(|v| v.as_str()).is_none()
-                                    && let Some(ref aid) = agent_id
-                                {
-                                    ipc["agent_id"] = serde_json::json!(aid);
-                                }
                                 // Recall cache lives daemon-side now; the daemon
                                 // invalidates it on any write (link_idea included).
                                 call_ipc(&ipc)
@@ -693,7 +694,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                 if let Some(n) = args.get("note").and_then(|v| v.as_str()) {
                                     ipc["note"] = serde_json::json!(n);
                                 }
-                                if let Some(ref aid) = agent_id {
+                                if let Some(aid) = args.get("agent_id").and_then(|v| v.as_str()) {
                                     ipc["agent_id"] = serde_json::json!(aid);
                                 }
                                 call_ipc(&ipc)
@@ -718,9 +719,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                 if let Some(v) = args.get("limit") {
                                     ipc["limit"] = v.clone();
                                 }
-                                if ipc.get("agent_id").and_then(|v| v.as_str()).is_none()
-                                    && let Some(ref aid) = agent_id
-                                {
+                                if let Some(aid) = args.get("agent_id").and_then(|v| v.as_str()) {
                                     ipc["agent_id"] = serde_json::json!(aid);
                                 }
                                 call_ipc(&ipc)
@@ -1300,7 +1299,8 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                         jsonrpc: "2.0".to_string(),
                         id: request.id.unwrap_or(serde_json::Value::Null),
                         result: Some(serde_json::json!({
-                            "content": [{"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}]
+                            "content": [{"type": "text", "text": serde_json::to_string_pretty(&data).unwrap_or_default()}],
+                            "structuredContent": data,
                         })),
                         error: None,
                     },

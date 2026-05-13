@@ -36,6 +36,7 @@ use crate::runtime_tools::validators::{
 /// One item in the reflector / consolidator output array.
 #[derive(Debug, Deserialize)]
 struct StoreItem {
+    #[serde(default)]
     name: String,
     #[serde(default)]
     content: String,
@@ -591,6 +592,37 @@ mod tests {
             .unwrap();
         assert!(!result.is_error);
         assert_eq!(result.data.get("stored").and_then(|v| v.as_u64()), Some(0));
+    }
+
+    #[tokio::test]
+    async fn missing_item_name_is_skipped_not_batch_fatal() {
+        let (store, _dir) = make_store();
+        let tool = IdeasStoreManyTool::new(Some(store.clone()));
+        let result = tool
+            .execute(serde_json::json!({
+                "from_json": r#"[
+                    {"content": "missing name should not kill the batch"},
+                    {"name": "good-reflection", "content": "stored"}
+                ]"#
+            }))
+            .await
+            .unwrap();
+
+        assert!(!result.is_error, "expected success, got: {}", result.output);
+        assert_eq!(result.data.get("stored").and_then(|v| v.as_u64()), Some(1));
+        let errors = result
+            .data
+            .get("errors")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(
+            store
+                .get_by_name("good-reflection", None)
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[tokio::test]
