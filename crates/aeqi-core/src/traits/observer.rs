@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::agent::LoopTransition;
+
 /// A typed context attachment for mid-step enrichment.
 ///
 /// Observers collect these between tool execution and the next model call.
@@ -161,6 +163,21 @@ pub trait Observer: Send + Sync {
 
     /// Called at session end.
     async fn session_end(&self, _reason: &str) {}
+
+    /// Called on every internal loop transition — tool use, output truncation,
+    /// compaction stage, reactive compact, fallback-model switch, after-turn
+    /// continuation. Read-only; observers cannot affect the loop from here
+    /// (return type is unit, not `LoopAction`). Default no-op so existing
+    /// observers stay unaffected.
+    ///
+    /// The 9-variant [`LoopTransition`] enum is the loop's internal state
+    /// machine. Exposing it lets detectors / dashboards / replay tooling
+    /// distinguish *why* the loop continued (a tool call vs. a context
+    /// compaction vs. a recovery) rather than guessing from the tool-call
+    /// stream alone. Compaction stages also carry per-stage token-freed
+    /// counts here, so tuning thresholds becomes data-driven instead of
+    /// guesswork.
+    async fn on_transition(&self, _transition: &LoopTransition) {}
 }
 
 /// Instructions returned by `pre_compact` to customize compaction behavior.

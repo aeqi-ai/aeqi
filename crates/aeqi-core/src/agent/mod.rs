@@ -916,7 +916,7 @@ impl Agent {
             }
 
             // --- Context window management (3-stage compaction pipeline) ---
-            let (compaction_result, estimated_tokens) = self
+            let (compaction_report, estimated_tokens) = self
                 .run_compaction_pipeline(
                     &mut messages,
                     &mut tracker,
@@ -925,7 +925,8 @@ impl Agent {
                     &active_model,
                 )
                 .await;
-            if let Some(t) = compaction_result {
+            if let Some(t) = compaction_report.dominant_transition() {
+                self.observer.on_transition(&t).await;
                 transition = t;
             }
 
@@ -1116,6 +1117,7 @@ impl Agent {
                             has_attempted_reactive_compact = true;
                             iterations -= 1;
                             transition = LoopTransition::ReactiveCompact;
+                            self.observer.on_transition(&transition).await;
                             continue;
                         }
                     }
@@ -1142,6 +1144,7 @@ impl Agent {
                         consecutive_errors = 0;
                         iterations -= 1;
                         transition = LoopTransition::FallbackModelSwitch;
+                        self.observer.on_transition(&transition).await;
                         stop_reason = AgentStopReason::FallbackActivated;
                         continue;
                     }
@@ -1269,6 +1272,7 @@ impl Agent {
                     transition = LoopTransition::OutputTruncated {
                         attempt: output_recovery_count,
                     };
+                    self.observer.on_transition(&transition).await;
                     continue;
                 }
 
@@ -1321,6 +1325,7 @@ impl Agent {
                             });
                         }
                         transition = LoopTransition::AfterTurnContinue;
+                        self.observer.on_transition(&transition).await;
                         continue;
                     }
                     LoopAction::Halt(reason) => {
@@ -1354,6 +1359,7 @@ impl Agent {
                                     )),
                                 });
                                 transition = LoopTransition::AfterTurnContinue;
+                                self.observer.on_transition(&transition).await;
                                 continue;
                             }
                         }
@@ -1377,6 +1383,7 @@ impl Agent {
                                 ),
                             });
                             transition = LoopTransition::AfterTurnContinue;
+                            self.observer.on_transition(&transition).await;
                             continue;
                         }
 
@@ -1822,6 +1829,7 @@ impl Agent {
             }
 
             transition = LoopTransition::ToolUse;
+            self.observer.on_transition(&transition).await;
 
             // If stop reason is EndTurn (not ToolUse), break after executing tools.
             if response.stop_reason == StopReason::EndTurn {

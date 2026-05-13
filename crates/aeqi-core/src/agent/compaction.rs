@@ -10,6 +10,86 @@ use super::LoopTransition;
 use super::step_context::ContextTracker;
 
 // ---------------------------------------------------------------------------
+// Per-stage compaction telemetry
+// ---------------------------------------------------------------------------
+
+/// Per-stage outcome of one run through [`Agent::run_compaction_pipeline`].
+///
+/// Each stage's slot is `None` when the stage did not fire (didn't run, or
+/// ran but freed nothing) and `Some(stats)` when it did real work. Replaces
+/// the prior `(Option<LoopTransition>, u32)` tuple-return so per-stage detail
+/// is preserved instead of collapsing to "did anything fire?". Tunable
+/// thresholds become observable thresholds.
+///
+/// The loop reads [`CompactionReport::dominant_transition`] to keep the
+/// historical "last-stage-wins" semantics for the `transition` variable
+/// (event_delegation > collapse > snip — microcompact has no
+/// `LoopTransition` variant, matching the prior behaviour where it fired
+/// silently).
+#[derive(Debug, Clone, Default)]
+pub struct CompactionReport {
+    pub snip: Option<SnipStats>,
+    pub microcompact: Option<MicrocompactStats>,
+    pub collapse: Option<CollapseStats>,
+    pub event_delegation: Option<EventDelegationStats>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SnipStats {
+    pub tokens_freed: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MicrocompactStats {
+    pub tools_cleared: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CollapseStats {
+    pub tokens_freed: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EventDelegationStats {
+    pub handled: bool,
+}
+
+impl CompactionReport {
+    /// True if any stage fired meaningful work this pass.
+    pub fn any_stage_fired(&self) -> bool {
+        self.snip.is_some()
+            || self.microcompact.is_some()
+            || self.collapse.is_some()
+            || self.event_delegation.is_some()
+    }
+
+    /// The single [`LoopTransition`] the outer loop should observe, matching
+    /// the previous "later stage wins" priority: `event_delegation` beats
+    /// `collapse` beats `snip`. Microcompact has no associated
+    /// `LoopTransition` variant (it emits only a
+    /// `ChatStreamEvent::MicroCompacted` side effect), so a microcompact-only
+    /// pass returns `None` here, matching the prior code.
+    pub fn dominant_transition(&self) -> Option<LoopTransition> {
+        if let Some(ed) = self.event_delegation
+            && ed.handled
+        {
+            return Some(LoopTransition::ContextCompacted);
+        }
+        if let Some(c) = self.collapse {
+            return Some(LoopTransition::ContextCollapsed {
+                tokens_freed: c.tokens_freed,
+            });
+        }
+        if let Some(s) = self.snip {
+            return Some(LoopTransition::SnipCompacted {
+                tokens_freed: s.tokens_freed,
+            });
+        }
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Constants consumed by compaction
 // ---------------------------------------------------------------------------
 
@@ -487,7 +567,7 @@ impl Agent {
     ///   Stage 1.5: Context collapse — remove stale system msgs + truncate long tool results
     ///   Stage 2: Full compact — event-driven structured summary + restoration
     ///
-    /// Returns (optional transition, estimated_tokens after compaction).
+    /// Returns (per-stage compaction report, estimated_tokens after compaction).
     pub(super) async fn run_compaction_pipeline(
         &self,
         messages: &mut Vec<Message>,
@@ -495,8 +575,8 @@ impl Agent {
         has_attempted_reactive_compact: &mut bool,
         iterations: u32,
         active_model: &str,
-    ) -> (Option<LoopTransition>, u32) {
-        let mut transition: Option<LoopTransition> = None;
+    ) -> (CompactionReport, u32) {
+        let mut report = CompactionReport::default();
 
         let estimated_tokens = if tracker.estimated_context_tokens() > 0 {
             tracker.estimated_context_tokens()
@@ -527,14 +607,12 @@ impl Agent {
                 self.emit(crate::chat_stream::ChatStreamEvent::SnipCompacted {
                     tokens_freed: freed,
                 });
-                transition = Some(LoopTransition::SnipCompacted {
-                    tokens_freed: freed,
-                });
+                report.snip = Some(SnipStats { tokens_freed: freed });
             }
         }
 
         // Re-estimate after snip.
-        let estimated_tokens = if transition.is_some() {
+        let estimated_tokens = if report.snip.is_some() {
             estimate_tokens_from_messages(messages)
         } else {
             estimated_tokens
@@ -550,6 +628,9 @@ impl Agent {
             if cleared > 0 {
                 self.emit(crate::chat_stream::ChatStreamEvent::MicroCompacted {
                     cleared: cleared as u32,
+                });
+                report.microcompact = Some(MicrocompactStats {
+                    tools_cleared: cleared as u32,
                 });
             }
         }
@@ -574,7 +655,7 @@ impl Agent {
                     tokens_freed: collapsed,
                 });
                 estimated_tokens = estimate_tokens_from_messages(messages);
-                transition = Some(LoopTransition::ContextCollapsed {
+                report.collapse = Some(CollapseStats {
                     tokens_freed: collapsed,
                 });
             }
@@ -637,7 +718,7 @@ impl Agent {
                 );
                 tracker.compactions += 1;
                 *has_attempted_reactive_compact = false;
-                transition = Some(LoopTransition::ContextCompacted);
+                report.event_delegation = Some(EventDelegationStats { handled: true });
 
                 if let Some(ref sf) = self.config.session_file {
                     super::Agent::save_session(messages, tracker, iterations, active_model, sf)
@@ -646,7 +727,7 @@ impl Agent {
             }
         }
 
-        (transition, estimated_tokens)
+        (report, estimated_tokens)
     }
 
     /// Ensure every tool_use has a matching tool_result and vice versa.
