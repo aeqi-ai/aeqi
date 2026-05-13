@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Popover } from "../ui/Popover";
 import { Button } from "../ui";
 import { dueLabel, isOverdue } from "@/lib/format";
+import { formatDateTime } from "@/lib/i18n";
 
 export interface QuestDueDatePopoverProps {
   /** RFC3339 UTC string when set, null/undefined when no deadline. */
@@ -95,7 +96,7 @@ export default function QuestDueDatePopover({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={popoverId}
-          title={due_at ? `Due: ${new Date(due_at).toLocaleString()}` : "No due date"}
+          title={due_at ? `Due: ${formatDateTime(due_at)}` : "No due date"}
         >
           <svg
             width="11"

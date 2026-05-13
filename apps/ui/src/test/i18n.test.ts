@@ -3,6 +3,8 @@ import {
   DEFAULT_LOCALE,
   formatCurrency,
   formatDate,
+  formatDateTime,
+  formatDateTimeWithSeconds,
   formatInteger,
   formatMediumDate,
   formatNumber,
@@ -28,6 +30,10 @@ describe("i18n formatting", () => {
 
     expect(formatShortDate(iso, { locale: "en-US" })).toBe("May 13");
     expect(formatMediumDate(iso, { locale: "en-US" })).toBe("May 13, 2026");
+    expect(formatDateTime(iso, { locale: "en-US" })).toMatch(/^May 13, \d{2}:\d{2} (AM|PM)$/);
+    expect(formatDateTimeWithSeconds(iso, { locale: "en-US" })).toMatch(
+      /^May 13, \d{2}:\d{2}:\d{2} (AM|PM)$/,
+    );
     expect(formatShortTime(iso, { locale: "en-US" })).toMatch(/\d{2}:\d{2} (AM|PM)/);
   });
 

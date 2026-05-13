@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { ToolCall } from "@/lib/types";
+import { formatDateTime, formatInteger } from "@/lib/i18n";
 import { Popover, Textarea } from "../ui";
 import { COMMON_PATTERNS, KNOWN_TOOLS } from "../EventEditorConstants";
 import { lifecycleGroup } from "./lifecycle";
@@ -457,11 +458,9 @@ function TerminalNode({
       <span className="event-canvas-node-body">
         {hasFired ? (
           <>
-            <span className="event-canvas-node-title">{fireCount.toLocaleString()}×</span>
+            <span className="event-canvas-node-title">{formatInteger(fireCount)}×</span>
             {lastFired && (
-              <span className="event-canvas-node-meta">
-                last {new Date(lastFired).toLocaleString()}
-              </span>
+              <span className="event-canvas-node-meta">last {formatDateTime(lastFired)}</span>
             )}
             {totalCostUsd > 0 && (
               <span className="event-canvas-node-meta">${totalCostUsd.toFixed(4)} total</span>

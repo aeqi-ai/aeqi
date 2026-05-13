@@ -1,4 +1,5 @@
 import type { ActivityEntry as ActivityEntryType } from "@/lib/types";
+import { formatDateTimeWithSeconds } from "@/lib/i18n";
 
 interface ActivityEntryProps {
   entry: ActivityEntryType;
@@ -19,14 +20,7 @@ const DECISION_TYPE_COLORS: Record<string, string> = {
 };
 
 function formatTimestamp(ts: string): string {
-  const date = new Date(ts);
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatDateTimeWithSeconds(ts, { fallback: ts });
 }
 
 function formatDecisionType(type: string): string {

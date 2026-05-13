@@ -4,6 +4,7 @@ import { useNav } from "@/hooks/useNav";
 import { useDaemonStore } from "@/store/daemon";
 import { api } from "@/lib/api";
 import { entityPathFromId } from "@/lib/entityPath";
+import { formatMediumDate } from "@/lib/i18n";
 import { Button } from "@/components/ui";
 import ModelPicker from "@/components/ModelPicker";
 import { ALL_TOOLS, TOOL_BY_ID } from "@/lib/tools";
@@ -354,13 +355,7 @@ function SettingsPanel({
           {agent?.created_at && (
             <div className="agent-settings-field">
               <span className="agent-settings-label">Created</span>
-              <span className="agent-settings-value">
-                {new Date(agent.created_at).toLocaleDateString([], {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </span>
+              <span className="agent-settings-value">{formatMediumDate(agent.created_at)}</span>
             </div>
           )}
         </div>

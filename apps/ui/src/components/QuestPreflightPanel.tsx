@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { formatInteger } from "@/lib/i18n";
 import { Spinner } from "@/components/ui";
 
 interface PreflightResult {
@@ -150,7 +151,7 @@ export default function QuestPreflightPanel({ agentId, description, taskIdeaIds 
                     }}
                   >
                     <span>Assembled context</span>
-                    <span style={{ fontWeight: 400 }}>{charCount.toLocaleString()} chars</span>
+                    <span style={{ fontWeight: 400 }}>{formatInteger(charCount)} chars</span>
                   </div>
                   <pre
                     style={{

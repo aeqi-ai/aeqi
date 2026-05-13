@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { AgentEvent, ToolCall } from "@/lib/types";
+import { formatInteger } from "@/lib/i18n";
 import { Button } from "./ui";
 import {
   type LifecycleGroup,
@@ -119,7 +120,7 @@ function OverviewRow({
           <span className="events-overview-row-pattern">{event.pattern}</span>
           <span className="events-overview-row-spacer" />
           <span className="events-overview-row-fires">
-            {event.fire_count > 0 ? `${event.fire_count.toLocaleString()} fires` : "never"}
+            {event.fire_count > 0 ? `${formatInteger(event.fire_count)} fires` : "never"}
           </span>
         </div>
         <div className="events-overview-row-flow">

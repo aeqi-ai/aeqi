@@ -6,6 +6,7 @@ import { useDaemonStore } from "@/store/daemon";
 import { useInboxStore } from "@/store/inbox";
 import { useTreasury } from "@/hooks/useTreasury";
 import { fetchTrust } from "@/lib/indexer";
+import { formatShortDate } from "@/lib/i18n";
 import type { Quest } from "@/lib/types";
 import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
 import { entityBasePath } from "@/lib/entityPath";
@@ -373,7 +374,7 @@ function relativeTime(iso: string | undefined): string {
   if (diff < 60_000) return "now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatShortDate(ts);
 }
 
 function netDeltaValue(delta: { inCount: number; outCount: number } | null): string {

@@ -5,6 +5,7 @@ import { Button, Tooltip } from "../ui";
 import type { Idea, ScopeValue } from "@/lib/types";
 import { api } from "@/lib/api";
 import { asStringArray, parseFrontmatter } from "@/lib/frontmatter";
+import { formatDateTime } from "@/lib/i18n";
 import { useAgentIdeasCache } from "@/queries/ideas";
 import { ImportMenu } from "@/components/blueprints/ImportMenu";
 import IdeasFilterPopover from "./IdeasFilterPopover";
@@ -662,9 +663,7 @@ export default function IdeasListView({
                               <span
                                 className="ideas-list-row-time"
                                 title={
-                                  idea.created_at
-                                    ? new Date(idea.created_at).toLocaleString()
-                                    : undefined
+                                  idea.created_at ? formatDateTime(idea.created_at) : undefined
                                 }
                               >
                                 {ago}

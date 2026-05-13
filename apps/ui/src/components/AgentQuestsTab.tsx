@@ -4,6 +4,7 @@ import { useNav } from "@/hooks/useNav";
 import { api } from "@/lib/api";
 import { useDaemonStore } from "@/store/daemon";
 import { useAuthStore } from "@/store/auth";
+import { formatDateTime } from "@/lib/i18n";
 import { Button, Popover, Spinner } from "./ui";
 import QuestCanvas from "./QuestCanvas";
 import type { Quest, QuestStatus, QuestPriority, ScopeValue, User } from "@/lib/types";
@@ -911,7 +912,7 @@ function QuestBoard({
                               className={`quest-due-chip${
                                 isOverdue(q.due_at) ? " quest-due-chip--overdue" : ""
                               }`}
-                              title={`Due ${new Date(q.due_at).toLocaleString()}`}
+                              title={`Due ${formatDateTime(q.due_at)}`}
                             >
                               {dueLabel(q.due_at)}
                             </span>
@@ -1123,7 +1124,7 @@ function QuestList({
                             className={`quest-due-chip${
                               isOverdue(q.due_at) ? " quest-due-chip--overdue" : ""
                             }`}
-                            title={`Due ${new Date(q.due_at).toLocaleString()}`}
+                            title={`Due ${formatDateTime(q.due_at)}`}
                           >
                             {dueLabel(q.due_at)}
                           </span>

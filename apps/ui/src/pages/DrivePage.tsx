@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { formatDateTime } from "@/lib/i18n";
 import { Button, EmptyState, Spinner } from "@/components/ui";
 import { useDaemonStore } from "@/store/daemon";
 
@@ -27,16 +28,7 @@ function formatBytes(n: number): string {
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
+  return formatDateTime(iso, { fallback: iso });
 }
 
 export default function DrivePage() {

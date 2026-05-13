@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { CredentialView, IntegrationCatalogEntry } from "@/api/integrations";
+import { formatDateTime } from "@/lib/i18n";
 import { Button } from "./ui";
 import { IntegrationStatusPill } from "./IntegrationStatusPill";
 
@@ -111,7 +112,7 @@ export function IntegrationCard({
         <div className="integration-card-meta">
           <span className="integration-card-meta-label">Expires</span>
           <span className="integration-card-meta-value">
-            {new Date(credential.expires_at).toLocaleString()}
+            {formatDateTime(credential.expires_at)}
           </span>
         </div>
       )}

@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { Spinner } from "@/components/ui";
 import { getIdeaActivity, type ActivityRow } from "@/api/sessions";
+import { formatDateTime, formatShortDate } from "@/lib/i18n";
 
 // ─── Time grouping ────────────────────────────────────────────────────────────
 
@@ -56,10 +57,10 @@ function RelativeTime({ iso }: { iso: string }) {
   if (mins < 1) label = "just now";
   else if (mins < 60) label = `${mins}m ago`;
   else if (hours < 24) label = `${hours}h ago`;
-  else label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  else label = formatShortDate(d);
 
   return (
-    <time className="idea-convo-ts" dateTime={iso} title={d.toLocaleString()}>
+    <time className="idea-convo-ts" dateTime={iso} title={formatDateTime(d)}>
       {label}
     </time>
   );

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { formatDateTime } from "@/lib/i18n";
 import { launchPlanDisplayName } from "@/lib/pricing";
 import { useAuthStore } from "@/store/auth";
 import {
@@ -114,9 +115,7 @@ interface AdminHealth {
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return s;
-  return d.toLocaleString();
+  return formatDateTime(s, { fallback: s });
 }
 
 function shortId(s: string): string {

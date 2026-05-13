@@ -20,6 +20,19 @@ export const DATE_FORMATS = {
     month: "short",
     day: "numeric",
   },
+  dateTime: {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  },
+  dateTimeWithSeconds: {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  },
   shortTime: {
     hour: "2-digit",
     minute: "2-digit",
@@ -57,6 +70,14 @@ export function formatShortDate(value: DateInput, config?: FormatConfig): string
 
 export function formatMediumDate(value: DateInput, config?: FormatConfig): string {
   return formatDate(value, DATE_FORMATS.mediumDate, config);
+}
+
+export function formatDateTime(value: DateInput, config?: FormatConfig): string {
+  return formatDate(value, DATE_FORMATS.dateTime, config);
+}
+
+export function formatDateTimeWithSeconds(value: DateInput, config?: FormatConfig): string {
+  return formatDate(value, DATE_FORMATS.dateTimeWithSeconds, config);
 }
 
 export function formatShortTime(value: DateInput, config?: FormatConfig): string {

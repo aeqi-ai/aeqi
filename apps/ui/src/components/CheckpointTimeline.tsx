@@ -1,17 +1,12 @@
 import type { Checkpoint } from "@/lib/types";
+import { formatDateTime } from "@/lib/i18n";
 
 interface CheckpointTimelineProps {
   checkpoints: Checkpoint[];
 }
 
 function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(ts, { fallback: ts });
 }
 
 export default function CheckpointTimeline({ checkpoints }: CheckpointTimelineProps) {
