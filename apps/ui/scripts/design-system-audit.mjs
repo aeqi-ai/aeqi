@@ -208,6 +208,21 @@ function missingPrimitiveStories() {
   });
 }
 
+function orphanRootPrimitiveModules() {
+  const exported = new Set(exportedPrimitiveModules());
+  const trackedRootComponents = execSync("git ls-files --cached -- 'apps/ui/src/components/ui/*.tsx'", {
+    cwd: REPO_ROOT,
+    encoding: "utf-8",
+  })
+    .split("\n")
+    .filter(Boolean)
+    .filter((file) => path.dirname(file) === "apps/ui/src/components/ui")
+    .filter((file) => !file.endsWith(".stories.tsx"))
+    .map((file) => path.basename(file, ".tsx"));
+
+  return trackedRootComponents.filter((moduleName) => !exported.has(moduleName)).sort();
+}
+
 function currentSnapshot() {
   return {
     version: 1,
@@ -253,11 +268,15 @@ function printDebtLeaderboard(snapshot) {
 function main() {
   const snapshot = currentSnapshot();
   const missingStories = missingPrimitiveStories();
+  const orphanRootModules = orphanRootPrimitiveModules();
 
   if (UPDATE_BASELINE) {
     writeBaseline(snapshot);
     if (missingStories.length > 0) {
       console.warn(`Missing primitive stories: ${missingStories.join(", ")}`);
+    }
+    if (orphanRootModules.length > 0) {
+      console.warn(`Unexported root primitive modules: ${orphanRootModules.join(", ")}`);
     }
     return;
   }
@@ -289,6 +308,12 @@ function main() {
   for (const moduleName of missingStories) {
     failures.push(
       `Primitive ${moduleName} is exported from components/ui but has no tracked/staged Storybook story.`,
+    );
+  }
+
+  for (const moduleName of orphanRootModules) {
+    failures.push(
+      `Root UI module ${moduleName} is not exported from components/ui. Export it as a primitive or move it under components/ui/docs, a feature folder, or another explicit private directory.`,
     );
   }
 
