@@ -221,19 +221,19 @@ async fn add_idea_edge_rejects_legacy_adjacent() {
     );
 }
 
-// ── 4. Supersede atomicity: `handle_store_idea` keeps the old row intact
-//    when the dedup pipeline is offline ─────────────────────────────────
+// ── 4. Supersede atomicity: `handle_store_idea` keeps one active row when the
+//    dedup pipeline is offline ──────────────────────────────────────────
 //
 // The store writes supersede through `supersede_atomic` which runs in a
 // single transaction. This test triggers the `Create` path (not `Supersede`
 // — that requires a similarity hit with a score above the supersede
 // threshold, driven by an embedder), and then issues a duplicate-name store
 // to exercise the active-row short-circuit. The outcome is that the *first*
-// row stays active and the second returns `action: "skip"` with the same
-// id — there's no "mid-supersede failure" to simulate in the current
-// store implementation because the whole thing is wrapped in a transaction.
-// What we CAN verify is that the atomic path never leaves the store in a
-// half-written state.
+// row stays active and the same-name changed-content write returns
+// `action: "merge"` with the same id. There's no "mid-supersede failure" to
+// simulate in the current store implementation because the whole thing is
+// wrapped in a transaction. What we CAN verify is that the atomic path never
+// leaves the store in a half-written state.
 
 #[tokio::test]
 async fn duplicate_store_short_circuits_and_does_not_split_active_row() {
@@ -250,8 +250,8 @@ async fn duplicate_store_short_circuits_and_does_not_split_active_row() {
     assert_eq!(resp1["ok"], serde_json::json!(true));
     let id1 = resp1["id"].as_str().unwrap().to_string();
 
-    // Second store with the same name — must short-circuit to `skip` and
-    // return the first id (the pre-dedup path at `handle_store_idea:100`).
+    // Second store with the same name and changed content merges into the
+    // existing active row instead of creating a sibling row.
     let req2 = serde_json::json!({
         "name": "atomic/test",
         "content": "second write attempt",
@@ -259,7 +259,7 @@ async fn duplicate_store_short_circuits_and_does_not_split_active_row() {
     });
     let resp2 = handle_store_idea(&ctx, &req2, &None).await;
     assert_eq!(resp2["ok"], serde_json::json!(true));
-    assert_eq!(resp2["action"], serde_json::json!("skip"));
+    assert_eq!(resp2["action"], serde_json::json!("merge"));
     assert_eq!(resp2["id"].as_str().unwrap(), id1);
 
     // Store invariant: exactly one active row with that name. If a half-
@@ -277,6 +277,17 @@ async fn duplicate_store_short_circuits_and_does_not_split_active_row() {
         .unwrap();
     assert_eq!(active1, Some(id1.clone()));
     assert_eq!(active1, active2);
+
+    let idea = h
+        .idea_store()
+        .get_by_ids(std::slice::from_ref(&id1))
+        .await
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    assert!(idea.content.contains("first write"));
+    assert!(idea.content.contains("second write attempt"));
 }
 
 // ── 5. Threshold dispatch persists consolidator output ─────────────────
