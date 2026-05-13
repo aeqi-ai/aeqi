@@ -103,14 +103,13 @@ async fn create_entity(
         && let (Some(accounts), Some(claims)) = (&state.accounts, &claims)
         && let Some(user_id) = claims.user_id.as_deref()
         && let Some(entity_id) = resp.get("id").and_then(|v| v.as_str())
+        && let Err(err) = accounts.add_director(user_id, entity_id)
     {
-        if let Err(err) = accounts.add_director(user_id, entity_id) {
-            tracing::warn!(
-                user_id,
-                entity_id,
-                "create_entity: failed to link entity to user: {err}"
-            );
-        }
+        tracing::warn!(
+            user_id,
+            entity_id,
+            "create_entity: failed to link entity to user: {err}"
+        );
     }
 
     Json(resp).into_response()
@@ -178,14 +177,13 @@ async fn create_root_legacy(
             .get("entity_id")
             .or_else(|| resp.get("id"))
             .and_then(|v| v.as_str())
+        && let Err(err) = accounts.add_director(user_id, entity_id)
     {
-        if let Err(err) = accounts.add_director(user_id, entity_id) {
-            tracing::warn!(
-                user_id,
-                entity_id,
-                "create_root: failed to link entity to user: {err}"
-            );
-        }
+        tracing::warn!(
+            user_id,
+            entity_id,
+            "create_root: failed to link entity to user: {err}"
+        );
     }
 
     Json(resp).into_response()

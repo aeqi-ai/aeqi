@@ -16,6 +16,8 @@ use super::{
     WaitlistRequest, ensure_account_wallet, server_configuration_error,
 };
 
+type AuthRouteResult<T> = Result<T, Box<Response>>;
+
 // ── Route builder ─────────────────────────────────────────
 
 pub fn routes() -> Router<AppState> {
@@ -45,10 +47,10 @@ struct RevokeSessionRequest {
 fn claims_from_headers(
     state: &AppState,
     headers: &HeaderMap,
-) -> Result<(auth::Claims, String), Response> {
+) -> AuthRouteResult<(auth::Claims, String)> {
     let secret = match auth::signing_secret(state) {
         Ok(secret) => secret,
-        Err(err) => return Err(server_configuration_error(err)),
+        Err(err) => return Err(Box::new(server_configuration_error(err))),
     };
     let token = headers
         .get("authorization")
@@ -56,25 +58,29 @@ fn claims_from_headers(
         .and_then(|v| v.strip_prefix("Bearer "));
 
     let Some(token) = token else {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({
-                "ok": false, "error": "missing token"
-            })),
-        )
-            .into_response());
+        return Err(Box::new(
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "ok": false, "error": "missing token"
+                })),
+            )
+                .into_response(),
+        ));
     };
 
     let mut claims = match auth::validate_token(token, secret) {
         Ok(c) => c,
         Err(_) => {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "ok": false, "error": "invalid token"
-                })),
-            )
-                .into_response());
+            return Err(Box::new(
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({
+                        "ok": false, "error": "invalid token"
+                    })),
+                )
+                    .into_response(),
+            ));
         }
     };
     if claims.jti.is_empty() {
@@ -89,23 +95,27 @@ fn ensure_session_allowed_and_touched(
     headers: &HeaderMap,
     claims: &auth::Claims,
     user_id: &str,
-) -> Result<(), Response> {
+) -> AuthRouteResult<()> {
     let Some(accounts) = &state.accounts else {
-        return Err((StatusCode::BAD_REQUEST, "accounts not enabled").into_response());
+        return Err(Box::new(
+            (StatusCode::BAD_REQUEST, "accounts not enabled").into_response(),
+        ));
     };
     if claims.jti.is_empty() {
         return Ok(());
     }
     match accounts.is_auth_session_revoked(&claims.jti) {
         Ok(true) => {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "ok": false,
-                    "error": "session revoked"
-                })),
-            )
-                .into_response());
+            return Err(Box::new(
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({
+                        "ok": false,
+                        "error": "session revoked"
+                    })),
+                )
+                    .into_response(),
+            ));
         }
         Ok(false) => {}
         Err(e) => {
@@ -497,11 +507,11 @@ async fn me_handler(State(state): State<AppState>, req: Request) -> Response {
 
     let (claims, user_id) = match claims_from_headers(&state, req.headers()) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if let Err(resp) = ensure_session_allowed_and_touched(&state, req.headers(), &claims, &user_id)
     {
-        return resp;
+        return *resp;
     }
     match accounts.get_user_by_id(&user_id) {
         Ok(Some(user)) => {
@@ -593,10 +603,10 @@ async fn sessions_handler(State(state): State<AppState>, headers: HeaderMap) -> 
     };
     let (claims, user_id) = match claims_from_headers(&state, &headers) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if let Err(resp) = ensure_session_allowed_and_touched(&state, &headers, &claims, &user_id) {
-        return resp;
+        return *resp;
     }
     match accounts.list_auth_sessions(&user_id, &claims.jti) {
         Ok(sessions) => Json(serde_json::json!({
@@ -624,10 +634,10 @@ async fn activity_handler(State(state): State<AppState>, headers: HeaderMap) -> 
     };
     let (claims, user_id) = match claims_from_headers(&state, &headers) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if let Err(resp) = ensure_session_allowed_and_touched(&state, &headers, &claims, &user_id) {
-        return resp;
+        return *resp;
     }
     match accounts.list_auth_activity(&user_id, 100) {
         Ok(events) => Json(serde_json::json!({
@@ -659,10 +669,10 @@ async fn revoke_session_handler(
     };
     let (claims, user_id) = match claims_from_headers(&state, &headers) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if let Err(resp) = ensure_session_allowed_and_touched(&state, &headers, &claims, &user_id) {
-        return resp;
+        return *resp;
     }
     let jti = body.jti.trim();
     if jti.is_empty() {
@@ -701,10 +711,10 @@ async fn revoke_other_sessions_handler(
     };
     let (claims, user_id) = match claims_from_headers(&state, &headers) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if let Err(resp) = ensure_session_allowed_and_touched(&state, &headers, &claims, &user_id) {
-        return resp;
+        return *resp;
     }
     if claims.jti.is_empty() {
         return Json(serde_json::json!({"ok": true, "revoked": 0})).into_response();

@@ -125,7 +125,6 @@ pub async fn login_handler(
         Some(&user.id),
         Some(&user.email),
     )
-    .map(|t| t)
     .unwrap_or_default();
 
     axum::Json(serde_json::json!({

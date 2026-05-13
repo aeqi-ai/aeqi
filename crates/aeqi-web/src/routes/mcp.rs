@@ -110,7 +110,7 @@ async fn mcp_post(
     }
 
     if let Err(response) = validate_protocol_header(&headers) {
-        return response;
+        return *response;
     }
 
     if request.method.is_none() {
@@ -217,7 +217,7 @@ fn negotiated_protocol(params: &serde_json::Value) -> &'static str {
     }
 }
 
-fn validate_protocol_header(headers: &HeaderMap) -> Result<(), Response> {
+fn validate_protocol_header(headers: &HeaderMap) -> Result<(), Box<Response>> {
     match headers
         .get("mcp-protocol-version")
         .and_then(|v| v.to_str().ok())
@@ -228,13 +228,15 @@ fn validate_protocol_header(headers: &HeaderMap) -> Result<(), Response> {
         | Some(MCP_PROTOCOL_LATEST)
         | Some(MCP_PROTOCOL_FALLBACK)
         | Some(MCP_PROTOCOL_LEGACY) => Ok(()),
-        Some(version) => Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": format!("unsupported MCP-Protocol-Version: {version}")
-            })),
-        )
-            .into_response()),
+        Some(version) => Err(Box::new(
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("unsupported MCP-Protocol-Version: {version}")
+                })),
+            )
+                .into_response(),
+        )),
     }
 }
 
@@ -312,7 +314,7 @@ async fn ipc(
     mut request: serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
     apply_actor(ctx, &mut request);
-    Ok(state.ipc.request(&request).await?)
+    state.ipc.request(&request).await
 }
 
 async fn call_tool(
