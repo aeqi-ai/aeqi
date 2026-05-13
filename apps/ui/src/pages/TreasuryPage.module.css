@@ -54,40 +54,6 @@
   border-radius: var(--radius-md);
 }
 
-.skeletonRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
-}
-
-.skeletonCell {
-  height: var(--space-md);
-  background: var(--color-card-subtle);
-  border-radius: var(--radius-sm);
-  opacity: 0.6;
-}
-
-.skeletonWidth48 {
-  width: 48px;
-}
-
-.skeletonWidth60 {
-  width: 60px;
-}
-
-.skeletonWidth70 {
-  width: 70px;
-}
-
-.skeletonWidth80 {
-  width: 80px;
-}
-
-.skeletonWidth120 {
-  width: 120px;
-}
-
 .emptyPanel,
 .emptyPanelCompact {
   padding: var(--space-lg) var(--space-md);

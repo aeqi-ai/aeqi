@@ -26,6 +26,18 @@ interface DemoRow {
   created: string;
 }
 
+interface WideRow {
+  id: string;
+  source: string;
+  owner: string;
+  status: string;
+  module: string;
+  purpose: string;
+  budget: string;
+  available: string;
+  updated: string;
+}
+
 const demoRows: DemoRow[] = [
   { id: "r1", title: "CEO", occupant: "Luca Eich", reportsTo: "—", created: "2026-04-12" },
   { id: "r2", title: "CTO", occupant: "agent · ada", reportsTo: "CEO", created: "2026-04-12" },
@@ -87,6 +99,60 @@ const sortableColumns: Array<TableColumn<DemoRow>> = [
     sortable: true,
     sortAccessor: (r) => r.created,
   },
+];
+
+const wideRows: WideRow[] = [
+  {
+    id: "b1",
+    source: "TRUST",
+    owner: "role · operations",
+    status: "active",
+    module: "Treasury",
+    purpose: "runway",
+    budget: "$48,000",
+    available: "$31,240",
+    updated: "12m",
+  },
+  {
+    id: "b2",
+    source: "B1",
+    owner: "agent · launch",
+    status: "active",
+    module: "Events",
+    purpose: "activation",
+    budget: "$12,500",
+    available: "$9,100",
+    updated: "47m",
+  },
+  {
+    id: "b3",
+    source: "B1",
+    owner: "role · product",
+    status: "paused",
+    module: "Inference",
+    purpose: "research",
+    budget: "$7,200",
+    available: "$1,920",
+    updated: "2h",
+  },
+];
+
+const wideColumns: Array<TableColumn<WideRow>> = [
+  { key: "id", header: "ID", cell: (r) => r.id, width: "72px", align: "center" },
+  { key: "source", header: "Source", cell: (r) => r.source, width: "120px" },
+  { key: "owner", header: "Owner", cell: (r) => r.owner, width: "180px" },
+  { key: "status", header: "Status", cell: (r) => r.status, width: "120px" },
+  { key: "module", header: "Module", cell: (r) => r.module, width: "140px" },
+  { key: "purpose", header: "Purpose", cell: (r) => r.purpose, width: "160px" },
+  { key: "budget", header: "Budget", cell: (r) => r.budget, width: "140px", align: "end" },
+  {
+    key: "available",
+    header: "Available",
+    cell: (r) => r.available,
+    width: "140px",
+    align: "end",
+  },
+  { key: "updated", header: "Updated", cell: (r) => r.updated, width: "120px", align: "end" },
 ];
 
 export const Default: Story = {
@@ -185,6 +251,64 @@ export const Empty: Story = {
           </div>
         }
         ariaLabel="Empty roles table"
+      />
+    </div>
+  ),
+};
+
+export const Loading: Story = {
+  name: "Loading skeleton",
+  render: () => (
+    <div style={{ maxWidth: 720 }}>
+      <Table
+        columns={demoColumns}
+        data={[]}
+        rowKey={(r) => r.id}
+        loading
+        skeletonRows={4}
+        ariaLabel="Roles loading"
+      />
+    </div>
+  ),
+};
+
+export const WideOperational: Story = {
+  name: "Wide operational table",
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use `scrollWidth` for dense operational/on-chain data instead of local overflow wrappers and ad hoc min-width classes.",
+      },
+    },
+  },
+  render: () => (
+    <div style={{ maxWidth: 1240 }}>
+      <Table
+        columns={wideColumns}
+        data={wideRows}
+        rowKey={(r) => r.id}
+        density="compact"
+        scrollWidth="lg"
+        ariaLabel="Budget operations"
+      />
+    </div>
+  ),
+};
+
+export const WideLoading: Story = {
+  name: "Wide loading",
+  render: () => (
+    <div style={{ maxWidth: 1240 }}>
+      <Table
+        columns={wideColumns}
+        data={[]}
+        rowKey={(r) => r.id}
+        density="compact"
+        loading
+        skeletonRows={5}
+        scrollWidth="lg"
+        ariaLabel="Budget operations loading"
       />
     </div>
   ),

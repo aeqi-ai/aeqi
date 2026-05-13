@@ -10,6 +10,29 @@
  * + density; do not fork.
  */
 
+.viewport {
+  width: 100%;
+}
+
+.viewport[data-scroll-width="sm"],
+.viewport[data-scroll-width="md"],
+.viewport[data-scroll-width="lg"] {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.viewport[data-scroll-width="sm"] .table {
+  min-width: 720px;
+}
+
+.viewport[data-scroll-width="md"] .table {
+  min-width: 960px;
+}
+
+.viewport[data-scroll-width="lg"] .table {
+  min-width: 1200px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -31,6 +54,13 @@
   padding: var(--space-2) var(--space-3);
   vertical-align: middle;
   background: transparent;
+}
+
+.viewport[data-sticky-header="true"] .table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-card);
 }
 
 .table tbody td {
@@ -129,7 +159,53 @@
   box-shadow: var(--focus-ring);
 }
 
+.skeletonBar {
+  display: block;
+  width: 64%;
+  height: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-card-subtle);
+  opacity: 0.7;
+}
+
+.table tbody td[data-align="end"] .skeletonBar {
+  margin-left: auto;
+}
+
+.table tbody td[data-align="center"] .skeletonBar {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.skeletonBar[data-size="sm"] {
+  width: 40%;
+}
+
+.skeletonBar[data-size="md"] {
+  width: 56%;
+}
+
+.skeletonBar[data-size="lg"] {
+  width: 72%;
+}
+
+.skeletonBar[data-size="xl"] {
+  width: 88%;
+}
+
 /* Empty state — no <table> markup, just a centered slot. */
 .emptyWrap {
   width: 100%;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

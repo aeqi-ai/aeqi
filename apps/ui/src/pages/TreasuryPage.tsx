@@ -241,35 +241,6 @@ function OnChainHoldings({ trustAddress, trustId }: { trustAddress?: string; tru
   );
 }
 
-// ── Skeleton row ──────────────────────────────────────────────────────────────
-
-function SkeletonRow({ widths }: { widths: string[] }) {
-  return (
-    <div className={styles.skeletonRow}>
-      {widths.map((w, i) => (
-        <div key={i} className={`${styles.skeletonCell} ${skeletonWidthClass(w)}`} />
-      ))}
-    </div>
-  );
-}
-
-function skeletonWidthClass(width: string): string {
-  switch (width) {
-    case "48px":
-      return styles.skeletonWidth48;
-    case "60px":
-      return styles.skeletonWidth60;
-    case "70px":
-      return styles.skeletonWidth70;
-    case "80px":
-      return styles.skeletonWidth80;
-    case "120px":
-      return styles.skeletonWidth120;
-    default:
-      return "";
-  }
-}
-
 // ── Holdings section ──────────────────────────────────────────────────────────
 
 function HoldingsSection({
@@ -283,9 +254,6 @@ function HoldingsSection({
   trustAddress?: string;
   nativeEth?: string;
 }) {
-  const hasEth = nativeEth !== undefined && nativeEth !== "0";
-  const hasErc20 = balances && balances.length > 0;
-  const hasAny = hasEth || hasErc20;
   const holdingRows: HoldingRow[] = [
     ...(nativeEth
       ? [
@@ -334,36 +302,32 @@ function HoldingsSection({
   return (
     <PageSection title="Holdings">
       <div className={styles.tableSurface}>
-        {loading && !nativeEth ? (
-          <>
-            <SkeletonRow widths={["60px", "120px", "80px"]} />
-            <SkeletonRow widths={["60px", "120px", "80px"]} />
-          </>
-        ) : !hasAny ? (
-          <div className={styles.emptyPanel}>
-            <div className={styles.emptyTitle}>0 ETH · 0 USDC</div>
-            <div className={styles.emptyText}>
-              Nothing here yet — fund this Treasury to get started.
-            </div>
-            {trustAddress && (
-              <div className={styles.emptyHint}>
-                Send ETH or USDC to{" "}
-                <code
-                  className={styles.inlineCode}
-                >{`${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`}</code>{" "}
-                to fund this Treasury.
+        <Table
+          columns={columns}
+          data={holdingRows}
+          rowKey={(row) => row.id}
+          density="compact"
+          ariaLabel="Treasury holdings"
+          loading={loading && !nativeEth}
+          skeletonRows={2}
+          empty={
+            <div className={styles.emptyPanel}>
+              <div className={styles.emptyTitle}>0 ETH · 0 USDC</div>
+              <div className={styles.emptyText}>
+                Nothing here yet — fund this Treasury to get started.
               </div>
-            )}
-          </div>
-        ) : (
-          <Table
-            columns={columns}
-            data={holdingRows}
-            rowKey={(row) => row.id}
-            density="compact"
-            ariaLabel="Treasury holdings"
-          />
-        )}
+              {trustAddress && (
+                <div className={styles.emptyHint}>
+                  Send ETH or USDC to{" "}
+                  <code
+                    className={styles.inlineCode}
+                  >{`${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`}</code>{" "}
+                  to fund this Treasury.
+                </div>
+              )}
+            </div>
+          }
+        />
       </div>
     </PageSection>
   );
@@ -416,23 +380,16 @@ function TransfersSection({
   return (
     <PageSection title="Recent transfers">
       <div className={styles.tableSurface}>
-        {loading ? (
-          <>
-            <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
-            <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
-            <SkeletonRow widths={["48px", "120px", "80px", "60px"]} />
-          </>
-        ) : !transfers || transfers.length === 0 ? (
-          <div className={styles.emptyPanelCompact}>No transfers yet.</div>
-        ) : (
-          <Table
-            columns={columns}
-            data={transfers}
-            rowKey={(row, index) => `${row.block}-${row.counterparty}-${index}`}
-            density="compact"
-            ariaLabel="Recent treasury transfers"
-          />
-        )}
+        <Table
+          columns={columns}
+          data={transfers ?? []}
+          rowKey={(row, index) => `${row.block}-${row.counterparty}-${index}`}
+          density="compact"
+          ariaLabel="Recent treasury transfers"
+          loading={loading}
+          skeletonRows={3}
+          empty={<div className={styles.emptyPanelCompact}>No transfers yet.</div>}
+        />
       </div>
     </PageSection>
   );
@@ -605,24 +562,20 @@ function InferenceZone({ agentId }: { agentId: string }) {
       <div className={styles.tableSurface}>
         {error ? (
           <div className={styles.emptyPanelCompact}>{error}</div>
-        ) : calls === null ? (
-          <>
-            <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
-            <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
-            <SkeletonRow widths={["80px", "60px", "60px", "60px", "70px"]} />
-          </>
-        ) : calls.length === 0 ? (
-          <div className={styles.emptyPanelCompact}>No inference calls yet.</div>
         ) : (
           <>
             <Table
               columns={columns}
-              data={calls}
+              data={calls ?? []}
               rowKey={(row) => row.id}
               density="compact"
               ariaLabel="Recent inference calls"
+              loading={calls === null}
+              skeletonRows={3}
+              scrollWidth="sm"
+              empty={<div className={styles.emptyPanelCompact}>No inference calls yet.</div>}
             />
-            {calls.length === limit && limit < 500 && (
+            {calls !== null && calls.length === limit && limit < 500 && (
               <div className={styles.loadMoreAction}>
                 <Button
                   variant="secondary"
