@@ -26,15 +26,15 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react-router-dom"],
   },
   build: {
+    // The largest expected async vendor chunk is MetaMask SDK's browser
+    // bundle (~549 KB raw). Keep the warning threshold just above that so
+    // new app or vendor growth still surfaces without making the known
+    // wallet-provider chunk permanent warning noise.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        // Manual chunks. Conservative: only carve out react itself so it
-        // gets its own long-cache bucket. Everything else falls through
-        // to rollup's per-import default chunking — wallet stack
-        // (metamask-sdk, walletconnect, reown) already auto-splits into
-        // multiple async chunks that only load when WalletProvider
-        // mounts; editor stack (blocknote/tiptap/prosemirror) likewise
-        // rides along with BlockEditor's `lazy(() => import(...))`.
+        // Manual chunks. Keep route/view lazy boundaries small and give
+        // the heaviest vendor ecosystems stable cache buckets.
         //
         // CRITICAL: do NOT use `id.includes("/react/")` for the
         // react-vendor split — that substring also matches
@@ -54,6 +54,52 @@ export default defineConfig({
             id.includes("/node_modules/scheduler/")
           ) {
             return "react-vendor";
+          }
+          if (
+            id.includes("/node_modules/@blocknote/react/") ||
+            id.includes("/node_modules/@blocknote/mantine/") ||
+            id.includes("/node_modules/@mantine/")
+          ) {
+            return "editor-blocknote-ui";
+          }
+          if (id.includes("/node_modules/@blocknote/core/")) {
+            return "editor-blocknote-core";
+          }
+          if (
+            id.includes("/node_modules/@tiptap/") ||
+            id.includes("/node_modules/prosemirror-") ||
+            id.includes("/node_modules/y-prosemirror/")
+          ) {
+            return "editor-prosemirror";
+          }
+          if (
+            id.includes("/node_modules/d3-force/") ||
+            id.includes("/node_modules/d3-selection/") ||
+            id.includes("/node_modules/d3-zoom/")
+          ) {
+            return "data-viz";
+          }
+          if (
+            id.includes("/node_modules/react-markdown/") ||
+            id.includes("/node_modules/remark-") ||
+            id.includes("/node_modules/rehype-") ||
+            id.includes("/node_modules/unified/") ||
+            id.includes("/node_modules/micromark") ||
+            id.includes("/node_modules/mdast-util-")
+          ) {
+            return "markdown";
+          }
+          if (id.includes("/node_modules/@metamask/sdk-communication-layer/")) {
+            return "wallet-metamask-transport";
+          }
+          if (id.includes("/node_modules/@metamask/sdk-install-modal-web/")) {
+            return "wallet-metamask-modal";
+          }
+          if (id.includes("/node_modules/@metamask/sdk/")) {
+            return "wallet-metamask-sdk";
+          }
+          if (id.includes("/node_modules/@metamask/")) {
+            return "wallet-metamask-core";
           }
           return undefined;
         },

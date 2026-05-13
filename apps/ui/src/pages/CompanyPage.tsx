@@ -1,16 +1,16 @@
 import { Suspense, lazy, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AgentPage from "@/components/AgentPage";
-import OwnershipPage from "@/pages/OwnershipPage";
-import TreasuryPage from "@/pages/TreasuryPage";
-import GovernancePage from "@/pages/GovernancePage";
-import MeInboxPage from "@/pages/MeInboxPage";
 import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 
 // EntityOverviewTab is the canonical bare-`/c/<id>/` landing — renders
 // EntityHeroStrip + roles / quests / activity. Lazy-loaded to keep this
 // dispatch shell light. Mirrors the lazy pattern used in AgentPage.
 const EntityOverviewTab = lazy(() => import("@/components/EntityOverviewTab"));
+const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
+const OwnershipPage = lazy(() => import("@/pages/OwnershipPage"));
+const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
+const GovernancePage = lazy(() => import("@/pages/GovernancePage"));
 // Entity-scope primitive tabs. `EntityAgentsTab` is entity-typed (takes
 // entityId, filters the directory). The remaining three render the
 // agent-scoped tab against the entity's ROOT agent. Without these explicit branches,
@@ -91,10 +91,34 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   // Inbox is the company-scoped action queue. Visually it's MeInbox
   // for now (Phase-1 cross-company aggregation lives at top-level
   // /inbox in WS-57).
-  if (tab === "inbox") return <MeInboxPage />;
-  if (tab === "ownership") return <OwnershipPage entityId={entityId} />;
-  if (tab === "treasury") return <TreasuryPage entityId={entityId} />;
-  if (tab === "governance") return <GovernancePage entityId={entityId} />;
+  if (tab === "inbox") {
+    return (
+      <Suspense>
+        <MeInboxPage />
+      </Suspense>
+    );
+  }
+  if (tab === "ownership") {
+    return (
+      <Suspense>
+        <OwnershipPage entityId={entityId} />
+      </Suspense>
+    );
+  }
+  if (tab === "treasury") {
+    return (
+      <Suspense>
+        <TreasuryPage entityId={entityId} />
+      </Suspense>
+    );
+  }
+  if (tab === "governance") {
+    return (
+      <Suspense>
+        <GovernancePage entityId={entityId} />
+      </Suspense>
+    );
+  }
 
   // Bare `/c/<id>/` Overview renders EntityOverviewTab directly — the
   // canonical entity cockpit (EntityHeroStrip + roles / quests / activity).

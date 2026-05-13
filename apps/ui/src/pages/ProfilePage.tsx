@@ -1,16 +1,17 @@
-import { useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import PageRail from "@/components/PageRail";
-import ProfilePanel from "@/pages/Settings/ProfilePanel";
-import BillingPanel from "@/pages/Settings/BillingPanel";
-import SecurityPanel from "@/pages/Settings/SecurityPanel";
-import DevicesPanel from "@/pages/Settings/DevicesPanel";
-import SettingsIntegrationsPage from "@/pages/Settings/Integrations";
-import ApiKeyPanel from "@/pages/Settings/ApiKeyPanel";
-import InvitesPanel from "@/pages/Settings/InvitesPanel";
-import WalletsPanel from "@/pages/Settings/WalletsPanel";
 import { useAuthStore } from "@/store/auth";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, Spinner } from "@/components/ui";
+
+const ProfilePanel = lazy(() => import("@/pages/Settings/ProfilePanel"));
+const BillingPanel = lazy(() => import("@/pages/Settings/BillingPanel"));
+const SecurityPanel = lazy(() => import("@/pages/Settings/SecurityPanel"));
+const DevicesPanel = lazy(() => import("@/pages/Settings/DevicesPanel"));
+const SettingsIntegrationsPage = lazy(() => import("@/pages/Settings/Integrations"));
+const ApiKeyPanel = lazy(() => import("@/pages/Settings/ApiKeyPanel"));
+const InvitesPanel = lazy(() => import("@/pages/Settings/InvitesPanel"));
+const WalletsPanel = lazy(() => import("@/pages/Settings/WalletsPanel"));
 
 const BASE_TABS = [
   { id: "profile", label: "Profile" },
@@ -22,6 +23,8 @@ const BASE_TABS = [
   { id: "api", label: "API keys" },
 ];
 const ADMIN_TAB = { id: "invites", label: "Invites" };
+
+const panelFallback = <Spinner size="md" />;
 
 /**
  * `/account` — user-scoped account shell. Each tab lives in its own
@@ -59,14 +62,16 @@ export default function ProfilePage() {
     <div className="page-rail-shell">
       <PageRail tabs={tabs} defaultTab="profile" title="Account" basePath="/account" />
       <div className="account-page page-rail-content">
-        {activeTab === "profile" && <ProfilePanel />}
-        {activeTab === "billing" && <BillingPanel />}
-        {activeTab === "security" && <SecurityPanel />}
-        {activeTab === "wallets" && <WalletsPanel />}
-        {activeTab === "devices" && <DevicesPanel />}
-        {activeTab === "integrations" && <SettingsIntegrationsPage />}
-        {activeTab === "api" && <ApiKeyPanel />}
-        {activeTab === "invites" && <InvitesPanel />}
+        <Suspense fallback={panelFallback}>
+          {activeTab === "profile" && <ProfilePanel />}
+          {activeTab === "billing" && <BillingPanel />}
+          {activeTab === "security" && <SecurityPanel />}
+          {activeTab === "wallets" && <WalletsPanel />}
+          {activeTab === "devices" && <DevicesPanel />}
+          {activeTab === "integrations" && <SettingsIntegrationsPage />}
+          {activeTab === "api" && <ApiKeyPanel />}
+          {activeTab === "invites" && <InvitesPanel />}
+        </Suspense>
         {activeTab === "not-found" && (
           <EmptyState
             title="Account section not found."

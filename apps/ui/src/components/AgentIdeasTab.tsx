@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useNav } from "@/hooks/useNav";
 import { api } from "@/lib/api";
@@ -6,10 +6,6 @@ import { useAgentIdeas } from "@/queries/ideas";
 import type { Idea } from "@/lib/types";
 import type { GraphNode, GraphEdge } from "./IdeaGraph";
 import IdeasListView from "./ideas/IdeasListView";
-import IdeasGraphView from "./ideas/IdeasGraphView";
-import IdeasCanvasView from "./ideas/IdeasCanvasView";
-import IdeasTableView from "./ideas/IdeasTableView";
-import IdeasKanbanView from "./ideas/IdeasKanbanView";
 import type { IdeasView } from "./ideas/IdeasViewPopover";
 import { blockTreeToPlainText } from "./editor/blockEditorContent";
 import { Spinner } from "./ui";
@@ -25,6 +21,16 @@ import {
 } from "./ideas/types";
 
 const NO_IDEAS: Idea[] = [];
+const IdeasGraphView = lazy(() => import("./ideas/IdeasGraphView"));
+const IdeasCanvasView = lazy(() => import("./ideas/IdeasCanvasView"));
+const IdeasTableView = lazy(() => import("./ideas/IdeasTableView"));
+const IdeasKanbanView = lazy(() => import("./ideas/IdeasKanbanView"));
+
+const viewFallback = (
+  <div className="ideas-list-body">
+    <Spinner size="md" />
+  </div>
+);
 
 /**
  * Ideas tab. Routes to:
@@ -308,54 +314,60 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
 
   if (view === "graph") {
     return (
-      <IdeasGraphView
-        agentId={agentId}
-        graphData={graphData}
-        filteredGraph={filteredGraph}
-        graphLoading={graphLoading}
-        filter={filter}
-        scopeCounts={scopeCounts}
-        selectedId={selectedId}
-        view={view}
-        onViewChange={setView}
-        onNew={() => fireNewIdea()}
-        onSelect={handleGraphSelect}
-        onFilterChange={setFilter}
-      />
+      <Suspense fallback={viewFallback}>
+        <IdeasGraphView
+          agentId={agentId}
+          graphData={graphData}
+          filteredGraph={filteredGraph}
+          graphLoading={graphLoading}
+          filter={filter}
+          scopeCounts={scopeCounts}
+          selectedId={selectedId}
+          view={view}
+          onViewChange={setView}
+          onNew={() => fireNewIdea()}
+          onSelect={handleGraphSelect}
+          onFilterChange={setFilter}
+        />
+      </Suspense>
     );
   }
 
   if (view === "table") {
     return (
-      <IdeasTableView
-        agentId={agentId}
-        ideas={filtered}
-        filter={filter}
-        scopeCounts={scopeCounts}
-        needsReviewCount={needsReviewCount}
-        onFilter={setFilter}
-        view={view}
-        onViewChange={setView}
-        onNew={() => fireNewIdea()}
-        onOpen={(id) => goEntity(entityId, "ideas", id)}
-      />
+      <Suspense fallback={viewFallback}>
+        <IdeasTableView
+          agentId={agentId}
+          ideas={filtered}
+          filter={filter}
+          scopeCounts={scopeCounts}
+          needsReviewCount={needsReviewCount}
+          onFilter={setFilter}
+          view={view}
+          onViewChange={setView}
+          onNew={() => fireNewIdea()}
+          onOpen={(id) => goEntity(entityId, "ideas", id)}
+        />
+      </Suspense>
     );
   }
 
   if (view === "kanban") {
     return (
-      <IdeasKanbanView
-        agentId={agentId}
-        ideas={filtered}
-        filter={filter}
-        scopeCounts={scopeCounts}
-        needsReviewCount={needsReviewCount}
-        onFilter={setFilter}
-        view={view}
-        onViewChange={setView}
-        onNew={() => fireNewIdea()}
-        onOpen={(id) => goEntity(entityId, "ideas", id)}
-      />
+      <Suspense fallback={viewFallback}>
+        <IdeasKanbanView
+          agentId={agentId}
+          ideas={filtered}
+          filter={filter}
+          scopeCounts={scopeCounts}
+          needsReviewCount={needsReviewCount}
+          onFilter={setFilter}
+          view={view}
+          onViewChange={setView}
+          onNew={() => fireNewIdea()}
+          onOpen={(id) => goEntity(entityId, "ideas", id)}
+        />
+      </Suspense>
     );
   }
 
@@ -364,13 +376,15 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
   if (selected || composing) {
     const presetName = composing ? (searchParams.get("name") ?? "") : "";
     return (
-      <IdeasCanvasView
-        agentId={agentId}
-        idea={selected}
-        presetName={presetName}
-        onBack={() => goEntity(entityId, "ideas")}
-        onNew={() => fireNewIdea()}
-      />
+      <Suspense fallback={viewFallback}>
+        <IdeasCanvasView
+          agentId={agentId}
+          idea={selected}
+          presetName={presetName}
+          onBack={() => goEntity(entityId, "ideas")}
+          onNew={() => fireNewIdea()}
+        />
+      </Suspense>
     );
   }
 
