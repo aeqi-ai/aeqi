@@ -55,11 +55,7 @@ pub fn quote_initial_liquidity(base_amount: u64, quote_amount: u64) -> Option<Li
     let product = (base_amount as u128).checked_mul(quote_amount as u128)?;
     let lp_out_u128 = integer_sqrt(product)?;
     let lp_out: u64 = lp_out_u128.try_into().ok()?;
-    Some(LiquidityQuote {
-        lp_out,
-        base_used: base_amount,
-        quote_used: quote_amount,
-    })
+    Some(LiquidityQuote { lp_out, base_used: base_amount, quote_used: quote_amount })
 }
 
 pub fn quote_add_liquidity(
@@ -77,9 +73,8 @@ pub fn quote_add_liquidity(
         return quote_initial_liquidity(base_amount, quote_amount);
     }
 
-    let lp_from_base = (base_amount as u128)
-        .checked_mul(lp_supply as u128)?
-        .checked_div(base_reserve as u128)?;
+    let lp_from_base =
+        (base_amount as u128).checked_mul(lp_supply as u128)?.checked_div(base_reserve as u128)?;
     let lp_from_quote = (quote_amount as u128)
         .checked_mul(lp_supply as u128)?
         .checked_div(quote_reserve as u128)?;
@@ -90,12 +85,10 @@ pub fn quote_add_liquidity(
     }
 
     let lp_out: u64 = lp_out_u128.try_into().ok()?;
-    let base_used_u128 = lp_out_u128
-        .checked_mul(base_reserve as u128)?
-        .checked_div(lp_supply as u128)?;
-    let quote_used_u128 = lp_out_u128
-        .checked_mul(quote_reserve as u128)?
-        .checked_div(lp_supply as u128)?;
+    let base_used_u128 =
+        lp_out_u128.checked_mul(base_reserve as u128)?.checked_div(lp_supply as u128)?;
+    let quote_used_u128 =
+        lp_out_u128.checked_mul(quote_reserve as u128)?.checked_div(lp_supply as u128)?;
 
     let base_used: u64 = base_used_u128.try_into().ok()?;
     let quote_used: u64 = quote_used_u128.try_into().ok()?;
@@ -103,11 +96,7 @@ pub fn quote_add_liquidity(
         return None;
     }
 
-    Some(LiquidityQuote {
-        lp_out,
-        base_used,
-        quote_used,
-    })
+    Some(LiquidityQuote { lp_out, base_used, quote_used })
 }
 
 pub fn quote_remove_liquidity(
@@ -119,12 +108,10 @@ pub fn quote_remove_liquidity(
     if lp_amount == 0 || lp_supply == 0 || lp_amount > lp_supply {
         return None;
     }
-    let base_out = (lp_amount as u128)
-        .checked_mul(base_reserve as u128)?
-        .checked_div(lp_supply as u128)?;
-    let quote_out = (lp_amount as u128)
-        .checked_mul(quote_reserve as u128)?
-        .checked_div(lp_supply as u128)?;
+    let base_out =
+        (lp_amount as u128).checked_mul(base_reserve as u128)?.checked_div(lp_supply as u128)?;
+    let quote_out =
+        (lp_amount as u128).checked_mul(quote_reserve as u128)?.checked_div(lp_supply as u128)?;
     Some((base_out.try_into().ok()?, quote_out.try_into().ok()?))
 }
 
@@ -141,9 +128,8 @@ pub fn quote_swap_exact_in(
         return None;
     }
 
-    let fee_amount_u128 = (amount_in as u128)
-        .checked_mul(fee_bps as u128)?
-        .checked_div(FEE_BPS_DENOMINATOR)?;
+    let fee_amount_u128 =
+        (amount_in as u128).checked_mul(fee_bps as u128)?.checked_div(FEE_BPS_DENOMINATOR)?;
     let effective_in = (amount_in as u128).checked_sub(fee_amount_u128)?;
     if effective_in == 0 {
         return None;
@@ -159,10 +145,7 @@ pub fn quote_swap_exact_in(
         return None;
     }
 
-    Some(SwapQuote {
-        amount_out,
-        fee_amount,
-    })
+    Some(SwapQuote { amount_out, fee_amount })
 }
 
 #[cfg(test)]

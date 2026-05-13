@@ -607,7 +607,9 @@ impl Agent {
                 self.emit(crate::chat_stream::ChatStreamEvent::SnipCompacted {
                     tokens_freed: freed,
                 });
-                report.snip = Some(SnipStats { tokens_freed: freed });
+                report.snip = Some(SnipStats {
+                    tokens_freed: freed,
+                });
             }
         }
 

@@ -121,11 +121,19 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     [poolPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("liquidity_pool"), fakeTrust.toBuffer(), Buffer.from(poolId)],
+      [
+        Buffer.from("liquidity_pool"),
+        fakeTrust.toBuffer(),
+        Buffer.from(poolId),
+      ],
       program.programId,
     );
     [poolAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("liquidity_pool_authority"), fakeTrust.toBuffer(), Buffer.from(poolId)],
+      [
+        Buffer.from("liquidity_pool_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(poolId),
+      ],
       program.programId,
     );
     [lpMintPda] = PublicKey.findProgramAddressSync(
@@ -818,7 +826,9 @@ describe("aeqi_unifutures", () => {
 
     const pool = await program.account.liquidityPool.fetch(poolPda);
     expect(pool.trust.toBase58()).to.eq(fakeTrust.toBase58());
-    expect(Buffer.from(pool.poolId).toString("hex")).to.eq(Buffer.from(poolId).toString("hex"));
+    expect(Buffer.from(pool.poolId).toString("hex")).to.eq(
+      Buffer.from(poolId).toString("hex"),
+    );
     expect(pool.baseMint.toBase58()).to.eq(baseMintPk.toBase58());
     expect(pool.quoteMint.toBase58()).to.eq(quoteMintPk.toBase58());
     expect(pool.lpMint.toBase58()).to.eq(lpMintPda.toBase58());
@@ -846,7 +856,11 @@ describe("aeqi_unifutures", () => {
     expect(quoted.lpOut.toString()).to.eq("10000");
 
     await program.methods
-      .addLiquidity(new anchor.BN(10_000), new anchor.BN(10_000), new anchor.BN(10_000))
+      .addLiquidity(
+        new anchor.BN(10_000),
+        new anchor.BN(10_000),
+        new anchor.BN(10_000),
+      )
       .accounts({
         pool: poolPda,
         poolAuthority: poolAuthorityPda,
@@ -872,19 +886,43 @@ describe("aeqi_unifutures", () => {
     expect(pool.quoteReserve.toString()).to.eq("10000");
     expect(pool.lpSupply.toString()).to.eq("10000");
 
-    const vaultBase = await getAccount(provider.connection, baseVault, undefined, TOKEN_2022_PROGRAM_ID);
-    const vaultQuote = await getAccount(provider.connection, quoteVault, undefined, TOKEN_2022_PROGRAM_ID);
-    const lpAccount = await getAccount(provider.connection, providerLpAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultBase = await getAccount(
+      provider.connection,
+      baseVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const vaultQuote = await getAccount(
+      provider.connection,
+      quoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const lpAccount = await getAccount(
+      provider.connection,
+      providerLpAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultBase.amount.toString()).to.eq("10000");
     expect(vaultQuote.amount.toString()).to.eq("10000");
     expect(lpAccount.amount.toString()).to.eq("10000");
   });
 
   it("swap_exact_in trades in both directions and updates the pool", async () => {
-    const baseToQuote = quoteSwapExactIn(poolBaseReserve, poolQuoteReserve, 1_000n, 30n);
+    const baseToQuote = quoteSwapExactIn(
+      poolBaseReserve,
+      poolQuoteReserve,
+      1_000n,
+      30n,
+    );
 
     await program.methods
-      .swapExactIn(0, new anchor.BN(1_000), new anchor.BN(baseToQuote.amountOut.toString()))
+      .swapExactIn(
+        0,
+        new anchor.BN(1_000),
+        new anchor.BN(baseToQuote.amountOut.toString()),
+      )
       .accounts({
         pool: poolPda,
         poolAuthority: poolAuthorityPda,
@@ -906,15 +944,36 @@ describe("aeqi_unifutures", () => {
     expect(pool.baseReserve.toString()).to.eq(poolBaseReserve.toString());
     expect(pool.quoteReserve.toString()).to.eq(poolQuoteReserve.toString());
 
-    let baseAccount = await getAccount(provider.connection, providerBaseAta, undefined, TOKEN_2022_PROGRAM_ID);
-    let quoteAccount = await getAccount(provider.connection, providerQuoteAta, undefined, TOKEN_2022_PROGRAM_ID);
+    let baseAccount = await getAccount(
+      provider.connection,
+      providerBaseAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    let quoteAccount = await getAccount(
+      provider.connection,
+      providerQuoteAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(baseAccount.amount.toString()).to.eq("9000");
-    expect(quoteAccount.amount.toString()).to.eq((10_000n + baseToQuote.amountOut).toString());
+    expect(quoteAccount.amount.toString()).to.eq(
+      (10_000n + baseToQuote.amountOut).toString(),
+    );
 
-    const quoteToBase = quoteSwapExactIn(poolQuoteReserve, poolBaseReserve, 500n, 30n);
+    const quoteToBase = quoteSwapExactIn(
+      poolQuoteReserve,
+      poolBaseReserve,
+      500n,
+      30n,
+    );
 
     await program.methods
-      .swapExactIn(1, new anchor.BN(500), new anchor.BN(quoteToBase.amountOut.toString()))
+      .swapExactIn(
+        1,
+        new anchor.BN(500),
+        new anchor.BN(quoteToBase.amountOut.toString()),
+      )
       .accounts({
         pool: poolPda,
         poolAuthority: poolAuthorityPda,
@@ -936,17 +995,40 @@ describe("aeqi_unifutures", () => {
     expect(pool.baseReserve.toString()).to.eq(poolBaseReserve.toString());
     expect(pool.quoteReserve.toString()).to.eq(poolQuoteReserve.toString());
 
-    baseAccount = await getAccount(provider.connection, providerBaseAta, undefined, TOKEN_2022_PROGRAM_ID);
-    quoteAccount = await getAccount(provider.connection, providerQuoteAta, undefined, TOKEN_2022_PROGRAM_ID);
-    expect(baseAccount.amount.toString()).to.eq((10_000n - 1_000n + quoteToBase.amountOut).toString());
-    expect(quoteAccount.amount.toString()).to.eq((10_000n + baseToQuote.amountOut - 500n).toString());
+    baseAccount = await getAccount(
+      provider.connection,
+      providerBaseAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    quoteAccount = await getAccount(
+      provider.connection,
+      providerQuoteAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    expect(baseAccount.amount.toString()).to.eq(
+      (10_000n - 1_000n + quoteToBase.amountOut).toString(),
+    );
+    expect(quoteAccount.amount.toString()).to.eq(
+      (10_000n + baseToQuote.amountOut - 500n).toString(),
+    );
   });
 
   it("remove_liquidity burns LP and returns reserves pro-rata", async () => {
-    const quoted = quoteRemoveLiquidity(5_000n, poolBaseReserve, poolQuoteReserve, poolLpSupply);
+    const quoted = quoteRemoveLiquidity(
+      5_000n,
+      poolBaseReserve,
+      poolQuoteReserve,
+      poolLpSupply,
+    );
 
     await program.methods
-      .removeLiquidity(new anchor.BN(5_000), new anchor.BN(quoted.baseOut.toString()), new anchor.BN(quoted.quoteOut.toString()))
+      .removeLiquidity(
+        new anchor.BN(5_000),
+        new anchor.BN(quoted.baseOut.toString()),
+        new anchor.BN(quoted.quoteOut.toString()),
+      )
       .accounts({
         pool: poolPda,
         poolAuthority: poolAuthorityPda,
@@ -972,7 +1054,12 @@ describe("aeqi_unifutures", () => {
     expect(pool.quoteReserve.toString()).to.eq(poolQuoteReserve.toString());
     expect(pool.lpSupply.toString()).to.eq(poolLpSupply.toString());
 
-    const lpAccount = await getAccount(provider.connection, providerLpAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const lpAccount = await getAccount(
+      provider.connection,
+      providerLpAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(lpAccount.amount.toString()).to.eq(poolLpSupply.toString());
   });
 
@@ -980,11 +1067,19 @@ describe("aeqi_unifutures", () => {
     const badPoolId = new Uint8Array(32);
     badPoolId[0] = 0x99;
     const [badPoolPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("liquidity_pool"), fakeTrust.toBuffer(), Buffer.from(badPoolId)],
+      [
+        Buffer.from("liquidity_pool"),
+        fakeTrust.toBuffer(),
+        Buffer.from(badPoolId),
+      ],
       program.programId,
     );
     const [badPoolAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("liquidity_pool_authority"), fakeTrust.toBuffer(), Buffer.from(badPoolId)],
+      [
+        Buffer.from("liquidity_pool_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(badPoolId),
+      ],
       program.programId,
     );
     const [badLpMintPda] = PublicKey.findProgramAddressSync(
@@ -1034,12 +1129,21 @@ describe("aeqi_unifutures", () => {
   });
 
   it("rejects swaps that miss the slippage floor", async () => {
-    const quote = quoteSwapExactIn(poolBaseReserve, poolQuoteReserve, 100n, 30n);
+    const quote = quoteSwapExactIn(
+      poolBaseReserve,
+      poolQuoteReserve,
+      100n,
+      30n,
+    );
 
     let threw = false;
     try {
       await program.methods
-        .swapExactIn(0, new anchor.BN(100), new anchor.BN((quote.amountOut + 1n).toString()))
+        .swapExactIn(
+          0,
+          new anchor.BN(100),
+          new anchor.BN((quote.amountOut + 1n).toString()),
+        )
         .accounts({
           pool: poolPda,
           poolAuthority: poolAuthorityPda,
@@ -1944,287 +2048,5 @@ describe("aeqi_unifutures", () => {
       expect(e.toString()).to.match(/InvalidReserveRatio/);
     }
     expect(threw).to.eq(true);
-  });
-
-  it("liquidity pool create/add/swap/remove works end to end", async () => {
-    const poolId = new Uint8Array(32);
-    poolId[0] = 0x44;
-    poolId[1] = 0x55;
-
-    const [poolPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("pool"), fakeTrust.toBuffer(), Buffer.from(poolId)],
-      program.programId,
-    );
-    const [poolAuthorityPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_authority"),
-        fakeTrust.toBuffer(),
-        Buffer.from(poolId),
-      ],
-      program.programId,
-    );
-    const [positionPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_position"),
-        poolPda.toBuffer(),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
-
-    const baseMint = await createMint(
-      provider.connection,
-      (provider.wallet as anchor.Wallet).payer,
-      provider.wallet.publicKey,
-      null,
-      0,
-      Keypair.generate(),
-      undefined,
-      TOKEN_2022_PROGRAM_ID,
-    );
-    const quoteMint = await createMint(
-      provider.connection,
-      (provider.wallet as anchor.Wallet).payer,
-      provider.wallet.publicKey,
-      null,
-      0,
-      Keypair.generate(),
-      undefined,
-      TOKEN_2022_PROGRAM_ID,
-    );
-
-    const baseVault = getAssociatedTokenAddressSync(
-      baseMint,
-      poolAuthorityPda,
-      true,
-      TOKEN_2022_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-    );
-    const quoteVault = getAssociatedTokenAddressSync(
-      quoteMint,
-      poolAuthorityPda,
-      true,
-      TOKEN_2022_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-    );
-    await provider.sendAndConfirm(
-      new anchor.web3.Transaction()
-        .add(
-          createAssociatedTokenAccountInstruction(
-            provider.wallet.publicKey,
-            baseVault,
-            poolAuthorityPda,
-            baseMint,
-            TOKEN_2022_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-          ),
-        )
-        .add(
-          createAssociatedTokenAccountInstruction(
-            provider.wallet.publicKey,
-            quoteVault,
-            poolAuthorityPda,
-            quoteMint,
-            TOKEN_2022_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-          ),
-        ),
-    );
-
-    const baseAta = getAssociatedTokenAddressSync(
-      baseMint,
-      provider.wallet.publicKey,
-      false,
-      TOKEN_2022_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-    );
-    const quoteAta = getAssociatedTokenAddressSync(
-      quoteMint,
-      provider.wallet.publicKey,
-      false,
-      TOKEN_2022_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-    );
-    await provider.sendAndConfirm(
-      new anchor.web3.Transaction()
-        .add(
-          createAssociatedTokenAccountInstruction(
-            provider.wallet.publicKey,
-            baseAta,
-            provider.wallet.publicKey,
-            baseMint,
-            TOKEN_2022_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-          ),
-        )
-        .add(
-          createAssociatedTokenAccountInstruction(
-            provider.wallet.publicKey,
-            quoteAta,
-            provider.wallet.publicKey,
-            quoteMint,
-            TOKEN_2022_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-          ),
-        ),
-    );
-
-    await mintTo(
-      provider.connection,
-      (provider.wallet as anchor.Wallet).payer,
-      baseMint,
-      baseAta,
-      provider.wallet.publicKey,
-      2_000,
-      [],
-      undefined,
-      TOKEN_2022_PROGRAM_ID,
-    );
-    await mintTo(
-      provider.connection,
-      (provider.wallet as anchor.Wallet).payer,
-      quoteMint,
-      quoteAta,
-      provider.wallet.publicKey,
-      2_000,
-      [],
-      undefined,
-      TOKEN_2022_PROGRAM_ID,
-    );
-
-    await program.methods
-      .createLiquidityPool(Array.from(poolId), 30)
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        pool: poolPda,
-        poolAuthority: poolAuthorityPda,
-        baseMint,
-        quoteMint,
-        baseVault,
-        quoteVault,
-        creator: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    await program.methods
-      .addLiquidity(new anchor.BN(1_000), new anchor.BN(1_000))
-      .accounts({
-        pool: poolPda,
-        poolAuthority: poolAuthorityPda,
-        baseMint,
-        quoteMint,
-        baseVault,
-        quoteVault,
-        position: positionPda,
-        provider: provider.wallet.publicKey,
-        providerBaseTa: baseAta,
-        providerQuoteTa: quoteAta,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    let pool = await program.account.liquidityPool.fetch(poolPda);
-    expect(pool.totalShares.toString()).to.eq("1000");
-    expect(pool.baseReserve.toString()).to.eq("1000");
-    expect(pool.quoteReserve.toString()).to.eq("1000");
-
-    let position = await program.account.liquidityPosition.fetch(positionPda);
-    expect(position.shares.toString()).to.eq("1000");
-
-    let threw = false;
-    try {
-      await program.methods
-        .addLiquidity(new anchor.BN(100), new anchor.BN(50))
-        .accounts({
-          pool: poolPda,
-          poolAuthority: poolAuthorityPda,
-          baseMint,
-          quoteMint,
-          baseVault,
-          quoteVault,
-          position: positionPda,
-          provider: provider.wallet.publicKey,
-          providerBaseTa: baseAta,
-          providerQuoteTa: quoteAta,
-          tokenProgram: TOKEN_2022_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc();
-    } catch (e: any) {
-      threw = true;
-      expect(e.toString()).to.match(/InvalidLiquidityRatio/);
-    }
-    expect(threw).to.eq(true);
-
-    threw = false;
-    try {
-      await program.methods
-        .swapExactIn(new anchor.BN(100), new anchor.BN(95), true)
-        .accounts({
-          pool: poolPda,
-          poolAuthority: poolAuthorityPda,
-          baseMint,
-          quoteMint,
-          baseVault,
-          quoteVault,
-          provider: provider.wallet.publicKey,
-          providerBaseTa: baseAta,
-          providerQuoteTa: quoteAta,
-          tokenProgram: TOKEN_2022_PROGRAM_ID,
-        })
-        .rpc();
-    } catch (e: any) {
-      threw = true;
-      expect(e.toString()).to.match(/SlippageExceeded/);
-    }
-    expect(threw).to.eq(true);
-
-    await program.methods
-      .swapExactIn(new anchor.BN(100), new anchor.BN(90), true)
-      .accounts({
-        pool: poolPda,
-        poolAuthority: poolAuthorityPda,
-        baseMint,
-        quoteMint,
-        baseVault,
-        quoteVault,
-        provider: provider.wallet.publicKey,
-        providerBaseTa: baseAta,
-        providerQuoteTa: quoteAta,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-      })
-      .rpc();
-
-    pool = await program.account.liquidityPool.fetch(poolPda);
-    expect(pool.baseReserve.toString()).to.eq("1100");
-    expect(pool.quoteReserve.toString()).to.eq("910");
-
-    await program.methods
-      .removeLiquidity(new anchor.BN(100))
-      .accounts({
-        pool: poolPda,
-        poolAuthority: poolAuthorityPda,
-        baseMint,
-        quoteMint,
-        baseVault,
-        quoteVault,
-        position: positionPda,
-        provider: provider.wallet.publicKey,
-        providerBaseTa: baseAta,
-        providerQuoteTa: quoteAta,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-      })
-      .rpc();
-
-    pool = await program.account.liquidityPool.fetch(poolPda);
-    expect(pool.totalShares.toString()).to.eq("900");
-    expect(pool.baseReserve.toString()).to.eq("990");
-    expect(pool.quoteReserve.toString()).to.eq("819");
-
-    position = await program.account.liquidityPosition.fetch(positionPda);
-    expect(position.shares.toString()).to.eq("900");
   });
 });
