@@ -40,17 +40,22 @@ pub mod aeqi_trust {
         Ok(())
     }
 
-    /// Register a module program against this TRUST. Stores the module's
-    /// program ID + initial ACL bit-flags. This is creation-mode only; live
-    /// module replacement is not enabled in this iteration.
+    /// Register a module program against this TRUST during creation. Stores the
+    /// selected provider implementation metadata plus initial ACL bit-flags.
+    /// After finalization, module implementation changes happen through
+    /// `adopt_module_implementation`.
     pub fn register_module(
         ctx: Context<RegisterModule>,
         module_id: [u8; 32],
         program_id: Pubkey,
+        provider: Pubkey,
+        implementation_version: u64,
+        implementation_metadata_hash: [u8; 32],
         trust_acl: u64,
     ) -> Result<()> {
         let trust = &mut ctx.accounts.trust;
         require!(!trust.paused, AeqiTrustError::TrustPaused);
+        require!(implementation_version > 0, AeqiTrustError::InvalidImplementationVersion);
 
         require!(trust.creation_mode, AeqiTrustError::NotInCreationMode);
         require_keys_eq!(
@@ -63,13 +68,124 @@ pub mod aeqi_trust {
         module.trust = trust.key();
         module.module_id = module_id;
         module.program_id = program_id;
+        module.provider = provider;
+        module.implementation_version = implementation_version;
+        module.implementation_metadata_hash = implementation_metadata_hash;
         module.trust_acl = trust_acl;
         module.initialized = ModuleInitState::Pending as u8;
         module.bump = ctx.bumps.module;
 
         bump_module_count(trust)?;
 
-        emit!(ModuleRegistered { trust: trust.key(), module_id, program_id, trust_acl });
+        emit!(ModuleRegistered {
+            trust: trust.key(),
+            module_id,
+            program_id,
+            provider,
+            implementation_version,
+            implementation_metadata_hash,
+            trust_acl,
+        });
+        Ok(())
+    }
+
+    /// Publish a provider-owned implementation candidate. This does not mutate
+    /// any TRUST. Each TRUST pulls an implementation into a module slot through
+    /// `adopt_module_implementation`.
+    pub fn publish_module_implementation(
+        ctx: Context<PublishModuleImplementation>,
+        module_id: [u8; 32],
+        version: u64,
+        metadata_hash: [u8; 32],
+    ) -> Result<()> {
+        require!(version > 0, AeqiTrustError::InvalidImplementationVersion);
+        require!(
+            ctx.accounts.implementation_program.executable,
+            AeqiTrustError::ImplementationProgramNotExecutable
+        );
+
+        let implementation = &mut ctx.accounts.implementation;
+        implementation.provider = ctx.accounts.provider.key();
+        implementation.module_id = module_id;
+        implementation.implementation_program_id = ctx.accounts.implementation_program.key();
+        implementation.version = version;
+        implementation.metadata_hash = metadata_hash;
+        implementation.active = true;
+        implementation.bump = ctx.bumps.implementation;
+
+        emit!(ModuleImplementationPublished {
+            provider: implementation.provider,
+            module_id,
+            version,
+            implementation_program_id: implementation.implementation_program_id,
+            metadata_hash,
+        });
+        Ok(())
+    }
+
+    /// Provider kill-switch for a published implementation. Existing TRUSTs do
+    /// not move automatically; this only prevents future adoption through this
+    /// catalog entry.
+    pub fn set_module_implementation_active(
+        ctx: Context<SetModuleImplementationActive>,
+        active: bool,
+    ) -> Result<()> {
+        let implementation = &mut ctx.accounts.implementation;
+        require_keys_eq!(
+            ctx.accounts.provider.key(),
+            implementation.provider,
+            AeqiTrustError::Unauthorized
+        );
+        implementation.active = active;
+        emit!(ModuleImplementationActiveChanged {
+            provider: implementation.provider,
+            module_id: implementation.module_id,
+            version: implementation.version,
+            active,
+        });
+        Ok(())
+    }
+
+    /// Pull a provider-published implementation into one module slot for one
+    /// TRUST. This is the Solana-native replacement for global beacon upgrades:
+    /// providers publish, but the TRUST authority chooses when to adopt.
+    pub fn adopt_module_implementation(
+        ctx: Context<AdoptModuleImplementation>,
+        trust_acl: u64,
+    ) -> Result<()> {
+        let trust = &ctx.accounts.trust;
+        require!(!trust.paused, AeqiTrustError::TrustPaused);
+        require!(!trust.creation_mode, AeqiTrustError::TrustNotFinalized);
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            trust.authority,
+            AeqiTrustError::Unauthorized
+        );
+
+        let implementation = &ctx.accounts.implementation;
+        require!(implementation.active, AeqiTrustError::InactiveImplementation);
+
+        let module = &mut ctx.accounts.module;
+        require!(
+            module.module_id == implementation.module_id,
+            AeqiTrustError::ImplementationModuleMismatch
+        );
+
+        module.program_id = implementation.implementation_program_id;
+        module.provider = implementation.provider;
+        module.implementation_version = implementation.version;
+        module.implementation_metadata_hash = implementation.metadata_hash;
+        module.trust_acl = trust_acl;
+
+        emit!(ModuleImplementationAdopted {
+            trust: trust.key(),
+            module_id: module.module_id,
+            provider: implementation.provider,
+            version: implementation.version,
+            implementation_program_id: implementation.implementation_program_id,
+            metadata_hash: implementation.metadata_hash,
+            trust_acl,
+        });
         Ok(())
     }
 
@@ -243,6 +359,73 @@ pub struct RegisterModule<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(module_id: [u8; 32], version: u64)]
+pub struct PublishModuleImplementation<'info> {
+    #[account(
+        init,
+        payer = provider,
+        space = 8 + ModuleImplementation::INIT_SPACE,
+        seeds = [
+            b"module_impl",
+            provider.key().as_ref(),
+            module_id.as_ref(),
+            version.to_le_bytes().as_ref(),
+        ],
+        bump,
+    )]
+    pub implementation: Account<'info, ModuleImplementation>,
+    /// CHECK: this account is stored as the implementation program id and is
+    /// constrained to executable so the catalog cannot point at arbitrary data.
+    pub implementation_program: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub provider: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetModuleImplementationActive<'info> {
+    #[account(
+        mut,
+        seeds = [
+            b"module_impl",
+            implementation.provider.as_ref(),
+            implementation.module_id.as_ref(),
+            implementation.version.to_le_bytes().as_ref(),
+        ],
+        bump = implementation.bump,
+    )]
+    pub implementation: Account<'info, ModuleImplementation>,
+    pub provider: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AdoptModuleImplementation<'info> {
+    #[account(
+        seeds = [b"trust", trust.trust_id.as_ref()],
+        bump = trust.bump,
+    )]
+    pub trust: Account<'info, Trust>,
+    #[account(
+        mut,
+        seeds = [b"module", trust.key().as_ref(), module.module_id.as_ref()],
+        bump = module.bump,
+        constraint = module.trust == trust.key() @ AeqiTrustError::ImplementationModuleMismatch,
+    )]
+    pub module: Account<'info, Module>,
+    #[account(
+        seeds = [
+            b"module_impl",
+            implementation.provider.as_ref(),
+            implementation.module_id.as_ref(),
+            implementation.version.to_le_bytes().as_ref(),
+        ],
+        bump = implementation.bump,
+    )]
+    pub implementation: Account<'info, ModuleImplementation>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(target_module_id: [u8; 32])]
 pub struct SetModuleAcl<'info> {
     #[account(
@@ -389,6 +572,37 @@ pub struct ModuleRegistered {
     pub trust: Pubkey,
     pub module_id: [u8; 32],
     pub program_id: Pubkey,
+    pub provider: Pubkey,
+    pub implementation_version: u64,
+    pub implementation_metadata_hash: [u8; 32],
+    pub trust_acl: u64,
+}
+
+#[event]
+pub struct ModuleImplementationPublished {
+    pub provider: Pubkey,
+    pub module_id: [u8; 32],
+    pub version: u64,
+    pub implementation_program_id: Pubkey,
+    pub metadata_hash: [u8; 32],
+}
+
+#[event]
+pub struct ModuleImplementationActiveChanged {
+    pub provider: Pubkey,
+    pub module_id: [u8; 32],
+    pub version: u64,
+    pub active: bool,
+}
+
+#[event]
+pub struct ModuleImplementationAdopted {
+    pub trust: Pubkey,
+    pub module_id: [u8; 32],
+    pub provider: Pubkey,
+    pub version: u64,
+    pub implementation_program_id: Pubkey,
+    pub metadata_hash: [u8; 32],
     pub trust_acl: u64,
 }
 

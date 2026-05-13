@@ -60,6 +60,9 @@ async function ensureTemplate(
   modules: {
     moduleId: Uint8Array;
     programId: PublicKey;
+    provider: PublicKey;
+    implementationVersion: anchor.BN;
+    implementationMetadataHash: number[];
     trustAcl: anchor.BN;
   }[],
   admin: PublicKey,
@@ -88,6 +91,9 @@ async function ensureTemplate(
       modules.map((m) => ({
         moduleId: Array.from(m.moduleId),
         programId: m.programId,
+        provider: m.provider,
+        implementationVersion: m.implementationVersion,
+        implementationMetadataHash: m.implementationMetadataHash,
         trustAcl: m.trustAcl,
       })),
       [],
@@ -124,15 +130,28 @@ async function main() {
     BASIC_ID,
     "BASIC",
     [
-      { moduleId: MODULE_ROLE, programId: role.programId, trustAcl: FULL_ACL },
+      {
+        moduleId: MODULE_ROLE,
+        programId: role.programId,
+        provider: role.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
+        trustAcl: FULL_ACL,
+      },
       {
         moduleId: MODULE_TOKEN,
         programId: token.programId,
+        provider: token.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
         trustAcl: FULL_ACL,
       },
       {
         moduleId: MODULE_GOV,
         programId: governance.programId,
+        provider: governance.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
         trustAcl: FULL_ACL,
       },
     ],
@@ -144,25 +163,44 @@ async function main() {
     VENTURE_ID,
     "VENTURE",
     [
-      { moduleId: MODULE_ROLE, programId: role.programId, trustAcl: FULL_ACL },
+      {
+        moduleId: MODULE_ROLE,
+        programId: role.programId,
+        provider: role.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
+        trustAcl: FULL_ACL,
+      },
       {
         moduleId: MODULE_TOKEN,
         programId: token.programId,
+        provider: token.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
         trustAcl: FULL_ACL,
       },
       {
         moduleId: MODULE_GOV,
         programId: governance.programId,
+        provider: governance.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
         trustAcl: FULL_ACL,
       },
       {
         moduleId: MODULE_TREASURY,
         programId: treasury.programId,
+        provider: treasury.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
         trustAcl: FULL_ACL,
       },
       {
         moduleId: MODULE_VESTING,
         programId: vesting.programId,
+        provider: vesting.programId,
+        implementationVersion: new anchor.BN(1),
+        implementationMetadataHash: Array.from(new Uint8Array(32)),
         trustAcl: FULL_ACL,
       },
     ],

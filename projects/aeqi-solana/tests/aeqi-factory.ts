@@ -73,6 +73,9 @@ describe("aeqi_factory", () => {
           {
             moduleId: Array.from(moduleId1),
             programId: anchor.web3.Keypair.generate().publicKey,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
         ],
@@ -87,6 +90,11 @@ describe("aeqi_factory", () => {
 
     const tmpl = await factory.account.template.fetch(templatePda);
     expect(tmpl.modules.length).to.eq(1);
+    expect(tmpl.modules[0].provider.toBase58()).to.eq(
+      provider.wallet.publicKey.toBase58(),
+    );
+    expect(tmpl.modules[0].implementationVersion.toString()).to.eq("1");
+    expect(Buffer.from(tmpl.modules[0].implementationMetadataHash)[0]).to.eq(0);
     expect(tmpl.aclEdges.length).to.eq(0);
     expect(tmpl.admin.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
   });
@@ -112,11 +120,17 @@ describe("aeqi_factory", () => {
             {
               moduleId: Array.from(moduleId),
               programId: anchor.web3.Keypair.generate().publicKey,
+              provider: provider.wallet.publicKey,
+              implementationVersion: new anchor.BN(1),
+              implementationMetadataHash: Array.from(new Uint8Array(32)),
               trustAcl: new anchor.BN(0xff),
             },
             {
               moduleId: Array.from(moduleId),
               programId: anchor.web3.Keypair.generate().publicKey,
+              provider: provider.wallet.publicKey,
+              implementationVersion: new anchor.BN(1),
+              implementationMetadataHash: Array.from(new Uint8Array(32)),
               trustAcl: new anchor.BN(0x80),
             },
           ],
@@ -158,6 +172,9 @@ describe("aeqi_factory", () => {
             {
               moduleId: Array.from(moduleId),
               programId: anchor.web3.Keypair.generate().publicKey,
+              provider: provider.wallet.publicKey,
+              implementationVersion: new anchor.BN(1),
+              implementationMetadataHash: Array.from(new Uint8Array(32)),
               trustAcl: new anchor.BN(0xff),
             },
           ],
@@ -213,11 +230,17 @@ describe("aeqi_factory", () => {
         {
           moduleId: Array.from(moduleIdRole),
           programId: dummyRoleProg,
+          provider: provider.wallet.publicKey,
+          implementationVersion: new anchor.BN(1),
+          implementationMetadataHash: Array.from(new Uint8Array(32)),
           trustAcl: new anchor.BN(0xff),
         },
         {
           moduleId: Array.from(moduleIdGov),
           programId: dummyGovProg,
+          provider: provider.wallet.publicKey,
+          implementationVersion: new anchor.BN(1),
+          implementationMetadataHash: Array.from(new Uint8Array(32)),
           trustAcl: new anchor.BN(0x80),
         },
       ])
@@ -241,10 +264,16 @@ describe("aeqi_factory", () => {
     // Both module PDAs were created with the right program IDs and ACLs
     const role = await trust.account.module.fetch(modulePdaRole);
     expect(role.programId.toBase58()).to.eq(dummyRoleProg.toBase58());
+    expect(role.provider.toBase58()).to.eq(
+      provider.wallet.publicKey.toBase58(),
+    );
+    expect(role.implementationVersion.toString()).to.eq("1");
     expect(role.trustAcl.toString()).to.eq("255");
 
     const gov = await trust.account.module.fetch(modulePdaGov);
     expect(gov.programId.toBase58()).to.eq(dummyGovProg.toBase58());
+    expect(gov.provider.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
+    expect(gov.implementationVersion.toString()).to.eq("1");
     expect(gov.trustAcl.toString()).to.eq("128");
   });
 
@@ -276,11 +305,17 @@ describe("aeqi_factory", () => {
           {
             moduleId: Array.from(moduleIdR),
             programId: programR,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdT),
             programId: programT,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0x80),
           },
         ],
@@ -334,10 +369,14 @@ describe("aeqi_factory", () => {
 
     const mR = await trust.account.module.fetch(modR);
     expect(mR.programId.toBase58()).to.eq(programR.toBase58());
+    expect(mR.provider.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
+    expect(mR.implementationVersion.toString()).to.eq("1");
     expect(mR.trustAcl.toString()).to.eq("255");
 
     const mT = await trust.account.module.fetch(modT);
     expect(mT.programId.toBase58()).to.eq(programT.toBase58());
+    expect(mT.provider.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
+    expect(mT.implementationVersion.toString()).to.eq("1");
     expect(mT.trustAcl.toString()).to.eq("128");
   });
 
@@ -441,10 +480,16 @@ describe("aeqi_factory", () => {
     // Each module record has the right program ID
     const r = await trust.account.module.fetch(roleModulePda);
     expect(r.programId.toBase58()).to.eq(role.programId.toBase58());
+    expect(r.provider.toBase58()).to.eq(role.programId.toBase58());
+    expect(r.implementationVersion.toString()).to.eq("1");
     const tk = await trust.account.module.fetch(tokenModulePda);
     expect(tk.programId.toBase58()).to.eq(token.programId.toBase58());
+    expect(tk.provider.toBase58()).to.eq(token.programId.toBase58());
+    expect(tk.implementationVersion.toString()).to.eq("1");
     const g = await trust.account.module.fetch(govModulePda);
     expect(g.programId.toBase58()).to.eq(governance.programId.toBase58());
+    expect(g.provider.toBase58()).to.eq(governance.programId.toBase58());
+    expect(g.implementationVersion.toString()).to.eq("1");
 
     // Each module's state PDA was created — module init ran
     const rs = await role.account.roleModuleState.fetch(roleModuleStatePda);
@@ -738,16 +783,25 @@ describe("aeqi_factory", () => {
           {
             moduleId: Array.from(moduleIdR),
             programId: role.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdT),
             programId: token.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdG),
             programId: governance.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
         ],
@@ -772,26 +826,41 @@ describe("aeqi_factory", () => {
           {
             moduleId: Array.from(moduleIdR),
             programId: role.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdT),
             programId: token.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdG),
             programId: governance.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdY),
             programId: treasury.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
           {
             moduleId: Array.from(moduleIdV),
             programId: vesting.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
             trustAcl: new anchor.BN(0xff),
           },
         ],

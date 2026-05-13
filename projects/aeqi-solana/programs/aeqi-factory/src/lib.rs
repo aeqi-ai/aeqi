@@ -111,6 +111,9 @@ pub mod aeqi_factory {
                 reg_ctx,
                 spec.module_id,
                 spec.program_id,
+                spec.provider,
+                spec.implementation_version,
+                spec.implementation_metadata_hash,
                 spec.trust_acl,
             )?;
         }
@@ -181,6 +184,9 @@ pub mod aeqi_factory {
             ),
             role_module_id,
             ctx.accounts.aeqi_role_program.key(),
+            ctx.accounts.aeqi_role_program.key(),
+            1,
+            [0; 32],
             role_acl,
         )?;
         aeqi_trust::cpi::register_module(
@@ -195,6 +201,9 @@ pub mod aeqi_factory {
             ),
             token_module_id,
             ctx.accounts.aeqi_token_program.key(),
+            ctx.accounts.aeqi_token_program.key(),
+            1,
+            [0; 32],
             token_acl,
         )?;
         aeqi_trust::cpi::register_module(
@@ -209,6 +218,9 @@ pub mod aeqi_factory {
             ),
             gov_module_id,
             ctx.accounts.aeqi_governance_program.key(),
+            ctx.accounts.aeqi_governance_program.key(),
+            1,
+            [0; 32],
             gov_acl,
         )?;
 
@@ -381,6 +393,9 @@ pub mod aeqi_factory {
                 reg_ctx,
                 spec.module_id,
                 spec.program_id,
+                spec.provider,
+                spec.implementation_version,
+                spec.implementation_metadata_hash,
                 spec.trust_acl,
             )?;
         }

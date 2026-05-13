@@ -12,8 +12,18 @@ pub enum AeqiTrustError {
     NotInCreationMode,
     #[msg("trust has already been finalized")]
     AlreadyFinalized,
+    #[msg("trust must be finalized before adopting module implementations")]
+    TrustNotFinalized,
     #[msg("trust must register at least one module before finalization")]
     NoModulesRegistered,
+    #[msg("module implementation version must be greater than zero")]
+    InvalidImplementationVersion,
+    #[msg("module implementation program account must be executable")]
+    ImplementationProgramNotExecutable,
+    #[msg("module implementation is inactive")]
+    InactiveImplementation,
+    #[msg("module implementation does not match the module slot")]
+    ImplementationModuleMismatch,
     #[msg("module has already been initialized")]
     ModuleAlreadyInitialized,
     #[msg("module has not yet been initialized")]

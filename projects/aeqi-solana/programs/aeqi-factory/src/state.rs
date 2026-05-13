@@ -12,13 +12,17 @@ pub struct Template {
     pub bump: u8,
 }
 
-/// Module declaration in a template. `program_id` points at a concrete
-/// module program (aeqi_role, aeqi_token, aeqi_governance, …) and
-/// `trust_acl` is the bit-flag mask granted to the module.
+/// Module declaration in a template. `program_id` points at the concrete
+/// executable selected for this template. `provider`, `implementation_version`,
+/// and `implementation_metadata_hash` record the provider-published version
+/// that this TRUST starts from; future provider releases are adopted per TRUST.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
 pub struct ModuleSpec {
     pub module_id: [u8; 32],
     pub program_id: Pubkey,
+    pub provider: Pubkey,
+    pub implementation_version: u64,
+    pub implementation_metadata_hash: [u8; 32],
     pub trust_acl: u64,
 }
 

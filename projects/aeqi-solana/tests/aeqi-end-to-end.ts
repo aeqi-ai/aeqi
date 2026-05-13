@@ -87,16 +87,25 @@ describe("AEQI end-to-end spawn", () => {
         {
           moduleId: Array.from(roleModuleIdBytes),
           programId: role.programId,
+          provider: provider.wallet.publicKey,
+          implementationVersion: new anchor.BN(1),
+          implementationMetadataHash: Array.from(new Uint8Array(32)),
           trustAcl: new anchor.BN(0xff),
         },
         {
           moduleId: Array.from(tokenModuleIdBytes),
           programId: token.programId,
+          provider: provider.wallet.publicKey,
+          implementationVersion: new anchor.BN(1),
+          implementationMetadataHash: Array.from(new Uint8Array(32)),
           trustAcl: new anchor.BN(0xff),
         },
         {
           moduleId: Array.from(govModuleIdBytes),
           programId: governance.programId,
+          provider: provider.wallet.publicKey,
+          implementationVersion: new anchor.BN(1),
+          implementationMetadataHash: Array.from(new Uint8Array(32)),
           trustAcl: new anchor.BN(0xff),
         },
       ])

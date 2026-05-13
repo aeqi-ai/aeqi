@@ -22,8 +22,26 @@ pub struct Module {
     pub trust: Pubkey,
     pub module_id: [u8; 32],
     pub program_id: Pubkey,
+    pub provider: Pubkey,
+    pub implementation_version: u64,
+    pub implementation_metadata_hash: [u8; 32],
     pub trust_acl: u64,
     pub initialized: u8,
+    pub bump: u8,
+}
+
+/// Provider-published implementation candidate. This is the Solana-native
+/// equivalent of the EVM beacon source catalog: providers can publish new
+/// module implementations, but each TRUST must explicitly adopt one.
+#[account]
+#[derive(InitSpace)]
+pub struct ModuleImplementation {
+    pub provider: Pubkey,
+    pub module_id: [u8; 32],
+    pub implementation_program_id: Pubkey,
+    pub version: u64,
+    pub metadata_hash: [u8; 32],
+    pub active: bool,
     pub bump: u8,
 }
 

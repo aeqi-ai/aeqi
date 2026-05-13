@@ -13,13 +13,19 @@ Defines the data needed to spawn the AEQI company via `aeqi_factory.instantiate_
 
 ## Modules to register
 
-The factory issues a `register_module` per slot, then `init` then `finalize`:
+The factory issues a `register_module` per slot, then `init` then `finalize`.
+Each slot records the selected provider/version/hash so a TRUST can later pull a
+provider-published replacement without changing other TRUSTs.
 
-| module_id (keccak256 of name) | program_id        | trust_acl                                   |
-| ----------------------------- | ----------------- | ------------------------------------------- |
-| `role`                        | `aeqi_role`       | SetNumericConfig + SetBytesConfig + Execute |
-| `token`                       | `aeqi_token`      | TransferFunds + SetBytesConfig              |
-| `governance`                  | `aeqi_governance` | Execute + SetAclBetweenModules              |
+| module_id (keccak256 of name) | program_id        | provider          | version | trust_acl                                   |
+| ----------------------------- | ----------------- | ----------------- | ------- | ------------------------------------------- |
+| `role`                        | `aeqi_role`       | `aeqi_role`       | 1       | SetNumericConfig + SetBytesConfig + Execute |
+| `token`                       | `aeqi_token`      | `aeqi_token`      | 1       | TransferFunds + SetBytesConfig              |
+| `governance`                  | `aeqi_governance` | `aeqi_governance` | 1       | Execute + SetAclBetweenModules              |
+
+Implementation metadata hashes are 32-byte release manifest hashes. A zero hash
+is allowed only for local/dev templates that do not have a published manifest
+yet.
 
 Future modules (lands once their program ships):
 

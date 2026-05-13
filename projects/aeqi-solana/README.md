@@ -25,7 +25,12 @@ Solana-native modular DAO framework. The EVM system at `~/projects/aeqi-core/con
 
 ### Key translation calls
 
-**Beacon proxy → program upgrade authority.** EVM beacons exist because EVM has no native upgrade. Solana programs are upgradable directly via `BPFLoaderUpgradeable`. The "multi-source delegation" semantics (per-TRUST module-implementation overrides) become per-PDA `module_program_id` config — each TRUST PDA stores the program ID it uses for each module slot. Different TRUSTs can point at different program-ID versions of the same module.
+**Beacon proxy → provider-published implementation registry.** Solana program
+upgrade authority remains an operational deployment concern. AEQI module
+selection is separate: providers publish executable module implementation
+records, and each TRUST explicitly adopts one implementation version per module
+slot. Provider publication never forces an upgrade; a TRUST moves only when its
+own authority pulls that implementation into its module record.
 
 **SlotArrays versioning → PDA isolation.** EVM SlotArrays use `keccak256(BASE, timestamp)` to derive fresh storage slots per-instance. Solana PDAs are already namespaced per (program, seeds) — the per-instance isolation is automatic. The "swap-with-last" O(1) array semantics port to a `Vec<Pubkey>` field with manual bookkeeping, OR (preferred) we use indexed PDAs (`[b"role_member", trust, idx]`) with a separate count.
 
