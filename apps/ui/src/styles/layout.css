@@ -1286,15 +1286,14 @@
   }
 }
 /* Drilled-agent surface tablet collapse — at <=1024px the LeftSidebar
-   already shrinks to the 52px icon strip; the PageRail (180px) plus
-   sessions-rail-col (300px) still leave the main content column under
-   ~360px on a 900px viewport, which wraps the chat to ~1 word per line.
-   Hide the agent PageRail at the same breakpoint the LeftSidebar
-   collapses at — same gesture, same bound. The rail's tabs remain
-   reachable via the sessions list (drilled URLs) and direct-link
-   navigation. Scoped to `.content-body-row .page-rail` so the
-   /settings / /blueprints PageRail (different parent, no squeeze) is
-   unaffected. */
+   (180px min) + PageRail (180px) + sessions-rail-col (300px) leave the
+   main content column under ~360px on a 900px viewport, which wraps the
+   chat to ~1 word per line. Hide the agent PageRail at this breakpoint;
+   its tabs remain reachable via the sessions list (drilled URLs) and
+   direct-link navigation. If the user wants more chat width they can
+   collapse the LeftSidebar (Cmd/Ctrl+B) — that's their explicit state.
+   Scoped to `.content-body-row .page-rail` so the /settings / /blueprints
+   PageRail (different parent, no squeeze) is unaffected. */
 @media (max-width: 1024px) {
   .content-body-row .page-rail {
     display: none;
@@ -3370,29 +3369,12 @@
 }
 
 /* ── Responsive: Tablet (max-width: 1024px) ── */
-/* Collapse sidebar to icon-only strip */
+/* The LeftSidebar's expanded width is the user's explicit state — respect
+   it. Icon-only treatment lives on `.left-sidebar.collapsed` only, driven
+   by the user's toggle (Cmd/Ctrl+B). The sidebar already has a 180px
+   canonical min-width (see ui.ts:SIDEBAR_WIDTH_MIN) which is narrow
+   enough on a 1024px viewport. */
 @media (max-width: 1024px) {
-  .left-sidebar {
-    width: 52px;
-  }
-
-  .sidebar-nav-label,
-  .sidebar-nav-action,
-  .sidebar-user-zone,
-  .sidebar-footer {
-    display: none;
-  }
-
-  .sidebar-nav-item {
-    justify-content: center;
-    padding: 8px;
-    min-height: var(--touch-target-min);
-  }
-
-  .sidebar-nav {
-    padding: 8px 4px;
-  }
-
   /* Context drawer hidden on tablet */
   .context-drawer {
     display: none;
