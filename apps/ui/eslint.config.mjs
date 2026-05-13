@@ -39,7 +39,6 @@ export default tseslint.config(
      *   - src/pages/WelcomePage.tsx                   1212
      *   - src/pages/AdminPage.tsx                      874
      *   - src/pages/BlueprintsPage.tsx                 676
-     *   - src/components/composer/Composer.tsx        639
      *   - src/components/ideas/IdeasListView.tsx      631
      *   - src/components/AgentQuestsTab.tsx          (>600, was 1146 raw)
      *   - src/components/EntityAgentsTab.tsx         (>600, was 791 raw)
@@ -50,13 +49,14 @@ export default tseslint.config(
      *     → components/ideas/{IdeaCanvasToolbar,IdeaCanvasDecisionPanel}.tsx
      *   - 2026-05-13 src/components/QuestCanvas.tsx — toolbar + linked-idea picker
      *     → components/quests/{QuestToolbar,LinkedIdeaPicker}.tsx
+     *   - 2026-05-13 src/components/composer/Composer.tsx — footer + kbd ribbon
+     *     → components/composer/{ComposerFooter,ComposerKbdRibbon}.tsx
      */
     files: [
       "src/lib/api.ts",
       "src/pages/WelcomePage.tsx",
       "src/pages/AdminPage.tsx",
       "src/pages/BlueprintsPage.tsx",
-      "src/components/composer/Composer.tsx",
       "src/components/ideas/IdeasListView.tsx",
       "src/components/AgentQuestsTab.tsx",
       "src/components/EntityAgentsTab.tsx",
