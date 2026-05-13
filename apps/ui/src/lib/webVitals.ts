@@ -7,54 +7,25 @@
 // CLS — Cumulative Layout Shift. Sum of every unexpected element move.
 //       Google target: <0.1.
 //
-// Reports to the console in dev; posts to /api/telemetry/web-vitals in
-// prod as a fire-and-forget beacon. Failures (404, 4xx, network) are
-// swallowed — telemetry MUST NOT break the UI.
+// Console-only today. A prior version posted to `/api/telemetry/web-vitals`
+// but that platform endpoint was never stubbed, so every metric tick logged
+// a 401 to the browser console — noise, no telemetry. Restored to a quiet
+// console reporter until the platform side ships a real (auth-optional) sink.
+//
+// To bring back beacon reporting:
+//   1. Land `POST /api/telemetry/web-vitals` on aeqi-platform as an
+//      unauthenticated 204-returning handler that ingests the JSON body.
+//   2. Restore the navigator.sendBeacon path here, gated on
+//      `if (!import.meta.env.DEV)`.
 
 import { onCLS, onINP, onLCP, type Metric } from "web-vitals";
 
-type WebVitalsMetric = Pick<Metric, "name" | "value" | "rating" | "id" | "delta">;
-
-function sendBeacon(metric: WebVitalsMetric): void {
-  const body = JSON.stringify({
-    name: metric.name,
-    value: metric.value,
-    rating: metric.rating,
-    id: metric.id,
-    delta: metric.delta,
-    url: window.location.pathname,
-    ts: Date.now(),
-  });
-  // navigator.sendBeacon survives page unloads (LCP often fires on
-  // visibility hidden) without keeping the response open. Falls back to
-  // fetch for browsers without the API.
-  try {
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon("/api/telemetry/web-vitals", body);
-      return;
-    }
-    void fetch("/api/telemetry/web-vitals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      keepalive: true,
-    }).catch(() => {
-      /* telemetry never fails the UI */
-    });
-  } catch {
-    /* same */
-  }
-}
-
 export function startWebVitalsReporting(): void {
   if (typeof window === "undefined") return;
-  const isDev = import.meta.env.DEV;
   const handler = (metric: Metric) => {
-    if (isDev) {
-      console.log(`[web-vitals] ${metric.name}=${metric.value.toFixed(2)} (${metric.rating})`);
-      return;
-    }
-    sendBeacon(metric);
+    // Tag every emit so DevTools filter `[web-vitals]` shows the full
+    // session-local timeline regardless of dev vs prod.
+    console.log(`[web-vitals] ${metric.name}=${metric.value.toFixed(2)} (${metric.rating})`);
   };
   onLCP(handler);
   onINP(handler);
