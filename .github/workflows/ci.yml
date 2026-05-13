@@ -20,7 +20,7 @@ jobs:
     needs: quality-gates
     if: needs.quality-gates.result == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # 1. Enhanced Rust toolchain verification
       - name: Verify and install Rust toolchain
