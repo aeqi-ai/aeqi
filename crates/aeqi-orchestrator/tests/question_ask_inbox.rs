@@ -121,10 +121,10 @@ async fn answer_inbox_clears_awaiting_and_enqueues_reply() {
     assert_eq!(claimed[0].content, "yes");
 }
 
-/// Two directors race to answer the same session. Exactly one wins; the
-/// loser sees a clean error and produces no second pending row.
+/// A director can answer a pending question and then send a normal follow-up
+/// reply after the awaiting flag has already cleared.
 #[tokio::test]
-async fn answer_inbox_first_writer_wins() {
+async fn answer_inbox_accepts_follow_up_after_awaiting_clears() {
     let h = TestHarness::build().await.unwrap();
     let (_agent_id, session_id) = seed_agent_and_session(&h, "alpha").await;
     let ctx = h.ctx();
@@ -145,22 +145,17 @@ async fn answer_inbox_first_writer_wins() {
         &None,
     )
     .await;
-    assert_eq!(second["ok"], serde_json::json!(false));
-    assert!(
-        second["error"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("already answered"),
-        "unexpected error message: {second:?}"
-    );
+    assert_eq!(second["ok"], serde_json::json!(true));
 
-    // Only the first answer landed in the queue.
+    // Both messages land in the queue: the first answers the decision request,
+    // the second is a normal chat reply to the same session.
     let claimed = ss
         .claim_pending_for_session(&session_id, None)
         .await
         .unwrap();
-    assert_eq!(claimed.len(), 1);
+    assert_eq!(claimed.len(), 2);
     assert_eq!(claimed[0].content, "ship it");
+    assert_eq!(claimed[1].content, "wait");
 }
 
 /// Tenancy: a user without `user_access` to the session's root agent gets
