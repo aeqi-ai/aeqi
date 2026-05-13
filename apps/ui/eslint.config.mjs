@@ -40,9 +40,12 @@ export default tseslint.config(
      *   - src/pages/AdminPage.tsx                      874
      *   - src/pages/BlueprintsPage.tsx                 676
      *   - src/components/QuestCanvas.tsx               736
-     *   - src/components/IdeaCanvas.tsx                640
      *   - src/components/composer/Composer.tsx        639
      *   - src/components/ideas/IdeasListView.tsx      631
+     *
+     * Extracted 2026-05-13:
+     *   - src/components/IdeaCanvas.tsx — toolbar + decision-panel
+     *     pulled into components/ideas/{IdeaCanvasToolbar,IdeaCanvasDecisionPanel}.tsx
      *   - src/components/AgentQuestsTab.tsx          (>600, was 1146 raw)
      *   - src/components/EntityAgentsTab.tsx         (>600, was 791 raw)
      *   - src/components/ui/Button.stories.tsx         668  (stories — OK to stay big)
@@ -53,7 +56,6 @@ export default tseslint.config(
       "src/pages/AdminPage.tsx",
       "src/pages/BlueprintsPage.tsx",
       "src/components/QuestCanvas.tsx",
-      "src/components/IdeaCanvas.tsx",
       "src/components/composer/Composer.tsx",
       "src/components/ideas/IdeasListView.tsx",
       "src/components/AgentQuestsTab.tsx",

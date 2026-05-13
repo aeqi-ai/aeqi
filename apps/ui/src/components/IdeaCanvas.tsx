@@ -13,17 +13,17 @@ import * as ideasApi from "@/api/ideas";
 import { useNav } from "@/hooks/useNav";
 import { useAgentIdeas, useAgentIdeasCache } from "@/queries/ideas";
 import type { Idea, ScopeValue } from "@/lib/types";
-import { Button, Textarea, Tooltip } from "./ui";
 import { Events, useTrack } from "@/lib/analytics";
 import LazyBlockEditor from "./editor/LazyBlockEditor";
 import { blockTreeToPlainText } from "./editor/blockEditorContent";
 import IdeaLinksPanel from "./IdeaLinksPanel";
 import RefsRow, { type RefRecord } from "./RefsRow";
 import TagsEditor from "./TagsEditor";
-import IdeasScopePopover from "./ideas/IdeasScopePopover";
 import IdeaConversationPanel from "./ideas/IdeaConversationPanel";
 import IdeaPropertyChips from "./ideas/IdeaPropertyChips";
 import IdeaChildrenList from "./ideas/IdeaChildrenList";
+import IdeaCanvasToolbar from "./ideas/IdeaCanvasToolbar";
+import IdeaCanvasDecisionPanel from "./ideas/IdeaCanvasDecisionPanel";
 
 /**
  * Imperative handle for callers that supply their own toolbar (the
@@ -40,8 +40,8 @@ export interface IdeaCanvasHandle {
   dirty: () => boolean;
 }
 
-type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
-type DecisionState = "idle" | "saving" | "done";
+export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
+export type DecisionState = "idle" | "saving" | "done";
 
 const SAVED_FLASH_MS = 1200;
 
@@ -514,149 +514,29 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
       )}
       {!embedded && !headerSlot && (
         <div className="ideas-list-head ideas-canvas-head">
-          <div className="ideas-toolbar ideas-canvas-toolbar">
-            <Tooltip content="Back to ideas">
-              <Button variant="secondary" size="sm" onClick={onBack}>
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 13 13"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M8 3 L4.5 6.5 L8 10" />
-                </svg>
-                Ideas
-              </Button>
-            </Tooltip>
-            {!showCompose && (
-              <Tooltip content="New idea (N)">
-                <Button variant="primary" size="sm" onClick={onNew}>
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 13 13"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    aria-hidden
-                  >
-                    <path d="M6.5 2.5v8M2.5 6.5h8" />
-                  </svg>
-                  New
-                </Button>
-              </Tooltip>
-            )}
-            <IdeasScopePopover
-              scope={headerScope}
-              locked={isEdit}
-              onChange={!isEdit ? setComposeScope : undefined}
-            />
-            <div className="ideas-toolbar-spacer" aria-hidden />
-            {isEdit && idea && (
-              <Tooltip content="Track this idea as a quest">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    goEntity(entityId, "quests", "new", {
-                      replace: false,
-                      search: { fromIdea: idea.id },
-                    })
-                  }
-                >
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 13 13"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <path d="M2.5 6.5h8M6.5 2.5v8" />
-                  </svg>
-                  Track as quest
-                </Button>
-              </Tooltip>
-            )}
-            {isEdit && (
-              <Tooltip content={deleteArmed ? "Click again to confirm delete" : "Delete idea"}>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleDeleteClick}
-                  onBlur={() => setDeleteArmed(false)}
-                >
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 13 13"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    aria-hidden
-                  >
-                    <path d="M3.2 3.2 L9.8 9.8 M9.8 3.2 L3.2 9.8" />
-                  </svg>
-                  {deleteArmed ? "Confirm" : "Delete"}
-                </Button>
-              </Tooltip>
-            )}
-            {(showCompose || dirty) && (
-              <>
-                <Tooltip content="Cancel">
-                  <Button variant="secondary" size="sm" onClick={handleCancel}>
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 13 13"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.7"
-                      strokeLinecap="round"
-                      aria-hidden
-                    >
-                      <path d="M3.2 3.2 L9.8 9.8 M9.8 3.2 L3.2 9.8" />
-                    </svg>
-                    Cancel
-                  </Button>
-                </Tooltip>
-                <Tooltip content={isEdit ? "Save (⌘↵)" : "Save idea (⌘↵)"}>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={isEdit ? flushSave : handleCreate}
-                    disabled={saveState === "saving"}
-                    loading={saveState === "saving"}
-                  >
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 13 13"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
-                    >
-                      <path d="M2.8 6.6 L5.4 9.2 L10.2 4" />
-                    </svg>
-                    Save
-                  </Button>
-                </Tooltip>
-              </>
-            )}
-          </div>
+          <IdeaCanvasToolbar
+            isEdit={isEdit}
+            showCompose={showCompose}
+            dirty={dirty}
+            idea={idea}
+            headerScope={headerScope}
+            setComposeScope={setComposeScope}
+            saveState={saveState}
+            deleteArmed={deleteArmed}
+            setDeleteArmed={setDeleteArmed}
+            onBack={onBack}
+            onNew={onNew}
+            onTrackAsQuest={() =>
+              idea &&
+              goEntity(entityId, "quests", "new", {
+                replace: false,
+                search: { fromIdea: idea.id },
+              })
+            }
+            onDeleteClick={handleDeleteClick}
+            onCancel={handleCancel}
+            onSave={isEdit ? flushSave : handleCreate}
+          />
         </div>
       )}
       {error && <div className="ideas-canvas-error">{error}</div>}
@@ -712,57 +592,16 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
         />
 
         {showDecisionBtns && (
-          <div className="ideas-canvas-decision-bar">
-            <div className="ideas-canvas-decision-head">
-              <span className="ideas-canvas-decision-kind">Candidate skill</span>
-              <div className="ideas-canvas-decision-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={decisionState === "saving" && !showRejectPanel}
-                  onClick={handlePromote}
-                >
-                  Promote
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={decisionState === "saving"}
-                  onClick={() => setShowRejectPanel((v) => !v)}
-                  aria-expanded={showRejectPanel}
-                >
-                  Reject
-                </Button>
-              </div>
-            </div>
-            {showRejectPanel && (
-              <div className="ideas-canvas-reject-panel">
-                <Textarea
-                  bare
-                  className="ideas-canvas-reject-textarea"
-                  placeholder="Why reject? This gets appended to the idea body."
-                  value={rejectRationale}
-                  onChange={(e) => setRejectRationale(e.target.value)}
-                  autoFocus
-                />
-                <div className="ideas-canvas-decision-actions">
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    loading={decisionState === "saving"}
-                    disabled={!rejectRationale.trim()}
-                    onClick={handleReject}
-                  >
-                    Confirm rejection
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowRejectPanel(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-            {decisionError && <span className="ideas-canvas-error">{decisionError}</span>}
-          </div>
+          <IdeaCanvasDecisionPanel
+            decisionState={decisionState}
+            decisionError={decisionError}
+            showRejectPanel={showRejectPanel}
+            setShowRejectPanel={setShowRejectPanel}
+            rejectRationale={rejectRationale}
+            setRejectRationale={setRejectRationale}
+            onPromote={handlePromote}
+            onReject={handleReject}
+          />
         )}
 
         {isEdit && idea && <IdeaPropertyChips ideaId={idea.id} properties={idea.properties} />}
