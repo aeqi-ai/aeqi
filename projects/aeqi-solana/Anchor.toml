@@ -35,7 +35,7 @@ upgradeable = false
 
 [test.validator]
 bind_address = "127.0.0.1"
-faucet_port = 9909
-gossip_port = 9800
+faucet_port = 9910
+gossip_port = 9810
 ledger = ".anchor/test-ledger"
-rpc_port = 9899
+rpc_port = 9901

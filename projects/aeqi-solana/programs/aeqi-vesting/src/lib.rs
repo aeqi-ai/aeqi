@@ -11,6 +11,10 @@
 //! `[b"vesting_vault_authority", trust]`. At claim time the program signs
 //! via PDA seeds to transfer the claimable amount to the recipient's ATA.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(clippy::too_many_arguments, deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
     burn, transfer_checked, Burn, Mint, TokenAccount, TokenInterface, TransferChecked,

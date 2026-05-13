@@ -5,6 +5,10 @@
 //! phase where the authority can register modules; once finalized, the trust
 //! becomes live and config writes remain authority-gated in this iteration.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 
 declare_id!("4CtmLZSLR3t1nKa3A2XD7F2awU5WajiNMxvHCiEDoBnD");

@@ -9,10 +9,17 @@
 //! This iteration: `init` stores the TokenModuleState PDA. Mint creation via
 //! Token-2022 CPI lands as `create_mint` in the next iteration.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::solana_program::program_pack::Pack;
 use anchor_spl::token_interface::{
-    burn, mint_to, Burn, Mint, MintTo, TokenAccount, TokenInterface,
+    burn, mint_to, Burn, InitializeMint2, Mint, MintTo, TokenAccount, TokenInterface,
 };
+use solana_system_interface::instruction as system_instruction;
 
 declare_id!("28vYmAxQVZkqGwrH28gXDYNdWBPY7dW5odeUvoAHkw8r");
 
@@ -181,7 +188,41 @@ pub mod aeqi_token {
         // so requiring strict Initialized would lock out the canonical flow.
         require!(module.initialized != ModuleInitState::Pending as u8, TokenError::NotInitialized);
         require!(module.mint == Pubkey::default(), TokenError::MintAlreadyCreated);
-        module.mint = ctx.accounts.mint.key();
+
+        let mint_key = ctx.accounts.mint.key();
+        let mint_bump = ctx.bumps.mint;
+        let trust_key = ctx.accounts.trust.key();
+        let mint_len = anchor_spl::token_interface::spl_token_2022::state::Mint::LEN;
+        let lamports = Rent::get()?.minimum_balance(mint_len);
+        let signer_seeds: &[&[&[u8]]] = &[&[b"mint", trust_key.as_ref(), &[mint_bump]]];
+
+        let create_ix = system_instruction::create_account(
+            &ctx.accounts.payer.key(),
+            &mint_key,
+            lamports,
+            mint_len as u64,
+            &ctx.accounts.token_program.key(),
+        );
+        invoke_signed(
+            &create_ix,
+            &[
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+            signer_seeds,
+        )?;
+
+        let init_accounts = InitializeMint2 { mint: ctx.accounts.mint.to_account_info() };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), init_accounts);
+        anchor_spl::token_interface::initialize_mint2(
+            cpi_ctx,
+            decimals,
+            &ctx.accounts.mint_authority.key(),
+            None,
+        )?;
+
+        module.mint = mint_key;
         emit!(MintCreated { trust: module.trust, mint: module.mint, decimals });
         Ok(())
     }
@@ -263,16 +304,13 @@ pub struct CreateMint<'info> {
     /// signer seeds) can mint or freeze the cap-table token.
     #[account(seeds = [b"token_authority", trust.key().as_ref()], bump)]
     pub mint_authority: UncheckedAccount<'info>,
+    /// CHECK: mint PDA is created and initialized manually in `create_mint`.
     #[account(
-        init,
-        payer = payer,
-        mint::decimals = decimals,
-        mint::authority = mint_authority,
-        mint::token_program = token_program,
+        mut,
         seeds = [b"mint", trust.key().as_ref()],
         bump,
     )]
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: UncheckedAccount<'info>,
     pub token_program: Interface<'info, TokenInterface>,
     #[account(mut)]
     pub payer: Signer<'info>,

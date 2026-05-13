@@ -15,6 +15,10 @@
 //! `register_template` and are replayed against a fresh TRUST by the next
 //! provisioning step.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(clippy::too_many_arguments, deprecated, unexpected_cfgs)]
+
 use aeqi_governance::cpi::accounts::{FinalizeGovernance, InitGovernance};
 use aeqi_governance::program::AeqiGovernance;
 use aeqi_role::cpi::accounts::{FinalizeModule as RoleFinalize, InitModule as RoleInit};

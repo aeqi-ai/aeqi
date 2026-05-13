@@ -12,6 +12,10 @@
 //!    account is the active delegate of, snapshotted at proposal start via
 //!    checkpoints maintained on every delegation change.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 
 declare_id!("8KgcKNqW94Xonj5H3s64Cgf3NmDPMjhpL3PfxeFnDV1r");

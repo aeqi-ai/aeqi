@@ -104,7 +104,7 @@ pub fn sale_return(
     let p_start = price_at(curve_type, start_price, end_price, max_supply, current_supply);
     let avg_price = p_end.checked_add(p_start)? / 2;
     let gross = token_amount.checked_mul(avg_price)?.checked_div(PRECISION)?;
-    Some(gross.checked_mul(reserve_ratio_ppm as u128)?.checked_div(1_000_000)?)
+    gross.checked_mul(reserve_ratio_ppm as u128)?.checked_div(1_000_000)
 }
 
 #[cfg(test)]

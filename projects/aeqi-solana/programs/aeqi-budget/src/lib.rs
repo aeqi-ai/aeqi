@@ -12,6 +12,10 @@
 //! to spend; the corresponding token transfer happens via `aeqi_treasury`
 //! or another module that respects the budget's allocation as a quota.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 
 declare_id!("2XVZqURv6hVL7EEMd4BL1zyJhngSiAEV2q4yCgbQjASA");

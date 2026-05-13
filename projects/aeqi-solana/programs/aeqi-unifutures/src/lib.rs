@@ -11,6 +11,10 @@
 //! exponential price, trapezoidal-rule purchase cost, and reserve-ratio
 //! sale return.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
     burn, transfer_checked, Burn, Mint, TokenAccount, TokenInterface, TransferChecked,
@@ -1017,7 +1021,7 @@ pub mod aeqi_unifutures {
             .ok_or(error!(UnifuturesError::MathOverflow))?;
         let amount_out =
             numerator.checked_div(denominator).ok_or(error!(UnifuturesError::MathOverflow))?;
-        Ok(amount_out.try_into().map_err(|_| error!(UnifuturesError::MathOverflow))?)
+        amount_out.try_into().map_err(|_| error!(UnifuturesError::MathOverflow))
     }
 }
 

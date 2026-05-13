@@ -52,15 +52,27 @@ describe("AEQI end-to-end spawn", () => {
 
   it("step 1: factory.create_with_modules spawns AEQI trust + registers 3 modules + finalizes", async () => {
     const [roleModulePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("module"), trustPda.toBuffer(), Buffer.from(roleModuleIdBytes)],
+      [
+        Buffer.from("module"),
+        trustPda.toBuffer(),
+        Buffer.from(roleModuleIdBytes),
+      ],
       trust.programId,
     );
     const [tokenModulePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("module"), trustPda.toBuffer(), Buffer.from(tokenModuleIdBytes)],
+      [
+        Buffer.from("module"),
+        trustPda.toBuffer(),
+        Buffer.from(tokenModuleIdBytes),
+      ],
       trust.programId,
     );
     const [govModulePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("module"), trustPda.toBuffer(), Buffer.from(govModuleIdBytes)],
+      [
+        Buffer.from("module"),
+        trustPda.toBuffer(),
+        Buffer.from(govModuleIdBytes),
+      ],
       trust.programId,
     );
 
@@ -163,7 +175,8 @@ describe("AEQI end-to-end spawn", () => {
     const ts = await token.account.tokenModuleState.fetch(tokenModuleStatePda);
     expect(ts.trust.toBase58()).to.eq(trustPda.toBase58());
 
-    const gs = await governance.account.governanceModuleState.fetch(govModuleStatePda);
+    const gs =
+      await governance.account.governanceModuleState.fetch(govModuleStatePda);
     expect(gs.trust.toBase58()).to.eq(trustPda.toBase58());
   });
 
@@ -178,7 +191,10 @@ describe("AEQI end-to-end spawn", () => {
     ceoTypeId[1] = 0x45;
     ceoTypeId[2] = 0x4f;
 
-    for (const [id, hierarchy] of [[directorTypeId, 0], [ceoTypeId, 1]] as const) {
+    for (const [id, hierarchy] of [
+      [directorTypeId, 0],
+      [ceoTypeId, 1],
+    ] as const) {
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("role_type"), trustPda.toBuffer(), Buffer.from(id)],
         role.programId,
@@ -254,11 +270,13 @@ describe("AEQI end-to-end spawn", () => {
       .accounts({
         trust: trustPda,
         moduleState: govModuleStatePda,
-        governanceConfig: cfgPda,
         proposal: proposalPda,
         proposer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
+      .remainingAccounts([
+        { pubkey: cfgPda, isSigner: false, isWritable: false },
+      ])
       .rpc();
 
     // Vote (For, weight 1000)
@@ -286,9 +304,11 @@ describe("AEQI end-to-end spawn", () => {
       .executeProposal(new anchor.BN(1000))
       .accounts({
         proposal: proposalPda,
-        governanceConfig: cfgPda,
         executor: provider.wallet.publicKey,
       })
+      .remainingAccounts([
+        { pubkey: cfgPda, isSigner: false, isWritable: false },
+      ])
       .rpc();
 
     const p = await governance.account.proposal.fetch(proposalPda);
@@ -330,7 +350,11 @@ describe("AEQI end-to-end spawn", () => {
     directorTypeId[2] = 0x52;
 
     const [rtPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("role_type"), trustPda.toBuffer(), Buffer.from(directorTypeId)],
+      [
+        Buffer.from("role_type"),
+        trustPda.toBuffer(),
+        Buffer.from(directorTypeId),
+      ],
       role.programId,
     );
 
@@ -389,7 +413,11 @@ describe("AEQI end-to-end spawn", () => {
       governance.programId,
     );
     const [roleCfgPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("gov_config"), trustPda.toBuffer(), Buffer.from(directorTypeId)],
+      [
+        Buffer.from("gov_config"),
+        trustPda.toBuffer(),
+        Buffer.from(directorTypeId),
+      ],
       governance.programId,
     );
     await governance.methods
@@ -427,11 +455,13 @@ describe("AEQI end-to-end spawn", () => {
       .accounts({
         trust: trustPda,
         moduleState: govModuleStatePda,
-        governanceConfig: roleCfgPda,
         proposal: proposalPda,
         proposer: alice.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
+      .remainingAccounts([
+        { pubkey: roleCfgPda, isSigner: false, isWritable: false },
+      ])
       .signers([alice])
       .rpc();
 
@@ -465,9 +495,11 @@ describe("AEQI end-to-end spawn", () => {
       .executeProposal(new anchor.BN(1))
       .accounts({
         proposal: proposalPda,
-        governanceConfig: roleCfgPda,
         executor: alice.publicKey,
       })
+      .remainingAccounts([
+        { pubkey: roleCfgPda, isSigner: false, isWritable: false },
+      ])
       .signers([alice])
       .rpc();
 

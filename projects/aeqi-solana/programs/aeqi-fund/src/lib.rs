@@ -18,14 +18,16 @@
 //! - Director carry-vesting via aeqi_vesting CPI
 //! - Flow-request settlement (deposit/redeem at next checkpoint)
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
 declare_id!("4QJQsnRYUyXo9EFxAayL79zAkFejjdWeKhoTXeMVK7Nv");
-
-const PRECISION: u128 = 1_000_000_000_000_000_000; // 1e18 — same as unifutures
 
 #[program]
 pub mod aeqi_fund {

@@ -21,6 +21,10 @@
 //! This iteration ships state + create only. The CPI-orchestrated lifecycle
 //! follows once the inter-module CPI surfaces stabilize.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use aeqi_unifutures::cpi::accounts::{CreateCommitmentSale, CreateCurve, CreateExit};
 use aeqi_unifutures::program::AeqiUnifutures;
 use anchor_lang::prelude::*;

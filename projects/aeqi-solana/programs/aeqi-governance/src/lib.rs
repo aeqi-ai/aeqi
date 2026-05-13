@@ -13,6 +13,10 @@
 //! This iteration: GovernanceConfig + Proposal PDAs + register_config + propose
 //! ixes. cast_vote and execute land in subsequent iterations.
 
+// Anchor 0.31 emits external macro warnings under newer Rust check-cfg/deprecation
+// lints. Keep this crate's warning output focused on protocol code.
+#![allow(deprecated, unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount};
 
@@ -68,6 +72,8 @@ pub mod aeqi_governance {
     ) -> Result<()> {
         require!(config.quorum_bps <= 10_000, GovernanceError::InvalidBpsValue);
         require!(config.support_bps <= 10_000, GovernanceError::InvalidBpsValue);
+        require!(config.quorum_bps > 0, GovernanceError::InvalidBpsValue);
+        require!(config.support_bps > 0, GovernanceError::InvalidBpsValue);
         require!(config.voting_period > 0, GovernanceError::ZeroVotingPeriod);
 
         let g = &mut ctx.accounts.governance_config;
@@ -106,15 +112,14 @@ pub mod aeqi_governance {
     /// is reserved for a follow-up — this iteration just transitions
     /// Proposal.executed → true after threshold gate.
     pub fn execute_proposal(ctx: Context<ExecuteProposal>, total_vote_supply: u128) -> Result<()> {
-        let cfg = &ctx.accounts.governance_config;
         let p = &mut ctx.accounts.proposal;
-
         require!(!p.executed, GovernanceError::ProposalAlreadyExecuted);
         require!(!p.canceled, GovernanceError::ProposalCanceled);
-        require!(
-            p.governance_config_id == cfg.governance_config_id,
-            GovernanceError::ConfigMismatch
-        );
+        
+        let cfg_acct =
+            ctx.remaining_accounts.first().ok_or(error!(GovernanceError::ConfigMismatch))?;
+        let cfg =
+            load_governance_config(cfg_acct, &p.trust, &p.governance_config_id, ctx.program_id)?;
 
         let now = Clock::get()?.unix_timestamp;
         let vote_end = proposal_vote_end(p)?;
@@ -254,8 +259,14 @@ pub mod aeqi_governance {
         governance_config_id: [u8; 32],
         ipfs_cid: [u8; 64],
     ) -> Result<()> {
-        let cfg = &ctx.accounts.governance_config;
-        require!(cfg.governance_config_id == governance_config_id, GovernanceError::ConfigMismatch);
+        let cfg_acct =
+            ctx.remaining_accounts.first().ok_or(error!(GovernanceError::ConfigMismatch))?;
+        let cfg = load_governance_config(
+            cfg_acct,
+            &ctx.accounts.trust.key(),
+            &governance_config_id,
+            ctx.program_id,
+        )?;
 
         let now = Clock::get()?.unix_timestamp;
         let p = &mut ctx.accounts.proposal;
@@ -349,6 +360,29 @@ fn bump_config_count(module_state: &mut Account<GovernanceModuleState>) -> Resul
     module_state.config_count =
         module_state.config_count.checked_add(1).ok_or(error!(GovernanceError::MathOverflow))?;
     Ok(())
+}
+
+fn load_governance_config(
+    cfg_acct: &AccountInfo,
+    trust: &Pubkey,
+    governance_config_id: &[u8; 32],
+    program_id: &Pubkey,
+) -> Result<GovernanceConfig> {
+    let (expected_cfg, _) = Pubkey::find_program_address(
+        &[b"gov_config", trust.as_ref(), governance_config_id],
+        program_id,
+    );
+    require_keys_eq!(cfg_acct.key(), expected_cfg, GovernanceError::ConfigMismatch);
+    require_keys_eq!(*cfg_acct.owner, *program_id, GovernanceError::ConfigMismatch);
+
+    let data = cfg_acct.try_borrow_data().map_err(|_| error!(GovernanceError::ConfigMismatch))?;
+    require!(data.len() >= 8, GovernanceError::ConfigMismatch);
+
+    let cfg = GovernanceConfig::try_from_slice(&data[8..])
+        .map_err(|_| error!(GovernanceError::ConfigMismatch))?;
+    require_keys_eq!(cfg.trust, *trust, GovernanceError::ConfigMismatch);
+    require!(cfg.governance_config_id == *governance_config_id, GovernanceError::ConfigMismatch);
+    Ok(cfg)
 }
 
 // -----------------------------------------------------------------------------
@@ -484,11 +518,6 @@ pub struct Propose<'info> {
     )]
     pub module_state: Account<'info, GovernanceModuleState>,
     #[account(
-        seeds = [b"gov_config", trust.key().as_ref(), governance_config_id.as_ref()],
-        bump = governance_config.bump,
-    )]
-    pub governance_config: Account<'info, GovernanceConfig>,
-    #[account(
         init,
         payer = proposer,
         space = 8 + Proposal::INIT_SPACE,
@@ -509,11 +538,6 @@ pub struct ExecuteProposal<'info> {
         bump = proposal.bump,
     )]
     pub proposal: Account<'info, Proposal>,
-    #[account(
-        seeds = [b"gov_config", proposal.trust.as_ref(), proposal.governance_config_id.as_ref()],
-        bump = governance_config.bump,
-    )]
-    pub governance_config: Account<'info, GovernanceConfig>,
     pub executor: Signer<'info>,
 }
 
@@ -651,7 +675,7 @@ pub struct VoteCast {
 
 #[error_code]
 pub enum GovernanceError {
-    #[msg("bps value must be ≤ 10000 (100.00%)")]
+    #[msg("bps value must be between 1 and 10000 (0.01%–100.00%)")]
     InvalidBpsValue,
     #[msg("voting_period must be > 0")]
     ZeroVotingPeriod,
