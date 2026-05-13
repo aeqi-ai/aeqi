@@ -23,7 +23,12 @@ export async function expectTxFail(
   try {
     await run();
   } catch (e: any) {
-    expect(String(e)).to.match(pattern);
+    const message = String(e);
+    if (typeof pattern === "string") {
+      expect(message).to.include(pattern);
+    } else {
+      expect(message).to.match(pattern);
+    }
     return;
   }
 

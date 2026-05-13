@@ -105,6 +105,8 @@ pub mod aeqi_funding {
         duration_secs: i64,
     ) -> Result<()> {
         let r = &mut ctx.accounts.request;
+        require_keys_eq!(ctx.accounts.creator.key(), r.creator, FundingError::Unauthorized);
+        require_keys_eq!(ctx.accounts.trust.key(), r.trust, FundingError::TrustMismatch);
         require!(r.status == RequestStatus::Pending as u8, FundingError::CannotActivate);
         require!(r.kind == 0, FundingError::WrongKind);
 
@@ -148,6 +150,8 @@ pub mod aeqi_funding {
         reserve_ratio_ppm: u32,
     ) -> Result<()> {
         let r = &mut ctx.accounts.request;
+        require_keys_eq!(ctx.accounts.creator.key(), r.creator, FundingError::Unauthorized);
+        require_keys_eq!(ctx.accounts.trust.key(), r.trust, FundingError::TrustMismatch);
         require!(r.status == RequestStatus::Pending as u8, FundingError::CannotActivate);
         require!(r.kind == 1, FundingError::WrongKind);
 
@@ -190,6 +194,8 @@ pub mod aeqi_funding {
         duration_secs: i64,
     ) -> Result<()> {
         let r = &mut ctx.accounts.request;
+        require_keys_eq!(ctx.accounts.creator.key(), r.creator, FundingError::Unauthorized);
+        require_keys_eq!(ctx.accounts.trust.key(), r.trust, FundingError::TrustMismatch);
         require!(r.status == RequestStatus::Pending as u8, FundingError::CannotActivate);
         require!(r.kind == 2, FundingError::WrongKind);
 
@@ -456,6 +462,8 @@ pub enum FundingError {
     MathOverflow,
     #[msg("only creator can cancel a request")]
     Unauthorized,
+    #[msg("trust account does not match the funding request")]
+    TrustMismatch,
     #[msg("request is not in Pending status — can't cancel")]
     CannotCancel,
     #[msg("request is not in Pending status — can't activate")]

@@ -45,7 +45,11 @@ describe("aeqi_funding", () => {
     budgetId[0] = 0xb1;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -82,7 +86,11 @@ describe("aeqi_funding", () => {
     budgetId[0] = 0xb2;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -116,7 +124,8 @@ describe("aeqi_funding", () => {
   });
 
   it("activate_commitment_sale CPIs into aeqi_unifutures to create the sale", async () => {
-    const unifutures = anchor.workspace.aeqiUnifutures as Program<AeqiUnifutures>;
+    const unifutures = anchor.workspace
+      .aeqiUnifutures as Program<AeqiUnifutures>;
 
     // Init the unifutures module on the same fakeTrust so CPI has a target
     const [unifModulePda] = PublicKey.findProgramAddressSync(
@@ -140,7 +149,11 @@ describe("aeqi_funding", () => {
     budgetId[0] = 0xb0;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -203,7 +216,8 @@ describe("aeqi_funding", () => {
   });
 
   it("activate_bonding_curve CPIs into aeqi_unifutures.create_curve", async () => {
-    const unifutures = anchor.workspace.aeqiUnifutures as Program<AeqiUnifutures>;
+    const unifutures = anchor.workspace
+      .aeqiUnifutures as Program<AeqiUnifutures>;
 
     // Reuse same fakeTrust + module init from prior test (it's idempotent —
     // skip the init since it's already done above; the module_state PDA is
@@ -219,7 +233,11 @@ describe("aeqi_funding", () => {
     budgetId[0] = 0xb1;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -281,7 +299,8 @@ describe("aeqi_funding", () => {
   });
 
   it("activate_exit CPIs into aeqi_unifutures.create_exit", async () => {
-    const unifutures = anchor.workspace.aeqiUnifutures as Program<AeqiUnifutures>;
+    const unifutures = anchor.workspace
+      .aeqiUnifutures as Program<AeqiUnifutures>;
 
     const [unifModulePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("unifutures_module"), fakeTrust.toBuffer()],
@@ -294,7 +313,11 @@ describe("aeqi_funding", () => {
     budgetId[0] = 0xe1;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -361,7 +384,11 @@ describe("aeqi_funding", () => {
     requestId[0] = 0x77;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -382,7 +409,8 @@ describe("aeqi_funding", () => {
       })
       .rpc();
 
-    const unifutures = anchor.workspace.aeqiUnifutures as Program<AeqiUnifutures>;
+    const unifutures = anchor.workspace
+      .aeqiUnifutures as Program<AeqiUnifutures>;
     const [unifModulePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("unifutures_module"), fakeTrust.toBuffer()],
       unifutures.programId,
@@ -423,7 +451,8 @@ describe("aeqi_funding", () => {
   });
 
   it("finalize_funding_request closes the lifecycle (Activated → Finalized)", async () => {
-    const unifutures = anchor.workspace.aeqiUnifutures as Program<AeqiUnifutures>;
+    const unifutures = anchor.workspace
+      .aeqiUnifutures as Program<AeqiUnifutures>;
     const [unifModulePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("unifutures_module"), fakeTrust.toBuffer()],
       unifutures.programId,
@@ -436,7 +465,11 @@ describe("aeqi_funding", () => {
     budgetId[0] = 0xf1;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -502,7 +535,11 @@ describe("aeqi_funding", () => {
     requestId[0] = 0xf3;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 
@@ -544,7 +581,11 @@ describe("aeqi_funding", () => {
     requestId[0] = 0xee;
 
     const [requestPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("funding_request"), fakeTrust.toBuffer(), Buffer.from(requestId)],
+      [
+        Buffer.from("funding_request"),
+        fakeTrust.toBuffer(),
+        Buffer.from(requestId),
+      ],
       program.programId,
     );
 

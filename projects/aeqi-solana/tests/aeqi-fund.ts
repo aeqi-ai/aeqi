@@ -55,7 +55,11 @@ describe("aeqi_fund", () => {
       program.programId,
     );
     const [fundAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("fund_authority"), fakeTrust.toBuffer(), Buffer.from(fundId)],
+      [
+        Buffer.from("fund_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(fundId),
+      ],
       program.programId,
     );
 
@@ -165,7 +169,12 @@ describe("aeqi_fund", () => {
     let s = await program.account.lpShare.fetch(lpSharePda);
     expect(s.shares.toString()).to.eq("5000");
 
-    let vault = await getAccount(provider.connection, fundQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    let vault = await getAccount(
+      provider.connection,
+      fundQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("5000");
 
     // Second deposit: 3000 quote → with NAV=5000, shares=5000:
@@ -214,10 +223,20 @@ describe("aeqi_fund", () => {
     s = await program.account.lpShare.fetch(lpSharePda);
     expect(s.shares.toString()).to.eq("4000");
 
-    vault = await getAccount(provider.connection, fundQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    vault = await getAccount(
+      provider.connection,
+      fundQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("4000");
 
-    const lpAccount = await getAccount(provider.connection, lpQuoteTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const lpAccount = await getAccount(
+      provider.connection,
+      lpQuoteTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     // Started 10_000, deposited 8000, redeemed 4000 → 6000 in LP wallet
     expect(lpAccount.amount.toString()).to.eq("6000");
   });
@@ -235,7 +254,11 @@ describe("aeqi_fund", () => {
       program.programId,
     );
     const [fundAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("fund_authority"), fakeTrust.toBuffer(), Buffer.from(fundId)],
+      [
+        Buffer.from("fund_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(fundId),
+      ],
       program.programId,
     );
 
@@ -416,9 +439,19 @@ describe("aeqi_fund", () => {
     expect(f.accruedCarry.toString()).to.eq("0");
     expect(f.grossNav.toString()).to.eq("960"); // LP NAV unaffected by claim
 
-    const mgrAcct = await getAccount(provider.connection, managerQuoteTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const mgrAcct = await getAccount(
+      provider.connection,
+      managerQuoteTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(mgrAcct.amount.toString()).to.eq("240");
-    const vault = await getAccount(provider.connection, fundQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    const vault = await getAccount(
+      provider.connection,
+      fundQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("960"); // 1200 minted - 240 claimed
   });
 
@@ -459,7 +492,10 @@ describe("aeqi_fund", () => {
     );
 
     const manager = Keypair.generate();
-    const sig = await provider.connection.requestAirdrop(manager.publicKey, 1_000_000_000);
+    const sig = await provider.connection.requestAirdrop(
+      manager.publicKey,
+      1_000_000_000,
+    );
     await provider.connection.confirmTransaction(sig);
 
     const quoteMint = await createMint(

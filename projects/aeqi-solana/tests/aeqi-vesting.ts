@@ -121,7 +121,11 @@ describe("aeqi_vesting", () => {
     positionId[0] = 0xf1;
 
     const [posPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vesting_pos"), fakeTrust.toBuffer(), Buffer.from(positionId)],
+      [
+        Buffer.from("vesting_pos"),
+        fakeTrust.toBuffer(),
+        Buffer.from(positionId),
+      ],
       program.programId,
     );
 
@@ -212,7 +216,11 @@ describe("aeqi_vesting", () => {
     positionId[1] = 0xff;
 
     const [posPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vesting_pos"), fakeTrust.toBuffer(), Buffer.from(positionId)],
+      [
+        Buffer.from("vesting_pos"),
+        fakeTrust.toBuffer(),
+        Buffer.from(positionId),
+      ],
       program.programId,
     );
 
@@ -277,7 +285,12 @@ describe("aeqi_vesting", () => {
       TOKEN_2022_PROGRAM_ID,
     );
 
-    const recipientPre = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const recipientPre = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
 
     // Mark FDV milestone hit
     await program.methods
@@ -305,8 +318,15 @@ describe("aeqi_vesting", () => {
       })
       .rpc();
 
-    const recipientPost = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
-    expect((recipientPost.amount - recipientPre.amount).toString()).to.eq("7777");
+    const recipientPost = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    expect((recipientPost.amount - recipientPre.amount).toString()).to.eq(
+      "7777",
+    );
 
     pos = await program.account.vestingPosition.fetch(posPda);
     expect(pos.claimedAmount.toString()).to.eq("7777");
@@ -338,7 +358,11 @@ describe("aeqi_vesting", () => {
     positionId[1] = 0xde;
 
     const [posPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vesting_pos"), fakeTrust.toBuffer(), Buffer.from(positionId)],
+      [
+        Buffer.from("vesting_pos"),
+        fakeTrust.toBuffer(),
+        Buffer.from(positionId),
+      ],
       program.programId,
     );
 
@@ -418,7 +442,12 @@ describe("aeqi_vesting", () => {
       TOKEN_2022_PROGRAM_ID,
     );
 
-    const recipientPre = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const recipientPre = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
 
     // Pay contribution (burns CONTRIBUTION tokens from recipientAta)
     await program.methods
@@ -436,8 +465,15 @@ describe("aeqi_vesting", () => {
     expect(pos.contributionPaid).to.eq(true);
 
     // Recipient just lost CONTRIBUTION tokens to burn
-    const recipientPostBurn = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
-    expect((recipientPre.amount - recipientPostBurn.amount).toString()).to.eq(String(CONTRIBUTION));
+    const recipientPostBurn = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    expect((recipientPre.amount - recipientPostBurn.amount).toString()).to.eq(
+      String(CONTRIBUTION),
+    );
 
     // Now claim should succeed and transfer full TOTAL
     await program.methods
@@ -453,8 +489,15 @@ describe("aeqi_vesting", () => {
       })
       .rpc();
 
-    const recipientPostClaim = await getAccount(provider.connection, recipientAta, undefined, TOKEN_2022_PROGRAM_ID);
-    expect((recipientPostClaim.amount - recipientPostBurn.amount).toString()).to.eq(String(TOTAL));
+    const recipientPostClaim = await getAccount(
+      provider.connection,
+      recipientAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    expect(
+      (recipientPostClaim.amount - recipientPostBurn.amount).toString(),
+    ).to.eq(String(TOTAL));
 
     pos = await program.account.vestingPosition.fetch(posPda);
     expect(pos.claimedAmount.toString()).to.eq(String(TOTAL));
@@ -465,7 +508,11 @@ describe("aeqi_vesting", () => {
     positionId[0] = 0xee;
 
     const [posPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vesting_pos"), fakeTrust.toBuffer(), Buffer.from(positionId)],
+      [
+        Buffer.from("vesting_pos"),
+        fakeTrust.toBuffer(),
+        Buffer.from(positionId),
+      ],
       program.programId,
     );
 
@@ -505,7 +552,11 @@ describe("aeqi_vesting", () => {
     positionId[0] = 0xf2;
 
     const [posPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vesting_pos"), fakeTrust.toBuffer(), Buffer.from(positionId)],
+      [
+        Buffer.from("vesting_pos"),
+        fakeTrust.toBuffer(),
+        Buffer.from(positionId),
+      ],
       program.programId,
     );
 

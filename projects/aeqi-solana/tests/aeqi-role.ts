@@ -586,9 +586,8 @@ describe("aeqi_role", () => {
     let aCkpt = await program.account.roleVoteCheckpoint.fetch(aCkptPda);
     expect(aCkpt.count.toString()).to.eq("1");
 
-    // Now delegate to user B — first-time delegation FROM userA's perspective,
-    // but A's prior delegatee is A itself (set at assign). So prev = userA;
-    // we DO need to pass prev_checkpoint.
+    // Now delegate to user B. First-time delegation defaults the prior
+    // delegatee to the role holder, so A's self-vote must be decremented.
     const userB = Keypair.generate().publicKey;
     const [delegationPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("role_deleg"), trustD.toBuffer(), Buffer.from(roleId)],
@@ -604,9 +603,31 @@ describe("aeqi_role", () => {
       program.programId,
     );
 
-    // First delegation creates RoleDelegation with prev=Pubkey::default(), so
-    // the program's `if prev != default` branch is skipped — prev_checkpoint
-    // is None on first call.
+    await program.methods
+      .delegateRole(userB)
+      .accounts({
+        role: rolePda,
+        roleType: rtPda,
+        delegation: delegationPda,
+        prevCheckpoint: aCkptPda,
+        newCheckpoint: bCkptPda,
+        newDelegatee: userB,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    // After delegation: B has +1 and A no longer carries that role vote.
+    aCkpt = await program.account.roleVoteCheckpoint.fetch(aCkptPda);
+    const bCkpt = await program.account.roleVoteCheckpoint.fetch(bCkptPda);
+    expect(aCkpt.count.toString()).to.eq("0");
+    expect(bCkpt.count.toString()).to.eq("1");
+    expect(bCkpt.account.toBase58()).to.eq(userB.toBase58());
+
+    const deleg = await program.account.roleDelegation.fetch(delegationPda);
+    expect(deleg.delegatee.toBase58()).to.eq(userB.toBase58());
+
+    // Repeating the same delegation is a no-op, not another +1 vote.
     await program.methods
       .delegateRole(userB)
       .accounts({
@@ -620,16 +641,9 @@ describe("aeqi_role", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
-
-    // After delegation: B has +1, A unchanged because the program saw prev as
-    // Pubkey::default() (the freshly-init'd RoleDelegation slot) and skipped
-    // the prev decrement.
-    const bCkpt = await program.account.roleVoteCheckpoint.fetch(bCkptPda);
-    expect(bCkpt.count.toString()).to.eq("1");
-    expect(bCkpt.account.toBase58()).to.eq(userB.toBase58());
-
-    const deleg = await program.account.roleDelegation.fetch(delegationPda);
-    expect(deleg.delegatee.toBase58()).to.eq(userB.toBase58());
+    const bAfterRepeat =
+      await program.account.roleVoteCheckpoint.fetch(bCkptPda);
+    expect(bAfterRepeat.count.toString()).to.eq("1");
   });
 
   it("authority walk authorizes ancestor over deep descendant", async () => {

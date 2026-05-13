@@ -57,7 +57,11 @@ async function ensureTemplate(
   factory: Program<AeqiFactory>,
   templateId: Uint8Array,
   label: string,
-  modules: { moduleId: Uint8Array; programId: PublicKey; trustAcl: anchor.BN }[],
+  modules: {
+    moduleId: Uint8Array;
+    programId: PublicKey;
+    trustAcl: anchor.BN;
+  }[],
   admin: PublicKey,
 ): Promise<{ pda: PublicKey; created: boolean }> {
   const [pda] = PublicKey.findProgramAddressSync(
@@ -121,8 +125,16 @@ async function main() {
     "BASIC",
     [
       { moduleId: MODULE_ROLE, programId: role.programId, trustAcl: FULL_ACL },
-      { moduleId: MODULE_TOKEN, programId: token.programId, trustAcl: FULL_ACL },
-      { moduleId: MODULE_GOV, programId: governance.programId, trustAcl: FULL_ACL },
+      {
+        moduleId: MODULE_TOKEN,
+        programId: token.programId,
+        trustAcl: FULL_ACL,
+      },
+      {
+        moduleId: MODULE_GOV,
+        programId: governance.programId,
+        trustAcl: FULL_ACL,
+      },
     ],
     provider.wallet.publicKey,
   );
@@ -133,10 +145,26 @@ async function main() {
     "VENTURE",
     [
       { moduleId: MODULE_ROLE, programId: role.programId, trustAcl: FULL_ACL },
-      { moduleId: MODULE_TOKEN, programId: token.programId, trustAcl: FULL_ACL },
-      { moduleId: MODULE_GOV, programId: governance.programId, trustAcl: FULL_ACL },
-      { moduleId: MODULE_TREASURY, programId: treasury.programId, trustAcl: FULL_ACL },
-      { moduleId: MODULE_VESTING, programId: vesting.programId, trustAcl: FULL_ACL },
+      {
+        moduleId: MODULE_TOKEN,
+        programId: token.programId,
+        trustAcl: FULL_ACL,
+      },
+      {
+        moduleId: MODULE_GOV,
+        programId: governance.programId,
+        trustAcl: FULL_ACL,
+      },
+      {
+        moduleId: MODULE_TREASURY,
+        programId: treasury.programId,
+        trustAcl: FULL_ACL,
+      },
+      {
+        moduleId: MODULE_VESTING,
+        programId: vesting.programId,
+        trustAcl: FULL_ACL,
+      },
     ],
     provider.wallet.publicKey,
   );

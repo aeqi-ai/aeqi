@@ -118,6 +118,7 @@ pub mod aeqi_role {
     /// auto-self-delegates voting power.
     pub fn assign_role(ctx: Context<AssignRole>, account: Pubkey) -> Result<()> {
         let role = &mut ctx.accounts.role;
+        require_role_type_matches(role, &ctx.accounts.role_type)?;
         require!(role.status == RoleStatus::Vacant as u8, AeqiRoleError::RoleNotVacant);
         role.account = account;
         role.status = RoleStatus::Occupied as u8;
@@ -140,6 +141,7 @@ pub mod aeqi_role {
     /// Occupied; an authorized parent can re-assign or remove it.
     pub fn resign_role(ctx: Context<ResignRole>) -> Result<()> {
         let role = &mut ctx.accounts.role;
+        require_role_type_matches(role, &ctx.accounts.role_type)?;
         require!(role.status == RoleStatus::Occupied as u8, AeqiRoleError::RoleNotOccupied);
         require_keys_eq!(ctx.accounts.payer.key(), role.account, AeqiRoleError::Unauthorized);
 
@@ -164,6 +166,12 @@ pub mod aeqi_role {
     /// checkpoint.
     pub fn transfer_role(ctx: Context<TransferRole>, new_account: Pubkey) -> Result<()> {
         let role = &mut ctx.accounts.role;
+        require_role_type_matches(role, &ctx.accounts.role_type)?;
+        require_keys_eq!(
+            ctx.accounts.new_account.key(),
+            new_account,
+            AeqiRoleError::InvalidDelegatee
+        );
         require!(role.status == RoleStatus::Occupied as u8, AeqiRoleError::RoleNotOccupied);
         require_keys_eq!(ctx.accounts.payer.key(), role.account, AeqiRoleError::Unauthorized);
 
@@ -198,24 +206,40 @@ pub mod aeqi_role {
     /// previous delegatee's checkpoint and increments the new delegatee's.
     pub fn delegate_role(ctx: Context<DelegateRole>, delegatee: Pubkey) -> Result<()> {
         let role = &ctx.accounts.role;
+        require_role_type_matches(role, &ctx.accounts.role_type)?;
+        require!(delegatee != Pubkey::default(), AeqiRoleError::InvalidDelegatee);
+        require_keys_eq!(
+            ctx.accounts.new_delegatee.key(),
+            delegatee,
+            AeqiRoleError::InvalidDelegatee
+        );
         require!(role.status == RoleStatus::Occupied as u8, AeqiRoleError::RoleNotOccupied);
         require_keys_eq!(ctx.accounts.payer.key(), role.account, AeqiRoleError::Unauthorized);
 
         let deleg = &mut ctx.accounts.delegation;
-        let prev = deleg.delegatee;
+        let prev =
+            if deleg.delegatee == Pubkey::default() { role.account } else { deleg.delegatee };
+        if prev == delegatee {
+            deleg.trust = role.trust;
+            deleg.role_id = role.role_id;
+            deleg.delegatee = delegatee;
+            deleg.bump = ctx.bumps.delegation;
+            emit!(RoleDelegated {
+                trust: role.trust,
+                role_id: role.role_id,
+                from: prev,
+                to: delegatee,
+            });
+            return Ok(());
+        }
         deleg.trust = role.trust;
         deleg.role_id = role.role_id;
         deleg.delegatee = delegatee;
         deleg.bump = ctx.bumps.delegation;
 
-        if prev != Pubkey::default() && prev != delegatee {
-            let prev_ckpt = ctx
-                .accounts
-                .prev_checkpoint
-                .as_mut()
-                .ok_or(AeqiRoleError::PrevCheckpointRequired)?;
-            bump_checkpoint(prev_ckpt, prev, ctx.accounts.role_type.role_type_id, -1)?;
-        }
+        let prev_ckpt =
+            ctx.accounts.prev_checkpoint.as_mut().ok_or(AeqiRoleError::PrevCheckpointRequired)?;
+        bump_checkpoint(prev_ckpt, prev, ctx.accounts.role_type.role_type_id, -1)?;
         bump_checkpoint(
             &mut ctx.accounts.new_checkpoint,
             delegatee,
@@ -321,6 +345,12 @@ fn bump_checkpoint(
         ckpt.count =
             ckpt.count.checked_sub((-delta) as u64).ok_or(error!(AeqiRoleError::MathOverflow))?;
     }
+    Ok(())
+}
+
+fn require_role_type_matches(role: &Role, role_type: &RoleType) -> Result<()> {
+    require_keys_eq!(role_type.trust, role.trust, AeqiRoleError::RoleTypeMismatch);
+    require!(role_type.role_type_id == role.role_type_id, AeqiRoleError::RoleTypeMismatch);
     Ok(())
 }
 

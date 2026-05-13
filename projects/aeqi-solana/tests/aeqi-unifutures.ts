@@ -78,7 +78,9 @@ describe("aeqi_unifutures", () => {
     const c = await program.account.bondingCurve.fetch(curvePda);
     expect(c.curveType).to.eq(0);
     expect(c.startPrice.toString()).to.eq(PRECISION.toString());
-    expect(c.endPrice.toString()).to.eq(PRECISION.mul(new anchor.BN(2)).toString());
+    expect(c.endPrice.toString()).to.eq(
+      PRECISION.mul(new anchor.BN(2)).toString(),
+    );
     expect(c.maxSupply.toString()).to.eq("1000");
     expect(c.currentSupply.toString()).to.eq("0");
     expect(c.reserveRatioPpm).to.eq(900_000);
@@ -136,7 +138,11 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     const [curveAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("curve_authority"), fakeTrust.toBuffer(), Buffer.from(curveId)],
+      [
+        Buffer.from("curve_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(curveId),
+      ],
       program.programId,
     );
 
@@ -305,16 +311,36 @@ describe("aeqi_unifutures", () => {
     //   buyer asset = 100, buyer quote = 200 - 105 = 95
     //   curve asset vault = 1000 - 100 = 900, curve quote vault = 105
     //   curve.current_supply = 100, curve.reserve_balance = 105
-    const buyerAsset = await getAccount(provider.connection, buyerAssetAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const buyerAsset = await getAccount(
+      provider.connection,
+      buyerAssetAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(buyerAsset.amount.toString()).to.eq("100");
 
-    const buyerQuote = await getAccount(provider.connection, buyerQuoteAta, undefined, TOKEN_2022_PROGRAM_ID);
+    const buyerQuote = await getAccount(
+      provider.connection,
+      buyerQuoteAta,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(buyerQuote.amount.toString()).to.eq("95");
 
-    const vaultAsset = await getAccount(provider.connection, curveAssetVault, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultAsset = await getAccount(
+      provider.connection,
+      curveAssetVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultAsset.amount.toString()).to.eq("900");
 
-    const vaultQuote = await getAccount(provider.connection, curveQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultQuote = await getAccount(
+      provider.connection,
+      curveQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultQuote.amount.toString()).to.eq("105");
 
     const c = await program.account.bondingCurve.fetch(curvePda);
@@ -337,7 +363,11 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     const [curveAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("curve_authority"), fakeTrust.toBuffer(), Buffer.from(curveId)],
+      [
+        Buffer.from("curve_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(curveId),
+      ],
       program.programId,
     );
 
@@ -523,16 +553,36 @@ describe("aeqi_unifutures", () => {
     //   curve quote vault = 105 - 47 = 58
     //   curve.current_supply = 50
     //   curve.reserve_balance = 105 - 47 = 58
-    const traderAsset = await getAccount(provider.connection, traderAssetTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const traderAsset = await getAccount(
+      provider.connection,
+      traderAssetTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(traderAsset.amount.toString()).to.eq("50");
 
-    const traderQuote = await getAccount(provider.connection, traderQuoteTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const traderQuote = await getAccount(
+      provider.connection,
+      traderQuoteTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(traderQuote.amount.toString()).to.eq("142");
 
-    const vaultAsset = await getAccount(provider.connection, curveAssetVault, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultAsset = await getAccount(
+      provider.connection,
+      curveAssetVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultAsset.amount.toString()).to.eq("950");
 
-    const vaultQuote = await getAccount(provider.connection, curveQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultQuote = await getAccount(
+      provider.connection,
+      curveQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vaultQuote.amount.toString()).to.eq("58");
 
     const c = await program.account.bondingCurve.fetch(curvePda);
@@ -670,7 +720,11 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     const [saleAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("sale_authority"), fakeTrust.toBuffer(), Buffer.from(saleId)],
+      [
+        Buffer.from("sale_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(saleId),
+      ],
       program.programId,
     );
 
@@ -787,7 +841,12 @@ describe("aeqi_unifutures", () => {
     expect(c.amount.toString()).to.eq("1500");
     expect(c.buyer.toBase58()).to.eq(buyer.toBase58());
 
-    let vault = await getAccount(provider.connection, saleQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    let vault = await getAccount(
+      provider.connection,
+      saleQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("1500");
 
     // Second commit: 500 (accumulates)
@@ -812,11 +871,21 @@ describe("aeqi_unifutures", () => {
     c = await program.account.saleCommitment.fetch(commitmentPda);
     expect(c.amount.toString()).to.eq("2000");
 
-    vault = await getAccount(provider.connection, saleQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    vault = await getAccount(
+      provider.connection,
+      saleQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("2000");
 
     // Buyer left with 1000 (3000 - 2000)
-    const buyerAcct = await getAccount(provider.connection, buyerQuoteTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const buyerAcct = await getAccount(
+      provider.connection,
+      buyerQuoteTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(buyerAcct.amount.toString()).to.eq("1000");
   });
 
@@ -832,7 +901,11 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     const [exitAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("exit_authority"), fakeTrust.toBuffer(), Buffer.from(exitId)],
+      [
+        Buffer.from("exit_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(exitId),
+      ],
       program.programId,
     );
 
@@ -978,7 +1051,12 @@ describe("aeqi_unifutures", () => {
     let e = await program.account.exit.fetch(exitPda);
     expect(e.proceedsCollected.toString()).to.eq(String(EXIT_QUOTE));
 
-    let vault = await getAccount(provider.connection, exitQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    let vault = await getAccount(
+      provider.connection,
+      exitQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq(String(EXIT_QUOTE));
 
     // Now claim_pro_rata: burn 100, expect share = 1000
@@ -1000,13 +1078,28 @@ describe("aeqi_unifutures", () => {
     e = await program.account.exit.fetch(exitPda);
     expect(e.remainingProceeds.toString()).to.eq("9000");
 
-    const holderAsset = await getAccount(provider.connection, holderAssetTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const holderAsset = await getAccount(
+      provider.connection,
+      holderAssetTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(holderAsset.amount.toString()).to.eq("900"); // 1000 - 100 burned
 
-    const holderQuote = await getAccount(provider.connection, creatorQuoteTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const holderQuote = await getAccount(
+      provider.connection,
+      creatorQuoteTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(holderQuote.amount.toString()).to.eq("1000"); // started 0 (creator gave it all to vault), got 1000 back
 
-    vault = await getAccount(provider.connection, exitQuoteVault, undefined, TOKEN_2022_PROGRAM_ID);
+    vault = await getAccount(
+      provider.connection,
+      exitQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("9000");
   });
 
@@ -1025,7 +1118,11 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     const [saleAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("sale_authority"), fakeTrust.toBuffer(), Buffer.from(saleId)],
+      [
+        Buffer.from("sale_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(saleId),
+      ],
       program.programId,
     );
 
@@ -1085,7 +1182,10 @@ describe("aeqi_unifutures", () => {
 
     const buyerA = provider.wallet.publicKey;
     const buyerB = Keypair.generate();
-    const sigB = await provider.connection.requestAirdrop(buyerB.publicKey, 1e9);
+    const sigB = await provider.connection.requestAirdrop(
+      buyerB.publicKey,
+      1e9,
+    );
     await provider.connection.confirmTransaction(sigB);
 
     const aQuoteTa = getAssociatedTokenAddressSync(
@@ -1218,11 +1318,21 @@ describe("aeqi_unifutures", () => {
 
     // Both buyers commit
     const [aCommitmentPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("sale_commitment"), fakeTrust.toBuffer(), Buffer.from(saleId), buyerA.toBuffer()],
+      [
+        Buffer.from("sale_commitment"),
+        fakeTrust.toBuffer(),
+        Buffer.from(saleId),
+        buyerA.toBuffer(),
+      ],
       program.programId,
     );
     const [bCommitmentPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("sale_commitment"), fakeTrust.toBuffer(), Buffer.from(saleId), buyerB.publicKey.toBuffer()],
+      [
+        Buffer.from("sale_commitment"),
+        fakeTrust.toBuffer(),
+        Buffer.from(saleId),
+        buyerB.publicKey.toBuffer(),
+      ],
       program.programId,
     );
 
@@ -1300,13 +1410,28 @@ describe("aeqi_unifutures", () => {
       .rpc();
 
     // Buyer A: 600, Buyer B: 400, sum = 1000 = asset_amount
-    const aAsset = await getAccount(provider.connection, aAssetTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const aAsset = await getAccount(
+      provider.connection,
+      aAssetTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(aAsset.amount.toString()).to.eq("600");
-    const bAsset = await getAccount(provider.connection, bAssetTa, undefined, TOKEN_2022_PROGRAM_ID);
+    const bAsset = await getAccount(
+      provider.connection,
+      bAssetTa,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(bAsset.amount.toString()).to.eq("400");
 
     // Vault drained
-    const vault = await getAccount(provider.connection, saleAssetVault, undefined, TOKEN_2022_PROGRAM_ID);
+    const vault = await getAccount(
+      provider.connection,
+      saleAssetVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     expect(vault.amount.toString()).to.eq("0");
 
     // Commitments zeroed
@@ -1361,11 +1486,19 @@ describe("aeqi_unifutures", () => {
       program.programId,
     );
     const [poolAuthorityPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("pool_authority"), fakeTrust.toBuffer(), Buffer.from(poolId)],
+      [
+        Buffer.from("pool_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(poolId),
+      ],
       program.programId,
     );
     const [positionPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("pool_position"), poolPda.toBuffer(), provider.wallet.publicKey.toBuffer()],
+      [
+        Buffer.from("pool_position"),
+        poolPda.toBuffer(),
+        provider.wallet.publicKey.toBuffer(),
+      ],
       program.programId,
     );
 

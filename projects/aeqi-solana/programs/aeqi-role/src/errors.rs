@@ -18,6 +18,10 @@ pub enum AeqiRoleError {
     CheckpointAfterQuery,
     #[msg("prev_checkpoint required when re-delegating away from a prior delegatee")]
     PrevCheckpointRequired,
+    #[msg("delegatee cannot be the default pubkey")]
+    InvalidDelegatee,
+    #[msg("role type does not match the role")]
+    RoleTypeMismatch,
     #[msg("math overflow")]
     MathOverflow,
 }
