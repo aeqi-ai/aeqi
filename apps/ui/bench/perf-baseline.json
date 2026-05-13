@@ -1,0 +1,1018 @@
+{
+  "_comment": "Per-chunk gzipped sizes after vite build. Stable names (Vite content-hash stripped). Regenerate with `npm run perf:update-baseline` after a deliberate code-split or dependency shift.",
+  "capturedAt": "2026-05-13",
+  "totalGz": 1938062,
+  "totalRaw": 7284327,
+  "regressionPct": 10,
+  "newChunkFloorKb": 50,
+  "chunks": {
+    "wallet-metamask-sdk.js": {
+      "bytes": 549041,
+      "gz": 167671
+    },
+    "en_US-Y4ZOVFV4.js": {
+      "bytes": 433390,
+      "gz": 137934
+    },
+    "editor-prosemirror.js": {
+      "bytes": 441985,
+      "gz": 137930
+    },
+    "core.js": {
+      "bytes": 498137,
+      "gz": 135646
+    },
+    "index.es.js": {
+      "bytes": 417588,
+      "gz": 120632
+    },
+    "markdown.js": {
+      "bytes": 375581,
+      "gz": 114413
+    },
+    "index.js": {
+      "bytes": 346213,
+      "gz": 102070
+    },
+    "editor-blocknote-ui.js": {
+      "bytes": 333856,
+      "gz": 97873
+    },
+    "native.js": {
+      "bytes": 432754,
+      "gz": 82798
+    },
+    "react-vendor.js": {
+      "bytes": 232878,
+      "gz": 74410
+    },
+    "editor-blocknote-core.js": {
+      "bytes": 228267,
+      "gz": 68424
+    },
+    "Macos-MW4AE7LN.js": {
+      "bytes": 49680,
+      "gz": 35824
+    },
+    "useBalance.js": {
+      "bytes": 120025,
+      "gz": 33904
+    },
+    "basic.js": {
+      "bytes": 143620,
+      "gz": 33357
+    },
+    "wallet-metamask-core.js": {
+      "bytes": 97044,
+      "gz": 33254
+    },
+    "module.js": {
+      "bytes": 77285,
+      "gz": 27784
+    },
+    "data-viz.js": {
+      "bytes": 58303,
+      "gz": 20098
+    },
+    "WalletProvider.js": {
+      "bytes": 55591,
+      "gz": 17077
+    },
+    "sanko-RHQYXGM5.js": {
+      "bytes": 21925,
+      "gz": 16453
+    },
+    "Linux-OO4TNCLJ.js": {
+      "bytes": 91134,
+      "gz": 14883
+    },
+    "SessionDetail.js": {
+      "bytes": 45605,
+      "gz": 14163
+    },
+    "secp256k1.js": {
+      "bytes": 31911,
+      "gz": 12810
+    },
+    "AgentQuestsTab.js": {
+      "bytes": 42204,
+      "gz": 11157
+    },
+    "AgentEventsTab.js": {
+      "bytes": 39697,
+      "gz": 10962
+    },
+    "IdeaCanvas.js": {
+      "bytes": 35840,
+      "gz": 10719
+    },
+    "ProfilePanel.js": {
+      "bytes": 34276,
+      "gz": 10371
+    },
+    "w3m-modal.js": {
+      "bytes": 40534,
+      "gz": 9624
+    },
+    "AgentIdeasTab.js": {
+      "bytes": 26411,
+      "gz": 8031
+    },
+    "hi_IN-XSKAA3MF.js": {
+      "bytes": 107997,
+      "gz": 7960
+    },
+    "th_TH-3ZQCKCQE.js": {
+      "bytes": 104066,
+      "gz": 7526
+    },
+    "ru_RU-IITAPRET.js": {
+      "bytes": 88789,
+      "gz": 6851
+    },
+    "EntityRolesTab.js": {
+      "bytes": 23213,
+      "gz": 6717
+    },
+    "ja_JP-4WRQ63RX.js": {
+      "bytes": 72046,
+      "gz": 6464
+    },
+    "ko_KR-I2K7AIEP.js": {
+      "bytes": 63976,
+      "gz": 6395
+    },
+    "uk_UA-SSN6SV5E.js": {
+      "bytes": 87228,
+      "gz": 6175
+    },
+    "SecurityPanel.js": {
+      "bytes": 16497,
+      "gz": 6164
+    },
+    "hooks.module.js": {
+      "bytes": 15352,
+      "gz": 6150
+    },
+    "ar_AR-44JUQ6EW.js": {
+      "bytes": 69613,
+      "gz": 6056
+    },
+    "AgentSettingsPage.js": {
+      "bytes": 17434,
+      "gz": 5978
+    },
+    "zh_CN-HJBN674C.js": {
+      "bytes": 53478,
+      "gz": 5647
+    },
+    "tr_TR-QUPUGMUF.js": {
+      "bytes": 61980,
+      "gz": 5626
+    },
+    "es_419-HRGOJ6VT.js": {
+      "bytes": 60297,
+      "gz": 5529
+    },
+    "AdminPage.js": {
+      "bytes": 19564,
+      "gz": 5496
+    },
+    "fr_FR-IGGVC6RM.js": {
+      "bytes": 66055,
+      "gz": 5483
+    },
+    "de_DE-PYAO5YD6.js": {
+      "bytes": 65394,
+      "gz": 5433
+    },
+    "id_ID-KUOB4UAL.js": {
+      "bytes": 58818,
+      "gz": 5393
+    },
+    "zh_HK-JW3WLRKE.js": {
+      "bytes": 54339,
+      "gz": 5364
+    },
+    "vi_VN-7BUVRNYY.js": {
+      "bytes": 67433,
+      "gz": 5339
+    },
+    "zh_TW-VNNRNXY7.js": {
+      "bytes": 53480,
+      "gz": 5307
+    },
+    "pt_BR-N3XOZ4SV.js": {
+      "bytes": 59959,
+      "gz": 5167
+    },
+    "IdeasGraphView.js": {
+      "bytes": 11955,
+      "gz": 5072
+    },
+    "ms_MY-6VZW6Q3Z.js": {
+      "bytes": 59650,
+      "gz": 5031
+    },
+    "TreasuryPage.js": {
+      "bytes": 14685,
+      "gz": 4989
+    },
+    "AgentSessionView.js": {
+      "bytes": 13113,
+      "gz": 4958
+    },
+    "MeInboxPage.js": {
+      "bytes": 15207,
+      "gz": 4851
+    },
+    "BlueprintsPage.js": {
+      "bytes": 13759,
+      "gz": 4771
+    },
+    "AgentChannelsTab.js": {
+      "bytes": 13160,
+      "gz": 4736
+    },
+    "sign-A7IJEUT5.js": {
+      "bytes": 5549,
+      "gz": 4228
+    },
+    "EntityAgentsTab.js": {
+      "bytes": 11367,
+      "gz": 4125
+    },
+    "assets-Q6ZU7ZJ5.js": {
+      "bytes": 23619,
+      "gz": 4101
+    },
+    "CompanySetupPage.js": {
+      "bytes": 11521,
+      "gz": 3894
+    },
+    "Composer.js": {
+      "bytes": 10604,
+      "gz": 3766
+    },
+    "Safari-ZPL37GXR.js": {
+      "bytes": 13751,
+      "gz": 3754
+    },
+    "Firefox-AAHGJQIP.js": {
+      "bytes": 15189,
+      "gz": 3392
+    },
+    "IntegrationsPanel.js": {
+      "bytes": 9846,
+      "gz": 3065
+    },
+    "login-UP3DZBGS.js": {
+      "bytes": 11995,
+      "gz": 2976
+    },
+    "BlueprintDetailPage.js": {
+      "bytes": 10710,
+      "gz": 2957
+    },
+    "OwnershipPage.js": {
+      "bytes": 8702,
+      "gz": 2557
+    },
+    "GovernancePage.js": {
+      "bytes": 7044,
+      "gz": 2493
+    },
+    "BillingPanel.js": {
+      "bytes": 6239,
+      "gz": 2350
+    },
+    "RoleDetailPage.js": {
+      "bytes": 7530,
+      "gz": 2320
+    },
+    "mantle-CKIUT334.js": {
+      "bytes": 5269,
+      "gz": 2254
+    },
+    "DevicesPanel.js": {
+      "bytes": 6539,
+      "gz": 2194
+    },
+    "Browser-76IHF3Y2.js": {
+      "bytes": 11824,
+      "gz": 2183
+    },
+    "EntityOverviewTab.js": {
+      "bytes": 7497,
+      "gz": 2150
+    },
+    "WalletsPanel.js": {
+      "bytes": 4910,
+      "gz": 2092
+    },
+    "RoleNewPage.js": {
+      "bytes": 6892,
+      "gz": 2031
+    },
+    "SessionsRail.js": {
+      "bytes": 5472,
+      "gz": 2024
+    },
+    "InvitationAcceptPage.js": {
+      "bytes": 6189,
+      "gz": 1975
+    },
+    "walletconnect.js": {
+      "bytes": 4538,
+      "gz": 1916
+    },
+    "RoleInvitePage.js": {
+      "bytes": 5900,
+      "gz": 1893
+    },
+    "DrivePage.js": {
+      "bytes": 4086,
+      "gz": 1803
+    },
+    "RoleEditPage.js": {
+      "bytes": 5493,
+      "gz": 1780
+    },
+    "image.js": {
+      "bytes": 3971,
+      "gz": 1779
+    },
+    "AgentOverviewTab.js": {
+      "bytes": 5933,
+      "gz": 1758
+    },
+    "copy.js": {
+      "bytes": 4295,
+      "gz": 1742
+    },
+    "EntityHeroStrip.js": {
+      "bytes": 4863,
+      "gz": 1734
+    },
+    "CommandPalette.js": {
+      "bytes": 4138,
+      "gz": 1701
+    },
+    "ComposerRow.js": {
+      "bytes": 3915,
+      "gz": 1689
+    },
+    "BlueprintPickerModal.js": {
+      "bytes": 3952,
+      "gz": 1643
+    },
+    "IdeasKanbanView.js": {
+      "bytes": 3684,
+      "gz": 1640
+    },
+    "PublicProfilePage.js": {
+      "bytes": 5047,
+      "gz": 1632
+    },
+    "Arc-VDBY7LNS.js": {
+      "bytes": 6622,
+      "gz": 1624
+    },
+    "CompanyPage.js": {
+      "bytes": 4248,
+      "gz": 1588
+    },
+    "send.js": {
+      "bytes": 2902,
+      "gz": 1551
+    },
+    "types.js": {
+      "bytes": 3223,
+      "gz": 1519
+    },
+    "lightbulb.js": {
+      "bytes": 3193,
+      "gz": 1488
+    },
+    "Brave-BRAKJXDS.js": {
+      "bytes": 4260,
+      "gz": 1485
+    },
+    "card.js": {
+      "bytes": 3069,
+      "gz": 1432
+    },
+    "SessionsToolbar.js": {
+      "bytes": 3543,
+      "gz": 1420
+    },
+    "info.js": {
+      "bytes": 2741,
+      "gz": 1411
+    },
+    "AgentsPage.js": {
+      "bytes": 3036,
+      "gz": 1405
+    },
+    "exclamation-triangle.js": {
+      "bytes": 2899,
+      "gz": 1397
+    },
+    "frontmatter.js": {
+      "bytes": 2757,
+      "gz": 1368
+    },
+    "ccip.js": {
+      "bytes": 2864,
+      "gz": 1363
+    },
+    "ProfilePage.js": {
+      "bytes": 3330,
+      "gz": 1360
+    },
+    "hardhat-TX56IT5N.js": {
+      "bytes": 4200,
+      "gz": 1352
+    },
+    "useTreasury.js": {
+      "bytes": 2698,
+      "gz": 1341
+    },
+    "Edge-XSPUTORV.js": {
+      "bytes": 5820,
+      "gz": 1335
+    },
+    "manta-SI27YFEJ.js": {
+      "bytes": 3199,
+      "gz": 1329
+    },
+    "reown-logo.js": {
+      "bytes": 3082,
+      "gz": 1327
+    },
+    "BlueprintTreePreview.js": {
+      "bytes": 3140,
+      "gz": 1317
+    },
+    "ApiKeyPanel.js": {
+      "bytes": 2913,
+      "gz": 1297
+    },
+    "chrome-store.js": {
+      "bytes": 3069,
+      "gz": 1250
+    },
+    "berachain-NJECWIVC.js": {
+      "bytes": 3776,
+      "gz": 1246
+    },
+    "metaMaskWallet-SITXT2FV.js": {
+      "bytes": 8512,
+      "gz": 1227
+    },
+    "VerifyEmailPage.js": {
+      "bytes": 2661,
+      "gz": 1221
+    },
+    "ronin-EMCPYXZT.js": {
+      "bytes": 2669,
+      "gz": 1200
+    },
+    "indexer.js": {
+      "bytes": 2995,
+      "gz": 1191
+    },
+    "scan-4UYSQ56Q.js": {
+      "bytes": 4586,
+      "gz": 1158
+    },
+    "rabbyWallet-GFVPHCTK.js": {
+      "bytes": 3162,
+      "gz": 1155
+    },
+    "nftPlaceholder.js": {
+      "bytes": 2229,
+      "gz": 1112
+    },
+    "create-FASO7PVG.js": {
+      "bytes": 4328,
+      "gz": 1094
+    },
+    "AgentSurfaceHeader.js": {
+      "bytes": 2823,
+      "gz": 1085
+    },
+    "blueprintStructures.js": {
+      "bytes": 2327,
+      "gz": 1081
+    },
+    "connect-UA7M4XW6.js": {
+      "bytes": 3545,
+      "gz": 1080
+    },
+    "ResetPasswordPage.js": {
+      "bytes": 2319,
+      "gz": 1078
+    },
+    "telegram.js": {
+      "bytes": 1930,
+      "gz": 1071
+    },
+    "IdeasTableView.js": {
+      "bytes": 2383,
+      "gz": 1053
+    },
+    "id.js": {
+      "bytes": 2226,
+      "gz": 1049
+    },
+    "browser.js": {
+      "bytes": 2057,
+      "gz": 1029
+    },
+    "ChangePasswordPage.js": {
+      "bytes": 2344,
+      "gz": 1025
+    },
+    "MentionText.js": {
+      "bytes": 2063,
+      "gz": 1018
+    },
+    "scroll-5OBGQVOV.js": {
+      "bytes": 2632,
+      "gz": 1016
+    },
+    "swapHorizontalRoundedBold.js": {
+      "bytes": 1934,
+      "gz": 1011
+    },
+    "network-placeholder.js": {
+      "bytes": 2132,
+      "gz": 971
+    },
+    "refresh-S4T5V5GX.js": {
+      "bytes": 3004,
+      "gz": 953
+    },
+    "ShortcutsOverlay.js": {
+      "bytes": 2418,
+      "gz": 951
+    },
+    "verify.js": {
+      "bytes": 1950,
+      "gz": 950
+    },
+    "recycle-horizontal.js": {
+      "bytes": 1823,
+      "gz": 946
+    },
+    "extension.js": {
+      "bytes": 1908,
+      "gz": 935
+    },
+    "swapHorizontalMedium.js": {
+      "bytes": 1782,
+      "gz": 917
+    },
+    "app-store.js": {
+      "bytes": 1676,
+      "gz": 910
+    },
+    "mail.js": {
+      "bytes": 1684,
+      "gz": 892
+    },
+    "isAddressEqual.js": {
+      "bytes": 1922,
+      "gz": 891
+    },
+    "discord.js": {
+      "bytes": 1779,
+      "gz": 888
+    },
+    "layout.js": {
+      "bytes": 1979,
+      "gz": 883
+    },
+    "desktop.js": {
+      "bytes": 1751,
+      "gz": 881
+    },
+    "facebook.js": {
+      "bytes": 1712,
+      "gz": 879
+    },
+    "MagicLinkPage.js": {
+      "bytes": 1955,
+      "gz": 859
+    },
+    "arbitrum-WURIBY6W.js": {
+      "bytes": 2591,
+      "gz": 858
+    },
+    "swapHorizontalBold.js": {
+      "bytes": 1642,
+      "gz": 858
+    },
+    "InvitesPanel.js": {
+      "bytes": 1681,
+      "gz": 836
+    },
+    "github.js": {
+      "bytes": 1608,
+      "gz": 833
+    },
+    "wallet-placeholder.js": {
+      "bytes": 1742,
+      "gz": 819
+    },
+    "BlockEditor.js": {
+      "bytes": 1511,
+      "gz": 805
+    },
+    "arrow-bottom-circle.js": {
+      "bytes": 1607,
+      "gz": 764
+    },
+    "apple.js": {
+      "bytes": 1437,
+      "gz": 760
+    },
+    "farcaster.js": {
+      "bytes": 1494,
+      "gz": 758
+    },
+    "Opera-KQZLSACL.js": {
+      "bytes": 2096,
+      "gz": 757
+    },
+    "bank.js": {
+      "bytes": 1420,
+      "gz": 757
+    },
+    "qr-code.js": {
+      "bytes": 1994,
+      "gz": 755
+    },
+    "play-store.js": {
+      "bytes": 1485,
+      "gz": 752
+    },
+    "IdeasToolbar.js": {
+      "bytes": 1573,
+      "gz": 746
+    },
+    "disconnect.js": {
+      "bytes": 1366,
+      "gz": 738
+    },
+    "gravity-J5YQHTYH.js": {
+      "bytes": 1538,
+      "gz": 738
+    },
+    "blast-V555OVXZ.js": {
+      "bytes": 1670,
+      "gz": 732
+    },
+    "i18n.js": {
+      "bytes": 1665,
+      "gz": 730
+    },
+    "twitch.js": {
+      "bytes": 1377,
+      "gz": 727
+    },
+    "gnosis-37ZC4RBL.js": {
+      "bytes": 1796,
+      "gz": 722
+    },
+    "degen-FQQ4XGHB.js": {
+      "bytes": 1486,
+      "gz": 717
+    },
+    "pricing.js": {
+      "bytes": 1488,
+      "gz": 715
+    },
+    "checkmark.js": {
+      "bytes": 1183,
+      "gz": 708
+    },
+    "ideas.js": {
+      "bytes": 1494,
+      "gz": 707
+    },
+    "clock.js": {
+      "bytes": 1318,
+      "gz": 706
+    },
+    "chat.js": {
+      "bytes": 1873,
+      "gz": 704
+    },
+    "AgentPage.js": {
+      "bytes": 1399,
+      "gz": 696
+    },
+    "verify-filled.js": {
+      "bytes": 1245,
+      "gz": 696
+    },
+    "google.js": {
+      "bytes": 1290,
+      "gz": 682
+    },
+    "etherscan.js": {
+      "bytes": 1182,
+      "gz": 678
+    },
+    "PasswordInput.js": {
+      "bytes": 1362,
+      "gz": 673
+    },
+    "kaia-65D2U3PU.js": {
+      "bytes": 1481,
+      "gz": 666
+    },
+    "avalanche-KOMJD3XY.js": {
+      "bytes": 1268,
+      "gz": 663
+    },
+    "checkmark-bold.js": {
+      "bytes": 1126,
+      "gz": 663
+    },
+    "add.js": {
+      "bytes": 1247,
+      "gz": 656
+    },
+    "help-circle.js": {
+      "bytes": 1191,
+      "gz": 653
+    },
+    "plus.js": {
+      "bytes": 1242,
+      "gz": 648
+    },
+    "wallet.js": {
+      "bytes": 1198,
+      "gz": 641
+    },
+    "apechain-SX5YFU6N.js": {
+      "bytes": 1459,
+      "gz": 636
+    },
+    "three-dots.js": {
+      "bytes": 1317,
+      "gz": 635
+    },
+    "polygon-WW6ZI7PM.js": {
+      "bytes": 1530,
+      "gz": 626
+    },
+    "format.js": {
+      "bytes": 1507,
+      "gz": 624
+    },
+    "x.js": {
+      "bytes": 1047,
+      "gz": 618
+    },
+    "bsc-N647EYR2.js": {
+      "bytes": 1587,
+      "gz": 613
+    },
+    "cronos-HJPAQTAE.js": {
+      "bytes": 1520,
+      "gz": 613
+    },
+    "ink-FZMYZWHG.js": {
+      "bytes": 1382,
+      "gz": 610
+    },
+    "twitterIcon.js": {
+      "bytes": 1062,
+      "gz": 605
+    },
+    "xdc-KJ3TDBYO.js": {
+      "bytes": 1311,
+      "gz": 596
+    },
+    "zora-FYL5H3IO.js": {
+      "bytes": 2681,
+      "gz": 591
+    },
+    "Chrome-65Q5P54Y.js": {
+      "bytes": 1723,
+      "gz": 583
+    },
+    "cursor-transparent.js": {
+      "bytes": 1058,
+      "gz": 576
+    },
+    "coinPlaceholder.js": {
+      "bytes": 981,
+      "gz": 572
+    },
+    "compass.js": {
+      "bytes": 1001,
+      "gz": 563
+    },
+    "swapVertical.js": {
+      "bytes": 1025,
+      "gz": 557
+    },
+    "ToolbarRadioPopover.js": {
+      "bytes": 1146,
+      "gz": 555
+    },
+    "WalletBoundary.js": {
+      "bytes": 1054,
+      "gz": 553
+    },
+    "swapHorizontal.js": {
+      "bytes": 1029,
+      "gz": 551
+    },
+    "superposition-HG6MMR2Y.js": {
+      "bytes": 988,
+      "gz": 550
+    },
+    "refresh.js": {
+      "bytes": 968,
+      "gz": 548
+    },
+    "mobile.js": {
+      "bytes": 1072,
+      "gz": 545
+    },
+    "warning-circle.js": {
+      "bytes": 975,
+      "gz": 534
+    },
+    "more.js": {
+      "bytes": 968,
+      "gz": 524
+    },
+    "search.js": {
+      "bytes": 916,
+      "gz": 520
+    },
+    "info-circle.js": {
+      "bytes": 952,
+      "gz": 516
+    },
+    "close.js": {
+      "bytes": 919,
+      "gz": 511
+    },
+    "off.js": {
+      "bytes": 912,
+      "gz": 508
+    },
+    "arrow-right.js": {
+      "bytes": 894,
+      "gz": 507
+    },
+    "arrow-bottom.js": {
+      "bytes": 892,
+      "gz": 505
+    },
+    "arrow-left.js": {
+      "bytes": 892,
+      "gz": 504
+    },
+    "chevron-bottom.js": {
+      "bytes": 878,
+      "gz": 504
+    },
+    "arrow-top.js": {
+      "bytes": 890,
+      "gz": 500
+    },
+    "chevron-left.js": {
+      "bytes": 875,
+      "gz": 499
+    },
+    "chevron-top.js": {
+      "bytes": 876,
+      "gz": 498
+    },
+    "external-link.js": {
+      "bytes": 877,
+      "gz": 498
+    },
+    "filters.js": {
+      "bytes": 928,
+      "gz": 494
+    },
+    "zksync-DH7HK5U4.js": {
+      "bytes": 1113,
+      "gz": 494
+    },
+    "chevron-right.js": {
+      "bytes": 878,
+      "gz": 493
+    },
+    "all-wallets.js": {
+      "bytes": 927,
+      "gz": 478
+    },
+    "injectedWallet-AWJSZPMG.js": {
+      "bytes": 1053,
+      "gz": 477
+    },
+    "linea-QRMVQ5DY.js": {
+      "bytes": 1050,
+      "gz": 469
+    },
+    "unichain-C5BWO2ZY.js": {
+      "bytes": 984,
+      "gz": 463
+    },
+    "ethereum-RGGVA4PY.js": {
+      "bytes": 1373,
+      "gz": 453
+    },
+    "IdeasCanvasView.js": {
+      "bytes": 779,
+      "gz": 449
+    },
+    "cursor.js": {
+      "bytes": 737,
+      "gz": 437
+    },
+    "hyperevm-VKPAA4SA.js": {
+      "bytes": 725,
+      "gz": 412
+    },
+    "Integrations.js": {
+      "bytes": 604,
+      "gz": 408
+    },
+    "monad-4KWC6TSS.js": {
+      "bytes": 739,
+      "gz": 401
+    },
+    "grants.js": {
+      "bytes": 761,
+      "gz": 394
+    },
+    "flow-5FQJFCTK.js": {
+      "bytes": 864,
+      "gz": 385
+    },
+    "optimism-HAF2GUT7.js": {
+      "bytes": 728,
+      "gz": 384
+    },
+    "zetachain-TLDS5IPW.js": {
+      "bytes": 597,
+      "gz": 375
+    },
+    "coinbaseWallet-OKXU3TRC.js": {
+      "bytes": 816,
+      "gz": 357
+    },
+    "NotFoundPage.js": {
+      "bytes": 468,
+      "gz": 343
+    },
+    "base-OAXLRA4F.js": {
+      "bytes": 604,
+      "gz": 330
+    },
+    "celo-GEP4TUHG.js": {
+      "bytes": 510,
+      "gz": 310
+    },
+    "Windows-PPTHQER6.js": {
+      "bytes": 524,
+      "gz": 292
+    },
+    "AgentAvatar.js": {
+      "bytes": 345,
+      "gz": 283
+    },
+    "anvil.js": {
+      "bytes": 231,
+      "gz": 209
+    },
+    "spend.js": {
+      "bytes": 100,
+      "gz": 118
+    },
+    "blueprint-launch-picker.js": {
+      "bytes": 74,
+      "gz": 93
+    },
+    "blueprints-store.js": {
+      "bytes": 85,
+      "gz": 89
+    },
+    "blueprintDefaults.js": {
+      "bytes": 31,
+      "gz": 51
+    }
+  }
+}

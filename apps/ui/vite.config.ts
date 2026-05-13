@@ -1,16 +1,32 @@
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
+import { visualizer } from "rollup-plugin-visualizer";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json" with { type: "json" };
 
 const webSharedSrc = fileURLToPath(new URL("../../packages/web-shared/src", import.meta.url));
 const appNodeModules = fileURLToPath(new URL("./node_modules", import.meta.url));
 
+// `npm run build:analyze` (ANALYZE=1) writes an interactive treemap to
+// `dist/stats.html` showing every chunk's bytes + which modules contributed.
+// Plain `npm run build` skips it so CI dist payloads don't grow.
+const analyzePlugins: PluginOption[] = process.env.ANALYZE
+  ? [
+      visualizer({
+        filename: "dist/stats.html",
+        template: "treemap",
+        gzipSize: true,
+        brotliSize: true,
+        open: false,
+      }) as PluginOption,
+    ]
+  : [];
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
-  plugins: [react()],
+  plugins: [react(), ...analyzePlugins],
   resolve: {
     alias: {
       "@": "/src",

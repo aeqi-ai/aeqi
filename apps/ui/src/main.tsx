@@ -10,7 +10,12 @@ import {
   readConsent,
   writeConsent,
 } from "./lib/analytics";
+import { startWebVitalsReporting } from "./lib/webVitals";
 import "./styles/index.css";
+
+// Real-user perf telemetry: LCP / INP / CLS. Console-only in dev; beacons
+// to /api/telemetry/web-vitals in prod (best-effort, swallows failures).
+startWebVitalsReporting();
 
 // Authed users have already accepted the privacy policy at signup, so
 // analytics defaults to on for them. Anonymous app visitors (rare —
