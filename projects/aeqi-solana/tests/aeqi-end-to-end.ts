@@ -451,8 +451,19 @@ describe("AEQI end-to-end spawn", () => {
       })
       .rpc();
 
-    // Assign that Role to Alice. Critical: provider.wallet pays, but
-    // Alice is the assignee — checkpoint PDA must be keyed on Alice.
+    // Bootstrap the root role to the provider, then transfer it to Alice.
+    // Assignment without an occupied caller role is self-bootstrap only; the
+    // transfer preserves the real operational case where Alice becomes the
+    // role-vote holder.
+    const [providerCkptPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("role_ckpt"),
+        trustPda.toBuffer(),
+        Buffer.from(directorTypeId),
+        provider.wallet.publicKey.toBuffer(),
+      ],
+      role.programId,
+    );
     const [aliceCkptPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("role_ckpt"),
@@ -463,12 +474,26 @@ describe("AEQI end-to-end spawn", () => {
       role.programId,
     );
     await role.methods
-      .assignRole(alice.publicKey)
+      .assignRole(provider.wallet.publicKey)
       .accounts({
         role: rolePda,
         roleType: rtPda,
         trust: trustPda,
-        checkpoint: aliceCkptPda,
+        callerRole: null,
+        checkpoint: providerCkptPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    await role.methods
+      .transferRole(alice.publicKey)
+      .accounts({
+        role: rolePda,
+        roleType: rtPda,
+        trust: trustPda,
+        prevCheckpoint: providerCkptPda,
+        newCheckpoint: aliceCkptPda,
+        newAccount: alice.publicKey,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })

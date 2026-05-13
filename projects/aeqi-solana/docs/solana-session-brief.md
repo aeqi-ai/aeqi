@@ -6,7 +6,7 @@ Use this file to start a fresh session on the Solana protocol work.
 
 - The Solana protocol stack is the canonical implementation target.
 - Governance is now explicit about loading config from `remaining_accounts`.
-- The full Anchor suite passed on the last run: `97 passing`.
+- The full Anchor suite passed on the last run: `98 passing`.
 - Anchor macro warning noise is intentionally suppressed at crate boundaries so
   real protocol warnings surface cleanly.
 
@@ -37,6 +37,9 @@ Use this file to start a fresh session on the Solana protocol work.
 - `aeqi_role`
   - `create_role` no longer permits arbitrary child-role creation without an
     occupied caller role.
+  - `assign_role` now requires first-root self-bootstrap or an occupied caller
+    role held by the payer; child-role assignment uses the same bounded
+    authority walk as child-role creation.
   - root-role bootstrap without `caller_role` is limited to the first role for
     that role type.
   - caller roles must be occupied, held by the payer, and bound to the same
@@ -47,11 +50,9 @@ Use this file to start a fresh session on the Solana protocol work.
 1. Fix budget/fund/funding accounting invariants: quote-mint binding, spend
    authority, budget-backed funding activation, and creator/trust activation
    checks.
-2. Gate `aeqi_role::assign_role` behind the same occupied-role authority walk
-   now used by child-role creation.
-3. Replace the temporary TRUST-authority mint bridge with a governance/module
+2. Replace the temporary TRUST-authority mint bridge with a governance/module
    ACL mint execution path once proposal execution is wired to module actions.
-4. Keep the Solana code readable and audit-friendly.
+3. Keep the Solana code readable and audit-friendly.
 
 ## Working Rules
 

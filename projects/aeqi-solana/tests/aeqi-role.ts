@@ -226,6 +226,7 @@ describe("aeqi_role", () => {
         role: rolePda,
         roleType: rtPda,
         trust: fakeTrust,
+        callerRole: null,
         checkpoint: checkpointPda,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -239,6 +240,149 @@ describe("aeqi_role", () => {
     const ckpt = await program.account.roleVoteCheckpoint.fetch(checkpointPda);
     expect(ckpt.count.toString()).to.eq("1");
     expect(ckpt.account.toBase58()).to.eq(occupant.toBase58());
+  });
+
+  it("assign_role rejects child assignment without an authorized caller role", async () => {
+    const directorTypeId = new Uint8Array(32);
+    directorTypeId[0] = 0x44;
+    directorTypeId[1] = 0x49;
+    directorTypeId[2] = 0x52;
+
+    const parentRoleId = new Uint8Array(32);
+    parentRoleId[0] = 0x46;
+    parentRoleId[1] = 0x4f;
+    parentRoleId[2] = 0x55;
+
+    const childRoleId = new Uint8Array(32);
+    childRoleId[0] = 0x46;
+    childRoleId[1] = 0x0d;
+
+    const [rtPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("role_type"),
+        fakeTrust.toBuffer(),
+        Buffer.from(directorTypeId),
+      ],
+      program.programId,
+    );
+    const [parentRolePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("role"), fakeTrust.toBuffer(), Buffer.from(parentRoleId)],
+      program.programId,
+    );
+    const [childRolePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("role"), fakeTrust.toBuffer(), Buffer.from(childRoleId)],
+      program.programId,
+    );
+
+    // First create and assign the parent role (root role, bootstrap)
+    await program.methods
+      .createRole(
+        Array.from(parentRoleId),
+        Array.from(directorTypeId),
+        null,
+        Array.from(new Uint8Array(64)),
+      )
+      .accounts({
+        trust: fakeTrust,
+        roleType: rtPda,
+        role: parentRolePda,
+        callerRole: null,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const [parentCheckpointPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("role_ckpt"),
+        fakeTrust.toBuffer(),
+        Buffer.from(directorTypeId),
+        provider.wallet.publicKey.toBuffer(),
+      ],
+      program.programId,
+    );
+
+    await program.methods
+      .assignRole(provider.wallet.publicKey)
+      .accounts({
+        role: parentRolePda,
+        roleType: rtPda,
+        trust: fakeTrust,
+        callerRole: null,
+        checkpoint: parentCheckpointPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    // Now create the child role
+    await program.methods
+      .createRole(
+        Array.from(childRoleId),
+        Array.from(directorTypeId),
+        Array.from(parentRoleId),
+        Array.from(new Uint8Array(64)),
+      )
+      .accounts({
+        trust: fakeTrust,
+        roleType: rtPda,
+        role: childRolePda,
+        callerRole: parentRolePda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const occupant = provider.wallet.publicKey;
+    const [checkpointPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("role_ckpt"),
+        fakeTrust.toBuffer(),
+        Buffer.from(directorTypeId),
+        occupant.toBuffer(),
+      ],
+      program.programId,
+    );
+
+    let threw = false;
+    try {
+      await program.methods
+        .assignRole(occupant)
+        .accounts({
+          role: childRolePda,
+          roleType: rtPda,
+          trust: fakeTrust,
+          callerRole: null,
+          checkpoint: checkpointPda,
+          payer: provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/Unauthorized/);
+    }
+    expect(threw).to.eq(true);
+
+    await program.methods
+      .assignRole(occupant)
+      .accounts({
+        role: childRolePda,
+        roleType: rtPda,
+        trust: fakeTrust,
+        callerRole: parentRolePda,
+        checkpoint: checkpointPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const role = await program.account.role.fetch(childRolePda);
+    expect(role.status).to.eq(1);
+    expect(role.account.toBase58()).to.eq(occupant.toBase58());
+
+    const ckpt = await program.account.roleVoteCheckpoint.fetch(checkpointPda);
+    expect(ckpt.count.toString()).to.eq("2");
   });
 
   it("resign_role transitions Occupied → Resigned + decrements checkpoint", async () => {
@@ -324,6 +468,7 @@ describe("aeqi_role", () => {
         role: rolePda,
         roleType: rtPda,
         trust: trustR,
+        callerRole: null,
         checkpoint: aCkpt,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -439,6 +584,7 @@ describe("aeqi_role", () => {
         role: rolePda,
         roleType: rtPda,
         trust: trustT,
+        callerRole: null,
         checkpoint: aCkpt,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -576,6 +722,7 @@ describe("aeqi_role", () => {
         role: rolePda,
         roleType: rtPda,
         trust: trustD,
+        callerRole: null,
         checkpoint: aCkptPda,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -750,6 +897,7 @@ describe("aeqi_role", () => {
         role: founderPda,
         roleType: directorRtPda,
         trust: trust2,
+        callerRole: null,
         checkpoint: founderCkpt,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -912,6 +1060,7 @@ describe("aeqi_role", () => {
         role: aPda,
         roleType: rtPda,
         trust: trustN,
+        callerRole: null,
         checkpoint: aCkpt,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -947,6 +1096,7 @@ describe("aeqi_role", () => {
         role: bPda,
         roleType: rtPda,
         trust: trustN,
+        callerRole: aPda,
         checkpoint: aCkpt,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,

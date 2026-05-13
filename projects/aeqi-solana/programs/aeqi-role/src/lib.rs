@@ -116,7 +116,19 @@ pub mod aeqi_role {
 
     /// Assign an account to a vacant role. Sets status = Occupied and
     /// auto-self-delegates voting power.
-    pub fn assign_role(ctx: Context<AssignRole>, account: Pubkey) -> Result<()> {
+    pub fn assign_role<'info>(
+        ctx: Context<'_, '_, 'info, 'info, AssignRole<'info>>,
+        account: Pubkey,
+    ) -> Result<()> {
+        gate_role_assignment(
+            &ctx.accounts.role,
+            &ctx.accounts.role_type,
+            ctx.accounts.caller_role.as_ref(),
+            ctx.accounts.payer.key(),
+            account,
+            ctx.remaining_accounts,
+        )?;
+
         let role = &mut ctx.accounts.role;
         require_role_type_matches(role, &ctx.accounts.role_type)?;
         require!(role.status == RoleStatus::Vacant as u8, AeqiRoleError::RoleNotVacant);
@@ -329,6 +341,36 @@ fn gate_role_creation<'info>(
     }
 }
 
+fn gate_role_assignment<'info>(
+    role: &Account<'info, Role>,
+    role_type: &Account<'info, RoleType>,
+    caller_role: Option<&Account<'info, Role>>,
+    payer: Pubkey,
+    assignee: Pubkey,
+    remaining: &'info [AccountInfo<'info>],
+) -> Result<()> {
+    require!(role_type.trust == role.trust, AeqiRoleError::Unauthorized);
+    require!(role.role_type_id == role_type.role_type_id, AeqiRoleError::Unauthorized);
+
+    match caller_role {
+        Some(caller_role) => {
+            require!(caller_role.trust == role.trust, AeqiRoleError::Unauthorized);
+            require!(caller_role.status == RoleStatus::Occupied as u8, AeqiRoleError::Unauthorized);
+            require_keys_eq!(caller_role.account, payer, AeqiRoleError::Unauthorized);
+            if role.parent_role_id != [0u8; 32] {
+                check_authority_walk(caller_role, &role.parent_role_id, remaining)?;
+            }
+            Ok(())
+        }
+        None => {
+            require!(role.parent_role_id == [0u8; 32], AeqiRoleError::Unauthorized);
+            require!(role_type.role_count == 1, AeqiRoleError::Unauthorized);
+            require_keys_eq!(assignee, payer, AeqiRoleError::Unauthorized);
+            Ok(())
+        }
+    }
+}
+
 fn bump_checkpoint(
     ckpt: &mut Account<RoleVoteCheckpoint>,
     account: Pubkey,
@@ -445,6 +487,9 @@ pub struct AssignRole<'info> {
     pub role_type: Account<'info, RoleType>,
     /// CHECK: structural.
     pub trust: AccountInfo<'info>,
+    /// The role held by the caller. Omitted only for first root-role
+    /// self-assignment bootstrap.
+    pub caller_role: Option<Account<'info, Role>>,
     /// Checkpoint is keyed on the *assignee* pubkey, not the payer — that's
     /// the semantics `cast_vote_role` reads back (seeds with `voter.key()`).
     /// Using `payer.key()` here would put the checkpoint at the wrong PDA

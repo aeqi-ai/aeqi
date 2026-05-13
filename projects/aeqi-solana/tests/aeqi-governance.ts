@@ -769,6 +769,7 @@ describe("aeqi_governance", () => {
         role: rolePda,
         roleType: rtPda,
         trust: trustR,
+        callerRole: null,
         checkpoint: checkpointPda,
         payer: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
