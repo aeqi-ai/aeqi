@@ -11,7 +11,9 @@ Your job is to make the on-chain stack canonical, auditable, deterministic, and 
 
 Build the strongest Solana-native trust / DAO / capital-formation system possible without regressing behavior.
 Prefer Solana-native shapes over EVM-shaped porting.
-Preserve semantics, not implementation tricks.
+Preserve semantics, not implementation tricks. Use
+`docs/evm-to-solana-essence-map.md` as the translation contract for what must
+survive from the historical EVM architecture.
 
 ## Current highest-leverage work
 
@@ -89,4 +91,3 @@ Stop when the code is:
 - resumable
 - explicit about authority
 - free of legacy product surfaces that are no longer canonical
-

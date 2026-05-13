@@ -10,18 +10,18 @@ Solana-native modular DAO framework. The EVM system at `~/projects/aeqi-core/con
 
 ### Programs
 
-| Program | Solidity origin | Purpose |
-|---|---|---|
-| `aeqi_trust` | `core/TRUST.sol` | Module registry, ACL flags, config store, execute() gateway |
-| `aeqi_factory` | `core/Factory.sol` | Template registry + instantiate flow with multi-sig approval gate |
-| `aeqi_role` | `modules/Role.module.sol` | Role DAG (parent walk), role types, delegations, vote checkpoints |
-| `aeqi_governance` | `modules/Governance.module.sol` | Proposals, voting — token-weighted + per-role-multisig modes |
-| `aeqi_token` | `modules/Token.module.sol` | Cap-table SPL Token-2022 mint authority + allocations |
+| Program           | Solidity origin                 | Purpose                                                            |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------ |
+| `aeqi_trust`      | `core/TRUST.sol`                | Module registry, ACL flags, config store, execute() gateway        |
+| `aeqi_factory`    | `core/Factory.sol`              | Template registry + instantiate flow with multi-sig approval gate  |
+| `aeqi_role`       | `modules/Role.module.sol`       | Role DAG (parent walk), role types, delegations, vote checkpoints  |
+| `aeqi_governance` | `modules/Governance.module.sol` | Proposals, voting — token-weighted + per-role-multisig modes       |
+| `aeqi_token`      | `modules/Token.module.sol`      | Cap-table SPL Token-2022 mint authority + allocations              |
 | `aeqi_unifutures` | `modules/Unifutures.module.sol` | Bonding curve / commitment sale / exit / liquidity pool primitives |
-| `aeqi_fund` | `modules/Fund.module.sol` | NAV-based fund accounting, LP shares, carry |
-| `aeqi_funding` | `modules/Funding.module.sol` | Capital raise orchestration via Unifutures |
-| `aeqi_budget` | `modules/Budget.module.sol` | Hierarchical treasury allocations per role |
-| `aeqi_vesting` | `modules/Vesting.module.sol` | Cliff + duration vesting, FDV milestone unlock |
+| `aeqi_fund`       | `modules/Fund.module.sol`       | NAV-based fund accounting, LP shares, carry                        |
+| `aeqi_funding`    | `modules/Funding.module.sol`    | Capital raise orchestration via Unifutures                         |
+| `aeqi_budget`     | `modules/Budget.module.sol`     | Hierarchical treasury allocations per role                         |
+| `aeqi_vesting`    | `modules/Vesting.module.sol`    | Cliff + duration vesting, FDV milestone unlock                     |
 
 ### Key translation calls
 
@@ -64,3 +64,5 @@ Three Solana-native firms targeted: OtterSec / Neodyme / Sec3. Budget $25-35k. R
 
 The professional benchmark for audit, release, SDK, and DAO-framework quality
 lives in [`docs/solana-protocol-benchmark.md`](docs/solana-protocol-benchmark.md).
+The EVM-to-Solana essence map that preserves the original AEQI thesis lives in
+[`docs/evm-to-solana-essence-map.md`](docs/evm-to-solana-essence-map.md).

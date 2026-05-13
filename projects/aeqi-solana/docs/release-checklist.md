@@ -17,6 +17,8 @@ complete for the exact commit being shipped.
 ## Security Review
 
 - compare the release against `docs/solana-protocol-benchmark.md`
+- confirm EVM-to-Solana translation assumptions still match
+  `docs/evm-to-solana-essence-map.md`
 - review all authority checks on mutable instructions
 - review PDA seed constraints against `docs/deployments.md`
 - review arithmetic bounds for token, treasury, budget, funding, fund, vesting,

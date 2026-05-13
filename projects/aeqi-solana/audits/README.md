@@ -27,6 +27,8 @@ The codebase should have:
 - deterministic build instructions in `docs/verifiable-build.md`
 - release checklist in `docs/release-checklist.md`
 - deployment/program-ID record in `docs/deployments.md`
+- EVM-to-Solana translation assumptions reviewed against
+  `docs/evm-to-solana-essence-map.md`
 - a final frozen commit hash for the auditor
 
 ## After an Audit
