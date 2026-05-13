@@ -46,7 +46,6 @@ export default tseslint.config(
      *
      *   - src/lib/api.ts                              1049
      *   - src/pages/AdminPage.tsx                      874
-     *   - src/components/AgentQuestsTab.tsx          (>600, was 1146 raw)
      *
      * Extracted (drop log):
      *   - 2026-05-13 src/components/IdeaCanvas.tsx — toolbar + decision-panel
@@ -69,11 +68,14 @@ export default tseslint.config(
      *     empty-state + dedupe ToolbarRadioPopover → components/agents/* +
      *     components/ui/ToolbarRadioPopover.tsx (BlueprintsPage now consumes
      *     the shared one too).
+     *   - 2026-05-13 src/components/AgentQuestsTab.tsx — board/list/filter/
+     *     scope-chip/status-dot + helpers → components/quests/{QuestBoard,
+     *     QuestList,QuestsFilterPopover,QuestScopeChip,StatusDot,
+     *     agentQuestsHelpers}. Final user-facing monolith extracted.
      */
     files: [
       "src/lib/api.ts",
       "src/pages/AdminPage.tsx",
-      "src/components/AgentQuestsTab.tsx",
     ],
     rules: {
       "max-lines": "off",

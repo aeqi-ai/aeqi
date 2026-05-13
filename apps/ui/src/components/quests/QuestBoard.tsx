@@ -1,0 +1,525 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import { Button } from "../ui";
+import { ImportMenu } from "../blueprints/ImportMenu";
+import type { Quest, QuestStatus, User } from "@/lib/types";
+import { dueLabel, isOverdue, timeAgo } from "@/lib/format";
+import { formatDateTime } from "@/lib/i18n";
+import QuestsViewPopover, { type QuestsView } from "./QuestsViewPopover";
+import QuestsSortPopover, { type QuestSort } from "./QuestsSortPopover";
+import AssigneeAvatar from "./AssigneeAvatar";
+import AssigneePicker from "./AssigneePicker";
+import PriorityIcon from "./PriorityIcon";
+import QuestsFilterPopover from "./QuestsFilterPopover";
+import QuestScopeChip from "./QuestScopeChip";
+import StatusDot from "./StatusDot";
+import QuestList from "./QuestList";
+import {
+  byUpdatedDesc,
+  importQuestFromMarkdown,
+  sortQuests,
+  type QuestFilter,
+} from "./agentQuestsHelpers";
+
+/**
+ * Board view shown when no quest is selected.
+ *
+ * Toolbar — search + filter popover + plus button (navigates to the
+ * `QuestCanvas` at `/<agentId>/quests/new`). Below: four kanban columns
+ * (Todo / In Progress / Blocked / Done). Done is capped to 10
+ * most-recent to keep the column from blowing out after months of work.
+ */
+export default function QuestBoard({
+  agentId: _agentId,
+  resolvedAgentId,
+  entityId,
+  quests,
+  allQuests,
+  scopeFilter,
+  onScopeChange,
+  onCreated,
+  onPick,
+  onCompose,
+  view,
+  onViewChange,
+  sort,
+  onSortChange,
+  agents,
+  users,
+}: {
+  agentId: string;
+  resolvedAgentId: string;
+  entityId: string;
+  quests: Quest[];
+  allQuests: Quest[];
+  scopeFilter: QuestFilter;
+  onScopeChange: (next: QuestFilter) => void;
+  onCreated: () => void;
+  onPick: (id: string) => void;
+  /** Navigates to the dedicated quest-compose page. Optional `status`
+   *  pre-selects the column the new quest lands in. */
+  onCompose: (status?: QuestStatus) => void;
+  view: QuestsView;
+  onViewChange: (next: QuestsView) => void;
+  sort: QuestSort;
+  onSortChange: (next: QuestSort) => void;
+  agents: { id: string; name: string }[];
+  users: Pick<User, "id" | "name" | "email" | "avatar_url">[];
+}) {
+  const [err, setErr] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Search narrows what's displayed in the columns. Scope filtering
+  // happens upstream (parent AgentQuestsTab) and feeds us `quests`; we
+  // narrow further by subject / description / id substring match.
+  // `allQuests` (unfiltered) stays the source for the scope-tab counts
+  // so the counts don't flicker as the user types.
+  const visibleQuests = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return quests;
+    return quests.filter(
+      (x) =>
+        (x.idea?.name ?? "").toLowerCase().includes(q) ||
+        (x.idea?.content ?? "").toLowerCase().includes(q) ||
+        x.id.toLowerCase().includes(q),
+    );
+  }, [quests, search]);
+
+  // Single sorted source feeding both Board grouping and List rendering.
+  // Stable sort means within-bucket order in Board reflects the chosen
+  // mode without a secondary sort pass.
+  const sortedVisibleQuests = useMemo(() => sortQuests(visibleQuests, sort), [visibleQuests, sort]);
+
+  // Drag-and-drop state. `dragging` is the quest id being dragged so cards can
+  // dim themselves; `dropTarget` is the column that'll receive the drop so its
+  // frame can light up. `optimistic` overrides a quest's displayed status until
+  // the server roundtrip lands — the UI feels instant, and a failed patch
+  // simply reverts when we clear the entry.
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<QuestStatus | null>(null);
+  const [optimistic, setOptimistic] = useState<Record<string, QuestStatus>>({});
+  // Keyboard-navigation focus. Separate from DOM focus so j/k can traverse
+  // cards even when the board root has programmatic focus — and so Esc can
+  // clear the outline without blurring anything visible.
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  const handleDrop = useCallback(
+    async (questId: string, next: QuestStatus) => {
+      const q = quests.find((x) => x.id === questId);
+      if (!q) return;
+      const current = optimistic[questId] ?? q.status;
+      if (current === next) return;
+      setOptimistic((s) => ({ ...s, [questId]: next }));
+      try {
+        await api.updateQuest(questId, { status: next });
+        onCreated();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Failed to move quest");
+      } finally {
+        setOptimistic((s) => {
+          const copy = { ...s };
+          delete copy[questId];
+          return copy;
+        });
+      }
+    },
+    [quests, optimistic, onCreated],
+  );
+
+  // v5.2: five-status Linear ladder. Backlog (parked) → Todo (ready) →
+  // In progress → Done | Cancelled. Reading order left-to-right on the
+  // board, top-to-bottom in the list view.
+  const columns: Array<{ status: QuestStatus; label: string }> = [
+    { status: "backlog", label: "Backlog" },
+    { status: "todo", label: "Todo" },
+    { status: "in_progress", label: "In progress" },
+    { status: "done", label: "Done" },
+    { status: "cancelled", label: "Cancelled" },
+  ];
+
+  // Bucket the already-sorted source by displayed status. Stable sort
+  // means within-column order honors the active sort mode without a
+  // secondary pass. Done + Cancelled are capped at the 10 MOST-RECENT
+  // regardless of sort mode (terminal columns are recency archives, not
+  // leaderboards); the chosen sort then orders that 10 for display.
+  const grouped: Record<QuestStatus, Quest[]> = useMemo(() => {
+    const buckets: Record<QuestStatus, Quest[]> = {
+      backlog: [],
+      todo: [],
+      in_progress: [],
+      done: [],
+      cancelled: [],
+    };
+    for (const q of sortedVisibleQuests) {
+      const s = optimistic[q.id] ?? q.status;
+      buckets[s]?.push(q);
+    }
+    for (const terminal of ["done", "cancelled"] as const) {
+      if (buckets[terminal].length > 10) {
+        const recent = [...buckets[terminal]].sort(byUpdatedDesc).slice(0, 10);
+        buckets[terminal] = sortQuests(recent, sort);
+      }
+    }
+    return buckets;
+  }, [sortedVisibleQuests, optimistic, sort]);
+
+  // Flat traversal order used by j/k. In Board view: column-major over
+  // backlog → todo → in_progress → done → cancelled. In List view:
+  // the flat-sorted order.
+  const flatOrderKey = useMemo(() => {
+    if (view === "list") {
+      return sortedVisibleQuests.map((q) => q.id).join("|");
+    }
+    const order: QuestStatus[] = ["backlog", "todo", "in_progress", "done", "cancelled"];
+    const ids: string[] = [];
+    for (const s of order) for (const q of grouped[s] ?? []) ids.push(q.id);
+    return ids.join("|");
+  }, [view, sortedVisibleQuests, grouped]);
+  const flatOrderRef = useRef<string[]>([]);
+  flatOrderRef.current = flatOrderKey ? flatOrderKey.split("|") : [];
+
+  // If the focused card vanishes (status change, cap, refresh) drop the focus.
+  useEffect(() => {
+    if (focusId && !flatOrderRef.current.includes(focusId)) setFocusId(null);
+  }, [flatOrderKey, focusId]);
+
+  // j/k/Enter/Escape navigation. Mirrors the `?` shortcut idiom in AppLayout:
+  // skip when focus is inside an INPUT / TEXTAREA / contenteditable, and stay
+  // inert when any modifier is held so we don't collide with browser chords.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      if (isEditable) return;
+
+      // "/" focuses the search input (Ideas-page idiom). Stop propagation
+      // so AppLayout's global "/" (palette) handler doesn't also fire.
+      if (e.key === "/") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+
+      // b / l toggle Board / List view (mirrors Ideas g/l idiom).
+      if (e.key === "b" && view !== "board") {
+        e.preventDefault();
+        onViewChange("board");
+        return;
+      }
+      if (e.key === "l" && view !== "list") {
+        e.preventDefault();
+        onViewChange("list");
+        return;
+      }
+
+      const order = flatOrderRef.current;
+      if (order.length === 0) return;
+
+      if (e.key === "j" || e.key === "k") {
+        e.preventDefault();
+        const dir = e.key === "j" ? 1 : -1;
+        const idx = focusId ? order.indexOf(focusId) : -1;
+        let next: number;
+        if (idx === -1) next = dir === 1 ? 0 : order.length - 1;
+        else next = (idx + dir + order.length) % order.length;
+        setFocusId(order[next]);
+        return;
+      }
+      if (e.key === "Enter" && focusId) {
+        e.preventDefault();
+        onPick(focusId);
+        return;
+      }
+      if (e.key === "Escape" && focusId) {
+        e.preventDefault();
+        setFocusId(null);
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [focusId, onPick, view, onViewChange]);
+
+  return (
+    <div className="quest-board">
+      <div className="ideas-list-head">
+        <div className="ideas-toolbar">
+          <span className="ideas-list-search-field">
+            <svg
+              className="ideas-list-search-glyph"
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <circle cx="5.2" cy="5.2" r="3.2" />
+              <path d="M7.6 7.6 L10 10" />
+            </svg>
+            <input
+              ref={searchRef}
+              className="ideas-list-search"
+              type="text"
+              placeholder="Search quests"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  if (search) {
+                    setSearch("");
+                  } else {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }
+              }}
+            />
+            {!search && (
+              <kbd className="ideas-list-search-kbd" aria-hidden>
+                /
+              </kbd>
+            )}
+            {search && (
+              <button
+                type="button"
+                className="ideas-list-search-clear"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </span>
+          <QuestsSortPopover sort={sort} onChange={onSortChange} />
+          <QuestsFilterPopover
+            agentId={resolvedAgentId}
+            quests={allQuests}
+            filter={scopeFilter}
+            onChange={onScopeChange}
+          />
+          <QuestsViewPopover view={view} onChange={onViewChange} />
+          <ImportMenu
+            entityId={entityId}
+            parts={["quests"]}
+            blueprintTitle="Import quests from a Blueprint"
+            onMarkdownPicked={async (files) => {
+              setErr(null);
+              const failures: string[] = [];
+              for (const file of Array.from(files)) {
+                try {
+                  await importQuestFromMarkdown(file, resolvedAgentId);
+                } catch (e) {
+                  failures.push(
+                    `${file.name}: ${e instanceof Error ? e.message : "import failed"}`,
+                  );
+                }
+              }
+              onCreated();
+              if (failures.length > 0) setErr(failures.join("; "));
+            }}
+            onBlueprintSpawned={onCreated}
+          />
+          <Button variant="primary" size="sm" onClick={() => onCompose()} title="New quest (N)">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 13 13"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <path d="M6.5 2.5v8M2.5 6.5h8" />
+            </svg>
+            New
+          </Button>
+        </div>
+      </div>
+      {err && <div className="quest-board-error">{err}</div>}
+
+      {view === "list" ? (
+        <QuestList
+          groups={columns.map((col) => ({
+            status: col.status,
+            label: col.label,
+            quests: grouped[col.status] || [],
+          }))}
+          optimistic={optimistic}
+          focusId={focusId}
+          totalCount={sortedVisibleQuests.length}
+          onPick={onPick}
+          onNew={() => onCompose()}
+          onCompose={onCompose}
+          onAssigneeChange={async (id, next) => {
+            try {
+              await api.updateQuest(id, { assignee: next });
+              onCreated();
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : "Failed to reassign");
+            }
+          }}
+          search={search}
+          agents={agents}
+          users={users}
+        />
+      ) : (
+        <div className="quest-board-columns">
+          {columns.map((col) => {
+            const list = grouped[col.status] || [];
+            const isTarget = dropTarget === col.status;
+            return (
+              <section
+                key={col.status}
+                className="quest-col"
+                data-status={col.status}
+                data-drop-target={isTarget || undefined}
+                onDragOver={(e) => {
+                  if (!dragging) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dropTarget !== col.status) setDropTarget(col.status);
+                }}
+                onDragLeave={(e) => {
+                  // Only clear the highlight when the pointer actually leaves
+                  // the column's own rectangle — not when it crosses onto a
+                  // child card (relatedTarget would still be inside us).
+                  const related = e.relatedTarget as Node | null;
+                  if (related && e.currentTarget.contains(related)) return;
+                  if (dropTarget === col.status) setDropTarget(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData("text/plain") || dragging;
+                  if (id) void handleDrop(id, col.status);
+                  setDragging(null);
+                  setDropTarget(null);
+                }}
+              >
+                <header className="quest-col-header">
+                  <StatusDot status={col.status} />
+                  <span className="quest-col-label">{col.label}</span>
+                  <span className="quest-col-count">{list.length}</span>
+                  <button
+                    type="button"
+                    className="quest-col-add"
+                    onClick={() => onCompose(col.status)}
+                    aria-label={`New ${col.label.toLowerCase()} quest`}
+                    title={`New quest in ${col.label}`}
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 13 13"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      aria-hidden
+                    >
+                      <path d="M6.5 2.5v8M2.5 6.5h8" />
+                    </svg>
+                  </button>
+                </header>
+                <div className="quest-col-body">
+                  {list.length === 0 ? (
+                    <div className="quest-col-empty">{isTarget ? "Drop here" : "Nothing here"}</div>
+                  ) : (
+                    list.map((q) => (
+                      <article
+                        key={q.id}
+                        className="quest-card"
+                        data-priority={q.priority}
+                        data-dragging={dragging === q.id || undefined}
+                        data-focused={focusId === q.id || undefined}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", q.id);
+                          setDragging(q.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragging(null);
+                          setDropTarget(null);
+                        }}
+                        onClick={() => onPick(q.id)}
+                      >
+                        <div className="quest-card-head">
+                          <StatusDot status={optimistic[q.id] ?? q.status} />
+                          <span className="quest-card-subject">{q.idea?.name ?? q.id}</span>
+                        </div>
+                        <div className="quest-card-meta">
+                          <PriorityIcon priority={q.priority} />
+                          {q.scope && q.scope !== "self" && <QuestScopeChip scope={q.scope} />}
+                          <span
+                            className="quest-card-assignee"
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <AssigneePicker
+                              assignee={q.assignee}
+                              agents={agents}
+                              users={users}
+                              onChange={async (next) => {
+                                try {
+                                  await api.updateQuest(q.id, { assignee: next });
+                                  onCreated();
+                                } catch (e) {
+                                  setErr(e instanceof Error ? e.message : "Failed to reassign");
+                                }
+                              }}
+                              renderTrigger={({ open }) => (
+                                <button
+                                  type="button"
+                                  className={`quest-row-assignee${open ? " open" : ""}`}
+                                  aria-haspopup="dialog"
+                                  aria-expanded={open}
+                                  aria-label={
+                                    q.assignee
+                                      ? `Assigned: ${q.assignee}. Click to reassign.`
+                                      : "Unassigned. Click to assign."
+                                  }
+                                >
+                                  <AssigneeAvatar
+                                    assignee={q.assignee}
+                                    agents={agents}
+                                    users={users}
+                                    size={18}
+                                  />
+                                </button>
+                              )}
+                            />
+                          </span>
+                          {q.due_at && (
+                            <span
+                              className={`quest-due-chip${
+                                isOverdue(q.due_at) ? " quest-due-chip--overdue" : ""
+                              }`}
+                              title={`Due ${formatDateTime(q.due_at)}`}
+                            >
+                              {dueLabel(q.due_at)}
+                            </span>
+                          )}
+                          {q.updated_at && (
+                            <span className="quest-card-time">{timeAgo(q.updated_at)}</span>
+                          )}
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
