@@ -17,6 +17,9 @@ Use this file to start a fresh session on the Solana protocol work.
   - the loader checks PDA address, owner, Anchor discriminator, embedded trust,
     and `governance_config_id`.
   - config mismatches surface as `ConfigMismatch`.
+  - generic caller-supplied vote weights are disabled with
+    `GenericVotingDisabled`; proposal tests now use typed token voting for real
+    tally setup.
 - Tests
   - `tests/aeqi-governance.ts` migrated to `remainingAccounts` for config passing.
   - `tests/aeqi-end-to-end.ts` migrated to the same governance account shape.
@@ -41,16 +44,14 @@ Use this file to start a fresh session on the Solana protocol work.
 
 ## What To Work On Next
 
-1. Disable or replace generic `aeqi_governance::cast_vote(choice, weight)`;
-   typed token/role vote paths are safer than caller-supplied weight.
-2. Fix budget/fund/funding accounting invariants: quote-mint binding, spend
+1. Fix budget/fund/funding accounting invariants: quote-mint binding, spend
    authority, budget-backed funding activation, and creator/trust activation
    checks.
-3. Gate `aeqi_role::assign_role` behind the same occupied-role authority walk
+2. Gate `aeqi_role::assign_role` behind the same occupied-role authority walk
    now used by child-role creation.
-4. Replace the temporary TRUST-authority mint bridge with a governance/module
+3. Replace the temporary TRUST-authority mint bridge with a governance/module
    ACL mint execution path once proposal execution is wired to module actions.
-5. Keep the Solana code readable and audit-friendly.
+4. Keep the Solana code readable and audit-friendly.
 
 ## Working Rules
 

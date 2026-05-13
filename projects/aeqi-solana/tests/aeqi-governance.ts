@@ -18,6 +18,7 @@ describe("aeqi_governance", () => {
 
   const program = anchor.workspace.aeqiGovernance as Program<AeqiGovernance>;
   const trustProgram = anchor.workspace.aeqiTrust as Program<AeqiTrust>;
+  const tokenProgram = anchor.workspace.aeqiToken as Program<AeqiToken>;
 
   const fakeTrust = Keypair.generate().publicKey;
   let modulePda: PublicKey;
@@ -28,6 +29,207 @@ describe("aeqi_governance", () => {
       program.programId,
     );
   });
+
+  async function createTrust(seed0: number, seed1 = 0) {
+    const trustId = new Uint8Array(32);
+    trustId[0] = seed0;
+    trustId[1] = seed1;
+    const [trustPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trust"), Buffer.from(trustId)],
+      trustProgram.programId,
+    );
+
+    await trustProgram.methods
+      .initialize(Array.from(trustId))
+      .accounts({
+        trust: trustPda,
+        authority: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    return trustPda;
+  }
+
+  async function setupTokenVotingProposal(args: {
+    seed0: number;
+    seed1?: number;
+    cfgId: Uint8Array;
+    proposalId: Uint8Array;
+    voteAmount: number;
+    castVote?: boolean;
+    allowEarlyEnact?: boolean;
+    executionDelay?: number;
+  }) {
+    const trustPda = await createTrust(args.seed0, args.seed1 ?? 0);
+
+    const [tokenModuleStatePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token_module"), trustPda.toBuffer()],
+      tokenProgram.programId,
+    );
+    const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token_authority"), trustPda.toBuffer()],
+      tokenProgram.programId,
+    );
+    const [mintPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("mint"), trustPda.toBuffer()],
+      tokenProgram.programId,
+    );
+
+    await tokenProgram.methods
+      .init()
+      .accounts({
+        trust: trustPda,
+        moduleState: tokenModuleStatePda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    await tokenProgram.methods
+      .createMint(9)
+      .accounts({
+        trust: trustPda,
+        moduleState: tokenModuleStatePda,
+        mintAuthority: mintAuthorityPda,
+        mint: mintPda,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const voter = provider.wallet.publicKey;
+    const voterAta = getAssociatedTokenAddressSync(
+      mintPda,
+      voter,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          voter,
+          voterAta,
+          voter,
+          mintPda,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      ),
+    );
+
+    if (args.voteAmount > 0) {
+      await tokenProgram.methods
+        .mintTokens(new anchor.BN(args.voteAmount))
+        .accounts({
+          trust: trustPda,
+          moduleState: tokenModuleStatePda,
+          mintAuthority: mintAuthorityPda,
+          mint: mintPda,
+          recipientTa: voterAta,
+          authority: provider.wallet.publicKey,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .rpc();
+    }
+
+    const [govModulePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("gov_module"), trustPda.toBuffer()],
+      program.programId,
+    );
+    await program.methods
+      .init()
+      .accounts({
+        trust: trustPda,
+        moduleState: govModulePda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const [cfgPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("gov_config"), trustPda.toBuffer(), Buffer.from(args.cfgId)],
+      program.programId,
+    );
+    await program.methods
+      .registerConfig(Array.from(args.cfgId), {
+        proposalThreshold: new anchor.BN(0),
+        quorumBps: 4000,
+        supportBps: 5000,
+        votingPeriod: new anchor.BN(60),
+        executionDelay: new anchor.BN(args.executionDelay ?? 0),
+        allowEarlyEnact: args.allowEarlyEnact ?? true,
+      })
+      .accounts({
+        trust: trustPda,
+        moduleState: govModulePda,
+        governanceConfig: cfgPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const [proposalPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("proposal"),
+        trustPda.toBuffer(),
+        Buffer.from(args.proposalId),
+      ],
+      program.programId,
+    );
+    await program.methods
+      .propose(
+        Array.from(args.proposalId),
+        Array.from(args.cfgId),
+        Array.from(new Uint8Array(64)),
+      )
+      .accounts({
+        trust: trustPda,
+        moduleState: govModulePda,
+        proposal: proposalPda,
+        proposer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .remainingAccounts([
+        { pubkey: cfgPda, isSigner: false, isWritable: false },
+      ])
+      .rpc();
+
+    const [votePda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vote"),
+        trustPda.toBuffer(),
+        Buffer.from(args.proposalId),
+        voter.toBuffer(),
+      ],
+      program.programId,
+    );
+
+    if (args.castVote ?? true) {
+      await program.methods
+        .castVoteToken(1)
+        .accounts({
+          proposal: proposalPda,
+          vote: votePda,
+          voterTokenAccount: voterAta,
+          mint: mintPda,
+          voter,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    return {
+      trustPda,
+      cfgPda,
+      proposalPda,
+      votePda,
+      voterAta,
+      mintPda,
+      voter,
+    };
+  }
 
   it("init creates governance module state", async () => {
     await program.methods
@@ -133,8 +335,7 @@ describe("aeqi_governance", () => {
     expect(m.proposalCount.toString()).to.eq("1");
   });
 
-  it("cast_vote tallies a For vote and creates VoteRecord", async () => {
-    const tokenConfigId = new Uint8Array(32);
+  it("cast_vote rejects caller-supplied vote weights", async () => {
     const proposalId = new Uint8Array(32);
     proposalId[0] = 0xab; // same proposal as previous test
 
@@ -153,52 +354,56 @@ describe("aeqi_governance", () => {
     );
 
     await program.methods
-      .castVote(1, new anchor.BN(1000)) // 1 = For, weight 1000
+      .castVote(1, new anchor.BN(1000))
       .accounts({
         proposal: proposalPda,
         vote: votePda,
         voter: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .rpc();
+      .rpc()
+      .then(
+        () => {
+          throw new Error("expected generic vote rejection");
+        },
+        (e: any) => {
+          expect(e.toString()).to.match(/GenericVotingDisabled/);
+        },
+      );
 
     const p = await program.account.proposal.fetch(proposalPda);
-    expect(p.forVotes.toString()).to.eq("1000");
+    expect(p.forVotes.toString()).to.eq("0");
     expect(p.againstVotes.toString()).to.eq("0");
     expect(p.abstainVotes.toString()).to.eq("0");
 
-    const v = await program.account.voteRecord.fetch(votePda);
-    expect(v.choice).to.eq(1);
-    expect(v.weight.toString()).to.eq("1000");
-    expect(v.voter.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
+    const voteInfo = await provider.connection.getAccountInfo(votePda);
+    expect(voteInfo).to.eq(null);
   });
 
-  it("rejects double-voting via PDA uniqueness", async () => {
+  it("cast_vote_token rejects double-voting via PDA uniqueness", async () => {
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xd0;
     const proposalId = new Uint8Array(32);
-    proposalId[0] = 0xab;
+    proposalId[0] = 0xd0;
+    proposalId[1] = 0x01;
 
-    const [proposalPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(proposalId)],
-      program.programId,
-    );
-    const [votePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vote"),
-        fakeTrust.toBuffer(),
-        Buffer.from(proposalId),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xd0,
+      cfgId,
+      proposalId,
+      voteAmount: 1000,
+    });
 
     let threw = false;
     try {
       await program.methods
-        .castVote(0, new anchor.BN(500))
+        .castVoteToken(0)
         .accounts({
-          proposal: proposalPda,
-          vote: votePda,
-          voter: provider.wallet.publicKey,
+          proposal: fixture.proposalPda,
+          vote: fixture.votePda,
+          voterTokenAccount: fixture.voterAta,
+          mint: fixture.mintPda,
+          voter: fixture.voter,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
@@ -307,62 +512,31 @@ describe("aeqi_governance", () => {
     expect(threw).to.eq(true);
   });
 
-  it("rejects zero-weight votes", async () => {
-    const tokenConfigId = new Uint8Array(32);
-    const [cfgPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("gov_config"),
-        fakeTrust.toBuffer(),
-        Buffer.from(tokenConfigId),
-      ],
-      program.programId,
-    );
-
+  it("cast_vote_token rejects zero-balance voters", async () => {
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xd1;
     const proposalId = new Uint8Array(32);
-    proposalId[0] = 0xab;
-    proposalId[1] = 0xcd;
+    proposalId[0] = 0xd1;
+    proposalId[1] = 0x01;
 
-    const [proposalPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(proposalId)],
-      program.programId,
-    );
-
-    await program.methods
-      .propose(
-        Array.from(proposalId),
-        Array.from(tokenConfigId),
-        Array.from(new Uint8Array(64)),
-      )
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        proposal: proposalPda,
-        proposer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .remainingAccounts([
-        { pubkey: cfgPda, isSigner: false, isWritable: false },
-      ])
-      .rpc();
-
-    const [votePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vote"),
-        fakeTrust.toBuffer(),
-        Buffer.from(proposalId),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xd1,
+      cfgId,
+      proposalId,
+      voteAmount: 0,
+      castVote: false,
+    });
 
     let threw = false;
     try {
       await program.methods
-        .castVote(1, new anchor.BN(0))
+        .castVoteToken(1)
         .accounts({
-          proposal: proposalPda,
-          vote: votePda,
-          voter: provider.wallet.publicKey,
+          proposal: fixture.proposalPda,
+          vote: fixture.votePda,
+          voterTokenAccount: fixture.voterAta,
+          mint: fixture.mintPda,
+          voter: fixture.voter,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
@@ -374,94 +548,32 @@ describe("aeqi_governance", () => {
   });
 
   it("execute_proposal advances state when quorum + support met (early enact)", async () => {
-    // Fresh config that allows early enact, fresh proposal, single For vote.
     const cfgId = new Uint8Array(32);
     cfgId[0] = 0xee; // 'e' for early-enact config
-
-    const [cfgPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(cfgId)],
-      program.programId,
-    );
-
-    await program.methods
-      .registerConfig(Array.from(cfgId), {
-        proposalThreshold: new anchor.BN(0),
-        quorumBps: 4000,
-        supportBps: 5000,
-        votingPeriod: new anchor.BN(60), // 1 minute
-        executionDelay: new anchor.BN(0),
-        allowEarlyEnact: true,
-      })
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        governanceConfig: cfgPda,
-        payer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
     const propId = new Uint8Array(32);
     propId[0] = 0xee;
     propId[1] = 0xee;
-
-    const [propPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(propId)],
-      program.programId,
-    );
-
-    await program.methods
-      .propose(
-        Array.from(propId),
-        Array.from(cfgId),
-        Array.from(new Uint8Array(64)),
-      )
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        proposal: propPda,
-        proposer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .remainingAccounts([
-        { pubkey: cfgPda, isSigner: false, isWritable: false },
-      ])
-      .rpc();
-
-    const [votePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vote"),
-        fakeTrust.toBuffer(),
-        Buffer.from(propId),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
-
-    await program.methods
-      .castVote(1, new anchor.BN(1000)) // For, 1000 weight
-      .accounts({
-        proposal: propPda,
-        vote: votePda,
-        voter: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xe0,
+      cfgId,
+      proposalId: propId,
+      voteAmount: 1000,
+    });
 
     // Total vote supply = 1000. Quorum: 40% = 400. We have 1000 participating.
     // Support: 100% For of 1000 decisive. Both thresholds met.
     await program.methods
       .executeProposal(new anchor.BN(1000))
       .accounts({
-        proposal: propPda,
+        proposal: fixture.proposalPda,
         executor: provider.wallet.publicKey,
       })
       .remainingAccounts([
-        { pubkey: cfgPda, isSigner: false, isWritable: false },
+        { pubkey: fixture.cfgPda, isSigner: false, isWritable: false },
       ])
       .rpc();
 
-    const p = await program.account.proposal.fetch(propPda);
+    const p = await program.account.proposal.fetch(fixture.proposalPda);
     expect(p.executed).to.eq(true);
     expect(p.succeededAt.toString()).to.not.eq("0");
   });
@@ -469,76 +581,15 @@ describe("aeqi_governance", () => {
   it("execute_proposal rejects when quorum not met", async () => {
     const cfgId = new Uint8Array(32);
     cfgId[0] = 0xed;
-
-    const [cfgPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(cfgId)],
-      program.programId,
-    );
-
-    await program.methods
-      .registerConfig(Array.from(cfgId), {
-        proposalThreshold: new anchor.BN(0),
-        quorumBps: 4000,
-        supportBps: 5000,
-        votingPeriod: new anchor.BN(60),
-        executionDelay: new anchor.BN(0),
-        allowEarlyEnact: true,
-      })
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        governanceConfig: cfgPda,
-        payer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
     const propId = new Uint8Array(32);
     propId[0] = 0xed;
     propId[1] = 0xed;
-
-    const [propPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(propId)],
-      program.programId,
-    );
-
-    await program.methods
-      .propose(
-        Array.from(propId),
-        Array.from(cfgId),
-        Array.from(new Uint8Array(64)),
-      )
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        proposal: propPda,
-        proposer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .remainingAccounts([
-        { pubkey: cfgPda, isSigner: false, isWritable: false },
-      ])
-      .rpc();
-
-    const [votePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vote"),
-        fakeTrust.toBuffer(),
-        Buffer.from(propId),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
-
-    await program.methods
-      .castVote(1, new anchor.BN(100)) // tiny weight
-      .accounts({
-        proposal: propPda,
-        vote: votePda,
-        voter: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xe1,
+      cfgId,
+      proposalId: propId,
+      voteAmount: 100,
+    });
 
     // total_vote_supply = 1_000_000 → 40% quorum = 400_000. 100 participating ≪ 400_000.
     let threw = false;
@@ -546,11 +597,11 @@ describe("aeqi_governance", () => {
       await program.methods
         .executeProposal(new anchor.BN(1_000_000))
         .accounts({
-          proposal: propPda,
+          proposal: fixture.proposalPda,
           executor: provider.wallet.publicKey,
         })
         .remainingAccounts([
-          { pubkey: cfgPda, isSigner: false, isWritable: false },
+          { pubkey: fixture.cfgPda, isSigner: false, isWritable: false },
         ])
         .rpc();
     } catch (e: any) {
@@ -563,82 +614,23 @@ describe("aeqi_governance", () => {
   it("execute_proposal rejects when the config account does not match the proposal", async () => {
     const cfgId = new Uint8Array(32);
     cfgId[0] = 0xab;
-    const [cfgPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(cfgId)],
-      program.programId,
-    );
-
-    await program.methods
-      .registerConfig(Array.from(cfgId), {
-        proposalThreshold: new anchor.BN(0),
-        quorumBps: 4000,
-        supportBps: 5000,
-        votingPeriod: new anchor.BN(60),
-        executionDelay: new anchor.BN(0),
-        allowEarlyEnact: true,
-      })
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        governanceConfig: cfgPda,
-        payer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
     const propId = new Uint8Array(32);
     propId[0] = 0xaf;
-    const [propPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(propId)],
-      program.programId,
-    );
-
-    await program.methods
-      .propose(
-        Array.from(propId),
-        Array.from(cfgId),
-        Array.from(new Uint8Array(64)),
-      )
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        proposal: propPda,
-        proposer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .remainingAccounts([
-        { pubkey: cfgPda, isSigner: false, isWritable: false },
-      ])
-      .rpc();
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xe2,
+      cfgId,
+      proposalId: propId,
+      voteAmount: 1000,
+    });
 
     const wrongCfgPda = anchor.web3.SystemProgram.programId;
-
-    const [votePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vote"),
-        fakeTrust.toBuffer(),
-        Buffer.from(propId),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
-
-    await program.methods
-      .castVote(1, new anchor.BN(1000))
-      .accounts({
-        proposal: propPda,
-        vote: votePda,
-        voter: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
 
     let threw = false;
     try {
       await program.methods
         .executeProposal(new anchor.BN(1000))
         .accounts({
-          proposal: propPda,
+          proposal: fixture.proposalPda,
           executor: provider.wallet.publicKey,
         })
         .remainingAccounts([
@@ -655,81 +647,22 @@ describe("aeqi_governance", () => {
   it("execute_proposal rejects when no config remaining account is supplied", async () => {
     const cfgId = new Uint8Array(32);
     cfgId[0] = 0xb1;
-    const [cfgPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("gov_config"), fakeTrust.toBuffer(), Buffer.from(cfgId)],
-      program.programId,
-    );
-
-    await program.methods
-      .registerConfig(Array.from(cfgId), {
-        proposalThreshold: new anchor.BN(0),
-        quorumBps: 4000,
-        supportBps: 5000,
-        votingPeriod: new anchor.BN(60),
-        executionDelay: new anchor.BN(0),
-        allowEarlyEnact: true,
-      })
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        governanceConfig: cfgPda,
-        payer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
     const propId = new Uint8Array(32);
     propId[0] = 0xb1;
     propId[1] = 0x01;
-    const [propPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("proposal"), fakeTrust.toBuffer(), Buffer.from(propId)],
-      program.programId,
-    );
-
-    await program.methods
-      .propose(
-        Array.from(propId),
-        Array.from(cfgId),
-        Array.from(new Uint8Array(64)),
-      )
-      .accounts({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        proposal: propPda,
-        proposer: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .remainingAccounts([
-        { pubkey: cfgPda, isSigner: false, isWritable: false },
-      ])
-      .rpc();
-
-    const [votePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("vote"),
-        fakeTrust.toBuffer(),
-        Buffer.from(propId),
-        provider.wallet.publicKey.toBuffer(),
-      ],
-      program.programId,
-    );
-
-    await program.methods
-      .castVote(1, new anchor.BN(1000))
-      .accounts({
-        proposal: propPda,
-        vote: votePda,
-        voter: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xe3,
+      cfgId,
+      proposalId: propId,
+      voteAmount: 1000,
+    });
 
     let threw = false;
     try {
       await program.methods
         .executeProposal(new anchor.BN(1000))
         .accounts({
-          proposal: propPda,
+          proposal: fixture.proposalPda,
           executor: provider.wallet.publicKey,
         })
         .rpc();

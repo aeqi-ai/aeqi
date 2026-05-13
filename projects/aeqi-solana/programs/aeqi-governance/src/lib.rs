@@ -233,22 +233,11 @@ pub mod aeqi_governance {
         Ok(())
     }
 
-    /// Cast a vote on a proposal. Records a `VoteRecord` PDA so the same voter
-    /// can't double-vote, and bumps the proposal's tally. Vote power is
-    /// passed in for now; the next iteration replaces this with a CPI to
-    /// `aeqi_token::get_past_votes` (token mode) or
-    /// `aeqi_role::get_past_role_votes` (per-role multisig).
-    pub fn cast_vote(ctx: Context<CastVote>, choice: u8, weight: u128) -> Result<()> {
-        require!(weight > 0, GovernanceError::ZeroWeight);
-
-        let p = &mut ctx.accounts.proposal;
-        let now = Clock::get()?.unix_timestamp;
-        require_vote_open(p, now)?;
-
-        apply_vote_tally(p, choice, weight)?;
-        let v = &mut ctx.accounts.vote;
-        record_vote(v, p, ctx.accounts.voter.key(), choice, weight, ctx.bumps.vote);
-        Ok(())
+    /// Deprecated compatibility entrypoint. Generic votes are disabled because
+    /// caller-supplied weight is not tied to token or role state. Use
+    /// `cast_vote_token` or `cast_vote_role` instead.
+    pub fn cast_vote(_ctx: Context<CastVote>, _choice: u8, _weight: u128) -> Result<()> {
+        err!(GovernanceError::GenericVotingDisabled)
     }
 
     /// Create a proposal under a registered governance config. Per-proposal
@@ -687,6 +676,8 @@ pub enum GovernanceError {
     InvalidVoteChoice,
     #[msg("vote weight must be > 0")]
     ZeroWeight,
+    #[msg("generic caller-supplied vote weights are disabled; use token or role voting")]
+    GenericVotingDisabled,
     #[msg("proposal has already been executed")]
     ProposalAlreadyExecuted,
     #[msg("proposal was canceled")]
