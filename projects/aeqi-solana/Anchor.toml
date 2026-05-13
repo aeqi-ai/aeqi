@@ -6,17 +6,17 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-aeqi_budget = "2XVZqURv6hVL7EEMd4BL1zyJhngSiAEV2q4yCgbQjASA"
-aeqi_factory = "4VvrC3pQ2hTUNJ7i5TnYzr9xnAU2P6T5ULwbbZnJES4T"
-aeqi_fund = "4QJQsnRYUyXo9EFxAayL79zAkFejjdWeKhoTXeMVK7Nv"
-aeqi_funding = "8EAVY6uosAatbwhemj1gsPB47WwwmDLzi2t7yo2b8CWV"
-aeqi_governance = "dXXXHVt3y8PXdVtw9yGWSb67hiDa7YkyuUTfi6xRLen"
-aeqi_role = "8KgcKNqW94Xonj5H3s64Cgf3NmDPMjhpL3PfxeFnDV1r"
-aeqi_token = "28vYmAxQVZkqGwrH28gXDYNdWBPY7dW5odeUvoAHkw8r"
-aeqi_treasury = "CQ7TGZFmkoZh61xgKnbjcj9Uomht38LqeihMNsY4p9KC"
-aeqi_trust = "4CtmLZSLR3t1nKa3A2XD7F2awU5WajiNMxvHCiEDoBnD"
-aeqi_unifutures = "2AqvqotDRhQj67YGn3MaZPUoYFBUEbnEbvbLD8Q2mF4s"
-aeqi_vesting = "24mJEeCHs492NGCJADvfb9zWDcqoDWNCpCYC2xAE2VBs"
+aeqi_budget = "5PbDxvaYD9shSGxE2pQyUTqCqe6FXUMDciXSEGevFE5G"
+aeqi_factory = "3qRT5qTuv4wkqbLfZQUVcf94QRyG3JdCAbFZsiBNpgEv"
+aeqi_fund = "DaFpZcqMaL4rmAemJ2WBeUth42PMmHxNg9t6j9h9p7YP"
+aeqi_funding = "8dCM5qRnfMAZGdsC8pYYQzomVdQpihL9jgwAXoPaie3U"
+aeqi_governance = "5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq"
+aeqi_role = "4GSrvANBi1yrn3w4VgoxvVz7pH9BdR8MeyUpH4ZcGXpB"
+aeqi_token = "AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh"
+aeqi_treasury = "2KBH4dhAM8fvix5sB44f55Hy6mE4HgeMMbm3htZTJNm7"
+aeqi_trust = "CCbs4TCqE6FXmRdyLexx2rSSHAShymWrrR9QWeJUJbXV"
+aeqi_unifutures = "CAz7bt2gLYTe3VUZ4xEyF8AA8syth4NkUKb5c1NRq8JF"
+aeqi_vesting = "DCZKRmxjUyAZ3nptbkCBnAGqTe4E7xTvXfLbnf95uj7y"
 
 [registry]
 url = "https://api.apr.dev"

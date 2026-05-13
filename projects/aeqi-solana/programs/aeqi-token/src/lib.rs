@@ -23,12 +23,12 @@ use anchor_spl::token_interface::{
 };
 use solana_system_interface::instruction as system_instruction;
 
-declare_id!("28vYmAxQVZkqGwrH28gXDYNdWBPY7dW5odeUvoAHkw8r");
+declare_id!("AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh");
 
 /// aeqi_trust program id — used for cross-program account read of the
 /// BytesConfig PDA written by the factory before finalize.
 pub const AEQI_TRUST_ID: Pubkey =
-    anchor_lang::pubkey!("4CtmLZSLR3t1nKa3A2XD7F2awU5WajiNMxvHCiEDoBnD");
+    anchor_lang::pubkey!("CCbs4TCqE6FXmRdyLexx2rSSHAShymWrrR9QWeJUJbXV");
 
 /// Stable PDA-key suffix the factory writes the token's borsh-encoded
 /// `TokenInitConfig` blob under, in the trust's BytesConfig slot. Each

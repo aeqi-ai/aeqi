@@ -33,7 +33,7 @@ use aeqi_trust::cpi::accounts::{
 use aeqi_trust::program::AeqiTrust;
 use anchor_lang::prelude::*;
 
-declare_id!("4VvrC3pQ2hTUNJ7i5TnYzr9xnAU2P6T5ULwbbZnJES4T");
+declare_id!("3qRT5qTuv4wkqbLfZQUVcf94QRyG3JdCAbFZsiBNpgEv");
 
 pub mod state;
 pub use state::*;

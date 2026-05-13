@@ -27,7 +27,7 @@ use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
-declare_id!("4QJQsnRYUyXo9EFxAayL79zAkFejjdWeKhoTXeMVK7Nv");
+declare_id!("DaFpZcqMaL4rmAemJ2WBeUth42PMmHxNg9t6j9h9p7YP");
 
 #[program]
 pub mod aeqi_fund {

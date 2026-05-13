@@ -26,7 +26,7 @@ pub mod pool;
 use crate::pool::SwapDirection;
 pub use curve::CurveType;
 
-declare_id!("2AqvqotDRhQj67YGn3MaZPUoYFBUEbnEbvbLD8Q2mF4s");
+declare_id!("CAz7bt2gLYTe3VUZ4xEyF8AA8syth4NkUKb5c1NRq8JF");
 
 #[program]
 pub mod aeqi_unifutures {

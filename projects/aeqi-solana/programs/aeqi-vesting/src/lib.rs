@@ -20,7 +20,7 @@ use anchor_spl::token_interface::{
     burn, transfer_checked, Burn, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
-declare_id!("24mJEeCHs492NGCJADvfb9zWDcqoDWNCpCYC2xAE2VBs");
+declare_id!("DCZKRmxjUyAZ3nptbkCBnAGqTe4E7xTvXfLbnf95uj7y");
 
 #[program]
 pub mod aeqi_vesting {

@@ -20,19 +20,19 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount};
 
-declare_id!("dXXXHVt3y8PXdVtw9yGWSb67hiDa7YkyuUTfi6xRLen");
+declare_id!("5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq");
 
 /// Hardcoded aeqi_role program ID — used to validate the PDA derivation +
 /// account ownership of `voter_checkpoint` in `cast_vote_role`. Avoids a
 /// cross-crate dep just to read RoleVoteCheckpoint.account / .count.
 pub const AEQI_ROLE_ID: Pubkey =
-    anchor_lang::pubkey!("8KgcKNqW94Xonj5H3s64Cgf3NmDPMjhpL3PfxeFnDV1r");
+    anchor_lang::pubkey!("4GSrvANBi1yrn3w4VgoxvVz7pH9BdR8MeyUpH4ZcGXpB");
 
 /// Hardcoded aeqi_token program ID — used to validate the cap-table mint
 /// passed to `cast_vote_token` is the canonical PDA `[b"mint", trust]`
 /// under aeqi_token, so callers can't substitute an unrelated mint.
 pub const AEQI_TOKEN_ID: Pubkey =
-    anchor_lang::pubkey!("28vYmAxQVZkqGwrH28gXDYNdWBPY7dW5odeUvoAHkw8r");
+    anchor_lang::pubkey!("AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh");
 
 /// Same memory layout as `aeqi_role::RoleVoteCheckpoint`. Used for borsh
 /// deserialization of the cross-program account data; the `#[account]`

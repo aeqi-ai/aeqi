@@ -30,7 +30,7 @@ use aeqi_unifutures::cpi::accounts::{CreateCommitmentSale, CreateCurve, CreateEx
 use aeqi_unifutures::program::AeqiUnifutures;
 use anchor_lang::prelude::*;
 
-declare_id!("8EAVY6uosAatbwhemj1gsPB47WwwmDLzi2t7yo2b8CWV");
+declare_id!("8dCM5qRnfMAZGdsC8pYYQzomVdQpihL9jgwAXoPaie3U");
 
 #[program]
 pub mod aeqi_funding {

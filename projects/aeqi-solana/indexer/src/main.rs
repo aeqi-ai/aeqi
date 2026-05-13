@@ -24,13 +24,13 @@ use std::str::FromStr;
 use tracing::{info, warn};
 
 const PROGRAMS: &[(&str, &str)] = &[
-    ("aeqi_trust", "4CtmLZSLR3t1nKa3A2XD7F2awU5WajiNMxvHCiEDoBnD"),
-    ("aeqi_factory", "4VvrC3pQ2hTUNJ7i5TnYzr9xnAU2P6T5ULwbbZnJES4T"),
-    ("aeqi_role", "8KgcKNqW94Xonj5H3s64Cgf3NmDPMjhpL3PfxeFnDV1r"),
-    ("aeqi_governance", "dXXXHVt3y8PXdVtw9yGWSb67hiDa7YkyuUTfi6xRLen"),
-    ("aeqi_token", "28vYmAxQVZkqGwrH28gXDYNdWBPY7dW5odeUvoAHkw8r"),
-    ("aeqi_treasury", "CQ7TGZFmkoZh61xgKnbjcj9Uomht38LqeihMNsY4p9KC"),
-    ("aeqi_vesting", "24mJEeCHs492NGCJADvfb9zWDcqoDWNCpCYC2xAE2VBs"),
+    ("aeqi_trust", "CCbs4TCqE6FXmRdyLexx2rSSHAShymWrrR9QWeJUJbXV"),
+    ("aeqi_factory", "3qRT5qTuv4wkqbLfZQUVcf94QRyG3JdCAbFZsiBNpgEv"),
+    ("aeqi_role", "4GSrvANBi1yrn3w4VgoxvVz7pH9BdR8MeyUpH4ZcGXpB"),
+    ("aeqi_governance", "5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq"),
+    ("aeqi_token", "AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh"),
+    ("aeqi_treasury", "2KBH4dhAM8fvix5sB44f55Hy6mE4HgeMMbm3htZTJNm7"),
+    ("aeqi_vesting", "DCZKRmxjUyAZ3nptbkCBnAGqTe4E7xTvXfLbnf95uj7y"),
 ];
 
 #[derive(Parser, Debug)]

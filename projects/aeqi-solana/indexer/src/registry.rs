@@ -28,7 +28,7 @@ pub struct EventMeta {
 const EVENTS: &[(&str, &str, &[&str])] = &[
     (
         "aeqi_trust",
-        "4CtmLZSLR3t1nKa3A2XD7F2awU5WajiNMxvHCiEDoBnD",
+        "CCbs4TCqE6FXmRdyLexx2rSSHAShymWrrR9QWeJUJbXV",
         &[
             "TrustInitialized",
             "TrustFinalized",
@@ -39,7 +39,7 @@ const EVENTS: &[(&str, &str, &[&str])] = &[
     ),
     (
         "aeqi_factory",
-        "4VvrC3pQ2hTUNJ7i5TnYzr9xnAU2P6T5ULwbbZnJES4T",
+        "3qRT5qTuv4wkqbLfZQUVcf94QRyG3JdCAbFZsiBNpgEv",
         &[
             "CompanyCreated",
             "CompanySpawned",
@@ -49,7 +49,7 @@ const EVENTS: &[(&str, &str, &[&str])] = &[
     ),
     (
         "aeqi_role",
-        "8KgcKNqW94Xonj5H3s64Cgf3NmDPMjhpL3PfxeFnDV1r",
+        "4GSrvANBi1yrn3w4VgoxvVz7pH9BdR8MeyUpH4ZcGXpB",
         &[
             "RoleTypeCreated",
             "RoleCreated",
@@ -61,7 +61,7 @@ const EVENTS: &[(&str, &str, &[&str])] = &[
     ),
     (
         "aeqi_governance",
-        "dXXXHVt3y8PXdVtw9yGWSb67hiDa7YkyuUTfi6xRLen",
+        "5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq",
         &[
             "ConfigRegistered",
             "ProposalCreated",
@@ -71,7 +71,7 @@ const EVENTS: &[(&str, &str, &[&str])] = &[
     ),
     (
         "aeqi_token",
-        "28vYmAxQVZkqGwrH28gXDYNdWBPY7dW5odeUvoAHkw8r",
+        "AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh",
         &[
             "TokenModuleInitialized",
             "MintCreated",
@@ -81,12 +81,12 @@ const EVENTS: &[(&str, &str, &[&str])] = &[
     ),
     (
         "aeqi_treasury",
-        "CQ7TGZFmkoZh61xgKnbjcj9Uomht38LqeihMNsY4p9KC",
+        "2KBH4dhAM8fvix5sB44f55Hy6mE4HgeMMbm3htZTJNm7",
         &["TreasuryWithdrew", "TreasuryDeposited"],
     ),
     (
         "aeqi_vesting",
-        "24mJEeCHs492NGCJADvfb9zWDcqoDWNCpCYC2xAE2VBs",
+        "DCZKRmxjUyAZ3nptbkCBnAGqTe4E7xTvXfLbnf95uj7y",
         &["PositionCreated", "Claimed"],
     ),
 ];

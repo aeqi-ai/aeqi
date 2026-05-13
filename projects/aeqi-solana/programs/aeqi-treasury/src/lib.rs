@@ -16,7 +16,7 @@ use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
-declare_id!("CQ7TGZFmkoZh61xgKnbjcj9Uomht38LqeihMNsY4p9KC");
+declare_id!("2KBH4dhAM8fvix5sB44f55Hy6mE4HgeMMbm3htZTJNm7");
 
 #[program]
 pub mod aeqi_treasury {

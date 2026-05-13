@@ -17,7 +17,7 @@
 use aeqi_role::{Role, RoleStatus};
 use anchor_lang::prelude::*;
 
-declare_id!("2XVZqURv6hVL7EEMd4BL1zyJhngSiAEV2q4yCgbQjASA");
+declare_id!("5PbDxvaYD9shSGxE2pQyUTqCqe6FXUMDciXSEGevFE5G");
 
 #[program]
 pub mod aeqi_budget {
