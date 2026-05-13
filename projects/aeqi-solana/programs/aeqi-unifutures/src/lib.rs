@@ -955,7 +955,6 @@ pub mod aeqi_unifutures {
         .ok_or_else(|| error!(UnifuturesError::MathOverflow))?;
         Ok(cost)
     }
-
 }
 
 // -----------------------------------------------------------------------------
@@ -1656,4 +1655,5 @@ pub enum UnifuturesError {
     #[msg("sale is not Completed yet — finalize first")]
     SaleNotCompleted,
     #[msg("commitment already claimed")]
-    AlreadyClaimed,}
+    AlreadyClaimed,
+}

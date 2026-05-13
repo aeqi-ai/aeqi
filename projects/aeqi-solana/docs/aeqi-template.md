@@ -13,9 +13,13 @@ Defines the data needed to spawn the AEQI company via `aeqi_factory.instantiate_
 
 ## Modules to register
 
-The factory issues a `register_module` per slot, then `init` then `finalize`.
-Each slot records the selected provider/version/hash so a TRUST can later pull a
-provider-published replacement without changing other TRUSTs.
+Before registration, the provider publishes one `ModuleImplementation` PDA per
+module version. The factory template then records the selected
+provider/version/hash. During `instantiate_template`, the factory validates
+those published implementation records, registers each module slot, replays the
+template's module ACL edges, and finalizes the TRUST. Per-module
+`init`/`finalize` instructions still run as a follow-on phase because each
+module has a different account context.
 
 | module_id (keccak256 of name) | program_id        | provider          | version | trust_acl                                   |
 | ----------------------------- | ----------------- | ----------------- | ------- | ------------------------------------------- |
@@ -26,6 +30,13 @@ provider-published replacement without changing other TRUSTs.
 Implementation metadata hashes are 32-byte release manifest hashes. A zero hash
 is allowed only for local/dev templates that do not have a published manifest
 yet.
+
+`instantiate_template` expects `remaining_accounts` in this exact order:
+
+1. one TRUST `Module` PDA per module, in template order
+2. one provider-published `ModuleImplementation` PDA per module, in template
+   order
+3. one `ModuleAclEdge` PDA per ACL edge, in template order
 
 Future modules (lands once their program ships):
 

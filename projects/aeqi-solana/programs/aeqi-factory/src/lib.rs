@@ -28,6 +28,7 @@ use aeqi_token::program::AeqiToken;
 use aeqi_trust::cpi::accounts::{
     Finalize as TrustFinalize, Initialize as TrustInitialize,
     RegisterModule as TrustRegisterModule, SetBytesConfig as TrustSetBytesConfig,
+    SetModuleAcl as TrustSetModuleAcl,
 };
 use aeqi_trust::program::AeqiTrust;
 use anchor_lang::prelude::*;
@@ -347,27 +348,44 @@ pub mod aeqi_factory {
     /// Full template-driven create flow: reads a registered Template PDA and
     /// replays its module set against a fresh TRUST.
     ///
-    /// `remaining_accounts` layout: one Module PDA per module in the
-    /// template, in declaration order. The aeqi_trust program will init them
-    /// pairwise during CPI.
+    /// `remaining_accounts` layout:
+    ///
+    ///   1. one Module PDA per module in template order
+    ///   2. one ModuleImplementation PDA per module in template order
+    ///   3. one ModuleAclEdge PDA per ACL edge in template order
     ///
     /// Steps run atomically:
     ///   1. CPI aeqi_trust::initialize (creates trust, enters creation mode)
-    ///   2. For each ModuleSpec in template.modules: CPI register_module
-    ///   3. CPI aeqi_trust::finalize (exits creation mode)
+    ///   2. Validate each ModuleSpec against its provider-published
+    ///      ModuleImplementation PDA
+    ///   3. For each ModuleSpec in template.modules: CPI register_module
+    ///   4. For each AclEdgeSpec in template.acl_edges: CPI set_module_acl
+    ///   5. CPI aeqi_trust::finalize (exits creation mode)
     ///
     /// Module init/finalize CPIs (loading per-module config) land separately
-    /// once each module's surface stabilizes. ACL-edge CPIs likewise.
+    /// once each module's surface stabilizes.
     pub fn instantiate_template<'info>(
         ctx: Context<'_, '_, 'info, 'info, InstantiateTemplate<'info>>,
         trust_id: [u8; 32],
     ) -> Result<()> {
         let template = &ctx.accounts.template;
         require!(!template.modules.is_empty(), FactoryError::EmptyModuleSet);
+        let expected_remaining_accounts = template.modules.len() * 2 + template.acl_edges.len();
         require!(
-            ctx.remaining_accounts.len() == template.modules.len(),
-            FactoryError::ModuleAccountCountMismatch
+            ctx.remaining_accounts.len() == expected_remaining_accounts,
+            FactoryError::TemplateAccountCountMismatch
         );
+
+        let module_count = template.modules.len();
+        let module_accounts = &ctx.remaining_accounts[..module_count];
+        let implementation_accounts = &ctx.remaining_accounts[module_count..module_count * 2];
+        let acl_edge_accounts = &ctx.remaining_accounts[module_count * 2..];
+
+        for (spec, implementation_acct) in
+            template.modules.iter().zip(implementation_accounts.iter())
+        {
+            validate_implementation_account(spec, implementation_acct)?;
+        }
 
         // 1. initialize trust
         let init_accounts = TrustInitialize {
@@ -380,7 +398,7 @@ pub mod aeqi_factory {
         aeqi_trust::cpi::initialize(init_ctx, trust_id)?;
 
         // 2. register each module from the template's spec
-        for (spec, module_acct) in template.modules.iter().zip(ctx.remaining_accounts.iter()) {
+        for (spec, module_acct) in template.modules.iter().zip(module_accounts.iter()) {
             let reg_accounts = TrustRegisterModule {
                 trust: ctx.accounts.trust.to_account_info(),
                 module: module_acct.clone(),
@@ -400,7 +418,27 @@ pub mod aeqi_factory {
             )?;
         }
 
-        // 3. finalize trust
+        // 3. replay the template ACL graph.
+        for (edge, acl_edge_acct) in template.acl_edges.iter().zip(acl_edge_accounts.iter()) {
+            let source_index = template
+                .modules
+                .iter()
+                .position(|module| module.module_id == edge.source_module_id)
+                .ok_or(error!(FactoryError::UnknownAclModuleReference))?;
+            let source_module = module_accounts[source_index].clone();
+            let acl_accounts = TrustSetModuleAcl {
+                trust: ctx.accounts.trust.to_account_info(),
+                source_module,
+                acl_edge: acl_edge_acct.clone(),
+                authority: ctx.accounts.authority.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+            };
+            let acl_ctx =
+                CpiContext::new(ctx.accounts.aeqi_trust_program.to_account_info(), acl_accounts);
+            aeqi_trust::cpi::set_module_acl(acl_ctx, edge.target_module_id, edge.flags)?;
+        }
+
+        // 4. finalize trust
         let fin_accounts = TrustFinalize {
             trust: ctx.accounts.trust.to_account_info(),
             authority: ctx.accounts.authority.to_account_info(),
@@ -419,8 +457,58 @@ pub mod aeqi_factory {
     }
 }
 
+fn validate_implementation_account<'info>(
+    spec: &ModuleSpec,
+    implementation_info: &'info AccountInfo<'info>,
+) -> Result<()> {
+    let expected_key = Pubkey::find_program_address(
+        &[
+            b"module_impl",
+            spec.provider.as_ref(),
+            spec.module_id.as_ref(),
+            spec.implementation_version.to_le_bytes().as_ref(),
+        ],
+        &aeqi_trust::ID,
+    )
+    .0;
+    require_keys_eq!(
+        implementation_info.key(),
+        expected_key,
+        FactoryError::ImplementationAccountMismatch
+    );
+
+    let implementation =
+        Account::<aeqi_trust::ModuleImplementation>::try_from(implementation_info)?;
+    require!(implementation.active, FactoryError::InactiveImplementation);
+    require_keys_eq!(
+        implementation.provider,
+        spec.provider,
+        FactoryError::ImplementationAccountMismatch
+    );
+    require!(
+        implementation.module_id == spec.module_id,
+        FactoryError::ImplementationAccountMismatch
+    );
+    require_keys_eq!(
+        implementation.implementation_program_id,
+        spec.program_id,
+        FactoryError::ImplementationAccountMismatch
+    );
+    require!(
+        implementation.version == spec.implementation_version,
+        FactoryError::ImplementationAccountMismatch
+    );
+    require!(
+        implementation.metadata_hash == spec.implementation_metadata_hash,
+        FactoryError::ImplementationAccountMismatch
+    );
+
+    Ok(())
+}
+
 fn validate_template_graph(modules: &[ModuleSpec], acl_edges: &[AclEdgeSpec]) -> Result<()> {
     for (i, module) in modules.iter().enumerate() {
+        require!(module.implementation_version > 0, FactoryError::InvalidImplementationVersion);
         for prev in modules.iter().take(i) {
             require!(prev.module_id != module.module_id, FactoryError::DuplicateModuleId);
         }
@@ -584,8 +672,16 @@ pub enum FactoryError {
     TooManyAclEdges,
     #[msg("remaining_accounts.len() must equal modules.len()")]
     ModuleAccountCountMismatch,
+    #[msg("remaining_accounts must include module, implementation, and ACL-edge accounts")]
+    TemplateAccountCountMismatch,
     #[msg("template module ids must be unique")]
     DuplicateModuleId,
     #[msg("template ACL edge references unknown module id")]
     UnknownAclModuleReference,
+    #[msg("template module implementation version must be greater than zero")]
+    InvalidImplementationVersion,
+    #[msg("template module implementation account does not match the module spec")]
+    ImplementationAccountMismatch,
+    #[msg("template module implementation is inactive")]
+    InactiveImplementation,
 }

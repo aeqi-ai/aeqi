@@ -9,6 +9,7 @@ import { AeqiTreasury } from "../target/types/aeqi_treasury";
 import { AeqiVesting } from "../target/types/aeqi_vesting";
 import { PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
+import { expectTxFail } from "./support";
 
 describe("aeqi_factory", () => {
   const provider = anchor.AnchorProvider.env();
@@ -21,6 +22,44 @@ describe("aeqi_factory", () => {
   const governance = anchor.workspace.aeqiGovernance as Program<AeqiGovernance>;
   const treasury = anchor.workspace.aeqiTreasury as Program<AeqiTreasury>;
   const vesting = anchor.workspace.aeqiVesting as Program<AeqiVesting>;
+  const zeroHash = Array.from(new Uint8Array(32));
+
+  const versionSeed = (version: anchor.BN) =>
+    version.toArrayLike(Buffer, "le", 8);
+
+  const implementationPda = (
+    moduleId: Uint8Array,
+    version = new anchor.BN(1),
+    providerKey = provider.wallet.publicKey,
+  ) =>
+    PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("module_impl"),
+        providerKey.toBuffer(),
+        Buffer.from(moduleId),
+        versionSeed(version),
+      ],
+      trust.programId,
+    )[0];
+
+  async function publishImplementation(
+    moduleId: Uint8Array,
+    implementationProgram: PublicKey,
+    metadataHash = zeroHash,
+    version = new anchor.BN(1),
+  ) {
+    const pda = implementationPda(moduleId, version);
+    await trust.methods
+      .publishModuleImplementation(Array.from(moduleId), version, metadataHash)
+      .accounts({
+        implementation: pda,
+        implementationProgram,
+        provider: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    return pda;
+  }
 
   it("create_company spawns a trust via CPI to aeqi_trust::initialize", async () => {
     const trustId = new Uint8Array(32);
@@ -295,8 +334,10 @@ describe("aeqi_factory", () => {
     moduleIdT[0] = 0x54;
     moduleIdT[1] = 0xa1;
 
-    const programR = anchor.web3.Keypair.generate().publicKey;
-    const programT = anchor.web3.Keypair.generate().publicKey;
+    const programR = role.programId;
+    const programT = token.programId;
+    const implR = await publishImplementation(moduleIdR, programR);
+    const implT = await publishImplementation(moduleIdT, programT);
 
     await factory.methods
       .registerTemplate(
@@ -307,7 +348,7 @@ describe("aeqi_factory", () => {
             programId: programR,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -315,11 +356,17 @@ describe("aeqi_factory", () => {
             programId: programT,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0x80),
           },
         ],
-        [],
+        [
+          {
+            sourceModuleId: Array.from(moduleIdR),
+            targetModuleId: Array.from(moduleIdT),
+            flags: new anchor.BN(0x40),
+          },
+        ],
       )
       .accounts({
         template: templatePda,
@@ -346,6 +393,15 @@ describe("aeqi_factory", () => {
       [Buffer.from("module"), trustPda.toBuffer(), Buffer.from(moduleIdT)],
       trust.programId,
     );
+    const [roleToTokenAcl] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("acl_edge"),
+        trustPda.toBuffer(),
+        Buffer.from(moduleIdR),
+        Buffer.from(moduleIdT),
+      ],
+      trust.programId,
+    );
 
     await factory.methods
       .instantiateTemplate(Array.from(trustId))
@@ -359,6 +415,9 @@ describe("aeqi_factory", () => {
       .remainingAccounts([
         { pubkey: modR, isWritable: true, isSigner: false },
         { pubkey: modT, isWritable: true, isSigner: false },
+        { pubkey: implR, isWritable: false, isSigner: false },
+        { pubkey: implT, isWritable: false, isSigner: false },
+        { pubkey: roleToTokenAcl, isWritable: true, isSigner: false },
       ])
       .rpc();
 
@@ -378,6 +437,91 @@ describe("aeqi_factory", () => {
     expect(mT.provider.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
     expect(mT.implementationVersion.toString()).to.eq("1");
     expect(mT.trustAcl.toString()).to.eq("128");
+
+    const acl = await trust.account.moduleAclEdge.fetch(roleToTokenAcl);
+    expect(Buffer.from(acl.sourceModuleId).toString("hex")).to.eq(
+      Buffer.from(moduleIdR).toString("hex"),
+    );
+    expect(Buffer.from(acl.targetModuleId).toString("hex")).to.eq(
+      Buffer.from(moduleIdT).toString("hex"),
+    );
+    expect(acl.flags.toString()).to.eq("64");
+  });
+
+  it("rejects instantiate_template when a selected implementation is inactive", async () => {
+    const templateId = new Uint8Array(32);
+    templateId[0] = 0xa1;
+    templateId[1] = 0x03;
+
+    const [templatePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("template"), Buffer.from(templateId)],
+      factory.programId,
+    );
+
+    const moduleId = new Uint8Array(32);
+    moduleId[0] = 0x49;
+    moduleId[1] = 0xa1;
+    const impl = await publishImplementation(moduleId, role.programId);
+    await trust.methods
+      .setModuleImplementationActive(false)
+      .accounts({
+        implementation: impl,
+        provider: provider.wallet.publicKey,
+      })
+      .rpc();
+
+    await factory.methods
+      .registerTemplate(
+        Array.from(templateId),
+        [
+          {
+            moduleId: Array.from(moduleId),
+            programId: role.programId,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: zeroHash,
+            trustAcl: new anchor.BN(0xff),
+          },
+        ],
+        [],
+      )
+      .accounts({
+        template: templatePda,
+        admin: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const trustId = new Uint8Array(32);
+    trustId[0] = 0x89;
+    trustId[1] = 0xa1;
+    const [trustPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trust"), Buffer.from(trustId)],
+      trust.programId,
+    );
+    const [modulePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("module"), trustPda.toBuffer(), Buffer.from(moduleId)],
+      trust.programId,
+    );
+
+    await expectTxFail(
+      async () =>
+        factory.methods
+          .instantiateTemplate(Array.from(trustId))
+          .accounts({
+            template: templatePda,
+            trust: trustPda,
+            authority: provider.wallet.publicKey,
+            aeqiTrustProgram: trust.programId,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .remainingAccounts([
+            { pubkey: modulePda, isWritable: true, isSigner: false },
+            { pubkey: impl, isWritable: false, isSigner: false },
+          ])
+          .rpc(),
+      /InactiveImplementation/,
+    );
   });
 
   it("create_company_full atomically spawns trust + registers + inits 3 modules in ONE tx", async () => {
@@ -739,7 +883,8 @@ describe("aeqi_factory", () => {
   // shape that holds funds + has time-vested grants).
   //
   // What `instantiate_template` ships today: trust.initialize +
-  // register_module per template-spec'd module + trust.finalize. Per-module
+  // provider-published implementation validation + register_module per
+  // template-spec'd module + ACL graph replay + trust.finalize. Per-module
   // init/finalize/set_bytes_config remains a separate caller step (each
   // module's own context shape varies). This test asserts the registry +
   // instantiation work; module init for the spawned trust is the next step
@@ -771,6 +916,21 @@ describe("aeqi_factory", () => {
     const moduleIdV = new Uint8Array(32);
     moduleIdV[0] = 0x56; // 'V' vesting
 
+    const roleImpl = await publishImplementation(moduleIdR, role.programId);
+    const tokenImpl = await publishImplementation(moduleIdT, token.programId);
+    const governanceImpl = await publishImplementation(
+      moduleIdG,
+      governance.programId,
+    );
+    const treasuryImpl = await publishImplementation(
+      moduleIdY,
+      treasury.programId,
+    );
+    const vestingImpl = await publishImplementation(
+      moduleIdV,
+      vesting.programId,
+    );
+
     // BASIC: role + token + governance
     const [basicPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("template"), Buffer.from(BASIC_ID)],
@@ -785,7 +945,7 @@ describe("aeqi_factory", () => {
             programId: role.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -793,7 +953,7 @@ describe("aeqi_factory", () => {
             programId: token.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -801,7 +961,7 @@ describe("aeqi_factory", () => {
             programId: governance.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
         ],
@@ -828,7 +988,7 @@ describe("aeqi_factory", () => {
             programId: role.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -836,7 +996,7 @@ describe("aeqi_factory", () => {
             programId: token.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -844,7 +1004,7 @@ describe("aeqi_factory", () => {
             programId: governance.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -852,7 +1012,7 @@ describe("aeqi_factory", () => {
             programId: treasury.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
           {
@@ -860,7 +1020,7 @@ describe("aeqi_factory", () => {
             programId: vesting.programId,
             provider: provider.wallet.publicKey,
             implementationVersion: new anchor.BN(1),
-            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            implementationMetadataHash: zeroHash,
             trustAcl: new anchor.BN(0xff),
           },
         ],
@@ -893,6 +1053,7 @@ describe("aeqi_factory", () => {
           trust.programId,
         )[0],
     );
+    const basicImplementationPdas = [roleImpl, tokenImpl, governanceImpl];
     await factory.methods
       .instantiateTemplate(Array.from(trustIdBasic))
       .accounts({
@@ -902,13 +1063,18 @@ describe("aeqi_factory", () => {
         aeqiTrustProgram: trust.programId,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .remainingAccounts(
-        basicModulePdas.map((p) => ({
+      .remainingAccounts([
+        ...basicModulePdas.map((p) => ({
           pubkey: p,
           isWritable: true,
           isSigner: false,
         })),
-      )
+        ...basicImplementationPdas.map((p) => ({
+          pubkey: p,
+          isWritable: false,
+          isSigner: false,
+        })),
+      ])
       .rpc();
 
     const tBasic = await trust.account.trust.fetch(trustPdaBasic);
@@ -953,6 +1119,13 @@ describe("aeqi_factory", () => {
           trust.programId,
         )[0],
     );
+    const ventureImplementationPdas = [
+      roleImpl,
+      tokenImpl,
+      governanceImpl,
+      treasuryImpl,
+      vestingImpl,
+    ];
     await factory.methods
       .instantiateTemplate(Array.from(trustIdVent))
       .accounts({
@@ -962,13 +1135,18 @@ describe("aeqi_factory", () => {
         aeqiTrustProgram: trust.programId,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .remainingAccounts(
-        ventureModulePdas.map((p) => ({
+      .remainingAccounts([
+        ...ventureModulePdas.map((p) => ({
           pubkey: p,
           isWritable: true,
           isSigner: false,
         })),
-      )
+        ...ventureImplementationPdas.map((p) => ({
+          pubkey: p,
+          isWritable: false,
+          isSigner: false,
+        })),
+      ])
       .rpc();
 
     const tVent = await trust.account.trust.fetch(trustPdaVent);
