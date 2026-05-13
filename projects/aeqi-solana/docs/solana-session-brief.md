@@ -6,7 +6,7 @@ Use this file to start a fresh session on the Solana protocol work.
 
 - The Solana protocol stack is the canonical implementation target.
 - Governance is now explicit about loading config from `remaining_accounts`.
-- The full Anchor suite passed on the last run: `98 passing`.
+- The full Anchor suite passed on the last run: `99 passing`.
 - Anchor macro warning noise is intentionally suppressed at crate boundaries so
   real protocol warnings surface cleanly.
 
@@ -44,12 +44,16 @@ Use this file to start a fresh session on the Solana protocol work.
     that role type.
   - caller roles must be occupied, held by the payer, and bound to the same
     trust before their authority walk can create child roles.
+- `aeqi_fund`
+  - `deposit`, `redeem`, and `claim_carry` now require the passed `quote_mint`
+    to match the fund's configured quote mint.
+  - wrong-mint deposit attempts are covered with an adversarial Token-2022
+    account fixture.
 
 ## What To Work On Next
 
-1. Fix budget/fund/funding accounting invariants: quote-mint binding, spend
-   authority, budget-backed funding activation, and creator/trust activation
-   checks.
+1. Fix remaining budget/funding accounting invariants: spend authority,
+   budget-backed funding activation, and creator/trust activation checks.
 2. Replace the temporary TRUST-authority mint bridge with a governance/module
    ACL mint execution path once proposal execution is wired to module actions.
 3. Keep the Solana code readable and audit-friendly.

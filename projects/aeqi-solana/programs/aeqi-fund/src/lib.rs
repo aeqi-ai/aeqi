@@ -78,6 +78,7 @@ pub mod aeqi_fund {
     pub fn deposit(ctx: Context<FundDeposit>, amount: u64) -> Result<()> {
         require!(amount > 0, FundError::ZeroAmount);
         let f = &mut ctx.accounts.fund;
+        require_keys_eq!(ctx.accounts.quote_mint.key(), f.quote_mint, FundError::QuoteMintMismatch);
 
         // Transfer quote: lp_quote_ta → fund_quote_vault (LP signs)
         let cpi = TransferChecked {
@@ -173,6 +174,7 @@ pub mod aeqi_fund {
     pub fn claim_carry(ctx: Context<ClaimCarry>) -> Result<()> {
         let f = &mut ctx.accounts.fund;
         require_keys_eq!(ctx.accounts.manager.key(), f.manager, FundError::NotManager);
+        require_keys_eq!(ctx.accounts.quote_mint.key(), f.quote_mint, FundError::QuoteMintMismatch);
         let carry = f.accrued_carry;
         require!(carry > 0, FundError::NoCarry);
 
@@ -209,6 +211,7 @@ pub mod aeqi_fund {
     pub fn redeem(ctx: Context<FundRedeem>, shares: u64) -> Result<()> {
         require!(shares > 0, FundError::ZeroAmount);
         let f = &mut ctx.accounts.fund;
+        require_keys_eq!(ctx.accounts.quote_mint.key(), f.quote_mint, FundError::QuoteMintMismatch);
         require!(f.total_shares > 0, FundError::EmptyFund);
 
         let s = &mut ctx.accounts.lp_share;
@@ -502,4 +505,6 @@ pub enum FundError {
     NotManager,
     #[msg("no accrued carry to claim")]
     NoCarry,
+    #[msg("quote mint does not match the fund's configured quote mint")]
+    QuoteMintMismatch,
 }

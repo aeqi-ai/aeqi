@@ -243,34 +243,66 @@ describe("aeqi_role", () => {
   });
 
   it("assign_role rejects child assignment without an authorized caller role", async () => {
+    const trustA = Keypair.generate().publicKey;
+    const [moduleStatePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("role_module"), trustA.toBuffer()],
+      program.programId,
+    );
+    await program.methods
+      .init()
+      .accounts({
+        trust: trustA,
+        moduleState: moduleStatePda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
     const directorTypeId = new Uint8Array(32);
-    directorTypeId[0] = 0x44;
-    directorTypeId[1] = 0x49;
-    directorTypeId[2] = 0x52;
+    directorTypeId[0] = 0xa4;
 
     const parentRoleId = new Uint8Array(32);
-    parentRoleId[0] = 0x46;
-    parentRoleId[1] = 0x4f;
-    parentRoleId[2] = 0x55;
+    parentRoleId[0] = 0xa4;
+    parentRoleId[1] = 0x01;
 
     const childRoleId = new Uint8Array(32);
-    childRoleId[0] = 0x46;
-    childRoleId[1] = 0x0d;
+    childRoleId[0] = 0xa4;
+    childRoleId[1] = 0x02;
 
     const [rtPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("role_type"),
-        fakeTrust.toBuffer(),
+        trustA.toBuffer(),
         Buffer.from(directorTypeId),
       ],
       program.programId,
     );
+    await program.methods
+      .createRoleType(Array.from(directorTypeId), 0, {
+        vesting: false,
+        vestingCliff: new anchor.BN(0),
+        vestingDuration: new anchor.BN(0),
+        fdv: false,
+        fdvStart: new anchor.BN(0),
+        fdvEnd: new anchor.BN(0),
+        probationaryPeriod: new anchor.BN(0),
+        severancePeriod: new anchor.BN(0),
+        contribution: false,
+      })
+      .accounts({
+        trust: trustA,
+        roleType: rtPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
     const [parentRolePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("role"), fakeTrust.toBuffer(), Buffer.from(parentRoleId)],
+      [Buffer.from("role"), trustA.toBuffer(), Buffer.from(parentRoleId)],
       program.programId,
     );
     const [childRolePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("role"), fakeTrust.toBuffer(), Buffer.from(childRoleId)],
+      [Buffer.from("role"), trustA.toBuffer(), Buffer.from(childRoleId)],
       program.programId,
     );
 
@@ -283,7 +315,7 @@ describe("aeqi_role", () => {
         Array.from(new Uint8Array(64)),
       )
       .accounts({
-        trust: fakeTrust,
+        trust: trustA,
         roleType: rtPda,
         role: parentRolePda,
         callerRole: null,
@@ -295,7 +327,7 @@ describe("aeqi_role", () => {
     const [parentCheckpointPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("role_ckpt"),
-        fakeTrust.toBuffer(),
+        trustA.toBuffer(),
         Buffer.from(directorTypeId),
         provider.wallet.publicKey.toBuffer(),
       ],
@@ -307,7 +339,7 @@ describe("aeqi_role", () => {
       .accounts({
         role: parentRolePda,
         roleType: rtPda,
-        trust: fakeTrust,
+        trust: trustA,
         callerRole: null,
         checkpoint: parentCheckpointPda,
         payer: provider.wallet.publicKey,
@@ -324,7 +356,7 @@ describe("aeqi_role", () => {
         Array.from(new Uint8Array(64)),
       )
       .accounts({
-        trust: fakeTrust,
+        trust: trustA,
         roleType: rtPda,
         role: childRolePda,
         callerRole: parentRolePda,
@@ -337,7 +369,7 @@ describe("aeqi_role", () => {
     const [checkpointPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("role_ckpt"),
-        fakeTrust.toBuffer(),
+        trustA.toBuffer(),
         Buffer.from(directorTypeId),
         occupant.toBuffer(),
       ],
@@ -351,7 +383,7 @@ describe("aeqi_role", () => {
         .accounts({
           role: childRolePda,
           roleType: rtPda,
-          trust: fakeTrust,
+          trust: trustA,
           callerRole: null,
           checkpoint: checkpointPda,
           payer: provider.wallet.publicKey,
@@ -369,7 +401,7 @@ describe("aeqi_role", () => {
       .accounts({
         role: childRolePda,
         roleType: rtPda,
-        trust: fakeTrust,
+        trust: trustA,
         callerRole: parentRolePda,
         checkpoint: checkpointPda,
         payer: provider.wallet.publicKey,

@@ -241,6 +241,129 @@ describe("aeqi_fund", () => {
     expect(lpAccount.amount.toString()).to.eq("6000");
   });
 
+  it("deposit rejects a quote mint that differs from the fund config", async () => {
+    const fundId = new Uint8Array(32);
+    fundId[0] = 0xfd;
+    fundId[1] = 0x11;
+
+    const [fundPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("fund"), fakeTrust.toBuffer(), Buffer.from(fundId)],
+      program.programId,
+    );
+    const [fundAuthorityPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("fund_authority"),
+        fakeTrust.toBuffer(),
+        Buffer.from(fundId),
+      ],
+      program.programId,
+    );
+
+    const configuredQuoteMint = await createMint(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      provider.wallet.publicKey,
+      null,
+      0,
+      Keypair.generate(),
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const wrongQuoteMint = await createMint(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      provider.wallet.publicKey,
+      null,
+      0,
+      Keypair.generate(),
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+
+    await program.methods
+      .createFund(Array.from(fundId), 0)
+      .accounts({
+        trust: fakeTrust,
+        moduleState: modulePda,
+        fund: fundPda,
+        quoteMint: configuredQuoteMint,
+        manager: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const fundQuoteVault = getAssociatedTokenAddressSync(
+      wrongQuoteMint,
+      fundAuthorityPda,
+      true,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    const lp = provider.wallet.publicKey;
+    const lpQuoteTa = getAssociatedTokenAddressSync(
+      wrongQuoteMint,
+      lp,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction()
+        .add(
+          createAssociatedTokenAccountInstruction(
+            lp,
+            fundQuoteVault,
+            fundAuthorityPda,
+            wrongQuoteMint,
+            TOKEN_2022_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+          ),
+        )
+        .add(
+          createAssociatedTokenAccountInstruction(
+            lp,
+            lpQuoteTa,
+            lp,
+            wrongQuoteMint,
+            TOKEN_2022_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+          ),
+        ),
+    );
+
+    const [lpSharePda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("lp_share"),
+        fakeTrust.toBuffer(),
+        Buffer.from(fundId),
+        lp.toBuffer(),
+      ],
+      program.programId,
+    );
+
+    let threw = false;
+    try {
+      await program.methods
+        .deposit(new anchor.BN(1))
+        .accounts({
+          fund: fundPda,
+          fundAuthority: fundAuthorityPda,
+          quoteMint: wrongQuoteMint,
+          fundQuoteVault,
+          lpQuoteTa,
+          lpShare: lpSharePda,
+          lp,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/QuoteMintMismatch/);
+    }
+    expect(threw).to.eq(true);
+  });
+
   // NAV-up → carry accrues at 20% of the increase, gross_nav reflects
   // post-carry LP-attributable value, HWM resets to the new gross_nav.
   // Manager then claims the accrued carry from the vault.
