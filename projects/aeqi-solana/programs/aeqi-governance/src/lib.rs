@@ -115,7 +115,7 @@ pub mod aeqi_governance {
         let p = &mut ctx.accounts.proposal;
         require!(!p.executed, GovernanceError::ProposalAlreadyExecuted);
         require!(!p.canceled, GovernanceError::ProposalCanceled);
-        
+
         let cfg_acct =
             ctx.remaining_accounts.first().ok_or(error!(GovernanceError::ConfigMismatch))?;
         let cfg =
@@ -376,9 +376,11 @@ fn load_governance_config(
     require_keys_eq!(*cfg_acct.owner, *program_id, GovernanceError::ConfigMismatch);
 
     let data = cfg_acct.try_borrow_data().map_err(|_| error!(GovernanceError::ConfigMismatch))?;
-    require!(data.len() >= 8, GovernanceError::ConfigMismatch);
+    let discriminator = GovernanceConfig::DISCRIMINATOR;
+    require!(data.len() >= discriminator.len(), GovernanceError::ConfigMismatch);
+    require!(&data[..discriminator.len()] == discriminator, GovernanceError::ConfigMismatch);
 
-    let cfg = GovernanceConfig::try_from_slice(&data[8..])
+    let cfg = GovernanceConfig::try_from_slice(&data[discriminator.len()..])
         .map_err(|_| error!(GovernanceError::ConfigMismatch))?;
     require_keys_eq!(cfg.trust, *trust, GovernanceError::ConfigMismatch);
     require!(cfg.governance_config_id == *governance_config_id, GovernanceError::ConfigMismatch);
@@ -709,4 +711,130 @@ pub enum GovernanceError {
     InvalidCheckpoint,
     #[msg("math overflow")]
     MathOverflow,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn governance_config_data(cfg: &GovernanceConfig) -> Vec<u8> {
+        let mut data = Vec::new();
+        data.extend_from_slice(GovernanceConfig::DISCRIMINATOR);
+        cfg.serialize(&mut data).unwrap();
+        data
+    }
+
+    fn sample_config(trust: Pubkey, governance_config_id: [u8; 32]) -> GovernanceConfig {
+        GovernanceConfig {
+            trust,
+            governance_config_id,
+            proposal_threshold: 0,
+            quorum_bps: 4000,
+            support_bps: 5000,
+            voting_period: 60,
+            execution_delay: 0,
+            allow_early_enact: true,
+            bump: 255,
+        }
+    }
+
+    fn assert_config_mismatch(result: Result<GovernanceConfig>) {
+        match result {
+            Ok(_) => panic!("expected ConfigMismatch"),
+            Err(err) => assert!(err.to_string().contains("ConfigMismatch"), "{err}"),
+        }
+    }
+
+    #[test]
+    fn load_governance_config_rejects_wrong_discriminator() {
+        let trust = Pubkey::new_unique();
+        let governance_config_id = [7u8; 32];
+        let (cfg_key, _) = Pubkey::find_program_address(
+            &[b"gov_config", trust.as_ref(), governance_config_id.as_ref()],
+            &crate::ID,
+        );
+        let cfg = sample_config(trust, governance_config_id);
+        let mut data = governance_config_data(&cfg);
+        data[0] ^= 0xff;
+        let mut lamports = 1;
+
+        let cfg_acct = AccountInfo::new(
+            &cfg_key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &crate::ID,
+            false,
+            0,
+        );
+
+        assert_config_mismatch(load_governance_config(
+            &cfg_acct,
+            &trust,
+            &governance_config_id,
+            &crate::ID,
+        ));
+    }
+
+    #[test]
+    fn load_governance_config_rejects_truncated_body() {
+        let trust = Pubkey::new_unique();
+        let governance_config_id = [8u8; 32];
+        let (cfg_key, _) = Pubkey::find_program_address(
+            &[b"gov_config", trust.as_ref(), governance_config_id.as_ref()],
+            &crate::ID,
+        );
+        let mut data = GovernanceConfig::DISCRIMINATOR.to_vec();
+        let mut lamports = 1;
+
+        let cfg_acct = AccountInfo::new(
+            &cfg_key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &crate::ID,
+            false,
+            0,
+        );
+
+        assert_config_mismatch(load_governance_config(
+            &cfg_acct,
+            &trust,
+            &governance_config_id,
+            &crate::ID,
+        ));
+    }
+
+    #[test]
+    fn load_governance_config_rejects_embedded_trust_mismatch() {
+        let trust = Pubkey::new_unique();
+        let governance_config_id = [9u8; 32];
+        let (cfg_key, _) = Pubkey::find_program_address(
+            &[b"gov_config", trust.as_ref(), governance_config_id.as_ref()],
+            &crate::ID,
+        );
+        let cfg = sample_config(Pubkey::new_unique(), governance_config_id);
+        let mut data = governance_config_data(&cfg);
+        let mut lamports = 1;
+
+        let cfg_acct = AccountInfo::new(
+            &cfg_key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &crate::ID,
+            false,
+            0,
+        );
+
+        assert_config_mismatch(load_governance_config(
+            &cfg_acct,
+            &trust,
+            &governance_config_id,
+            &crate::ID,
+        ));
+    }
 }

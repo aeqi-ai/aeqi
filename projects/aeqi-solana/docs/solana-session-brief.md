@@ -6,24 +6,32 @@ Use this file to start a fresh session on the Solana protocol work.
 
 - The Solana protocol stack is the canonical implementation target.
 - Governance is now explicit about loading config from `remaining_accounts`.
-- The full Anchor suite passed on the last run: `92 passing`.
-- The current repo still has framework noise, but the functional test suite is green.
+- The full Anchor suite passed on the last run: `94 passing`.
+- Anchor macro warning noise is intentionally suppressed at crate boundaries so
+  real protocol warnings surface cleanly.
 
 ## Last Verified Changes
 
 - `aeqi_governance`
   - `propose` and `execute_proposal` now validate config via a shared loader.
+  - the loader checks PDA address, owner, Anchor discriminator, embedded trust,
+    and `governance_config_id`.
   - config mismatches surface as `ConfigMismatch`.
 - Tests
   - `tests/aeqi-governance.ts` migrated to `remainingAccounts` for config passing.
   - `tests/aeqi-end-to-end.ts` migrated to the same governance account shape.
   - the brittle config-mismatch test was fixed by registering the config first.
+  - missing config `remainingAccounts` are covered on both `propose` and
+    `execute_proposal`.
+  - Rust loader tests cover wrong discriminator, truncated body, and embedded
+    trust mismatch.
 
 ## What To Work On Next
 
-1. Reduce Anchor warning noise crate by crate.
-2. Tighten trust / factory / governance invariants if any new drift appears.
-3. Add more adversarial tests only where they compound coverage.
+1. Tighten trust / factory / governance invariants if any new drift appears.
+2. Add more adversarial tests only where they compound coverage.
+3. Review token mint edge cases: pre-created mint PDA, wrong token program,
+   authority mismatch, and duplicate creation paths.
 4. Keep the Solana code readable and audit-friendly.
 
 ## Working Rules
@@ -44,4 +52,3 @@ Use this file to start a fresh session on the Solana protocol work.
 ## Suggested Opening Prompt
 
 > Continue Solana protocol hardening from the current green state. Keep the work file-by-file, preserve behavior, and focus first on reducing Anchor warning noise while keeping trust, factory, governance, token, and Unifutures explicit and auditable.
-
