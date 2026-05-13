@@ -1,60 +1,32 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
-import { blueprintId } from "@/lib/blueprintId";
 import type { Blueprint, BlueprintCategory, SingleBlueprint } from "@/lib/types";
 import { isSingleBlueprint } from "@/lib/types";
-import { Button, Popover, Spinner, Tooltip } from "@/components/ui";
+import { Button, Spinner, Tooltip } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import PageRail from "@/components/PageRail";
-import { BlueprintCard } from "@/components/blueprints/BlueprintCard";
 import { parseTags, serializeTags } from "@/components/ideas/types";
 import "@/styles/templates.css";
 import "@/styles/blueprints-store.css";
-
-type Kind = "companies" | "agents" | "events" | "quests" | "ideas";
-type Sort = "recent" | "alpha-asc" | "alpha-desc" | "complexity";
-type View = "grid" | "list";
-
-const KIND_TABS: { id: Kind; label: string }[] = [
-  { id: "companies", label: "Companies" },
-  { id: "agents", label: "Agents" },
-  { id: "events", label: "Events" },
-  { id: "quests", label: "Quests" },
-  { id: "ideas", label: "Ideas" },
-];
-const KIND_IDS = KIND_TABS.map((t) => t.id);
-
-const SORT_LABELS: Record<Sort, string> = {
-  recent: "Recently added",
-  "alpha-asc": "Name (A→Z)",
-  "alpha-desc": "Name (Z→A)",
-  complexity: "Complexity",
-};
-const SORT_ORDER: Sort[] = ["recent", "alpha-asc", "alpha-desc", "complexity"];
-const SORT_VALUES = new Set<Sort>(SORT_ORDER);
-
-const VIEW_LABELS: Record<View, string> = { grid: "Grid", list: "List" };
-const VIEW_ORDER: View[] = ["grid", "list"];
-const VIEW_VALUES = new Set<View>(VIEW_ORDER);
-
-/** Display order for category sections. Foundation always shown (even empty). */
-const CATEGORY_ORDER: BlueprintCategory[] = ["company", "foundation", "fund"];
-
-const CATEGORY_LABELS: Record<BlueprintCategory, string> = {
-  company: "Company",
-  foundation: "Foundation",
-  fund: "Fund",
-};
-
-const CATEGORY_DESCRIPTIONS: Record<BlueprintCategory, string> = {
-  company: "Smart account with role-based governance",
-  foundation: "Public-good org with grant flows",
-  fund: "LP cap table for investment vehicles",
-};
-
-/** Set of valid category param values. */
-const CATEGORY_VALUES = new Set<BlueprintCategory>(CATEGORY_ORDER);
+import {
+  CATEGORY_ORDER,
+  CATEGORY_VALUES,
+  KIND_IDS,
+  KIND_TABS,
+  SORT_LABELS,
+  SORT_ORDER,
+  SORT_VALUES,
+  VIEW_LABELS,
+  VIEW_ORDER,
+  VIEW_VALUES,
+  type Kind,
+  type Sort,
+  type View,
+} from "./blueprints/constants";
+import BlueprintCategorySection from "./blueprints/BlueprintCategorySection";
+import ToolbarRadioPopover from "./blueprints/ToolbarRadioPopover";
+import BlueprintsFilterPopover from "./blueprints/BlueprintsFilterPopover";
 
 /**
  * `/blueprints` — top-level catalog with a vertical PageRail (Companies /
@@ -343,7 +315,7 @@ export default function BlueprintsPage() {
               onChange={(next) => setSearchParam("sort", next === "recent" ? null : next)}
             />
 
-            <FilterPopover
+            <BlueprintsFilterPopover
               tagCounts={tagCounts}
               selected={selectedTags}
               onChange={setTags}
@@ -446,298 +418,6 @@ export default function BlueprintsPage() {
 }
 
 /* ── Category section ─────────────────────────────────── */
-
-interface BlueprintCategorySectionProps {
-  category: BlueprintCategory;
-  blueprints: SingleBlueprint[];
-  view: View;
-  importTargetSuffix: string;
-  isActiveFilter: boolean;
-  onCategoryFilter: () => void;
-  onNavigate: (path: string) => void;
-}
-
-function BlueprintCategorySection({
-  category,
-  blueprints,
-  view,
-  importTargetSuffix,
-  isActiveFilter,
-  onCategoryFilter,
-  onNavigate,
-}: BlueprintCategorySectionProps) {
-  const label = CATEGORY_LABELS[category];
-  const description = CATEGORY_DESCRIPTIONS[category];
-  const count = blueprints.length;
-  const isEmpty = count === 0;
-
-  return (
-    <section
-      className={`bp-category-section${isActiveFilter ? " bp-category-section--active" : ""}`}
-    >
-      <header className="bp-category-header">
-        <div className="bp-category-header-main">
-          <button
-            type="button"
-            className={`bp-category-name${isActiveFilter ? " active" : ""}`}
-            onClick={onCategoryFilter}
-            title={isActiveFilter ? `Show all categories` : `Filter to ${label}`}
-          >
-            {label}
-          </button>
-          <span className="bp-category-count">{count}</span>
-          <span className="bp-category-desc">{description}</span>
-        </div>
-      </header>
-
-      {isEmpty ? (
-        <div className="bp-category-empty">More archetypes coming soon.</div>
-      ) : view === "list" ? (
-        <ul className="bp-list" role="list">
-          {blueprints.map((t) => (
-            <li key={blueprintId(t)} className="bp-list-row">
-              <button
-                type="button"
-                className="bp-list-row-btn"
-                onClick={() =>
-                  onNavigate(
-                    `/blueprints/${encodeURIComponent(blueprintId(t))}${importTargetSuffix}`,
-                  )
-                }
-              >
-                <span className="bp-list-row-name">{t.name}</span>
-                {t.tagline && <span className="bp-list-row-tagline">{t.tagline}</span>}
-                <span className="bp-list-row-counts">
-                  {t.template ?? "entity"} · {(t.seed_agents?.length ?? 0) + 1} agents
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="bp-grid" role="list">
-          {blueprints.map((t) => (
-            <BlueprintCard
-              key={blueprintId(t)}
-              template={t}
-              importTargetSuffix={importTargetSuffix}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* ── Toolbar popovers ─────────────────────────────────── */
-
-interface ToolbarRadioPopoverProps<T extends string> {
-  label: string;
-  current: string;
-  glyph: ReactElement;
-  options: { id: T; label: string }[];
-  value: T;
-  onChange: (next: T) => void;
-}
-
-function ToolbarRadioPopover<T extends string>({
-  label,
-  current,
-  glyph,
-  options,
-  value,
-  onChange,
-}: ToolbarRadioPopoverProps<T>) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover
-      open={open}
-      onOpenChange={setOpen}
-      placement="bottom-end"
-      trigger={
-        <button
-          type="button"
-          className={`ideas-toolbar-btn${open ? " open" : ""}`}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={`${label}: ${current}`}
-          title={`${label}: ${current}`}
-        >
-          {glyph}
-        </button>
-      }
-    >
-      <div className="ideas-filter-popover" role="dialog" aria-label={label}>
-        <header className="ideas-filter-popover-head">
-          <span className="ideas-filter-popover-label">{label.toLowerCase()}</span>
-        </header>
-        <div className="ideas-filter-popover-list" role="radiogroup" aria-label={label}>
-          {options.map((opt) => {
-            const isActive = value === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                className={`ideas-filter-row${isActive ? " active" : ""}`}
-                onClick={() => {
-                  onChange(opt.id);
-                  setOpen(false);
-                }}
-              >
-                <span className="ideas-filter-row-label">{opt.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </Popover>
-  );
-}
-
-interface FilterPopoverProps {
-  tagCounts: [string, number][];
-  selected: string[];
-  onChange: (next: string[]) => void;
-  activeCategory: BlueprintCategory | null;
-  onCategoryChange: (cat: BlueprintCategory | null) => void;
-}
-
-/**
- * Combined tag + category filter popover. Tags: multi-select OR. Category: single
- * select (clicking again deselects). Both persist in URL.
- */
-function FilterPopover({
-  tagCounts,
-  selected,
-  onChange,
-  activeCategory,
-  onCategoryChange,
-}: FilterPopoverProps) {
-  const [open, setOpen] = useState(false);
-  const popoverId = useId();
-  const activeTagCount = selected.length;
-  const hasFilters = tagCounts.length > 0 || true; // category filter always available
-
-  const toggleTag = (tag: string) => {
-    if (selected.includes(tag)) onChange(selected.filter((t) => t !== tag));
-    else onChange([...selected, tag]);
-  };
-
-  const toggleCategory = (cat: BlueprintCategory) => {
-    onCategoryChange(activeCategory === cat ? null : cat);
-  };
-
-  const totalActive = activeTagCount + (activeCategory ? 1 : 0);
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => hasFilters && setOpen(o)}
-      placement="bottom-end"
-      trigger={
-        <button
-          type="button"
-          className={`ideas-toolbar-btn${totalActive > 0 ? " active" : ""}${open ? " open" : ""}`}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-controls={popoverId}
-          aria-label={totalActive > 0 ? `Filter — ${totalActive} active` : "Filter"}
-          title={totalActive > 0 ? `Filter — ${totalActive} active` : "Filter"}
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 13 13"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M2 3.25h9M3.5 6.5h6M5 9.75h3" />
-          </svg>
-          {totalActive > 0 && <span className="ideas-toolbar-btn-dot" aria-hidden />}
-        </button>
-      }
-    >
-      <div
-        id={popoverId}
-        className="ideas-filter-popover"
-        role="dialog"
-        aria-label="Filter blueprints"
-      >
-        {/* Category filter */}
-        <section className="ideas-filter-popover-section">
-          <header className="ideas-filter-popover-head">
-            <span className="ideas-filter-popover-label">category</span>
-            {activeCategory && (
-              <button
-                type="button"
-                className="ideas-filter-popover-reset"
-                onClick={() => onCategoryChange(null)}
-              >
-                reset
-              </button>
-            )}
-          </header>
-          <div className="ideas-filter-popover-list" role="group" aria-label="Filter by category">
-            {CATEGORY_ORDER.map((cat) => {
-              const isActive = activeCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  aria-pressed={isActive}
-                  className={`ideas-filter-row${isActive ? " active" : ""}`}
-                  onClick={() => toggleCategory(cat)}
-                >
-                  <span className="ideas-filter-row-label">{CATEGORY_LABELS[cat]}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Tag filter — only when tags exist */}
-        {tagCounts.length > 0 && (
-          <section className="ideas-filter-popover-section">
-            <header className="ideas-filter-popover-head">
-              <span className="ideas-filter-popover-label">tags</span>
-              {activeTagCount > 0 && (
-                <button
-                  type="button"
-                  className="ideas-filter-popover-reset"
-                  onClick={() => onChange([])}
-                >
-                  reset
-                </button>
-              )}
-            </header>
-            <div className="ideas-list-tags" role="group" aria-label="Filter by tag">
-              {tagCounts.map(([tag, count]) => {
-                const isActive = selected.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    aria-pressed={isActive}
-                    className={`ideas-tag-chip${isActive ? " active" : ""}`}
-                    onClick={() => toggleTag(tag)}
-                  >
-                    #{tag}
-                    <span className="ideas-tag-chip-count">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
-      </div>
-    </Popover>
-  );
-}
 
 const GLYPHS = {
   sort: (

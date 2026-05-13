@@ -28,6 +28,15 @@ export default tseslint.config(
     },
   },
   {
+    /* Storybook files are intentionally long — one file per primitive,
+     * one story per variant. Permanent exemption keeps the catalogue
+     * idiomatic without polluting the named-files list. */
+    files: ["**/*.stories.tsx"],
+    rules: {
+      "max-lines": "off",
+    },
+  },
+  {
     /* Known monolith files awaiting extraction. CLAUDE.md says "no 500-line
      * monoliths" — these predate the rule. Each is on the TODO list to
      * split into smaller per-concern components; the override exempts them
@@ -38,10 +47,8 @@ export default tseslint.config(
      *   - src/lib/api.ts                              1049
      *   - src/pages/WelcomePage.tsx                   1212
      *   - src/pages/AdminPage.tsx                      874
-     *   - src/pages/BlueprintsPage.tsx                 676
      *   - src/components/AgentQuestsTab.tsx          (>600, was 1146 raw)
      *   - src/components/EntityAgentsTab.tsx         (>600, was 791 raw)
-     *   - src/components/ui/Button.stories.tsx         668  (stories — OK to stay big)
      *
      * Extracted (drop log):
      *   - 2026-05-13 src/components/IdeaCanvas.tsx — toolbar + decision-panel
@@ -52,15 +59,18 @@ export default tseslint.config(
      *     → components/composer/{ComposerFooter,ComposerKbdRibbon}.tsx
      *   - 2026-05-13 src/components/ideas/IdeasListView.tsx — toolbar + chips
      *     → components/ideas/{IdeasListToolbar,IdeasListFilterChips}.tsx
+     *   - 2026-05-13 src/pages/BlueprintsPage.tsx — category section, filter,
+     *     toolbar radio popover + constants → pages/blueprints/{constants,
+     *     BlueprintCategorySection,BlueprintsFilterPopover,ToolbarRadioPopover}
+     *   - 2026-05-13 Button.stories.tsx + future *.stories.tsx — permanent
+     *     `**\/*.stories.tsx` glob exemption.
      */
     files: [
       "src/lib/api.ts",
       "src/pages/WelcomePage.tsx",
       "src/pages/AdminPage.tsx",
-      "src/pages/BlueprintsPage.tsx",
       "src/components/AgentQuestsTab.tsx",
       "src/components/EntityAgentsTab.tsx",
-      "src/components/ui/Button.stories.tsx",
     ],
     rules: {
       "max-lines": "off",
