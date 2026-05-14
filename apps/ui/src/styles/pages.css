@@ -4009,7 +4009,15 @@
   color: var(--color-text-secondary);
 }
 
+/* `.content-scroll` is a column wrapper, not a scroller (see layout.css).
+ * The admin surface is the inner scroller — without `overflow-y: auto`
+ * the page gets clipped by `.content-paper { overflow: hidden }` when
+ * the user list + health tiles + table exceed the viewport. */
 .admin-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-6);
   display: flex;
   flex-direction: column;
