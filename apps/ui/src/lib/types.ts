@@ -205,6 +205,12 @@ export interface IdeaEdges {
   backlinks: IdeaBacklink[];
 }
 
+export interface ActivityEntryMetadata {
+  /** Project / root entity attribution surfaced as the activity-project chip. */
+  root?: string;
+  [key: string]: unknown;
+}
+
 export interface ActivityEntry {
   id: number;
   timestamp: string;
@@ -213,7 +219,7 @@ export interface ActivityEntry {
   summary: string;
   agent?: string;
   quest_id?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: ActivityEntryMetadata;
 }
 
 export interface DaemonStatus {

@@ -60,9 +60,7 @@ export default function ActivityEntryComponent({ entry, compact = false }: Activ
           >
             {formatDecisionType(entry.decision_type)}
           </span>
-          {(entry.metadata as any)?.root && (
-            <span className="activity-project">{(entry.metadata as any).root}</span>
-          )}
+          {entry.metadata?.root && <span className="activity-project">{entry.metadata.root}</span>}
         </div>
         <span className="activity-timestamp">{formatTimestamp(entry.timestamp)}</span>
       </div>
