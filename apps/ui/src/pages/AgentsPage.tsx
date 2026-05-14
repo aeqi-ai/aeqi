@@ -77,11 +77,11 @@ export default function AgentsPage() {
           );
         } else {
           return api.getAgents({ root: true }).then((agentData) => {
-            const agentList = (agentData?.agents || []) as Array<Record<string, unknown>>;
+            const agentList = agentData?.agents ?? [];
             // Group by entity_id — one row per entity.
             const byEntity = new Map<string, { id: string; name: string; agentCount: number }>();
             for (const a of agentList) {
-              const eid = (a.entity_id as string) ?? (a.id as string) ?? "";
+              const eid = a.entity_id ?? a.id ?? "";
               if (!eid) continue;
               const existing = byEntity.get(eid);
               if (existing) {

@@ -246,6 +246,19 @@ export interface User {
   roots?: string[];
   phone?: string;
   phishing_code?: string;
+  /** Primary auth provider (`"google"` / `"github"` / `"email"` /
+   *  `"passkey"` / `"wallet"`). Surfaced by /auth/me so the settings
+   *  panel can render which provider the active session was created
+   *  with. */
+  provider?: string;
+  /** Every auth method linked to the account, in addition to `provider`.
+   *  Used by Settings/SecurityPanel to render Connect / Connected
+   *  status per provider. */
+  auth_methods?: Array<{ kind?: string }>;
+  /** Wallet bindings — populated only by the WalletsPanel `/me`
+   *  refresh path. Each row is the public wallet shape from the
+   *  platform's `wallets` table. */
+  wallets?: Array<Record<string, unknown>>;
   /** Subscription state from the accounts table. Mirrors Stripe's
    *  subscription status. `"none"` means no active organization
    *  subscription; `"active"` is the standard monthly billing state.

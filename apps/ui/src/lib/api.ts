@@ -2,6 +2,7 @@ import { API_BASE_URL, ApiError, apiRequest as request, RateLimitedError } from 
 import type { AppMode } from "@/lib/appMode";
 import type { LaunchPlanId } from "@/lib/pricing";
 import type {
+  Agent,
   AgentEvent,
   Blueprint,
   EventInvocationRow,
@@ -17,6 +18,7 @@ import type {
   RoleType,
   Quest,
   ScopeValue,
+  User,
 } from "@/lib/types";
 import type { AllowedChat } from "@/api/channels";
 export { RateLimitedError };
@@ -126,7 +128,7 @@ export const api = {
       health?: Record<string, unknown>;
     }>("/admin/overview"),
 
-  getMe: () => request<Record<string, unknown>>("/auth/me"),
+  getMe: () => request<User>("/auth/me"),
 
   deleteAccount: () => request<{ ok: boolean }>("/auth/delete-account", { method: "DELETE" }),
 
@@ -362,11 +364,11 @@ export const api = {
     if (params?.status) query.set("status", params.status);
     if (params?.root) query.set("root", params.root);
     const qs = query.toString();
-    return request<Record<string, unknown>>(`/quests${qs ? `?${qs}` : ""}`);
+    return request<{ ok: boolean; quests: Quest[] }>(`/quests${qs ? `?${qs}` : ""}`);
   },
 
   getAgents: (params?: { root?: boolean }) =>
-    request<Record<string, unknown>>(params?.root ? "/agents?root=true" : "/agents"),
+    request<{ ok: boolean; agents: Agent[] }>(params?.root ? "/agents?root=true" : "/agents"),
 
   getAgentRecentInferenceCalls: (agentId: string, limit?: number) => {
     const qs = limit ? `?limit=${limit}` : "";

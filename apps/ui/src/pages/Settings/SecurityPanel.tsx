@@ -9,7 +9,6 @@ import { GoogleIcon, GitHubIcon } from "@/components/icons/Brand";
 import AddPasskeyButton from "@/pages/Settings/AddPasskeyButton";
 
 type Feedback = { type: "success" | "error"; msg: string } | null;
-type AuthMethodSummary = { kind?: unknown };
 
 /**
  * Mirrors `validate_security_phrase` in aeqi-platform/src/server.rs. Keep
@@ -83,16 +82,15 @@ export default function SecurityPanel() {
   useEffect(() => {
     api
       .getMe()
-      .then((data) => {
-        const u = data as Record<string, unknown>;
-        if (typeof u.phishing_code === "string") setPhishingCode(u.phishing_code);
-        if (typeof u.provider === "string") setProvider(u.provider);
-        if (typeof u.email === "string") setAccountEmail(u.email);
+      .then((u) => {
+        if (u.phishing_code) setPhishingCode(u.phishing_code);
+        if (u.provider) setProvider(u.provider);
+        if (u.email) setAccountEmail(u.email);
         const kinds = new Set<string>();
-        if (typeof u.provider === "string") kinds.add(u.provider);
-        if (Array.isArray(u.auth_methods)) {
-          for (const method of u.auth_methods as AuthMethodSummary[]) {
-            if (typeof method.kind === "string") kinds.add(method.kind);
+        if (u.provider) kinds.add(u.provider);
+        if (u.auth_methods) {
+          for (const method of u.auth_methods) {
+            if (method.kind) kinds.add(method.kind);
           }
         }
         setConnectedAuthKinds([...kinds]);
