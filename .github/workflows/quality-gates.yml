@@ -95,9 +95,28 @@ jobs:
         run: |
           echo "=== Running JavaScript Security Audit ==="
 
-          # Find npm projects
+          # Find npm projects this workspace's CI gates on. Excludes:
+          #   - node_modules/        — transitive deps, not our shipped surface.
+          #   - ./tmp/               — third-party repos checked out for
+          #                            research / trending analysis; we don't
+          #                            ship them and their vulns aren't ours.
+          #   - dist/, build/, .next/ — generated output occasionally embeds
+          #                             package.json copies.
+          #   - ./projects/          — sub-projects with their own CI gates
+          #                            (currently aeqi-solana whose Anchor
+          #                            test deps pull bigint-buffer * which
+          #                            has no clean upstream patch — the
+          #                            sub-project's own `verify:ci` is the
+          #                            right audit boundary for that surface).
           find_npm_projects() {
-            find . -name "package.json" -type f | grep -v node_modules | head -10
+            find . -name "package.json" -type f \
+              -not -path "*/node_modules/*" \
+              -not -path "./tmp/*" \
+              -not -path "./projects/*" \
+              -not -path "*/dist/*" \
+              -not -path "*/build/*" \
+              -not -path "*/.next/*" \
+              | head -10
           }
 
           npm_projects=$(find_npm_projects)
