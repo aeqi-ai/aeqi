@@ -204,7 +204,7 @@ jobs:
       # Upload artifacts
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-reports
           path: |
@@ -214,7 +214,7 @@ jobs:
 
       - name: Upload documentation
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: documentation
           path: |
@@ -224,7 +224,7 @@ jobs:
 
       - name: Upload performance metrics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: performance-metrics
           path: |
