@@ -115,9 +115,12 @@ pub mod aeqi_token {
     /// Used for redemption, exit, buyback, vesting clawback (when the vault
     /// is owned by a vesting PDA).
     pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+        require!(amount > 0, TokenError::ZeroAmount);
         require_token_2022(ctx.accounts.token_program.key())?;
         let module = &ctx.accounts.module_state;
+        require!(module.initialized == ModuleInitState::Finalized as u8, TokenError::NotFinalized);
         require!(module.mint == ctx.accounts.mint.key(), TokenError::MintMismatch);
+        require_keys_eq!(module.trust, ctx.accounts.trust.key(), TokenError::TrustMismatch);
 
         let cpi_accounts = Burn {
             mint: ctx.accounts.mint.to_account_info(),
@@ -142,12 +145,15 @@ pub mod aeqi_token {
     ///
     /// Supply cap: when `module_state.max_supply_cap > 0` the post-mint
     /// total supply is checked against the cap (cap=0 means "uncapped",
-    /// the pre-finalize default).
+    /// only after the module has been finalized with its config).
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        require!(amount > 0, TokenError::ZeroAmount);
         require_token_2022(ctx.accounts.token_program.key())?;
         let module = &ctx.accounts.module_state;
+        require!(module.initialized == ModuleInitState::Finalized as u8, TokenError::NotFinalized);
         require!(module.mint == ctx.accounts.mint.key(), TokenError::MintMismatch);
         require_keys_eq!(module.trust, ctx.accounts.trust.key(), TokenError::TrustMismatch);
+        require!(ctx.accounts.mint.decimals == module.decimals, TokenError::DecimalsMismatch);
         require_keys_eq!(
             ctx.accounts.authority.key(),
             ctx.accounts.trust.authority,
@@ -194,10 +200,9 @@ pub mod aeqi_token {
     pub fn create_mint(ctx: Context<CreateMint>, decimals: u8) -> Result<()> {
         require_token_2022(ctx.accounts.token_program.key())?;
         let module = &mut ctx.accounts.module_state;
-        // Mint creation is valid post-init *and* post-finalize. The factory
-        // pipeline finalizes the module before user-driven create_mint runs,
-        // so requiring strict Initialized would lock out the canonical flow.
-        require!(module.initialized != ModuleInitState::Pending as u8, TokenError::NotInitialized);
+        require!(module.initialized == ModuleInitState::Finalized as u8, TokenError::NotFinalized);
+        require_keys_eq!(module.trust, ctx.accounts.trust.key(), TokenError::TrustMismatch);
+        require!(decimals == module.decimals, TokenError::DecimalsMismatch);
         require!(module.mint == Pubkey::default(), TokenError::MintAlreadyCreated);
 
         let mint_key = ctx.accounts.mint.key();
@@ -407,6 +412,8 @@ pub struct TokensBurned {
 pub enum TokenError {
     #[msg("token module not yet initialized")]
     NotInitialized,
+    #[msg("token module must be finalized before mint operations")]
+    NotFinalized,
     #[msg("mint already created for this trust")]
     MintAlreadyCreated,
     #[msg("mint account does not match the module's recorded mint")]
@@ -421,4 +428,8 @@ pub enum TokenError {
     TrustMismatch,
     #[msg("caller is not the trust authority for minting")]
     UnauthorizedMintAuthority,
+    #[msg("amount must be > 0")]
+    ZeroAmount,
+    #[msg("mint decimals must match finalized token config")]
+    DecimalsMismatch,
 }

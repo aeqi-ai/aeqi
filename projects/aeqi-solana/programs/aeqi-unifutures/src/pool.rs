@@ -40,7 +40,7 @@ pub fn integer_sqrt(value: u128) -> Option<u128> {
         return Some(0);
     }
     let mut x0 = value;
-    let mut x1 = (x0 + 1) / 2;
+    let mut x1 = x0.div_ceil(2);
     while x1 < x0 {
         x0 = x1;
         x1 = (x0 + value / x0) / 2;

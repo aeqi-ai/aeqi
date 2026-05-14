@@ -211,9 +211,16 @@ pub mod aeqi_unifutures {
             quote.lp_out,
         )?;
 
-        p.base_reserve = p.base_reserve.checked_add(quote.base_used).unwrap();
-        p.quote_reserve = p.quote_reserve.checked_add(quote.quote_used).unwrap();
-        p.lp_supply = p.lp_supply.checked_add(quote.lp_out).unwrap();
+        p.base_reserve = p
+            .base_reserve
+            .checked_add(quote.base_used)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.quote_reserve = p
+            .quote_reserve
+            .checked_add(quote.quote_used)
+            .ok_or(error!(UnifuturesError::MathOverflow))?;
+        p.lp_supply =
+            p.lp_supply.checked_add(quote.lp_out).ok_or(error!(UnifuturesError::MathOverflow))?;
 
         emit!(LiquidityAdded {
             trust: p.trust,
@@ -300,9 +307,18 @@ pub mod aeqi_unifutures {
             ctx.accounts.quote_mint.decimals,
         )?;
 
-        p.base_reserve = p.base_reserve.checked_sub(base_out).unwrap();
-        p.quote_reserve = p.quote_reserve.checked_sub(quote_out).unwrap();
-        p.lp_supply = p.lp_supply.checked_sub(lp_amount).unwrap();
+        p.base_reserve = p
+            .base_reserve
+            .checked_sub(base_out)
+            .ok_or(error!(UnifuturesError::InsufficientLiquidity))?;
+        p.quote_reserve = p
+            .quote_reserve
+            .checked_sub(quote_out)
+            .ok_or(error!(UnifuturesError::InsufficientLiquidity))?;
+        p.lp_supply = p
+            .lp_supply
+            .checked_sub(lp_amount)
+            .ok_or(error!(UnifuturesError::InsufficientLiquidity))?;
 
         emit!(LiquidityRemoved {
             trust: p.trust,
@@ -389,8 +405,14 @@ pub mod aeqi_unifutures {
                     ctx.accounts.quote_mint.decimals,
                 )?;
 
-                p.base_reserve = p.base_reserve.checked_add(amount_in).unwrap();
-                p.quote_reserve = p.quote_reserve.checked_sub(quote.amount_out).unwrap();
+                p.base_reserve = p
+                    .base_reserve
+                    .checked_add(amount_in)
+                    .ok_or(error!(UnifuturesError::MathOverflow))?;
+                p.quote_reserve = p
+                    .quote_reserve
+                    .checked_sub(quote.amount_out)
+                    .ok_or(error!(UnifuturesError::InsufficientLiquidity))?;
             }
             SwapDirection::QuoteToBase => {
                 let transfer_in = TransferChecked {
@@ -430,8 +452,14 @@ pub mod aeqi_unifutures {
                     ctx.accounts.base_mint.decimals,
                 )?;
 
-                p.quote_reserve = p.quote_reserve.checked_add(amount_in).unwrap();
-                p.base_reserve = p.base_reserve.checked_sub(quote.amount_out).unwrap();
+                p.quote_reserve = p
+                    .quote_reserve
+                    .checked_add(amount_in)
+                    .ok_or(error!(UnifuturesError::MathOverflow))?;
+                p.base_reserve = p
+                    .base_reserve
+                    .checked_sub(quote.amount_out)
+                    .ok_or(error!(UnifuturesError::InsufficientLiquidity))?;
             }
         }
 
