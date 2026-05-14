@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { goExternal } from "@/lib/navigation";
 import { formatCents, type LaunchPlanId } from "@/lib/pricing";
 import { useDaemonStore } from "@/store/daemon";
 import { useUIStore } from "@/store/ui";
@@ -125,7 +126,7 @@ export default function BillingPanel() {
     setActionPending("portal");
     try {
       const { url } = await api.openBillingPortal();
-      window.location.href = url;
+      goExternal(url);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not open the Stripe portal.");
       setActionPending(null);
@@ -140,7 +141,7 @@ export default function BillingPanel() {
         display_name: rootSlug,
         plan,
       });
-      window.location.href = url;
+      goExternal(url);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not start Checkout.");
       setActionPending(null);

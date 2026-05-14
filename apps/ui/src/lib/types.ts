@@ -1,4 +1,4 @@
-import type { QuestRuntime } from "./runtime";
+import type { QuestMetadata, QuestRuntime } from "./runtime";
 
 export type EntityType = "company" | "human" | "agent" | "fund" | "dao" | "holding" | "protocol";
 
@@ -153,7 +153,7 @@ export interface Quest {
   outcome?: QuestOutcome;
   worktree_branch?: string;
   worktree_path?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: QuestMetadata;
   runtime?: QuestRuntime;
 }
 

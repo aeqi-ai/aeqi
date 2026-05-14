@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { goExternal } from "@/lib/navigation";
 import { Button, ConfirmDialog } from "@/components/ui";
 
 type Session = {
@@ -222,7 +223,7 @@ export default function DevicesPanel() {
     try {
       await api.revokeAuthSession(revokeTarget.jti);
       if (revokeTarget.isCurrent) {
-        window.location.href = "/login";
+        goExternal("/login");
         return;
       }
       await loadSessions();

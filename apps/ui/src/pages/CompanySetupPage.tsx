@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, ApiError } from "@/lib/api";
 import { blueprintId } from "@/lib/blueprintId";
 import { DEFAULT_BLUEPRINT_SLUG } from "@/lib/blueprintDefaults";
+import { goExternal } from "@/lib/navigation";
 import { DEFAULT_LAUNCH_PLAN, LAUNCH_PLANS, type LaunchPlanId } from "@/lib/pricing";
 import { RECOMMENDED_BLUEPRINTS } from "@/lib/recommendedBlueprints";
 import type { SingleBlueprint as Blueprint } from "@/lib/types";
@@ -300,7 +301,7 @@ export default function CompanySetupPage() {
         plan,
         launch: true,
       });
-      window.location.href = url;
+      goExternal(url);
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         try {
@@ -311,7 +312,7 @@ export default function CompanySetupPage() {
             plan,
             launch: true,
           });
-          window.location.href = url;
+          goExternal(url);
           return;
         } catch {
           setSubmitError("Payment is required to launch this organization.");

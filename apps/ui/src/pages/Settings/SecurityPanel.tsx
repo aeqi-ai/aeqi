@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { api } from "@/lib/api";
+import { goExternal } from "@/lib/navigation";
 import { Banner, Button, Input, ConfirmDialog, QRCode, StatusRow } from "@/components/ui";
 import { GoogleIcon, GitHubIcon } from "@/components/icons/Brand";
 import AddPasskeyButton from "@/pages/Settings/AddPasskeyButton";
@@ -341,7 +342,7 @@ export default function SecurityPanel() {
                 size="sm"
                 type="button"
                 onClick={() => {
-                  window.location.href = "/api/auth/welcome/google/start";
+                  goExternal("/api/auth/welcome/google/start");
                 }}
               >
                 Connect
@@ -360,7 +361,7 @@ export default function SecurityPanel() {
                 size="sm"
                 type="button"
                 onClick={() => {
-                  window.location.href = "/api/auth/welcome/github/start";
+                  goExternal("/api/auth/welcome/github/start");
                 }}
               >
                 Connect

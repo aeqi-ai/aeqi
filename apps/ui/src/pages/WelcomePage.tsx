@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Wordmark from "@/components/Wordmark";
 import { useAuthStore } from "@/store/auth";
+import { goExternal } from "@/lib/navigation";
 import { getRedirectAfterAuth } from "@/lib/redirectAfterAuth";
 import {
   COPY,
@@ -593,12 +594,12 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
               onGoogle={() => {
                 const inviteCode = searchParams.get("invite");
                 const qs = inviteCode ? `?invite_code=${encodeURIComponent(inviteCode)}` : "";
-                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/google/start${qs}`;
+                goExternal(`${SOLANA_API_URL}/api/auth/welcome/google/start${qs}`);
               }}
               onGithub={() => {
                 const inviteCode = searchParams.get("invite");
                 const qs = inviteCode ? `?invite_code=${encodeURIComponent(inviteCode)}` : "";
-                window.location.href = `${SOLANA_API_URL}/api/auth/welcome/github/start${qs}`;
+                goExternal(`${SOLANA_API_URL}/api/auth/welcome/github/start${qs}`);
               }}
               onSwitch={() => navigate(copy.switchHref)}
             />

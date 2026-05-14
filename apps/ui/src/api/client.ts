@@ -1,4 +1,5 @@
 import { getScopedEntity } from "@/lib/appMode";
+import { goExternal } from "@/lib/navigation";
 import { setRateLimitedUntil } from "@/lib/rateLimit";
 import { clearSessionData } from "@/lib/session";
 
@@ -109,7 +110,7 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
       // they return to the page that 401'd, not to /.
       const here = window.location.pathname + window.location.search;
       const skipNext = here === "/" || here.startsWith("/login") || here.startsWith("/signup");
-      window.location.href = skipNext ? "/login" : `/login?next=${encodeURIComponent(here)}`;
+      goExternal(skipNext ? "/login" : `/login?next=${encodeURIComponent(here)}`);
     }
     throw new ApiError(401, "Unauthorized");
   }

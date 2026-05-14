@@ -20,6 +20,7 @@ import {
 import { api } from "@/lib/api";
 import { indexerEnabled } from "@/lib/indexer";
 import { formatInteger, formatMediumDate, formatShortDate } from "@/lib/i18n";
+import { goExternal } from "@/lib/navigation";
 import { formatCents, launchPlanById, launchPlanResourceItems } from "@/lib/pricing";
 import { useTreasury, type TreasuryTransfer, type TokenBalance } from "@/hooks/useTreasury";
 import { useDaemonStore } from "@/store/daemon";
@@ -127,7 +128,7 @@ export default function TreasuryPage({ entityId, agentId }: TreasuryPageProps) {
     setPortalBusy(true);
     try {
       const { url } = await api.openBillingPortal();
-      window.location.href = url;
+      goExternal(url);
     } catch (err) {
       setBillingError(err instanceof Error ? err.message : String(err));
       setPortalBusy(false);

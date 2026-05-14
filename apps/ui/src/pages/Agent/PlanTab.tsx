@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { goExternal } from "@/lib/navigation";
 import type { LaunchPlanId } from "@/lib/pricing";
 import { useDaemonStore } from "@/store/daemon";
 import { Banner, Card, Spinner } from "@/components/ui";
@@ -96,7 +97,7 @@ export default function PlanTab({ agentId }: PlanTabProps) {
         plan,
       });
       if (!url) throw new Error("Checkout returned no URL.");
-      window.location.href = url;
+      goExternal(url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start checkout.");
       setActionPending(null);
@@ -108,7 +109,7 @@ export default function PlanTab({ agentId }: PlanTabProps) {
     try {
       const { url } = await api.openBillingPortal();
       if (!url) throw new Error("Portal returned no URL.");
-      window.location.href = url;
+      goExternal(url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not open Stripe portal.");
       setActionPending(null);

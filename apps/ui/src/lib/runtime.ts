@@ -1,3 +1,22 @@
+/** Well-known keys on `Quest.metadata`. Server can attach arbitrary
+ *  additional keys (the index signature). The two we read in the UI
+ *  are explicit so a backend rename surfaces as a TS error rather than
+ *  silently stopping a render. */
+export interface QuestMetadata {
+  /** Mirror of `Quest.runtime` when the runtime field isn't populated
+   *  on the wire (some legacy endpoints stuff it under metadata). */
+  "aeqi/runtime"?: QuestRuntime;
+  /** Outcome rollup emitted when a quest closes — shape mirrors
+   *  `QuestOutcome` but lives under metadata for indexable storage. */
+  "aeqi/task_outcome"?: {
+    kind: string;
+    summary: string;
+    reason?: string;
+    next_action?: string;
+  };
+  [key: string]: unknown;
+}
+
 export type QuestRuntime = {
   session?: {
     phase?: string | null;
@@ -67,16 +86,14 @@ export function runtimeLabel(runtime?: QuestRuntime): string | null {
 
 export function extractRuntime(quest: {
   runtime?: QuestRuntime;
-  metadata?: Record<string, unknown>;
+  metadata?: QuestMetadata;
 }): QuestRuntime | null {
   if (quest.runtime) return quest.runtime;
-  const rt = quest.metadata?.["aeqi/runtime"] as QuestRuntime | undefined;
-  return rt ?? null;
+  return quest.metadata?.["aeqi/runtime"] ?? null;
 }
 
 export function extractOutcome(quest: {
-  metadata?: Record<string, unknown>;
+  metadata?: QuestMetadata;
 }): { kind: string; summary: string; reason?: string; next_action?: string } | null {
-  const oc = quest.metadata?.["aeqi/task_outcome"] as any;
-  return oc ?? null;
+  return quest.metadata?.["aeqi/task_outcome"] ?? null;
 }
