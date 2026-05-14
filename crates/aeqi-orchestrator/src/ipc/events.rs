@@ -4,6 +4,25 @@ use super::request_field;
 use crate::event_handler::{NewEvent, ToolCall};
 use crate::event_validation::validate_tool_calls;
 
+async fn resolve_agent_id(
+    ctx: &super::CommandContext,
+    request: &serde_json::Value,
+) -> Result<Option<String>, String> {
+    if let Some(agent_id) = request_field(request, "agent_id").filter(|s| !s.is_empty()) {
+        return Ok(Some(agent_id.to_string()));
+    }
+
+    let Some(agent) = request_field(request, "agent").filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+
+    match ctx.agent_registry.resolve_by_hint(agent).await {
+        Ok(Some(agent)) => Ok(Some(agent.id)),
+        Ok(None) => Err(format!("agent not found: {agent}")),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 pub async fn handle_list_events(
     ctx: &super::CommandContext,
     request: &serde_json::Value,
@@ -13,9 +32,12 @@ pub async fn handle_list_events(
         return serde_json::json!({"ok": false, "error": "event handler store not available"});
     };
 
-    let agent_id = request_field(request, "agent_id");
+    let agent_id = match resolve_agent_id(ctx, request).await {
+        Ok(agent_id) => agent_id,
+        Err(error) => return serde_json::json!({"ok": false, "error": error}),
+    };
 
-    let events = if let Some(agent_id) = agent_id {
+    let events = if let Some(agent_id) = agent_id.as_deref() {
         store.list_for_agent(agent_id).await
     } else {
         store.list_enabled().await
@@ -40,7 +62,10 @@ pub async fn handle_create_event(
     };
 
     // `agent_id` may be null/missing → global event.
-    let agent_id_opt = request_field(request, "agent_id").map(|s| s.to_string());
+    let agent_id_opt = match resolve_agent_id(ctx, request).await {
+        Ok(agent_id) => agent_id,
+        Err(error) => return serde_json::json!({"ok": false, "error": error}),
+    };
     let name = request_field(request, "name").unwrap_or("");
     let pattern = request_field(request, "pattern").unwrap_or("");
 
@@ -593,6 +618,130 @@ fn parse_tool_calls(request: &serde_json::Value) -> Vec<ToolCall> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    async fn test_context() -> (
+        super::super::CommandContext,
+        tempfile::TempDir,
+        crate::agent_registry::Agent,
+    ) {
+        use crate::dispatch::{DispatchConfig, Dispatcher};
+        use crate::ipc::ActivityBuffer;
+        use tokio::sync::Mutex;
+
+        let dir = tempfile::tempdir().unwrap();
+        let registry = Arc::new(crate::agent_registry::AgentRegistry::open(dir.path()).unwrap());
+        let agent = registry.spawn("shadow", None, None).await.unwrap();
+        let event_store = Arc::new(crate::event_handler::EventHandlerStore::new(registry.db()));
+        let (embed_queue, _rx) = aeqi_ideas::embed_worker::EmbedQueue::channel(8);
+
+        let ctx = super::super::CommandContext {
+            metrics: Arc::new(crate::metrics::AEQIMetrics::new()),
+            activity_log: Arc::new(crate::activity_log::ActivityLog::new(registry.db())),
+            session_store: None,
+            event_handler_store: Some(event_store),
+            agent_registry: registry.clone(),
+            entity_registry: Arc::new(crate::entity_registry::EntityRegistry::open(registry.db())),
+            role_registry: Arc::new(crate::role_registry::RoleRegistry::open(registry.db())),
+            idea_store: None,
+            message_router: None,
+            activity_buffer: Arc::new(Mutex::new(ActivityBuffer::default())),
+            default_provider: None,
+            default_model: "test".to_string(),
+            session_manager: Arc::new(crate::session_manager::SessionManager::new()),
+            dispatcher: Arc::new(Dispatcher::new(DispatchConfig::default())),
+            daily_budget_usd: 0.0,
+            skill_loader: None,
+            execution_registry: Arc::new(crate::execution_registry::ExecutionRegistry::new()),
+            stream_registry: Arc::new(crate::stream_registry::StreamRegistry::new()),
+            channel_spawner: None,
+            tag_policy_cache: Arc::new(aeqi_ideas::tag_policy::TagPolicyCache::new(60)),
+            embed_queue: Arc::new(embed_queue),
+            embedder: None,
+            recall_cache: Arc::new(aeqi_ideas::RecallCache::default()),
+            pattern_dispatcher: None,
+            credentials: None,
+        };
+
+        (ctx, dir, agent)
+    }
+
+    #[tokio::test]
+    async fn create_schedule_event_resolves_agent_hint() {
+        let (ctx, _dir, agent) = test_context().await;
+
+        let response = handle_create_event(
+            &ctx,
+            &serde_json::json!({
+                "agent": "shadow",
+                "name": "weekly-drift-check",
+                "pattern": "schedule:0 8 * * 1",
+            }),
+            &None,
+        )
+        .await;
+
+        assert_eq!(response["ok"].as_bool(), Some(true), "{response}");
+        assert_eq!(
+            response["event"]["agent_id"].as_str(),
+            Some(agent.id.as_str())
+        );
+        assert_eq!(
+            response["event"]["pattern"].as_str(),
+            Some("schedule:0 8 * * 1")
+        );
+    }
+
+    #[tokio::test]
+    async fn create_schedule_event_accepts_explicit_agent_id() {
+        let (ctx, _dir, agent) = test_context().await;
+
+        let response = handle_create_event(
+            &ctx,
+            &serde_json::json!({
+                "agent_id": agent.id.clone(),
+                "name": "explicit-weekly-drift-check",
+                "pattern": "schedule:0 8 * * 1",
+            }),
+            &None,
+        )
+        .await;
+
+        assert_eq!(response["ok"].as_bool(), Some(true), "{response}");
+        assert_eq!(
+            response["event"]["agent_id"].as_str(),
+            Some(agent.id.as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn list_events_resolves_agent_hint() {
+        let (ctx, _dir, agent) = test_context().await;
+
+        let create = handle_create_event(
+            &ctx,
+            &serde_json::json!({
+                "agent": "shadow",
+                "name": "listable-weekly-drift-check",
+                "pattern": "schedule:0 8 * * 1",
+            }),
+            &None,
+        )
+        .await;
+        assert_eq!(create["ok"].as_bool(), Some(true), "{create}");
+
+        let response =
+            handle_list_events(&ctx, &serde_json::json!({"agent": agent.id}), &None).await;
+
+        assert_eq!(response["ok"].as_bool(), Some(true), "{response}");
+        let events = response["events"].as_array().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event["name"].as_str() == Some("listable-weekly-drift-check")),
+            "{response}"
+        );
+    }
 
     /// `plan_install_default_events` must count all missing defaults on a
     /// brand-new agent and flip counts to 0 installed / 2 skipped after the

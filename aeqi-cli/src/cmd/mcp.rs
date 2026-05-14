@@ -505,6 +505,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                         "description": "create: new handler (needs name, pattern or schedule, idea_ids). list: show handlers. enable/disable: toggle (needs event_id). delete: remove (needs event_id). trigger: fire an event pattern and return the assembled ideas context — same context the runtime injects during its lifecycle (optional pattern, defaults to session:start). trace: query event invocation history — pass session_id + optional limit to list invocations, or invocation_id for full step detail."
                     },
                     "agent": {"type": "string", "description": "Agent name or ID"},
+                    "agent_id": {"type": "string", "description": "Explicit agent ID. Required for schedule:* events unless `agent` resolves to an active agent."},
                     "name": {"type": "string", "description": "Event handler name (for create)"},
                     "pattern": {"type": "string", "description": "Full pattern (e.g. 'schedule:0 9 * * *', 'session:quest_result')"},
                     "schedule": {"type": "string", "description": "Cron expression — shorthand for pattern 'schedule:<expr>'"},
@@ -940,6 +941,9 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                     "name": name,
                                     "pattern": pattern,
                                 });
+                                if let Some(aid) = args.get("agent_id").and_then(|v| v.as_str()) {
+                                    ipc["agent_id"] = serde_json::json!(aid);
+                                }
                                 if let Some(cooldown) = args.get("cooldown_secs") {
                                     ipc["cooldown_secs"] = cooldown.clone();
                                 }
@@ -952,6 +956,8 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                 let mut ipc = serde_json::json!({"cmd": "list_events"});
                                 if let Some(agent) = args.get("agent") {
                                     ipc["agent"] = agent.clone();
+                                } else if let Some(agent_id) = args.get("agent_id") {
+                                    ipc["agent_id"] = agent_id.clone();
                                 } else if let Some(ref aname) = agent_name {
                                     ipc["agent"] = serde_json::json!(aname);
                                 }

@@ -587,13 +587,15 @@ async fn call_events(
                 "name": args.get("name").and_then(|v| v.as_str()).unwrap_or(""),
                 "pattern": event_pattern(&args, "session:start"),
             });
-            copy_fields(&args, &mut req, &["cooldown_secs", "idea_ids"]);
+            copy_fields(&args, &mut req, &["agent_id", "cooldown_secs", "idea_ids"]);
             ipc(state, ctx, req).await
         }
         "list" => {
             let mut req = serde_json::json!({"cmd": "list_events"});
             if let Some(agent) = args.get("agent").cloned() {
                 req["agent"] = agent;
+            } else if let Some(agent_id) = args.get("agent_id").cloned() {
+                req["agent_id"] = agent_id;
             } else {
                 default_agent_name(ctx, &mut req);
             }
@@ -1047,6 +1049,7 @@ fn tool_defs() -> serde_json::Value {
                 "properties": {
                     "action": {"type": "string", "enum": ["create", "list", "enable", "disable", "delete", "trigger", "trace"], "description": "create/list/enable/disable/delete manage handlers; trigger fires a lifecycle event; trace inspects invocations."},
                     "agent": {"type": "string", "description": "Optional agent name or ID for agent-scoped event context."},
+                    "agent_id": {"type": "string", "description": "Explicit agent ID. Required for schedule:* events unless `agent` resolves to an active agent."},
                     "name": {"type": "string", "description": "Event handler name for create."},
                     "pattern": {"type": "string", "description": "Full event pattern, for example session:start, session:quest_end, or schedule:0 9 * * *."},
                     "schedule": {"type": "string", "description": "Cron expression shorthand for schedule:<expr>."},
