@@ -42,17 +42,16 @@ use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-#[cfg(feature = "ann-sqlite-vec")]
-use std::sync::atomic::{AtomicU8, Ordering};
 use tracing::warn;
 
-/// Sticky ANN availability cache for the scope-aware path in this module.
-/// 0 = unknown, 1 = ready, 2 = unavailable. Mirrors `VS_ANN_STATE` in
-/// `vector.rs` but lives here so a failure on one path doesn't disable the
-/// other. Once set to `unavailable` we stop probing until the process
-/// restarts.
+/// Self-rearming ANN availability circuit for the scope-aware path in
+/// this module. Mirrors `VS_ANN_STATE` in `vector.rs` but lives here so
+/// a failure on one path doesn't disable the other. Auto-rearms
+/// `ANN_CIRCUIT_RETRY_MS` (60s) after a failure — pre-fix this was a
+/// 3-value AtomicU8 that, once tripped, never tried again until process
+/// restart.
 #[cfg(feature = "ann-sqlite-vec")]
-static ANN_STATE: AtomicU8 = AtomicU8::new(0);
+static ANN_STATE: crate::vector::AnnCircuit = crate::vector::AnnCircuit::new();
 
 /// Internal scored-candidate view used across the stages.
 #[derive(Clone, Debug)]
@@ -300,13 +299,14 @@ impl SqliteIdeas {
         use crate::sqlite::embeddings::vec_extension_ready;
         use crate::vector::vec_to_bytes;
 
-        // Short-circuit when we already learned ANN isn't available, or when
-        // the extension never registered globally.
-        if ANN_STATE.load(Ordering::Relaxed) == 2 {
+        // Short-circuit when ANN isn't available, or when the extension
+        // never registered globally. Circuit auto-rearms after 60s so a
+        // transient `sqlite-vec` reload heals on its own.
+        if ANN_STATE.should_skip() {
             return None;
         }
         if !vec_extension_ready() {
-            ANN_STATE.store(2, Ordering::Relaxed);
+            ANN_STATE.mark_failed();
             return None;
         }
 
@@ -380,9 +380,9 @@ impl SqliteIdeas {
             Err(e) => {
                 tracing::debug!(
                     error = %e,
-                    "ANN prepare failed; falling back to brute-force for this process"
+                    "ANN prepare failed; falling back to brute-force until circuit re-arms"
                 );
-                ANN_STATE.store(2, Ordering::Relaxed);
+                ANN_STATE.mark_failed();
                 return None;
             }
         };
@@ -396,13 +396,13 @@ impl SqliteIdeas {
         }) {
             Ok(i) => i,
             Err(e) => {
-                warn!(error = %e, "ANN query failed; falling back to brute-force for this process");
-                ANN_STATE.store(2, Ordering::Relaxed);
+                warn!(error = %e, "ANN query failed; falling back to brute-force until circuit re-arms");
+                ANN_STATE.mark_failed();
                 return None;
             }
         };
 
-        ANN_STATE.store(1, Ordering::Relaxed);
+        ANN_STATE.mark_ok();
         let mut hits: Vec<(String, f32)> = rows_iter
             .filter_map(|r| r.ok())
             .map(|(id, bytes)| {
@@ -495,7 +495,18 @@ impl SqliteIdeas {
 
         // Phase D: hydrate ideas + tags for each hit id.
         let ids: Vec<String> = hits.iter().map(|h| h.id.clone()).collect();
-        let ideas = self.get_by_ids_impl(&ids).await.unwrap_or_default();
+        let ideas = self.get_by_ids_impl(&ids).await.unwrap_or_else(|e| {
+            // Log loudly when hydration fails (2026-05-14, Wave 3). The
+            // previous `unwrap_or_default()` silently dropped every hit
+            // — search returned "no results" to the user with no signal
+            // that the hits existed but couldn't be fetched.
+            tracing::error!(
+                hit_count = ids.len(),
+                error = %e,
+                "get_by_ids_impl failed during search hydration; returning no results",
+            );
+            Vec::new()
+        });
         let idea_map: HashMap<String, Idea> =
             ideas.into_iter().map(|i| (i.id.clone(), i)).collect();
 
@@ -700,7 +711,20 @@ impl SqliteIdeas {
                 include_superseded,
                 ban_after_wrong,
             )
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                // Log at error-level instead of silently returning an
+                // empty list (2026-05-14, Ideas steward Wave 3, Lane A).
+                // The previous `unwrap_or_default()` made a SQL failure
+                // look identical to "this tag has no matches" to the
+                // operator. Resilience preserved — other tags still get
+                // their pass — but the failure is now visible.
+                tracing::error!(
+                    tag = %tag,
+                    error = %e,
+                    "bm25_search_filtered failed; using empty list for this tag",
+                );
+                Vec::new()
+            });
             let vec_list = match (query_embedding, embedding_profile.as_ref()) {
                 (Some(qv), Some(profile)) => {
                     let scope = VectorSearchScope {

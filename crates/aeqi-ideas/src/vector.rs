@@ -1,11 +1,64 @@
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use tracing::{debug, warn};
 
-/// Per-VectorStore ANN availability cache. 0 = unknown, 1 = ready, 2 = unavailable.
-static VS_ANN_STATE: AtomicU8 = AtomicU8::new(0);
+/// Self-rearming circuit breaker for the sqlite-vec ANN path. Stores the
+/// Unix-millisecond timestamp at which to retry: `0` means ready,
+/// `t > 0` means "skip until at least `t`". A failure stamps
+/// `now + ANN_CIRCUIT_RETRY_MS`; a success resets to `0`. Pre-fix this
+/// was a 3-value AtomicU8 (0 = unknown, 1 = ready, 2 = unavailable) —
+/// once `2` landed, the process never tried again, so a single
+/// transient extension-load hiccup permanently demoted every store in
+/// the process to brute-force cosine. The audit caught this on
+/// 2026-05-14 (Ideas steward Wave 3, Lane A).
+pub(crate) struct AnnCircuit(AtomicI64);
+
+/// How long to skip ANN after a failure before retrying. 60s is short
+/// enough that a transient `sqlite-vec` reload at restart self-heals
+/// the next time a search lands; long enough that a genuinely missing
+/// extension doesn't burn CPU on every query trying to load it.
+pub(crate) const ANN_CIRCUIT_RETRY_MS: i64 = 60_000;
+
+impl AnnCircuit {
+    pub(crate) const fn new() -> Self {
+        Self(AtomicI64::new(0))
+    }
+
+    /// True when callers should skip ANN entirely (the circuit is open).
+    /// Crosses the time horizon back to closed automatically.
+    pub(crate) fn should_skip(&self) -> bool {
+        let next_retry = self.0.load(Ordering::Relaxed);
+        if next_retry == 0 {
+            return false;
+        }
+        ann_now_ms() < next_retry
+    }
+
+    /// Trip the circuit. Subsequent `should_skip` calls return `true`
+    /// until `ANN_CIRCUIT_RETRY_MS` has elapsed.
+    pub(crate) fn mark_failed(&self) {
+        self.0
+            .store(ann_now_ms() + ANN_CIRCUIT_RETRY_MS, Ordering::Relaxed);
+    }
+
+    /// Close the circuit. The next call attempts ANN.
+    pub(crate) fn mark_ok(&self) {
+        self.0.store(0, Ordering::Relaxed);
+    }
+}
+
+fn ann_now_ms() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Per-VectorStore ANN availability circuit (auto-rearming).
+static VS_ANN_STATE: AnnCircuit = AnnCircuit::new();
 
 /// Cosine similarity between two f32 vectors.
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -163,7 +216,7 @@ fn try_ann_search_unscoped(
     query_vec: &[f32],
     top_k: usize,
 ) -> Option<Vec<VectorResult>> {
-    if VS_ANN_STATE.load(Ordering::Relaxed) == 2 {
+    if VS_ANN_STATE.should_skip() {
         return None;
     }
 
@@ -178,7 +231,7 @@ fn try_ann_search_unscoped(
         Ok(s) => s,
         Err(e) => {
             debug!(error = %e, "VectorStore ANN prepare failed; falling back to brute-force");
-            VS_ANN_STATE.store(2, Ordering::Relaxed);
+            VS_ANN_STATE.mark_failed();
             return None;
         }
     };
@@ -191,12 +244,12 @@ fn try_ann_search_unscoped(
         Ok(i) => i,
         Err(e) => {
             warn!(error = %e, "VectorStore ANN query failed; falling back to brute-force");
-            VS_ANN_STATE.store(2, Ordering::Relaxed);
+            VS_ANN_STATE.mark_failed();
             return None;
         }
     };
 
-    VS_ANN_STATE.store(1, Ordering::Relaxed);
+    VS_ANN_STATE.mark_ok();
     let mut hits: Vec<VectorResult> = iter
         .filter_map(|r| r.ok())
         .map(|(idea_id, bytes)| {

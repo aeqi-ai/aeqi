@@ -1008,7 +1008,26 @@ impl Daemon {
                 match (self.idea_store.clone(), self.embedder.clone()) {
                     (Some(store), Some(embedder)) => {
                         info!("embedding worker started");
-                        tokio::spawn(aeqi_ideas::embed_worker::run(embed_rx, store, embedder));
+                        tokio::spawn(aeqi_ideas::embed_worker::run(
+                            embed_rx,
+                            store.clone(),
+                            embedder,
+                        ));
+                        // Sweeper: re-enqueue rows still flagged
+                        // embedding_pending=1 after 5min — recovers from
+                        // drop-on-full (`EmbedQueue::enqueue` log+drop)
+                        // and worker crashes that left rows invisible
+                        // to vector search. Drains via the priority
+                        // lane so fresh ideas don't get blocked.
+                        // Wave 3 of Ideas steward, 2026-05-14.
+                        let sweeper_queue = (*embed_queue).clone();
+                        tokio::spawn(aeqi_ideas::embed_worker::run_sweeper(
+                            sweeper_queue,
+                            store,
+                            std::time::Duration::from_secs(60),
+                            chrono::Duration::minutes(5),
+                            64,
+                        ));
                     }
                     _ => {
                         warn!(

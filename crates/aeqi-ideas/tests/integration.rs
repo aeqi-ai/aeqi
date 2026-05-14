@@ -689,6 +689,100 @@ async fn vector_search_skips_rows_with_embedding_pending() {
     );
 }
 
+// ── Test: MMR diversifies the staged pipeline end-to-end ─────────────
+//
+// Closes the audit gap from 2026-05-14 (Ideas steward Wave 3, Lane A):
+// the unit MMR test in `hybrid.rs::tests::mmr_rerank_diversifies`
+// exercises the reranker in isolation. This test drives the full
+// `run_staged_pipeline` → `search_explained` path that production
+// callers hit. Build the store WITHOUT an embedder so
+// `embedding_pending=1` for every row, vector retrieval is skipped,
+// and MMR falls back to tag-Jaccard distance — the most common
+// production shape when an embedder isn't wired or has lagged behind.
+//
+// Five `fact`-tagged ideas share the BM25 query terms. Three are near-
+// identical content (a redundant cluster); two share only the query
+// term plus their own distinct kind tag. A pure-BM25 sort would let
+// the three duplicates dominate the top results. MMR with tag-Jaccard
+// should interleave the two distinct ones into the top-5.
+
+#[tokio::test]
+async fn mmr_diversifies_redundant_results_end_to_end() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("mmr-diversity.db");
+    // Deliberately no `with_embedder` — keeps every row at
+    // `embedding_pending=1` so MMR exercises the Jaccard fallback path.
+    let ideas = SqliteIdeas::open(&db, 30.0).unwrap();
+
+    // Redundant cluster — all three share the same kind tag.
+    for name in ["jwt-rotate-a", "jwt-rotate-b", "jwt-rotate-c"] {
+        ideas
+            .store_full(store_full(
+                name,
+                "authentication token rotation invariant",
+                &["fact", "kind:jwt"],
+            ))
+            .await
+            .unwrap();
+    }
+    // Distinct neighbours — same query terms (including the rare
+    // anchor "invariant" so BM25 retrieves them alongside the redundant
+    // cluster), different kind tag. Two diverse neighbours so MMR has
+    // somewhere to go after picking the first one.
+    ideas
+        .store_full(store_full(
+            "session-cookie-policy",
+            "authentication cookie policy invariant",
+            &["fact", "kind:session"],
+        ))
+        .await
+        .unwrap();
+    ideas
+        .store_full(store_full(
+            "oauth-exchange-flow",
+            "authentication oauth exchange invariant",
+            &["fact", "kind:oauth"],
+        ))
+        .await
+        .unwrap();
+
+    let q = IdeaQuery::new("authentication invariant", 5);
+    let hits = ideas.search_explained(&q).await.unwrap();
+
+    let kinds: Vec<&str> = hits
+        .iter()
+        .map(|h| {
+            h.idea
+                .tags
+                .iter()
+                .find_map(|t| t.strip_prefix("kind:"))
+                .unwrap_or("?")
+        })
+        .collect();
+
+    // MMR must pull a DIFFERENT kind into slot 1 from whatever sits at
+    // slot 0 — that's the core MMR guarantee. With three near-identical
+    // kind:jwt rows + two diverse neighbours all sharing the BM25
+    // anchor, a pure-BM25 sort would put jwt at both slots 0 and 1.
+    assert!(
+        kinds.len() >= 2,
+        "expected at least 2 hits to exercise MMR; got {kinds:?}",
+    );
+    assert_ne!(
+        kinds[0], kinds[1],
+        "MMR must diversify slot 1 away from slot 0's kind; got {kinds:?}",
+    );
+
+    // And the two distinct neighbours (kind:session, kind:oauth) should
+    // BOTH appear in the top-5 — otherwise MMR is letting one of them
+    // get crowded out by the redundant cluster.
+    let non_jwt_count = kinds.iter().filter(|k| **k != "jwt").count();
+    assert!(
+        non_jwt_count >= 2,
+        "MMR must surface both diverse neighbours in top-5; got {kinds:?}",
+    );
+}
+
 // ── Test 6: embedder dim mismatch doesn't panic (16 vs default 1536) ──
 
 #[tokio::test]

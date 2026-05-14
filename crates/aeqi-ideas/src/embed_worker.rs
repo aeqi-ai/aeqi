@@ -12,8 +12,10 @@
 //! candidates on `embedding_pending = 0`; BM25 always serves.
 //!
 //! Dropped when the queue is full: the sender logs at WARN and the store
-//! row stays `embedding_pending = 1`. A future decay-patrol sweep (Agent R)
-//! can re-enqueue lingering pending rows if that turns out to matter.
+//! row stays `embedding_pending = 1`. [`run_sweeper`] re-enqueues those
+//! lingering rows on a periodic schedule so a single drop-on-full or a
+//! transient embedder failure can't make an idea invisible to vector
+//! search forever.
 //!
 //! ## Priority lane
 //!
@@ -137,6 +139,63 @@ pub async fn run(
     }
 }
 
+/// Periodic sweeper: re-enqueue rows that are still
+/// `embedding_pending = 1` after `stale_threshold`. Handles two recovery
+/// cases the worker alone can't:
+///
+/// 1. `EmbedQueue::enqueue*` dropped a job because the queue was full
+///    (sender's `try_send` failed with `TrySendError::Full`).
+/// 2. The worker task crashed mid-job or the embedder failed transiently
+///    before the row's flag flipped.
+///
+/// Without this sweep, both cases leave a row stuck at
+/// `embedding_pending = 1` forever, invisible to vector search but still
+/// served by BM25 — a silent quality regression no operator sees.
+///
+/// Caller is responsible for `tokio::spawn`ing this and dropping the
+/// task on shutdown. The loop exits cleanly when the store's `Arc` is
+/// dropped (every clone gone). Re-enqueues land on the **priority**
+/// channel so newly-written ideas don't starve the recovery path.
+pub async fn run_sweeper(
+    queue: EmbedQueue,
+    store: Arc<dyn aeqi_core::traits::IdeaStore>,
+    interval: std::time::Duration,
+    stale_threshold: chrono::Duration,
+    batch_size: usize,
+) {
+    let mut ticker = tokio::time::interval(interval);
+    // `MissedTickBehavior::Delay` keeps the sweeper spacing consistent
+    // even after a slow tick — we don't want to fire back-to-back
+    // recovery passes if the worker was paused (e.g. paused embedder).
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        ticker.tick().await;
+        if Arc::strong_count(&store) == 1 {
+            tracing::debug!("embed_worker sweeper: store dropped, exiting");
+            return;
+        }
+        let cutoff = chrono::Utc::now() - stale_threshold;
+        match store.find_stale_pending(cutoff, batch_size).await {
+            Ok(rows) if !rows.is_empty() => {
+                tracing::info!(
+                    count = rows.len(),
+                    cutoff = %cutoff.to_rfc3339(),
+                    "embed_worker sweeper: re-enqueueing stale pending embeddings",
+                );
+                for (id, content) in rows {
+                    queue.enqueue_priority(id, content);
+                }
+            }
+            Ok(_) => {
+                tracing::trace!("embed_worker sweeper: no stale pending rows");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "embed_worker sweeper: find_stale_pending failed");
+            }
+        }
+    }
+}
+
 /// Sink-only drain: consume jobs and throw them away. Used when the
 /// daemon starts without a configured embedder so the write path can
 /// still `enqueue` without back-pressure deadlocks. Search falls back
@@ -196,6 +255,91 @@ mod tests {
     /// dispatch_merge freshness contract: a row that got its content
     /// updated re-embeds ahead of first-time embeds still in the queue.
     ///
+    /// Sweeper re-enqueues stale `embedding_pending=1` rows back onto
+    /// the priority lane. End-to-end through a real `SqliteIdeas` — the
+    /// cost of doing it for real is tiny vs. the value of pinning the
+    /// invariant (silent vector-search invisibility was the audit
+    /// finding driving Wave 3).
+    #[tokio::test]
+    async fn sweeper_reenqueues_stale_pending() {
+        use crate::SqliteIdeas;
+        use aeqi_core::Scope;
+        use aeqi_core::traits::{IdeaStore, StoreFull};
+        use std::time::Duration;
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let store = Arc::new(SqliteIdeas::open(&dir.path().join("sweep.db"), 30.0).unwrap());
+
+        // Insert two ideas without an embedder wired — both stay at
+        // `embedding_pending=1` indefinitely. The sweeper should
+        // re-enqueue them when their `updated_at` falls behind the cutoff.
+        for name in ["stuck-a", "stuck-b"] {
+            store
+                .store_full(StoreFull {
+                    name: name.to_string(),
+                    content: format!("content for {name}"),
+                    tags: vec!["fact".into()],
+                    agent_id: None,
+                    scope: Scope::Global,
+                    authored_by: None,
+                    confidence: 1.0,
+                    expires_at: None,
+                    valid_from: None,
+                    valid_until: None,
+                    time_context: "timeless".into(),
+                    status: "active".into(),
+                })
+                .await
+                .unwrap();
+        }
+
+        // Cutoff in the future so EVERY pending row counts as stale —
+        // we don't want to sleep in a test. (Production uses
+        // `now - threshold`; the helper accepts any cutoff so the test
+        // can simulate "everything is stale".)
+        let cutoff = chrono::Utc::now() + chrono::Duration::seconds(60);
+        let stale = store.find_stale_pending(cutoff, 10).await.unwrap();
+        assert_eq!(stale.len(), 2, "both pending rows should be found stale");
+        let names: Vec<&str> = stale.iter().map(|(_, c)| c.as_str()).collect();
+        assert!(names.contains(&"content for stuck-a"));
+        assert!(names.contains(&"content for stuck-b"));
+
+        // Verify the sweeper itself wires up cleanly: enqueue both via
+        // its priority lane and confirm the queue receives them.
+        let (queue, mut rx) = EmbedQueue::channel(8);
+        let store_dyn: Arc<dyn IdeaStore> = store.clone();
+        // One-shot tick: spawn the sweeper, give it long enough to fire
+        // once, then drop the store handle so the loop's strong-count
+        // check exits cleanly.
+        let handle = tokio::spawn(run_sweeper(
+            queue.clone(),
+            store_dyn,
+            Duration::from_millis(50),
+            chrono::Duration::seconds(-60), /* cutoff = now + 60s */
+            10,
+        ));
+        // Allow the sweeper one tick.
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        drop(queue); // close senders so rx.recv returns None when drained
+        drop(store); // strong_count drops to 1 (only the sweeper holds it)
+        // Wait a tick for the sweeper to notice and exit.
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+
+        let mut drained: Vec<String> = Vec::new();
+        while let Some((_id, content)) = rx.priority.recv().await {
+            drained.push(content);
+        }
+        assert!(
+            drained.iter().any(|c| c == "content for stuck-a"),
+            "sweeper should re-enqueue stuck-a; drained={drained:?}",
+        );
+        assert!(
+            drained.iter().any(|c| c == "content for stuck-b"),
+            "sweeper should re-enqueue stuck-b; drained={drained:?}",
+        );
+    }
+
     /// Uses a dummy no-op receiver plus direct recv-ordering assertions
     /// so we don't need to stand up a real IdeaStore + Embedder just to
     /// test the biased select.

@@ -356,6 +356,14 @@ impl IdeaStore for SqliteIdeas {
         self.set_embedding_impl(id, embedding).await
     }
 
+    async fn find_stale_pending(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+        limit: usize,
+    ) -> Result<Vec<(String, String)>> {
+        self.find_stale_pending_impl(cutoff, limit).await
+    }
+
     async fn count_by_tag_since(
         &self,
         tag: &str,

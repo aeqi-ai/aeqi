@@ -813,6 +813,47 @@ impl SqliteIdeas {
         .await
     }
 
+    /// Find rows still `embedding_pending = 1` whose most-recent
+    /// timestamp (updated_at if set, else created_at) is older than
+    /// `cutoff`. Used by the embed-worker sweeper to re-enqueue jobs
+    /// that fell off the queue (drop-on-full or worker crash). Returns
+    /// `(id, content)` pairs ordered ascending so persistent failures
+    /// don't starve newer rows.
+    ///
+    /// The query rides the partial index
+    /// `idx_ideas_embedding_pending WHERE embedding_pending=1`, so the
+    /// scan is bounded to the pending set rather than the whole table.
+    pub(super) async fn find_stale_pending_impl(
+        &self,
+        cutoff: DateTime<Utc>,
+        limit: usize,
+    ) -> Result<Vec<(String, String)>> {
+        let cutoff_str = cutoff.to_rfc3339();
+        let limit = limit as i64;
+        self.blocking(move |conn| {
+            // `updated_at` is nullable; a fresh insert leaves it NULL
+            // until something rewrites the row. Use COALESCE so a row
+            // that has been pending since insert is just as eligible as
+            // a row that was edited later.
+            let mut stmt = conn.prepare(
+                "SELECT id, content FROM ideas \
+                 WHERE embedding_pending = 1 \
+                   AND COALESCE(updated_at, created_at) < ?1 \
+                 ORDER BY COALESCE(updated_at, created_at) ASC \
+                 LIMIT ?2",
+            )?;
+            let rows = stmt
+                .query_map(rusqlite::params![cutoff_str, limit], |row| {
+                    let id: String = row.get(0)?;
+                    let content: String = row.get(1)?;
+                    Ok((id, content))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
     /// Count rows tagged `tag` created on/after `since`. Used by the
     /// per-store consolidation threshold check.
     pub(super) async fn count_by_tag_since_impl(

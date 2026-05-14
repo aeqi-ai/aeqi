@@ -664,6 +664,22 @@ pub trait IdeaStore: Send + Sync {
         )
     }
 
+    /// Find rows still flagged `embedding_pending = 1` whose timestamp
+    /// is older than `cutoff`. Returns `(id, content)` pairs the
+    /// embed-worker sweeper can re-enqueue (drop-on-full or worker-crash
+    /// recovery). The default returns an empty list — stores without
+    /// async embedding don't need a sweeper and shouldn't pay the cost
+    /// of pretending to. The SQLite store overrides this with an indexed
+    /// query.
+    async fn find_stale_pending(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<(String, String)>> {
+        let _ = (cutoff, limit);
+        Ok(Vec::new())
+    }
+
     /// Count ideas tagged `tag` created on/after `since`. Used by the
     /// consolidation threshold check on every store.
     async fn count_by_tag_since(
