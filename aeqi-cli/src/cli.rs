@@ -524,6 +524,15 @@ pub enum IdeasAction {
         #[arg(long)]
         yes: bool,
     },
+    /// Rebuild active idea embeddings that do not match the configured embedding profile.
+    RebuildEmbeddings {
+        /// Preview how many embeddings would be rebuilt without writing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Maximum number of ideas to rebuild in this run.
+        #[arg(long)]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Subcommand)]

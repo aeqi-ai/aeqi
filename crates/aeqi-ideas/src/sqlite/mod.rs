@@ -38,6 +38,14 @@ pub(super) struct EmbeddingProfile {
     pub dimensions: usize,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EmbeddingRebuildSummary {
+    pub candidates: usize,
+    pub rebuilt: usize,
+    pub failed: usize,
+    pub dry_run: bool,
+}
+
 impl SqliteIdeas {
     /// Open (or create) a SQLite-backed idea store at `path`.
     ///

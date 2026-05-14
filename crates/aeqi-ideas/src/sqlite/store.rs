@@ -13,13 +13,28 @@
 //! that fill missing fields with defaults. Agents R and W in Round 3 will
 //! route their write paths through `store_full_impl`.
 
-use super::SqliteIdeas;
+use super::{EmbeddingProfile, EmbeddingRebuildSummary, SqliteIdeas};
 use crate::vector::vec_to_bytes;
 use aeqi_core::traits::{StoreFull, UpdateFull};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension};
 use tracing::{debug, warn};
+
+#[derive(Debug)]
+struct EmbeddingRebuildCandidate {
+    id: String,
+    content: String,
+}
+
+fn rebuild_candidate_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<EmbeddingRebuildCandidate> {
+    Ok(EmbeddingRebuildCandidate {
+        id: row.get(0)?,
+        content: row.get(1)?,
+    })
+}
 
 /// Insert a provenance-rich row + its tags on an existing connection /
 /// transaction. Shared between `store_full_impl` (plain blocking) and
@@ -200,12 +215,20 @@ impl SqliteIdeas {
                 let model = self.embedding_model.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Ok(conn) = conn.lock()
-                        && let Err(e) = conn.execute(
+                        && let Err(e) = conn
+                            .execute(
                             "INSERT OR REPLACE INTO idea_embeddings \
                                  (idea_id, embedding, dimensions, content_hash, embedding_provider, embedding_model) \
                              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                            rusqlite::params![id, bytes, dims as i64, hash, provider, model],
-                        ) {
+                                rusqlite::params![&id, bytes, dims as i64, hash, provider, model],
+                            )
+                            .and_then(|_| {
+                                conn.execute(
+                                    "UPDATE ideas SET embedding_pending = 0 WHERE id = ?1",
+                                    rusqlite::params![&id],
+                                )
+                            })
+                    {
                             warn!(id = %id, "failed to store embedding: {e}");
                         }
                 })
@@ -360,8 +383,14 @@ impl SqliteIdeas {
                             "INSERT OR REPLACE INTO idea_embeddings \
                                  (idea_id, embedding, dimensions, content_hash, embedding_provider, embedding_model) \
                              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                            rusqlite::params![id_for_embedding, bytes, dims as i64, hash, provider, model],
+                            rusqlite::params![&id_for_embedding, bytes, dims as i64, hash, provider, model],
                         )
+                        .and_then(|_| {
+                            conn.execute(
+                                "UPDATE ideas SET embedding_pending = 0 WHERE id = ?1",
+                                rusqlite::params![&id_for_embedding],
+                            )
+                        })
                         .map(|_| ())
                     } else {
                         conn.execute(
@@ -661,6 +690,125 @@ impl SqliteIdeas {
                 rusqlite::params![id],
             )?;
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn rebuild_stale_embeddings(
+        &self,
+        limit: Option<usize>,
+        dry_run: bool,
+    ) -> Result<EmbeddingRebuildSummary> {
+        if limit == Some(0) {
+            return Ok(EmbeddingRebuildSummary {
+                dry_run,
+                ..EmbeddingRebuildSummary::default()
+            });
+        }
+
+        let profile = self.active_embedding_profile().context(
+            "idea vector search is disabled; configure an embedding provider/model first",
+        )?;
+        let embedder = self
+            .embedder
+            .clone()
+            .context("idea vector search is disabled; configure an embedder first")?;
+        let candidates = self
+            .stale_embedding_candidates(profile.clone(), limit)
+            .await?;
+
+        let mut summary = EmbeddingRebuildSummary {
+            candidates: candidates.len(),
+            dry_run,
+            ..EmbeddingRebuildSummary::default()
+        };
+        if dry_run {
+            return Ok(summary);
+        }
+
+        for candidate in candidates {
+            let pending_id = candidate.id.clone();
+            self.blocking(move |conn| {
+                conn.execute(
+                    "UPDATE ideas SET embedding_pending = 1 WHERE id = ?1",
+                    rusqlite::params![pending_id],
+                )?;
+                Ok(())
+            })
+            .await?;
+
+            match embedder.embed(&candidate.content).await {
+                Ok(embedding) if embedding.len() == profile.dimensions => {
+                    if let Err(err) = self.set_embedding_impl(&candidate.id, &embedding).await {
+                        summary.failed += 1;
+                        warn!(id = %candidate.id, "failed to persist rebuilt embedding: {err}");
+                    } else {
+                        summary.rebuilt += 1;
+                    }
+                }
+                Ok(embedding) => {
+                    summary.failed += 1;
+                    warn!(
+                        id = %candidate.id,
+                        expected = profile.dimensions,
+                        actual = embedding.len(),
+                        "embedder returned the wrong number of dimensions"
+                    );
+                }
+                Err(err) => {
+                    summary.failed += 1;
+                    warn!(id = %candidate.id, "failed to rebuild embedding: {err}");
+                }
+            }
+        }
+
+        Ok(summary)
+    }
+
+    async fn stale_embedding_candidates(
+        &self,
+        profile: EmbeddingProfile,
+        limit: Option<usize>,
+    ) -> Result<Vec<EmbeddingRebuildCandidate>> {
+        self.blocking(move |conn| {
+            let mut sql = String::from(
+                "SELECT i.id, i.content \
+                 FROM ideas i \
+                 LEFT JOIN idea_embeddings e ON e.idea_id = i.id \
+                 WHERE i.status = 'active' \
+                   AND (i.embedding_pending = 1 \
+                        OR e.idea_id IS NULL \
+                        OR e.embedding_provider IS NULL \
+                        OR e.embedding_model IS NULL \
+                        OR e.embedding_provider != ?1 \
+                        OR e.embedding_model != ?2 \
+                        OR e.dimensions != ?3) \
+                 ORDER BY i.created_at ASC, i.id ASC",
+            );
+
+            if limit.is_some() {
+                sql.push_str(" LIMIT ?4");
+            }
+
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = match limit {
+                Some(limit) => stmt.query_map(
+                    rusqlite::params![
+                        &profile.provider,
+                        &profile.model,
+                        profile.dimensions as i64,
+                        limit as i64
+                    ],
+                    rebuild_candidate_from_row,
+                )?,
+                None => stmt.query_map(
+                    rusqlite::params![&profile.provider, &profile.model, profile.dimensions as i64],
+                    rebuild_candidate_from_row,
+                )?,
+            };
+
+            rows.collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(Into::into)
         })
         .await
     }

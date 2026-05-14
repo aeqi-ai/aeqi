@@ -240,7 +240,7 @@ async fn vector_search_requires_active_embedding_profile() {
         .await
         .unwrap();
     old_store
-        .set_embedding(&id, &vec![1.0; TEST_DIMS])
+        .set_embedding(&id, &[1.0; TEST_DIMS])
         .await
         .unwrap();
     drop(old_store);
@@ -259,10 +259,27 @@ async fn vector_search_requires_active_embedding_profile() {
         "vectors from a different model profile must not be searched"
     );
 
-    new_store
-        .set_embedding(&id, &vec![1.0; TEST_DIMS])
+    let dry_run = new_store
+        .rebuild_stale_embeddings(None, true)
         .await
         .unwrap();
+    assert_eq!(dry_run.candidates, 1);
+    assert_eq!(dry_run.rebuilt, 0);
+
+    let still_stale = new_store.search(&query).await.unwrap();
+    assert!(
+        still_stale.is_empty(),
+        "dry-run must not make stale-profile vectors searchable"
+    );
+
+    let rebuilt = new_store
+        .rebuild_stale_embeddings(None, false)
+        .await
+        .unwrap();
+    assert_eq!(rebuilt.candidates, 1);
+    assert_eq!(rebuilt.rebuilt, 1);
+    assert_eq!(rebuilt.failed, 0);
+
     let fresh_results = new_store.search(&query).await.unwrap();
     assert_eq!(
         fresh_results.first().map(|idea| idea.id.as_str()),

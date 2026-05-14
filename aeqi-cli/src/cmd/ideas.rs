@@ -31,6 +31,9 @@ pub(crate) async fn cmd_ideas(config_path: &Option<PathBuf>, action: IdeasAction
             dry_run,
             yes,
         } => cmd_ideas_recover_tags(config_path, &from, &r#match, dry_run, yes).await,
+        IdeasAction::RebuildEmbeddings { dry_run, limit } => {
+            cmd_ideas_rebuild_embeddings(config_path, limit, dry_run).await
+        }
     }
 }
 
@@ -86,6 +89,22 @@ async fn cmd_ideas_store(
         .await?;
     let scope = root.unwrap_or("global");
     println!("Stored idea {id} [{scope}] {name}");
+    Ok(())
+}
+
+async fn cmd_ideas_rebuild_embeddings(
+    config_path: &Option<PathBuf>,
+    limit: Option<usize>,
+    dry_run: bool,
+) -> Result<()> {
+    let (config, _) = load_config(config_path)?;
+    let ideas = open_ideas(&config)?;
+    let summary = ideas.rebuild_stale_embeddings(limit, dry_run).await?;
+    let prefix = if dry_run { "[dry-run] " } else { "" };
+    println!(
+        "{prefix}rebuild-embeddings: candidates={}, rebuilt={}, failed={}",
+        summary.candidates, summary.rebuilt, summary.failed
+    );
     Ok(())
 }
 
