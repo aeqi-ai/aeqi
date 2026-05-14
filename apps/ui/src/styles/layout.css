@@ -5554,6 +5554,9 @@
   background: transparent;
   border: none;
   outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Top-right ⋯ kebab — destructive actions hide here (Notion-style) */
@@ -6750,13 +6753,68 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  gap: 28px;
-  margin-top: 24px;
-  padding: 20px 20px 16px;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 12px 12px;
   /* Tint shift separates the conversation zone from the body editor
      without a hairline. Same technique as `.ideas-canvas-strip`. */
   background: var(--color-card-subtle, var(--bg-surface));
   border-radius: var(--radius-md);
+}
+
+.idea-convo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.idea-convo-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-card-muted, var(--bg-elevated));
+  border-radius: var(--radius-sm);
+}
+
+.idea-convo-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.idea-convo-tab:hover {
+  color: var(--color-text-primary);
+  background: var(--state-hover);
+}
+
+.idea-convo-tab.is-active {
+  color: var(--color-text-primary);
+  background: var(--color-card-elevated, var(--bg-surface));
+}
+
+.idea-convo-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* ── Subscribe bar ─────────────────────────────────────────── */
@@ -6766,9 +6824,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  /* Negative bottom-margin pulls the first section title up to the
-     same baseline — the bar is page-internal chrome, not its own row. */
-  margin-bottom: -16px;
+  margin-left: auto;
 }
 
 /* ── Vertical sections ─────────────────────────────────────── */
@@ -6796,8 +6852,8 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   align-items: center;
   justify-content: center;
   min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
+  height: 16px;
+  padding: 0 5px;
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0;
@@ -6838,7 +6894,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 .idea-convo-loading {
   display: flex;
   justify-content: center;
-  padding: 24px 0;
+  padding: 14px 0;
 }
 
 .idea-convo-error {
@@ -6850,7 +6906,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 .idea-convo-empty {
   display: flex;
   justify-content: center;
-  padding: 28px 0;
+  padding: 18px 0;
 }
 
 .idea-convo-empty-text {
@@ -6875,7 +6931,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 .idea-convo-group:first-child {
@@ -6888,7 +6944,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  padding: 4px 0 2px;
+  padding: 2px 0;
 }
 
 .idea-convo-group-rows {
@@ -6909,7 +6965,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 5px 0;
+  padding: 3px 0;
 }
 
 .idea-convo-activity-dot {
@@ -6955,8 +7011,8 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 
 .idea-convo-comment {
   display: flex;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 5px 0;
   transition: opacity 0.15s ease;
 }
 
@@ -6986,11 +7042,16 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 
 .idea-convo-comment-body {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.42;
   color: var(--color-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.idea-convo-panel .asv-composer--card {
+  padding: 4px 0 0;
+  background: transparent;
 }
 
 /* ── Tables-in-Ideas Phase 2.1 — property chips + children list ── */

@@ -79,9 +79,9 @@ function CommentAvatar({ row }: { row: CommentRow }) {
   // the app. System messages don't render comments (they live in the activity
   // section), so this branch is never hit.
   if (row.author_kind === "agent") {
-    return <BlockAvatar name={row.author} size={28} />;
+    return <BlockAvatar name={row.author} size={24} />;
   }
-  return <UserAvatar name={row.author} size={28} src={row.avatar_url} />;
+  return <UserAvatar name={row.author} size={24} src={row.avatar_url} />;
 }
 
 function CommentBubble({ row, entityId }: { row: CommentRow; entityId?: string }) {

@@ -107,6 +107,45 @@ function isUnknownCommandLike(msg: string): boolean {
   );
 }
 
+function formatScalar(value: unknown): string {
+  if (value == null) return "none";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+function formatActivityPayload(payload: unknown): { summary: string; eventType?: string } {
+  if (payload == null) return { summary: "" };
+  if (typeof payload === "string") return { summary: payload };
+  if (typeof payload !== "object" || Array.isArray(payload)) {
+    return { summary: formatScalar(payload) };
+  }
+
+  const data = payload as Record<string, unknown>;
+  const rawEvent = typeof data.event === "string" ? data.event : undefined;
+  const field = typeof data.field === "string" ? data.field.replace(/_/g, " ") : undefined;
+  const source = typeof data.source === "string" ? data.source : undefined;
+
+  if (field && ("from" in data || "to" in data)) {
+    return {
+      summary: `${field} ${formatScalar(data.from)} -> ${formatScalar(data.to)}`,
+      eventType: rawEvent,
+    };
+  }
+  if (source) {
+    return { summary: source, eventType: rawEvent };
+  }
+  if (rawEvent) {
+    const details = Object.entries(data)
+      .filter(([key]) => key !== "event")
+      .map(([key, value]) => `${key.replace(/_/g, " ")} ${formatScalar(value)}`)
+      .join(", ");
+    return { summary: details || "Recorded", eventType: rawEvent };
+  }
+
+  return { summary: JSON.stringify(payload) };
+}
+
 // ─── API functions ─────────────────────────────────────────────────────────────
 
 export async function getIdeaActivity(ideaId: string): Promise<ActivityRow[]> {
@@ -116,25 +155,19 @@ export async function getIdeaActivity(ideaId: string): Promise<ActivityRow[]> {
     return items.map((item, idx): ActivityRow => {
       const payload =
         typeof item.payload === "object" && item.payload !== null ? item.payload : undefined;
-      const summary =
+      const formatted =
         item.kind === "system_message"
-          ? (item.body ?? "")
-          : item.payload !== undefined
-            ? typeof item.payload === "string"
-              ? item.payload
-              : JSON.stringify(item.payload)
-            : "";
+          ? { summary: item.body ?? "" }
+          : formatActivityPayload(item.payload);
       return {
         id: `${item.kind}-${idx}-${item.at}`,
         kind: "activity",
         timestamp: item.at,
-        summary,
+        summary: formatted.summary,
         event_type:
-          typeof payload?.kind === "string"
-            ? payload.kind
-            : item.kind === "log"
-              ? "activity"
-              : undefined,
+          item.kind === "log"
+            ? (formatted.eventType ?? (typeof payload?.kind === "string" ? payload.kind : "activity"))
+            : undefined,
       };
     });
   } catch (err) {
