@@ -17,22 +17,11 @@ use crate::ipc::blueprints::Blueprint;
 pub const DEFAULT_BLUEPRINT_SLUG: &str = "aeqi";
 
 const AEQI_DEFAULT_JSON: &str = include_str!("../../../../presets/blueprints/aeqi.json");
-const AEQI_COMPANY_JSON: &str = include_str!("../../../../presets/blueprints/aeqi-company.json");
-const INDEX_FUND_JSON: &str = include_str!("../../../../presets/blueprints/index-fund.json");
-const SOLO_FOUNDER_JSON: &str = include_str!("../../../../presets/blueprints/solo-founder.json");
-const STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/studio.json");
-const TECH_STUDIO_JSON: &str = include_str!("../../../../presets/blueprints/tech-studio.json");
-const PERSONAL_OS_JSON: &str = include_str!("../../../../presets/blueprints/personal-os.json");
-
-const COMPANY_BLUEPRINT_JSON: &[&str] = &[
-    AEQI_DEFAULT_JSON,
-    AEQI_COMPANY_JSON,
-    INDEX_FUND_JSON,
-    SOLO_FOUNDER_JSON,
-    STUDIO_JSON,
-    TECH_STUDIO_JSON,
-    PERSONAL_OS_JSON,
-];
+// Keep the shipped catalog intentionally narrow. The repository still carries
+// draft manifests for future archetypes, but only the conservative default is
+// embedded into the public runtime catalog until the others have a fresh
+// product and protocol audit.
+const COMPANY_BLUEPRINT_JSON: &[&str] = &[AEQI_DEFAULT_JSON];
 
 /// All shipped company templates, sorted by slug so the catalog is stable.
 /// Parses the embedded JSON on every call — cheap (a handful of small docs)
@@ -59,21 +48,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn company_catalog_has_canonical_slugs() {
+    fn company_catalog_ships_only_the_default_blueprint() {
         let slugs: Vec<String> = company_blueprints().into_iter().map(|t| t.slug).collect();
-        for expected in [
-            DEFAULT_BLUEPRINT_SLUG,
-            "index-fund",
-            "solo-founder",
-            "studio",
-            "tech-studio",
-            "personal-os",
-        ] {
-            assert!(
-                slugs.iter().any(|s| s == expected),
-                "canonical company template '{expected}' missing; got {slugs:?}",
-            );
-        }
+        assert_eq!(slugs, vec![DEFAULT_BLUEPRINT_SLUG.to_string()]);
     }
 
     #[test]
@@ -85,34 +62,37 @@ mod tests {
     }
 
     #[test]
-    fn company_blueprint_lookup_returns_full_spec() {
-        let studio = company_blueprint("studio").expect("studio template present");
-        assert_eq!(studio.name, "Content Studio");
-        assert_eq!(studio.seed_agents.len(), 2);
+    fn company_blueprint_lookup_returns_default_full_spec() {
+        let default = company_blueprint(DEFAULT_BLUEPRINT_SLUG).expect("default template present");
+        assert_eq!(default.name, "aeqi");
+        assert_eq!(default.seed_agents.len(), 1);
+        assert_eq!(default.seed_quests.len(), 1);
     }
 
     #[test]
-    fn blueprints_have_categories_and_templates() {
-        // (slug, display-category, on-chain-template)
-        let expected = [
-            ("aeqi", "company", "venture"),
-            ("aeqi-company", "company", "venture"),
-            ("index-fund", "fund", "fund"),
-            ("personal-os", "company", "entity"),
-            ("solo-founder", "company", "entity"),
-            ("studio", "company", "entity"),
-            ("tech-studio", "company", "venture"),
+    fn default_blueprint_has_category_and_template() {
+        let bp = company_blueprint(DEFAULT_BLUEPRINT_SLUG).expect("default template present");
+        assert_eq!(bp.category, "company");
+        assert_eq!(bp.template, "venture");
+    }
+
+    #[test]
+    fn draft_blueprints_still_parse_as_inventory() {
+        let draft_json = [
+            include_str!("../../../../presets/blueprints/aeqi-company.json"),
+            include_str!("../../../../presets/blueprints/index-fund.json"),
+            include_str!("../../../../presets/blueprints/personal-os.json"),
+            include_str!("../../../../presets/blueprints/solo-founder.json"),
+            include_str!("../../../../presets/blueprints/studio.json"),
+            include_str!("../../../../presets/blueprints/tech-studio.json"),
         ];
-        for (slug, category, template) in expected {
-            let bp =
-                company_blueprint(slug).unwrap_or_else(|| panic!("blueprint '{slug}' missing"));
-            assert_eq!(
-                bp.category, category,
-                "blueprint '{slug}' has wrong category"
-            );
-            assert_eq!(
-                bp.template, template,
-                "blueprint '{slug}' has wrong template"
+        for raw in draft_json {
+            let bp: Blueprint =
+                serde_json::from_str(raw).expect("draft blueprint inventory must parse");
+            assert!(
+                company_blueprint(&bp.slug).is_none(),
+                "draft blueprint '{}' must not be exposed in the shipped catalog",
+                bp.slug,
             );
         }
     }

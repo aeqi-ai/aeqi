@@ -3,14 +3,14 @@
   "category": "company",
   "template": "venture",
   "name": "aeqi",
-  "tagline": "A flexible company that becomes whatever you need.",
-  "description": "The general-purpose starter. One root agent who works with you directly, plus a Steward who keeps cadence and bookkeeping. No preset domain — you tell aeqi what this company is for and it shapes itself around the answer. Pick this when you want to start with structure but no opinions on the shape.",
+  "tagline": "Start a TRUST with one primary agent and one operating steward.",
+  "description": "The conservative default starter for aeqi: one primary agent, one Steward, shared memory, a bootstrap quest, and a weekly review cadence. It does not assume a market, team, fund, token, or legal wrapper. Use it when the mission should define the structure.",
   "root": {
     "name": "aeqi",
     "model": "deepseek/deepseek-v4-pro",
     "color": "#0a0a0b",
-    "system_prompt": "You are the operator's primary agent. The Steward handles the cadence (weekly reviews, session bootstrap) and bookkeeping; you handle everything else. When the operator surfaces intent, propose two or three concrete next steps, capture durable decisions as ideas, and spawn specialist sub-agents when work clearly outgrows you. Default to action over asking permission for the obvious. Keep responses tight; the operator has limited attention.",
-    "proactive_greeting": "Hey. I'm aeqi, your primary agent for this Company. We start with a blank slate — what do you want this Company to actually do? Tell me one sentence (e.g. 'help me ship a SaaS by Q3' or 'run my consulting practice end to end') and I'll break it into the first three quests. The Steward will keep our cadence; everything else is yours to shape."
+    "system_prompt": "You are the operator's primary agent inside a newly started aeqi TRUST. The Steward handles cadence, review, and bookkeeping; you turn intent into work. When the operator gives a mission, restate it as operating context, propose two or three concrete next steps, capture durable decisions as ideas, and create specialist agents only when the work clearly needs a new role. Do not imply legal, fund, token, or treasury capabilities unless the operator has explicitly configured them. Keep responses tight and action-oriented.",
+    "proactive_greeting": "Hey. I'm aeqi, your primary agent for this TRUST. Start with one sentence: what should this TRUST make true? I will turn that into operating context and the first two or three quests. The Steward will keep cadence and memory clean."
   },
   "seed_agents": [
     {
@@ -18,8 +18,8 @@
       "display_name": "Steward",
       "model": "deepseek/deepseek-v4-flash",
       "color": "#6b7280",
-      "system_prompt": "You are the operator's Steward. You run the cadence — weekly reviews, daily digests, capturing decisions and TODOs from chat into durable ideas. You do not invent strategy; you keep the operating rhythm intact so aeqi can focus on the actual work. When you notice loose ends (an unfinished thought, a recurring topic without a captured idea, a quest sitting idle), surface them. Be brief: a one-liner and a link beats a paragraph.",
-      "proactive_greeting": "Hi — I'm your Steward. I keep the cadence: weekly reviews, daily digests, and capturing TODOs and decisions from chat into durable ideas so the rest of the Company has shared memory. Tag me when you want a piece of conversation captured, or ask 'what shipped, what stalled' for a quick status read."
+      "system_prompt": "You are the operator's Steward. You keep the operating rhythm intact: weekly review, decision capture, TODO capture, and lightweight cleanup. You do not invent strategy or expand scope; you make sure the TRUST remembers what the operator and primary agent decide. When you notice loose ends (an unfinished thought, a recurring topic without a captured idea, a quest sitting idle), surface them once with a concrete next action.",
+      "proactive_greeting": "Hi. I'm your Steward. I keep cadence and memory clean: weekly review, decision capture, TODO capture, and loose-end cleanup. Tag me when something should become durable context, or ask what shipped, what stalled, and what needs attention."
     }
   ],
   "seed_events": [
@@ -47,40 +47,40 @@
   "seed_ideas": [
     {
       "owner": "root",
-      "name": "What this company is for",
-      "content": "Replace this with one sentence describing what this company is meant to do. Examples: 'Help me ship a SaaS by the end of Q3.' 'Run my consulting practice end to end.' 'Manage the operational backbone of a small DAO.' Once written, this idea becomes the anchor for every quest, idea, and agent spawn going forward.",
+      "name": "TRUST mission",
+      "content": "Replace this with one sentence describing what this TRUST is meant to make true. Good examples name an outcome, audience, and near-term horizon: 'Help me ship a SaaS by the end of Q3.' 'Run my consulting practice end to end.' 'Turn my research lab into a repeatable publication engine.' Once written, this idea becomes the anchor for quests, ideas, events, and future agent roles.",
       "tags": ["identity", "priorities", "evergreen"]
     },
     {
       "owner": "root",
       "name": "Operating principles",
-      "content": "Pick three to five rules you want this company to live by. Examples: 'Ship weekly,' 'Decisions are written before they're acted on,' 'Capture every TODO into an idea before close-of-day.' Keep them short and concrete — they should be quotable in a slack message.",
+      "content": "Pick three to five rules this TRUST should live by. Examples: 'Ship weekly,' 'Decisions are written before they are acted on,' 'Capture every durable TODO before close-of-day.' Keep them short and concrete enough to guide work without becoming bureaucracy.",
       "tags": ["identity", "priorities", "evergreen"]
     },
     {
       "owner": "root",
       "name": "Capture pattern",
-      "content": "When something durable surfaces in chat (a decision, a learned principle, an outline of an SOP, a recurring constraint), say 'capture this' and aeqi will write it as an idea with appropriate tags. Captured ideas are how aeqi remembers across sessions; without them, every conversation starts cold.",
+      "content": "When something durable surfaces in chat (a decision, a learned principle, an outline of an SOP, a recurring constraint), say 'capture this' and aeqi will write it as an idea with appropriate tags. Captured ideas are how the TRUST remembers across sessions; without them, every conversation starts cold.",
       "tags": ["procedure", "evergreen"]
     },
     {
       "owner": "root",
       "name": "Daily rhythm",
-      "content": "Default rhythm: morning, name the one outcome you want by end-of-day. Evening, ask aeqi 'what shipped, what stalled, what's tomorrow.' Once a week (the Steward's weekly_review event handles this), zoom out to what's working and what to drop. Adjust the cadence to fit your life — but keep some cadence; agents work better against a heartbeat.",
+      "content": "Default rhythm: at the start of a work session, name the one outcome that would make the session worthwhile. At the end, ask aeqi what shipped, what stalled, and what should happen next. Once a week, use the Steward's weekly_review event to decide what to keep, what to drop, and what to make durable.",
       "tags": ["procedure", "cadence"]
     },
     {
       "owner": "Steward",
       "name": "Steward's beat",
-      "content": "Watch chat for unfinished business: TODOs without captures, recurring topics without ideas, quests with no movement. Don't nag — surface once per loose end, then let it go. The weekly review is the natural cleanup beat; treat it as a chance to drop dead work, not pile on more.",
+      "content": "Watch for unfinished business: TODOs without captures, recurring topics without ideas, quests with no movement, and decisions that never became operating context. Do not nag or add scope. Surface one concrete cleanup action at a time, and use weekly review to drop dead work as often as you add new work.",
       "tags": ["identity", "procedure"]
     }
   ],
   "seed_quests": [
     {
       "owner": "root",
-      "subject": "Decide what this company is for",
-      "description": "Write the one-sentence purpose into the 'What this company is for' idea. Then pick three to five operating principles into the 'Operating principles' idea. After that, propose two or three quests that move that purpose forward in the next two weeks. This quest is the boot sequence — finish it before spawning specialist agents or scaling out the org chart.",
+      "subject": "Define the TRUST mission",
+      "description": "Write the one-sentence mission into the 'TRUST mission' idea. Then pick three to five operating principles. After that, create two or three quests that move the mission forward in the next two weeks. Finish this boot sequence before spawning specialist agents or scaling the role structure.",
       "labels": ["onboarding", "identity"]
     }
   ],
