@@ -292,10 +292,38 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
     let app = app.with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&web.bind).await?;
+    let bound_addr = listener
+        .local_addr()
+        .map_err(|e| anyhow::anyhow!("failed to read bound socket addr: {e}"))?;
     info!(
         "aeqi-web listening on {} (auth: {:?})",
-        web.bind, web.auth.mode
+        bound_addr, web.auth.mode
     );
+
+    // Sidecar listen-port file. The platform proxy reads this on every
+    // request as source-of-truth for the runtime's actual bound address —
+    // the platform's `runtime_placements.target_port` column becomes a
+    // hint, not a contract. Eliminates the postgres↔runtime port-drift
+    // class. Best-effort: write failures log WARN but never block startup;
+    // the platform falls back to placement values when the file is absent.
+    let listen_port_path = resolve_listen_port_path(config);
+    if let Err(e) = write_listen_port_file(&listen_port_path, bound_addr) {
+        tracing::warn!(
+            path = %listen_port_path.display(),
+            error = %e,
+            "failed to write listen.port — proxy falls back to placement.target_port"
+        );
+    } else {
+        info!(
+            path = %listen_port_path.display(),
+            bound = %bound_addr,
+            "wrote listen.port for platform proxy"
+        );
+    }
+    let _listen_port_guard = ListenPortGuard {
+        path: listen_port_path,
+    };
+
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -303,6 +331,100 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+/// Resolve where the runtime should write `listen.port`. Prefers the
+/// platform-injected `AEQI_DATA_DIR` (set by `host.rs` for
+/// `aeqi-host-*.service` transient units); falls back to the config's
+/// resolved data dir for dev runs without systemd-run.
+fn resolve_listen_port_path(config: &AEQIConfig) -> PathBuf {
+    if let Some(dir) = std::env::var_os("AEQI_DATA_DIR") {
+        return PathBuf::from(dir).join("listen.port");
+    }
+    config.data_dir().join("listen.port")
+}
+
+/// Atomically write `bound_addr` as `host:port\n` to `path`. Writes to
+/// `<path>.tmp` then `rename`s over the destination so a partial write is
+/// never observable. Sets mode 0644 so the platform service user can
+/// read regardless of group membership.
+fn write_listen_port_file(path: &std::path::Path, bound_addr: SocketAddr) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("port.tmp");
+    std::fs::write(&tmp, format!("{bound_addr}\n"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o644));
+    }
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Best-effort cleanup of `listen.port` on graceful shutdown. SIGKILL /
+/// OOM don't get a chance — that's fine because the next spawn rewrites
+/// atomically. The mtime-cache on the platform side notices.
+struct ListenPortGuard {
+    path: PathBuf,
+}
+
+impl Drop for ListenPortGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(test)]
+mod listen_port_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn writes_host_port_with_trailing_newline() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("listen.port");
+        let addr: SocketAddr = "127.0.0.1:8501".parse().unwrap();
+        write_listen_port_file(&path, addr).unwrap();
+        let contents = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "127.0.0.1:8501\n");
+    }
+
+    #[test]
+    fn write_is_atomic_no_tmp_remains() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("listen.port");
+        let addr: SocketAddr = "127.0.0.1:8501".parse().unwrap();
+        write_listen_port_file(&path, addr).unwrap();
+        assert!(path.exists());
+        assert!(!path.with_extension("port.tmp").exists());
+    }
+
+    #[test]
+    fn write_failure_does_not_panic() {
+        // Non-existent parent path that isn't writable (root-owned `/proc/<bogus>`).
+        let path = std::path::PathBuf::from("/proc/aeqi-bogus-test/listen.port");
+        let addr: SocketAddr = "127.0.0.1:8501".parse().unwrap();
+        let result = write_listen_port_file(&path, addr);
+        assert!(
+            result.is_err(),
+            "expected write to fail under /proc/<bogus>"
+        );
+    }
+
+    #[test]
+    fn guard_removes_file_on_drop() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("listen.port");
+        let addr: SocketAddr = "127.0.0.1:8501".parse().unwrap();
+        write_listen_port_file(&path, addr).unwrap();
+        assert!(path.exists());
+        {
+            let _guard = ListenPortGuard { path: path.clone() };
+        }
+        assert!(!path.exists(), "guard should remove the file on drop");
+    }
 }
 
 // ── SPA Handlers ────────────────────────────────────────
