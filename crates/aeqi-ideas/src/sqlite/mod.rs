@@ -423,15 +423,25 @@ impl IdeaStore for SqliteIdeas {
 
     // ── Round 4c additions (Agent G — graph walk) ───────────────────────
 
-    async fn walk(&self, from: &str, max_hops: u32, relations: &[String]) -> Result<Vec<WalkStep>> {
-        // Default threshold of 0.0 accepts every edge; callers that want
-        // to prune weak edges use `walk_impl` directly.
+    async fn walk(
+        &self,
+        from: &str,
+        max_hops: u32,
+        relations: &[String],
+        strength_threshold: f32,
+    ) -> Result<Vec<WalkStep>> {
+        // 2026-05-14 (Wave 4): the trait method now carries
+        // strength_threshold so MCP callers can prune weak edges. Prior
+        // to this, every external walk landed with threshold=0.0 even
+        // when the MCP request specified one.
         let this = self.clone();
         let from = from.to_string();
         let relations = relations.to_vec();
-        tokio::task::spawn_blocking(move || this.walk_impl(&from, max_hops, &relations, 0.0))
-            .await
-            .map_err(|e| anyhow::anyhow!("spawn_blocking join: {e}"))?
+        tokio::task::spawn_blocking(move || {
+            this.walk_impl(&from, max_hops, &relations, strength_threshold)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("spawn_blocking join: {e}"))?
     }
 
     // ── Tables-in-Ideas Phase 2 ─────────────────────────────────────────
@@ -750,6 +760,73 @@ mod tests {
 
         let results = mem.search(&IdeaQuery::new("content", 10)).await.unwrap();
         assert!(results.is_empty());
+    }
+
+    /// `delete_impl` must sweep every `entity_edges` row that referenced
+    /// the deleted idea — `entity_edges` has no FK to `ideas`, so without
+    /// the explicit cascade the table grows monotonically across the
+    /// lifetime of the store. 2026-05-14 (Wave 4, Lane B).
+    #[tokio::test]
+    async fn test_delete_cascades_entity_edges() {
+        use crate::graph::EntityEdge;
+
+        let (mem, _dir) = test_ideas();
+        let src = mem
+            .store("doomed", "to-be-deleted", &["fact".to_string()], None)
+            .await
+            .unwrap();
+        let target = mem
+            .store("survivor", "still-here", &["fact".to_string()], None)
+            .await
+            .unwrap();
+        let bystander = mem
+            .store("witness", "unrelated", &["fact".to_string()], None)
+            .await
+            .unwrap();
+
+        // Edges in both directions involving the doomed idea, plus one
+        // unrelated edge that should survive the cascade.
+        mem.store_edge(&EntityEdge::new(&src, &target, "link", 0.8))
+            .unwrap();
+        mem.store_edge(&EntityEdge::new(&target, &src, "mention", 0.5))
+            .unwrap();
+        mem.store_edge(&EntityEdge::new(&target, &bystander, "link", 0.7))
+            .unwrap();
+
+        // Before: 3 edges total.
+        let before: i64 = {
+            let conn = mem.conn.lock().unwrap();
+            conn.query_row("SELECT COUNT(*) FROM entity_edges", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(before, 3, "fixture should land 3 edges");
+
+        mem.delete(&src).await.unwrap();
+
+        // After: only the bystander edge should remain. Both edges
+        // touching `src` (as source AND as target) must have been swept.
+        let after: i64 = {
+            let conn = mem.conn.lock().unwrap();
+            conn.query_row("SELECT COUNT(*) FROM entity_edges", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(
+            after, 1,
+            "cascade must remove both edges touching the deleted idea"
+        );
+
+        // And the surviving edge should be exactly the bystander→target one.
+        let (s_src, s_tgt): (String, String) = {
+            let conn = mem.conn.lock().unwrap();
+            conn.query_row(
+                "SELECT source_id, target_id FROM entity_edges LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap()
+        };
+        assert_eq!(s_src, target);
+        assert_eq!(s_tgt, bystander);
     }
 
     /// A mock embedder that tracks how many times `embed()` is called.

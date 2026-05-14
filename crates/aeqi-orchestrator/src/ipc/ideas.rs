@@ -1628,7 +1628,10 @@ pub async fn handle_walk_ideas(
         });
     }
 
-    let raw_steps = match idea_store.walk(&from, max_hops, &relations).await {
+    let raw_steps = match idea_store
+        .walk(&from, max_hops, &relations, strength_threshold)
+        .await
+    {
         Ok(s) => s,
         Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
     };

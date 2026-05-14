@@ -763,16 +763,23 @@ pub trait IdeaStore: Send + Sync {
     }
 
     /// Walk the idea graph up to `max_hops` from `from`, optionally
-    /// restricting to the given relations. Returns the visited edges in
-    /// traversal order. Agent G (Round 4c) wires the MCP
-    /// `ideas(action='walk')` against this.
+    /// restricting to the given relations. Edges (and accumulated walk
+    /// strength) below `strength_threshold` are pruned during traversal.
+    /// Returns the visited edges in traversal order.
+    ///
+    /// MCP `ideas(action='walk')` reads the request's `strength_threshold`
+    /// (defaulting to 0.1) and passes it through here. Prior to
+    /// 2026-05-14 (Wave 4) the trait signature dropped it and the
+    /// SQLite impl was always called with `0.0`, so the documented
+    /// argument silently no-op'd.
     async fn walk(
         &self,
         from: &str,
         max_hops: u32,
         relations: &[String],
+        strength_threshold: f32,
     ) -> anyhow::Result<Vec<WalkStep>> {
-        let _ = (from, max_hops, relations);
+        let _ = (from, max_hops, relations, strength_threshold);
         unsupported_idea_store_capability(self.name(), "walk", IdeaStoreCapability::GraphWalk)
     }
 

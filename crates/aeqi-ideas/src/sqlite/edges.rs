@@ -801,6 +801,43 @@ mod walk_tests {
         assert!(!targets.contains(c.as_str()));
     }
 
+    /// The trait-level `walk` (the MCP-callable path) must honour
+    /// `strength_threshold`, not silently pass 0.0. Before 2026-05-14
+    /// (Wave 4) the trait signature dropped the param and every MCP
+    /// caller's prune threshold was a no-op.
+    #[tokio::test]
+    async fn trait_walk_honours_strength_threshold() {
+        use aeqi_core::traits::IdeaStore;
+        let (mem, _dir) = test_store();
+        let a = mem.store("t-a", "A", &[], None).await.unwrap();
+        let strong = mem.store("t-strong", "B", &[], None).await.unwrap();
+        let weak = mem.store("t-weak", "C", &[], None).await.unwrap();
+        mem.store_idea_edge(&a, &strong, "mention", 0.9)
+            .await
+            .unwrap();
+        mem.store_idea_edge(&a, &weak, "mention", 0.05)
+            .await
+            .unwrap();
+
+        // Threshold above the weak edge — the trait must drop it.
+        let pruned = IdeaStore::walk(&mem, &a, 1, &[], 0.1).await.unwrap();
+        let pruned_targets: std::collections::HashSet<&str> =
+            pruned.iter().map(|s| s.to.as_str()).collect();
+        assert!(pruned_targets.contains(strong.as_str()));
+        assert!(
+            !pruned_targets.contains(weak.as_str()),
+            "trait walk must prune edges below strength_threshold"
+        );
+
+        // Threshold at 0 must still see every edge (regression guard for
+        // a default that drops things it shouldn't).
+        let unpruned = IdeaStore::walk(&mem, &a, 1, &[], 0.0).await.unwrap();
+        let unpruned_targets: std::collections::HashSet<&str> =
+            unpruned.iter().map(|s| s.to.as_str()).collect();
+        assert!(unpruned_targets.contains(strong.as_str()));
+        assert!(unpruned_targets.contains(weak.as_str()));
+    }
+
     #[tokio::test]
     async fn walk_max_hops_zero_returns_empty() {
         let (mem, _dir) = test_store();

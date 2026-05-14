@@ -251,6 +251,21 @@ impl SqliteIdeas {
                 "DELETE FROM idea_embeddings WHERE idea_id = ?1",
                 rusqlite::params![id],
             )?;
+            // Sweep entity_edges where this idea was source or target
+            // (kind='idea'). `entity_edges` has no FK to `ideas` —
+            // SQLite can't add a real FK after table create without a
+            // full rebuild (and the schema.rs trapdoor banner says
+            // never rename-swap this table). Do the cascade explicitly
+            // at delete-time. Without this, edges accumulate
+            // monotonically as ideas get deleted; reads were
+            // accidentally correct only because callers filter by live
+            // ids. 2026-05-14, Ideas steward Wave 4, Lane B.
+            conn.execute(
+                "DELETE FROM entity_edges \
+                 WHERE (source_kind = 'idea' AND source_id = ?1) \
+                    OR (target_kind = 'idea' AND target_id = ?1)",
+                rusqlite::params![id],
+            )?;
             Ok(())
         })
         .await
