@@ -128,18 +128,17 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
         if (sc === "inherited") {
           // cross-cut: visible but anchored on another agent
           if (idea.agent_id == null || idea.agent_id === agentId) return false;
+        } else if (idea.scope != null) {
+          // Modern rows carry an explicit scope, so direct equality is
+          // the only filtering rule needed for the scope enum.
+          if (idea.scope !== sc) return false;
         } else {
-          // match idea.scope if present, else fallback heuristics
-          if (idea.scope != null) {
-            if (idea.scope !== sc) return false;
-          } else if (sc === "self" && idea.agent_id !== agentId) {
-            return false;
-          } else if (sc === "global" && idea.agent_id != null) {
-            return false;
-          } else if (sc !== "self" && sc !== "global") {
-            // siblings/children/branch — no scope field, can't match
-            return false;
-          }
+          // Legacy rows have no scope column; only self/global can be
+          // inferred from agent ownership.
+          const inferredSelf = idea.agent_id === agentId;
+          if (sc === "self" && !inferredSelf) return false;
+          if (sc === "global" && idea.agent_id != null) return false;
+          if (sc !== "self" && sc !== "global") return false;
         }
       }
       if (filter.needsReview) {
