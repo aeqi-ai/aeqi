@@ -37,6 +37,29 @@ struct ToolDef {
     input_schema: serde_json::Value,
 }
 
+/// Canonical list of `action` values accepted by the `ideas` MCP tool.
+///
+/// Drift-guard contract: when you change this list (add, remove, rename),
+/// you must also:
+///
+/// 1. Update the dispatch arm at `aeqi-cli/src/cmd/mcp.rs` (`"ideas" => ...`)
+///    so the new action actually routes to an IPC verb.
+/// 2. Update `aeqi-docs/docs/concepts/ideas.md` - the "REST <-> MCP surface"
+///    table is the agent-facing canonical reference; out-of-band changes
+///    silently mislead agents.
+/// 3. Decide whether the new action also belongs on the REST surface
+///    (`crates/aeqi-web/src/routes/ideas.rs`). The split is deliberate
+///    (feedback / walk are MCP-only because they're agent-internal;
+///    activity / comments / subscribe / properties / children are REST-only
+///    because they back UI streams) but every new action needs the same
+///    deliberate decision.
+///
+/// `ideas_mcp_action_enum_drift_guard` snapshots this list so the doc-update
+/// step can't be silently skipped.
+const IDEAS_MCP_ACTIONS: &[&str] = &[
+    "store", "search", "update", "delete", "link", "feedback", "walk",
+];
+
 fn ipc_request_sync(sock_path: &Path, request: &serde_json::Value) -> Result<serde_json::Value> {
     let stream = std::os::unix::net::UnixStream::connect(sock_path)?;
     let mut writer = io::BufWriter::new(&stream);
@@ -398,7 +421,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["store", "search", "update", "delete", "link", "feedback", "walk"],
+                        "enum": IDEAS_MCP_ACTIONS,
                         "description": "store: save knowledge (needs name, content, tags). search: find ideas by natural language query (needs query). update: modify an idea by ID (needs id plus name/content/tags). delete: remove an idea by ID (needs id). link: connect two ideas with a typed edge (needs from, to, relation). feedback: mark an idea as used/useful/ignored/wrong/corrected/pinned (needs id and signal). walk: BFS the idea graph from a starting idea (needs from; optional max_hops, relations[], strength_threshold, limit)."
                     },
                     "id": {"type": "string", "description": "Idea ID (for update, delete, feedback)"},
@@ -1416,6 +1439,28 @@ fn graph_dirty_files(store: &aeqi_graph::GraphStore) -> anyhow::Result<Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Snapshot the `ideas` MCP tool action enum. Fires loudly on any
+    /// add/remove/rename so the dev is forced to:
+    ///   - update the dispatch arm in `cmd_mcp`
+    ///   - refresh `aeqi-docs/docs/concepts/ideas.md` ("REST <-> MCP surface")
+    ///   - decide whether the change should also touch
+    ///     `crates/aeqi-web/src/routes/ideas.rs`
+    ///
+    /// See the full contract on `IDEAS_MCP_ACTIONS`.
+    #[test]
+    fn ideas_mcp_action_enum_drift_guard() {
+        let expected: &[&str] = &[
+            "store", "search", "update", "delete", "link", "feedback", "walk",
+        ];
+        assert_eq!(
+            IDEAS_MCP_ACTIONS, expected,
+            "ideas MCP action enum changed - update aeqi-docs/docs/concepts/ideas.md \
+             (REST <-> MCP surface table), the dispatch arm in cmd_mcp, and decide \
+             whether the change also belongs on the REST surface in \
+             crates/aeqi-web/src/routes/ideas.rs. Then update this snapshot."
+        );
+    }
 
     #[test]
     fn agents_get_context_uses_trigger_event_with_session_start() {
