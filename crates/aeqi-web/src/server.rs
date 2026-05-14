@@ -324,13 +324,148 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         path: listen_port_path,
     };
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    // Optional Unix domain socket bind. When `web.uds_bind` is set the
+    // runtime serves BOTH the existing TCP listener AND a UDS listener at
+    // the configured path. The platform proxy may then dial either; the
+    // TCP path remains the rollback. Drops out cleanly when uds_bind is
+    // None (TCP-only legacy behaviour).
+    if let Some(uds_path) = web.uds_bind.as_ref().filter(|p| !p.is_empty()) {
+        let uds_path = PathBuf::from(uds_path);
+        let uds_listener = bind_uds(&uds_path).await?;
+        info!(
+            path = %uds_path.display(),
+            "aeqi-web also listening on UDS"
+        );
+        let _uds_guard = UdsSocketGuard {
+            path: uds_path.clone(),
+        };
+        let tcp_app = app.clone();
+        let uds_app = app;
+        tokio::try_join!(
+            async move {
+                axum::serve(
+                    listener,
+                    tcp_app.into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .await
+                .map_err(anyhow::Error::from)
+            },
+            async move {
+                axum::serve(
+                    uds_listener,
+                    uds_app.into_make_service_with_connect_info::<UdsConnectInfo>(),
+                )
+                .await
+                .map_err(anyhow::Error::from)
+            },
+        )?;
+    } else {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await?;
+    }
 
     Ok(())
+}
+
+/// Bind a `UnixListener` at `path`, recovering from a dangling socket file
+/// left by a previously crashed runtime. We probe the existing inode with a
+/// short connect attempt; if it accepts we refuse to overwrite (another
+/// runtime is alive on the same path — bind would have caused either two
+/// services to race the inode or this start to clobber a live socket).
+/// If the probe fails the inode is stale and we remove it before `bind`.
+///
+/// Permissions are tightened to `0o660` so only members of the runtime's
+/// group can dial the socket; the platform service shares that group.
+async fn bind_uds(path: &std::path::Path) -> Result<tokio::net::UnixListener> {
+    if path.exists() {
+        let connectable = tokio::time::timeout(
+            std::time::Duration::from_millis(50),
+            tokio::net::UnixStream::connect(path),
+        )
+        .await
+        .ok()
+        .and_then(|res| res.ok())
+        .is_some();
+        if connectable {
+            anyhow::bail!(
+                "UDS path {} is already serving a live runtime; refusing to clobber",
+                path.display()
+            );
+        }
+        std::fs::remove_file(path).map_err(|e| {
+            anyhow::anyhow!("failed to remove stale UDS at {}: {e}", path.display())
+        })?;
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            anyhow::anyhow!("failed to create UDS parent dir {}: {e}", parent.display())
+        })?;
+    }
+    let listener = tokio::net::UnixListener::bind(path)
+        .map_err(|e| anyhow::anyhow!("failed to bind UDS at {}: {e}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660)).map_err(|e| {
+            anyhow::anyhow!(
+                "failed to chmod UDS at {}: {e} (proxy may be unable to dial)",
+                path.display()
+            )
+        })?;
+    }
+    Ok(listener)
+}
+
+/// ConnectInfo for axum's UDS branch. Carries peer credentials for audit
+/// (the proxy runs as `aeqi`; `peer_cred` lets future middleware hard-
+/// assert that) and is the per-stream type axum threads into request
+/// extensions. Extractors that read `ConnectInfo<SocketAddr>` won't fire
+/// on UDS requests — `SmartIpKeyExtractor` resolves via the
+/// `X-Forwarded-For: 127.0.0.1` header the platform proxy always injects
+/// (see aeqi-platform's `internal_runtime_client()` invariant).
+#[derive(Clone, Debug)]
+pub struct UdsConnectInfo {
+    pub peer_cred: Option<UCredInfo>,
+}
+
+/// Peer credentials snapshot — `tokio::net::unix::UCred` isn't `Clone`,
+/// so we project it into a `Copy` shape on accept.
+#[derive(Clone, Copy, Debug)]
+pub struct UCredInfo {
+    pub uid: u32,
+    pub gid: u32,
+    pub pid: Option<i32>,
+}
+
+impl
+    axum::extract::connect_info::Connected<
+        axum::serve::IncomingStream<'_, tokio::net::UnixListener>,
+    > for UdsConnectInfo
+{
+    fn connect_info(stream: axum::serve::IncomingStream<'_, tokio::net::UnixListener>) -> Self {
+        let peer_cred = stream.io().peer_cred().ok().map(|c| UCredInfo {
+            uid: c.uid(),
+            gid: c.gid(),
+            pid: c.pid(),
+        });
+        UdsConnectInfo { peer_cred }
+    }
+}
+
+/// Best-effort cleanup of the UDS inode on graceful shutdown. systemd
+/// `Restart=on-failure` covers SIGKILL/OOM via `bind_uds`'s stale-inode
+/// recovery on the next start.
+struct UdsSocketGuard {
+    path: PathBuf,
+}
+
+impl Drop for UdsSocketGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 /// Resolve where the runtime should write `listen.port`. Prefers the
@@ -541,5 +676,58 @@ mod tests {
         assert_eq!(resolved.source, AuthSecretSource::Generated);
         assert_eq!(resolved.value.len(), 48);
         assert_ne!(resolved.value, "aeqi-dev");
+    }
+}
+
+#[cfg(test)]
+mod uds_tests {
+    use super::bind_uds;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+    use tokio::net::UnixListener;
+
+    #[tokio::test]
+    async fn bind_uds_creates_listener_and_chmods_660() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("runtime.sock");
+        let listener = bind_uds(&path).await.expect("bind on fresh path");
+        assert!(path.exists(), "socket file should exist after bind");
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o660, "socket should be 0o660 for group-only access");
+        drop(listener);
+    }
+
+    #[tokio::test]
+    async fn bind_uds_recovers_stale_inode() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("runtime.sock");
+        // Simulate a leftover regular file from a crashed runtime.
+        std::fs::write(&path, b"stale").unwrap();
+        assert!(path.exists());
+        let _listener = bind_uds(&path).await.expect("should recover stale inode");
+        assert!(
+            path.exists(),
+            "bind should have replaced the file with a live socket"
+        );
+    }
+
+    #[tokio::test]
+    async fn bind_uds_refuses_to_clobber_live_socket() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("runtime.sock");
+        let _existing = UnixListener::bind(&path).expect("existing live socket");
+        let err = bind_uds(&path).await.expect_err("should refuse to clobber");
+        assert!(
+            err.to_string().contains("already serving a live runtime"),
+            "expected clobber guard, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn bind_uds_creates_parent_dir() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("nested/deep/runtime.sock");
+        let _listener = bind_uds(&path).await.expect("should mkdir -p parent");
+        assert!(path.exists());
     }
 }

@@ -727,6 +727,15 @@ pub struct WebConfig {
     pub enabled: bool,
     #[serde(default = "default_web_bind")]
     pub bind: String,
+    /// Optional Unix domain socket bind path. When set, the runtime binds a
+    /// `UnixListener` at this path *in addition to* the TCP listener on
+    /// `bind`. The platform proxy may then dial the runtime over UDS,
+    /// eliminating the port-drift class of outages between
+    /// `runtime_placements.target_port` and the runtime's actual bound port.
+    /// Absent → TCP-only (legacy behaviour). The path is removed on bind if
+    /// it points at a non-connectable inode (dangling-after-crash recovery).
+    #[serde(default)]
+    pub uds_bind: Option<String>,
     #[serde(default)]
     pub ui_dist_dir: Option<String>,
     #[serde(default)]
@@ -748,6 +757,7 @@ impl Default for WebConfig {
         Self {
             enabled: false,
             bind: default_web_bind(),
+            uds_bind: None,
             ui_dist_dir: None,
             cors_origins: Vec::new(),
             auth_secret: None,
