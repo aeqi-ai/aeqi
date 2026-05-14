@@ -7,9 +7,15 @@
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-black)](Cargo.toml)
 [![GitHub stars](https://img.shields.io/github/stars/aeqi-ai/aeqi?style=social)](https://github.com/aeqi-ai/aeqi/stargazers)
 
-aeqi is a source-available agent runtime for running persistent AI workers,
-their memory, their work queues, and their event handlers from one self-hosted
-binary.
+aeqi is a source-available agent runtime and CLI for running persistent AI
+workers, their memory, their work queues, and their event handlers.
+
+You can use the same `aeqi` binary in two modes:
+
+- as a client for an existing hosted aeqi organization, where the runtime is
+  managed by the platform and the CLI/MCP bridge connects you to it.
+- as a self-hosted runtime, where `aeqi start` runs the daemon, API, dashboard,
+  MCP server, local SQLite state, and event loop yourself.
 
 The runtime is built around four primitives:
 
@@ -35,7 +41,7 @@ release workflows, and source-available protocol work under
 | Dashboard       | Embedded into the `aeqi` binary; no separate frontend host is required for normal use                                            |
 | Providers       | OpenRouter, Anthropic, and local Ollama paths exist in the runtime                                                               |
 | Self-hosting    | Single-binary/systemd is the recommended path; Docker Compose exists for configured runtime deployments                          |
-| Hosted platform | Separate repository/product boundary; accounts, billing, fleet placement, and hosted operations are not implemented in this repo |
+| Hosted platform | Separate product boundary; this repo's CLI can connect to hosted organizations, but accounts, billing, and fleet placement live outside this repo |
 | Protocol work   | Solana trust work is active under `projects/aeqi-solana`; it is not required to run the local runtime                            |
 
 aeqi is under active development. Interfaces are usable, but they are not a
@@ -57,7 +63,54 @@ cd aeqi
 cargo build --release -p aeqi
 ```
 
-Initialize and verify a runtime:
+Then choose the path you are using.
+
+### Existing hosted organization
+
+Use this path when you already have an aeqi account and organization. The CLI is
+the terminal client; it does not run the hosted runtime on your machine.
+
+```bash
+export AEQI_API_KEY=ak_account_xxxxx
+export AEQI_API_URL=https://cloud.aeqi.ai
+
+aeqi chat
+```
+
+`aeqi chat` authenticates as your account, lets you select the company/entity
+when needed, and opens an interactive session with an agent in that runtime.
+From there you can talk to existing agents, create quests, or use the runtime's
+memory and work ledger.
+
+For Codex, Claude Code, editors, or other MCP-aware clients, run `aeqi mcp` as a
+stdio MCP server:
+
+```json
+{
+  "mcpServers": {
+    "aeqi": {
+      "command": "aeqi",
+      "args": ["mcp"],
+      "env": {
+        "AEQI_SECRET_KEY": "sk_company_xxxxx",
+        "AEQI_API_KEY": "ak_account_xxxxx",
+        "AEQI_API_URL": "https://cloud.aeqi.ai"
+      }
+    }
+  }
+}
+```
+
+In this shape the editor or coding agent is the client, `aeqi mcp` is the tool
+bridge, and the hosted aeqi runtime remains the system of record for agents,
+ideas, quests, events, and code intelligence. To delegate to an existing agent,
+use the MCP `agents`, `quests`, and `ideas` tools. To create a persistent new
+agent, use `agents(action="hire", ...)` or the CLI's local `aeqi agent spawn`
+flow when working against a self-hosted runtime.
+
+### Self-hosted runtime
+
+Use this path when you want to run the runtime from this repository yourself:
 
 ```bash
 aeqi setup
@@ -73,6 +126,9 @@ embedded dashboard in one process, defaulting to `http://127.0.0.1:8400`.
 
 For a no-cloud-provider walkthrough, use the Ollama path in
 [`docs/local-demo.md`](docs/local-demo.md).
+
+Read [`docs/mcp-setup.md`](docs/mcp-setup.md) for the full hosted and
+self-hosted MCP setup matrix.
 
 ## Self-Host Paths
 
@@ -98,22 +154,28 @@ Run `aeqi <command> --help` for exact flags. Common commands:
 | `aeqi setup`                             | Write starter config, agents, and dashboard secret                 |
 | `aeqi doctor --strict`                   | Validate config, provider readiness, and local state before launch |
 | `aeqi start`                             | Start daemon, API, WebSocket server, and dashboard together        |
-| `aeqi chat`                              | Open the terminal chat client                                      |
+| `aeqi chat`                              | Open the terminal chat client for local or hosted runtimes         |
 | `aeqi run "<prompt>"`                    | Run a one-shot agent prompt                                        |
-| `aeqi agent list`                        | List discovered and registered agents                              |
+| `aeqi agent list`                        | List discovered and registered agents in a local runtime           |
+| `aeqi agent spawn`                       | Create a persistent local runtime agent                            |
 | `aeqi assign "subject" --root <ROOT>`    | Assign a quest to a root agent                                     |
 | `aeqi events install-defaults`           | Install the standard schedule events on existing agents            |
 | `aeqi monitor`                           | Show an operator monitor view                                      |
 | `aeqi graph index --root <ROOT>`         | Index a repository into the code graph                             |
 | `aeqi trust derive --entity-id <ENTITY>` | Derive the canonical trust identity for a company/entity           |
-| `aeqi mcp`                               | Run the MCP server                                                 |
+| `aeqi mcp`                               | Run the stdio MCP bridge for local or hosted runtimes              |
 
 ## Runtime Model
 
-The daemon coordinates sessions, queued work, event firing, provider calls,
-middleware, tool execution, and persistence. The web server exposes the local
-dashboard and API through Axum and WebSocket routes. The UI is embedded into the
-release binary by default.
+When self-hosting, the daemon coordinates sessions, queued work, event firing,
+provider calls, middleware, tool execution, and persistence. The web server
+exposes the local dashboard and API through Axum and WebSocket routes. The UI is
+embedded into the release binary by default.
+
+When connecting to a hosted organization, the same primitives live in the
+managed runtime. The local CLI process is a client and transport: `aeqi chat`
+opens terminal sessions, and `aeqi mcp` exposes the runtime tools to MCP-aware
+clients.
 
 Default runtime data lives under `~/.aeqi`:
 
@@ -185,6 +247,7 @@ Useful starting points:
 
 - [`docs/README.md`](docs/README.md) — documentation index
 - [`docs/quickstart.md`](docs/quickstart.md) — first local runtime
+- [`docs/mcp-setup.md`](docs/mcp-setup.md) — hosted and self-hosted MCP client setup
 - [`docs/self-hosting.md`](docs/self-hosting.md) — self-host operator checklist
 - [`docs/runtime-platform-separation.md`](docs/runtime-platform-separation.md) — runtime vs hosted platform boundary
 - [`docs/security/configuration.md`](docs/security/configuration.md) — security configuration

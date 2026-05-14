@@ -1,13 +1,20 @@
-# AEQI MCP — Client-Agnostic Integration
+# aeqi MCP — Client-Agnostic Integration
 
-Connect any MCP-capable client to your aeqi company runtime. The contract is
-client-agnostic: Codex, Claude Code, editors, downstream SaaS agents, and local
-self-hosted tools all authenticate as the API-key owner and receive the same
-actor-aware tool surface.
+Connect any MCP-capable client to your aeqi company runtime. The same `aeqi`
+binary supports two deployment shapes:
+
+- hosted organization: `aeqi mcp` is a local stdio bridge into the managed
+  runtime selected by your platform credentials.
+- self-hosted runtime: `aeqi mcp` connects to the daemon you run yourself.
+
+The contract is client-agnostic: Codex, Claude Code, editors, downstream SaaS
+agents, and local self-hosted tools all receive the same actor-aware tool
+surface.
 
 ## Setup
 
-For local stdio clients, add an `aeqi` MCP server that runs `aeqi mcp`:
+For local stdio clients, add an `aeqi` MCP server that runs `aeqi mcp`. For a
+hosted organization, provide both the company secret and account key:
 
 ```json
 {
@@ -16,19 +23,25 @@ For local stdio clients, add an `aeqi` MCP server that runs `aeqi mcp`:
       "command": "aeqi",
       "args": ["mcp"],
       "env": {
-        "AEQI_AGENT": "my-agent"
+        "AEQI_SECRET_KEY": "sk_company_xxxxx",
+        "AEQI_API_KEY": "ak_account_xxxxx",
+        "AEQI_API_URL": "https://cloud.aeqi.ai",
+        "AEQI_AGENT": "codex"
       }
     }
   }
 }
 ```
 
+For a self-hosted daemon on the same machine, omit the platform credentials and
+let `aeqi mcp` connect to the local runtime socket.
+
 ### Local development
 
 Start the daemon, then start your MCP client:
 
 ```bash
-aeqi daemon
+aeqi start
 ```
 
 No platform keys are needed for a purely local self-hosted runtime. The stdio
@@ -53,10 +66,10 @@ The account key identifies you. The chat session then selects:
 
 No extra key is required to choose the target agent.
 
-MCP is different: it is an entity-scoped tool bridge for external clients, so it
-uses a company secret key and may also carry the account key to bind the call to
-your user account. Wrappers for Codex or Claude Code are convenience shims only;
-authorization is not client-specific.
+MCP is different: it is an entity-scoped tool bridge for external clients. It
+uses a company secret key to select the company runtime and should also carry
+the account key to bind the call to your user account. Wrappers for Codex or
+Claude Code are convenience shims only; authorization is not client-specific.
 
 ```json
 {
@@ -67,17 +80,42 @@ authorization is not client-specific.
       "env": {
         "AEQI_SECRET_KEY": "sk_company_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
-        "AEQI_AGENT": "my-agent"
+        "AEQI_API_URL": "https://cloud.aeqi.ai",
+        "AEQI_AGENT": "codex"
       }
     }
   }
 }
 ```
 
-- `AEQI_SECRET_KEY` — identifies the company runtime for MCP
+- `AEQI_SECRET_KEY` — identifies the company runtime for hosted MCP
 - `AEQI_API_KEY` — identifies the user account
+- `AEQI_API_URL` — platform API base URL; defaults to the production platform when omitted
 - `AEQI_AGENT` — client/agent hint for logs/context, not the human account identity. It does not automatically own new quests, filter quest lists, or scope idea memory.
 - `AEQI_AGENT_ID` — optional explicit agent scope. The shared wrapper does not set this from the runtime default; pass `agent_id` only when intentionally working inside a specific runtime agent's memory.
+
+### Common user stories
+
+Work as yourself from Codex or Claude Code:
+
+1. Configure the MCP server with `AEQI_SECRET_KEY` and `AEQI_API_KEY`.
+2. Use `me(action="profile")` to confirm the actor and company scope.
+3. Use `ideas`, `quests`, `events`, and `code` as your organization memory and work ledger.
+
+Delegate to an existing runtime agent:
+
+1. Use `agents(action="list")` to find the existing agent.
+2. Use `quests(action="create", agent="agent-name", ...)` to assign work.
+3. Use `quests(action="show", ...)` or `agents(action="get", ...)` to inspect outcome and context.
+
+Create a new persistent agent:
+
+1. Use `agents(action="hire", template="analyst")` or another available template.
+2. Store durable instructions with `ideas(action="store", agent_id="...", ...)`.
+3. Create quests assigned to that agent when it should own work.
+
+The CLI is still only the client in hosted mode. Hiring an agent changes the
+hosted runtime state; it does not spawn a local daemon on your machine.
 
 ### Hosted HTTP MCP
 
@@ -138,28 +176,34 @@ This calls `agents(action='get')` and prints the agent's assembled ideas. One MC
 
 ## Tools
 
-| Tool | Actions | What it does |
-|------|---------|-------------|
-| `me` | profile, permissions | Authenticated actor, runtime transport, and entity scope |
-| `ideas` | store, search, update, delete, link, feedback, walk | Persistent knowledge — facts, procedures, preferences, context |
-| `quests` | create, list, show, update, close, cancel | Work tracking — hierarchical, with dependencies and outcomes |
-| `agents` | get, hire, retire, list, projects, delegate | Agent management — hire children, delegate work, list projects |
-| `events` | create, list, enable, disable, delete | Reaction rules — lifecycle triggers and scheduled automation |
-| `code` | search, context, impact, file, stats, index | Code intelligence — symbol search, blast radius, dependency graph |
+| Tool     | Actions                                      | What it does                                                        |
+| -------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| `me`     | profile, permissions                         | Authenticated actor, runtime transport, and entity scope            |
+| `ideas`  | store, search, update, delete, link, feedback, walk | Persistent knowledge: facts, procedures, preferences, context |
+| `quests` | create, list, show, update, close, cancel    | Work tracking: hierarchy, dependencies, assignment, outcomes        |
+| `agents` | get, hire, retire, list, projects            | Agent management: inspect, hire, retire, list projects              |
+| `events` | create, list, enable, disable, delete        | Reaction rules: lifecycle triggers and scheduled automation         |
+| `code`   | search, context, impact, file, stats, index  | Code intelligence: symbol search, blast radius, dependency graph    |
 
-All operations are scoped to your agent. Ideas searches return your agent's knowledge + inherited knowledge from parent agents. Quests are owned by your agent. Events fire for your agent's lifecycle.
+Tool scope follows the authenticated actor and selected entity. In hosted mode,
+that is normally your user account inside the company selected by the secret
+key. Use explicit `agent` or `agent_id` parameters when you want a runtime agent
+to own the work.
 
 ## How it works
 
-The AEQI daemon is the runtime. It manages agents, ideas, quests, events, sessions, and code intelligence in two databases:
+For self-hosting, the aeqi daemon is the runtime. It manages agents, ideas,
+quests, events, sessions, and code intelligence in two databases:
 
 - **`aeqi.db`** — the company template (agents, events, ideas). Copy this file = clone the company.
 - **`sessions.db`** — the runtime journal (sessions, quests, activity, runs). Delete this = fresh start.
 
-The stdio MCP server connects to the daemon via Unix socket IPC. The HTTP MCP
+The stdio MCP server connects to the daemon via Unix socket IPC. In hosted mode,
+the local stdio process connects to the platform, which resolves the company
+runtime and forwards the same MCP JSON-RPC calls to that runtime. The HTTP MCP
 endpoint lives in `aeqi-web` and forwards tool calls to the same daemon IPC with
 the same actor envelope. Every tool call translates to a daemon command. The
-daemon handles concurrent connections — web UI, CLI, HTTP MCP, and stdio MCP can
+daemon handles concurrent connections: web UI, CLI, HTTP MCP, and stdio MCP can
 all be connected simultaneously.
 
 ## Architecture
@@ -172,7 +216,7 @@ Web UI ──→ HTTP API (aeqi-web) ──────────────�
 CLI (aeqi chat) ──→ IPC ─────────────────────────────────────────┘
 ```
 
-One daemon. Many clients. Same agent state.
+One runtime. Many clients. Same agent state.
 
 ## Data model
 
