@@ -26,7 +26,16 @@ pub struct SqliteIdeas {
     conn: Arc<Mutex<Connection>>,
     embedder: Option<Arc<dyn Embedder>>,
     embedding_dimensions: usize,
+    embedding_provider: Option<String>,
+    embedding_model: Option<String>,
     mmr_lambda: f64,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct EmbeddingProfile {
+    pub provider: String,
+    pub model: String,
+    pub dimensions: usize,
 }
 
 impl SqliteIdeas {
@@ -78,6 +87,8 @@ impl SqliteIdeas {
             conn: Arc::new(Mutex::new(conn)),
             embedder: None,
             embedding_dimensions: 1536,
+            embedding_provider: None,
+            embedding_model: None,
             mmr_lambda: 0.7,
         })
     }
@@ -122,10 +133,20 @@ impl SqliteIdeas {
                 crate::sqlite::schema::rebuild_idea_vec_table(&conn, dimensions);
             }
         }
+        self.embedding_provider = Some(embedder.provider().to_string());
+        self.embedding_model = Some(embedder.model().to_string());
         self.embedder = Some(embedder);
         self.embedding_dimensions = dimensions;
         self.mmr_lambda = mmr_lambda;
         Ok(self)
+    }
+
+    fn active_embedding_profile(&self) -> Option<EmbeddingProfile> {
+        Some(EmbeddingProfile {
+            provider: self.embedding_provider.clone()?,
+            model: self.embedding_model.clone()?,
+            dimensions: self.embedding_dimensions,
+        })
     }
 }
 
@@ -801,8 +822,10 @@ mod tests {
                 "content_hash should be stored"
             );
 
-            // Verify lookup_embedding_by_hash finds it.
-            let cached = SqliteIdeas::lookup_embedding_by_hash(&conn, &hash);
+            // Verify the profiled cache lookup finds it.
+            let cached = SqliteIdeas::lookup_embedding_by_hash_for_profile(
+                &conn, &hash, "unknown", "unknown", 4,
+            );
             assert!(cached.is_some(), "should find cached embedding by hash");
         }
     }
@@ -849,8 +872,12 @@ mod tests {
                 "different content should have different hashes"
             );
 
-            let cached1 = SqliteIdeas::lookup_embedding_by_hash(&conn, &hash1);
-            let cached2 = SqliteIdeas::lookup_embedding_by_hash(&conn, &hash2);
+            let cached1 = SqliteIdeas::lookup_embedding_by_hash_for_profile(
+                &conn, &hash1, "unknown", "unknown", 4,
+            );
+            let cached2 = SqliteIdeas::lookup_embedding_by_hash_for_profile(
+                &conn, &hash2, "unknown", "unknown", 4,
+            );
             assert!(cached1.is_some(), "first hash should be cached");
             assert!(cached2.is_some(), "second hash should be cached");
         }
@@ -902,9 +929,9 @@ mod tests {
 
     /// Regression: `update_full` (the path `dispatch_merge` uses) must
     /// refresh `ideas.content_hash` whenever the `content` column changes.
-    /// If the hash stays stale, `lookup_embedding_by_hash` on the row would
-    /// return the PRE-merge embedding even though the row carries the
-    /// POST-merge content — a freshness hygiene bug.
+    /// If the hash stays stale, profiled cache lookup on the row would return
+    /// the PRE-merge embedding even though the row carries the POST-merge
+    /// content — a freshness hygiene bug.
     #[tokio::test]
     async fn test_update_full_refreshes_content_hash() {
         use aeqi_core::traits::UpdateFull;

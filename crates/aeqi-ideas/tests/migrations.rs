@@ -5,7 +5,7 @@
 //! R9 finished the job by deleting v8 and v9 once the live DB reached
 //! `schema_version = 9`. These tests protect three scenarios:
 //!
-//! * Fresh DB: `initial_schema` runs once, DB is stamped at `schema_version=10`.
+//! * Fresh DB: `initial_schema` runs once, DB is stamped at the current baseline.
 //! * Legacy DB already at v9: a pure no-op (no catch-up migrations remain).
 //! * Opening the same DB twice: no-op.
 //!
@@ -89,6 +89,8 @@ const REQUIRED_INDEXES: &[&str] = &[
     "idx_feedback_idea",
     // Tables-in-Ideas Phase 2 (v15) — partial index.
     "idx_ideas_parent_idea_id",
+    // Embedding profile enforcement (v16).
+    "idx_idea_embeddings_profile",
 ];
 
 /// Every FTS5 sync trigger on `ideas`.
@@ -222,7 +224,7 @@ fn build_post_v7_shape(conn: &Connection) {
 }
 
 /// Fresh DB gets the full post-v9 shape directly from `initial_schema`,
-/// stamped at `schema_version = 10` (the "baseline reached" marker).
+/// stamped at the current baseline version.
 #[test]
 fn test_fresh_db_has_final_shape() {
     let dir = TempDir::new().expect("tempdir");
@@ -232,8 +234,8 @@ fn test_fresh_db_has_final_shape() {
 
     let conn = Connection::open(&db_path).expect("inspect db");
 
-    // 1. schema_version is stamped at 15 — the baseline marker
-    // (Tables-in-Ideas Phase 2 added parent_idea_id + properties).
+    // 1. schema_version is stamped at 16 — the baseline marker
+    // (embedding profile enforcement added provider/model metadata).
     let max_version: i64 = conn
         .query_row(
             "SELECT COALESCE(MAX(version), 0) FROM schema_version",
@@ -242,8 +244,8 @@ fn test_fresh_db_has_final_shape() {
         )
         .expect("read schema_version");
     assert_eq!(
-        max_version, 15,
-        "fresh DB should be stamped at baseline version 15, got {max_version}"
+        max_version, 16,
+        "fresh DB should be stamped at baseline version 16, got {max_version}"
     );
 
     // 2. ideas has every required column.
@@ -314,6 +316,14 @@ fn test_fresh_db_has_final_shape() {
             "entity_edges.{required} column missing; got {edge_cols:?}"
         );
     }
+
+    let embedding_cols = columns_on(&conn, "idea_embeddings");
+    for required in &["embedding_provider", "embedding_model"] {
+        assert!(
+            embedding_cols.iter().any(|c| c == required),
+            "idea_embeddings.{required} column missing; got {embedding_cols:?}"
+        );
+    }
 }
 
 /// A DB that was migrated by the full legacy v1..v9 chain carries
@@ -370,12 +380,12 @@ fn test_legacy_db_with_schema_version_9_runs_v11() {
         .filter_map(Result::ok)
         .collect();
     // T1.8 appended v11; T1.9 v12; T1.13 v13; T1.14 v14 (polymorphic
-    // assignee); Tables-in-Ideas Phase 2 appends v15. Legacy DBs catching
-    // up land all five rows.
+    // assignee); Tables-in-Ideas Phase 2 appends v15; embedding profile
+    // enforcement appends v16. Legacy DBs catch up through all rows.
     assert_eq!(
         versions,
-        (1..=9).chain([11, 12, 13, 14, 15]).collect::<Vec<_>>(),
-        "legacy 1..9 rows must be preserved; v11..v15 must be stamped"
+        (1..=9).chain([11, 12, 13, 14, 15, 16]).collect::<Vec<_>>(),
+        "legacy 1..9 rows must be preserved; v11..v16 must be stamped"
     );
 
     let idea_count: i64 = conn
@@ -411,6 +421,14 @@ fn test_legacy_db_with_schema_version_9_runs_v11() {
         assert!(
             edge_cols.iter().any(|c| c == required),
             "entity_edges.{required} column missing post-migration"
+        );
+    }
+
+    let embedding_cols = columns_on(&conn, "idea_embeddings");
+    for required in &["embedding_provider", "embedding_model"] {
+        assert!(
+            embedding_cols.iter().any(|c| c == required),
+            "idea_embeddings.{required} column missing post-migration"
         );
     }
 }

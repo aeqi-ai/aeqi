@@ -121,4 +121,12 @@ impl Embedder for OpenRouterEmbedder {
     fn dimensions(&self) -> usize {
         self.dimensions
     }
+
+    fn provider(&self) -> &str {
+        "openrouter"
+    }
+
+    fn model(&self) -> &str {
+        &self.model
+    }
 }

@@ -150,15 +150,26 @@ impl SqliteIdeas {
 
         // Embedding phase: async embed, then sync store.
         if let Some(ref embedder) = self.embedder {
+            let profile = self.active_embedding_profile();
             let hash = Self::content_hash(&redacted);
 
             // Check cache in spawn_blocking.
             let cached = {
                 let conn = self.conn.clone();
                 let hash_c = hash.clone();
+                let profile = profile.clone();
                 tokio::task::spawn_blocking(move || {
                     let conn = conn.lock().ok()?;
-                    Self::lookup_embedding_by_hash(&conn, &hash_c)
+                    match profile {
+                        Some(profile) => Self::lookup_embedding_by_hash_for_profile(
+                            &conn,
+                            &hash_c,
+                            &profile.provider,
+                            &profile.model,
+                            profile.dimensions,
+                        ),
+                        None => None,
+                    }
                 })
                 .await
                 .ok()
@@ -185,11 +196,15 @@ impl SqliteIdeas {
                 let conn = self.conn.clone();
                 let id = id.clone();
                 let dims = self.embedding_dimensions;
+                let provider = self.embedding_provider.clone();
+                let model = self.embedding_model.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Ok(conn) = conn.lock()
                         && let Err(e) = conn.execute(
-                            "INSERT OR REPLACE INTO idea_embeddings (idea_id, embedding, dimensions, content_hash) VALUES (?1, ?2, ?3, ?4)",
-                            rusqlite::params![id, bytes, dims as i64, hash],
+                            "INSERT OR REPLACE INTO idea_embeddings \
+                                 (idea_id, embedding, dimensions, content_hash, embedding_provider, embedding_model) \
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                            rusqlite::params![id, bytes, dims as i64, hash, provider, model],
                         ) {
                             warn!(id = %id, "failed to store embedding: {e}");
                         }
@@ -296,14 +311,25 @@ impl SqliteIdeas {
         };
 
         if let Some(ref embedder) = self.embedder {
+            let profile = self.active_embedding_profile();
             let hash = Self::content_hash(&content);
 
             let cached = {
                 let conn = self.conn.clone();
                 let hash_c = hash.clone();
+                let profile = profile.clone();
                 tokio::task::spawn_blocking(move || {
                     let conn = conn.lock().ok()?;
-                    Self::lookup_embedding_by_hash(&conn, &hash_c)
+                    match profile {
+                        Some(profile) => Self::lookup_embedding_by_hash_for_profile(
+                            &conn,
+                            &hash_c,
+                            &profile.provider,
+                            &profile.model,
+                            profile.dimensions,
+                        ),
+                        None => None,
+                    }
                 })
                 .await
                 .ok()
@@ -325,12 +351,16 @@ impl SqliteIdeas {
             let conn = self.conn.clone();
             let id_for_embedding = id.clone();
             let dims = self.embedding_dimensions;
+            let provider = self.embedding_provider.clone();
+            let model = self.embedding_model.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 if let Ok(conn) = conn.lock() {
                     let result = if let Some(bytes) = embed_bytes {
                         conn.execute(
-                            "INSERT OR REPLACE INTO idea_embeddings (idea_id, embedding, dimensions, content_hash) VALUES (?1, ?2, ?3, ?4)",
-                            rusqlite::params![id_for_embedding, bytes, dims as i64, hash],
+                            "INSERT OR REPLACE INTO idea_embeddings \
+                                 (idea_id, embedding, dimensions, content_hash, embedding_provider, embedding_model) \
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                            rusqlite::params![id_for_embedding, bytes, dims as i64, hash, provider, model],
                         )
                         .map(|_| ())
                     } else {
@@ -607,6 +637,8 @@ impl SqliteIdeas {
         let id = id.to_string();
         let bytes = vec_to_bytes(embedding);
         let dims = embedding.len() as i64;
+        let provider = self.embedding_provider.clone();
+        let model = self.embedding_model.clone();
         self.blocking(move |conn| {
             // Content hash is the cache key for duplicate-embedding detection;
             // read it from the row so a later call with the same content can
@@ -620,9 +652,9 @@ impl SqliteIdeas {
                 .optional()?;
             conn.execute(
                 "INSERT OR REPLACE INTO idea_embeddings \
-                     (idea_id, embedding, dimensions, content_hash) \
-                 VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![id, bytes, dims, hash],
+                     (idea_id, embedding, dimensions, content_hash, embedding_provider, embedding_model) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![id, bytes, dims, hash, provider, model],
             )?;
             conn.execute(
                 "UPDATE ideas SET embedding_pending = 0 WHERE id = ?1",

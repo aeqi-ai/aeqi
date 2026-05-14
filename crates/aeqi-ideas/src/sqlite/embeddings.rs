@@ -113,12 +113,24 @@ impl SqliteIdeas {
         format!("{:x}", hasher.finalize())
     }
 
-    /// Look up a cached embedding by content hash.
-    /// Returns the embedding bytes if a match exists, None otherwise.
-    pub(super) fn lookup_embedding_by_hash(conn: &Connection, hash: &str) -> Option<Vec<u8>> {
+    /// Look up a cached embedding by content hash within the active vector
+    /// space. Same-dimension embeddings from a different model are not
+    /// interchangeable, so cache hits must include provider/model/dimensions.
+    pub(super) fn lookup_embedding_by_hash_for_profile(
+        conn: &Connection,
+        hash: &str,
+        provider: &str,
+        model: &str,
+        dimensions: usize,
+    ) -> Option<Vec<u8>> {
         conn.query_row(
-            "SELECT embedding FROM idea_embeddings WHERE content_hash = ?1 LIMIT 1",
-            rusqlite::params![hash],
+            "SELECT embedding FROM idea_embeddings
+             WHERE content_hash = ?1
+               AND embedding_provider = ?2
+               AND embedding_model = ?3
+               AND dimensions = ?4
+             LIMIT 1",
+            rusqlite::params![hash, provider, model, dimensions as i64],
             |row| row.get(0),
         )
         .ok()

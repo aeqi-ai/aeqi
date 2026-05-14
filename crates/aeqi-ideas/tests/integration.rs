@@ -27,11 +27,22 @@ const TEST_DIMS: usize = 16;
 /// Output is normalised so cosine similarity stays in `[-1, 1]`.
 struct HashEmbedder {
     dimensions: usize,
+    model: String,
 }
 
 impl HashEmbedder {
     fn new(dimensions: usize) -> Self {
-        Self { dimensions }
+        Self {
+            dimensions,
+            model: "hash-v1".to_string(),
+        }
+    }
+
+    fn with_model(dimensions: usize, model: &str) -> Self {
+        Self {
+            dimensions,
+            model: model.to_string(),
+        }
     }
 }
 
@@ -63,6 +74,14 @@ impl Embedder for HashEmbedder {
 
     fn dimensions(&self) -> usize {
         self.dimensions
+    }
+
+    fn provider(&self) -> &str {
+        "test"
+    }
+
+    fn model(&self) -> &str {
+        &self.model
     }
 }
 
@@ -199,6 +218,56 @@ async fn store_search_why_has_bm25_hotness_confidence() {
         hits.iter().any(|h| h.why.bm25 > 0.0),
         "at least one hit must carry bm25 > 0 (min-max spread); got {:?}",
         hits.iter().map(|h| h.why.bm25).collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn vector_search_requires_active_embedding_profile() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("profile.db");
+
+    let old_embedder = Arc::new(HashEmbedder::with_model(TEST_DIMS, "hash-old"));
+    let old_store = SqliteIdeas::open(&db, 30.0)
+        .unwrap()
+        .with_embedder(old_embedder, TEST_DIMS, 0.6, 0.4, 0.7)
+        .unwrap();
+    let id = old_store
+        .store_full(store_full(
+            "profile-only",
+            "content with no query term overlap",
+            &["fact"],
+        ))
+        .await
+        .unwrap();
+    old_store
+        .set_embedding(&id, &vec![1.0; TEST_DIMS])
+        .await
+        .unwrap();
+    drop(old_store);
+
+    let new_embedder = Arc::new(HashEmbedder::with_model(TEST_DIMS, "hash-new"));
+    let new_store = SqliteIdeas::open(&db, 30.0)
+        .unwrap()
+        .with_embedder(new_embedder, TEST_DIMS, 0.6, 0.4, 0.7)
+        .unwrap();
+
+    let mut query = IdeaQuery::new("needle", 10);
+    query.tags = vec!["fact".to_string()];
+    let stale_results = new_store.search(&query).await.unwrap();
+    assert!(
+        stale_results.is_empty(),
+        "vectors from a different model profile must not be searched"
+    );
+
+    new_store
+        .set_embedding(&id, &vec![1.0; TEST_DIMS])
+        .await
+        .unwrap();
+    let fresh_results = new_store.search(&query).await.unwrap();
+    assert_eq!(
+        fresh_results.first().map(|idea| idea.id.as_str()),
+        Some(id.as_str()),
+        "active-profile vectors should participate in vector search"
     );
 }
 

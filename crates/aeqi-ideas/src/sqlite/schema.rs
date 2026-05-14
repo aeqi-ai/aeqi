@@ -49,9 +49,9 @@ use rusqlite::Connection;
 
 /// The version stamped on a fresh DB after `initial_schema` runs. Legacy
 /// DBs that ran the old v1..v9 chain carry rows 1..9 and are not re-stamped;
-/// they catch up via the `migrations` table below. The current head is v15
-/// (Tables-in-Ideas Phase 2: `parent_idea_id` + `properties` JSON columns).
-const BASELINE_VERSION: i64 = 15;
+/// they catch up via the `migrations` table below. The current head is v16
+/// (embedding provider/model profile metadata).
+const BASELINE_VERSION: i64 = 16;
 
 impl SqliteIdeas {
     pub fn prepare_schema(conn: &Connection) -> Result<()> {
@@ -104,6 +104,7 @@ fn run_migrations(conn: &Connection) -> Result<()> {
         (13, migration_v13_wrong_feedback_count),
         (14, migration_v14_assignee),
         (15, migration_v15_parent_and_properties),
+        (16, migration_v16_embedding_profile),
     ];
     for (version, f) in migrations {
         if *version > current {
@@ -206,7 +207,9 @@ fn initial_schema(conn: &Connection) -> Result<()> {
             idea_id TEXT PRIMARY KEY REFERENCES ideas(id) ON DELETE CASCADE,
             embedding BLOB NOT NULL,
             dimensions INTEGER NOT NULL,
-            content_hash TEXT
+            content_hash TEXT,
+            embedding_provider TEXT,
+            embedding_model TEXT
         );",
     )?;
 
@@ -255,6 +258,8 @@ fn initial_schema(conn: &Connection) -> Result<()> {
          CREATE INDEX idx_ideas_assignee ON ideas(assignee);
          CREATE INDEX idx_ideas_parent_idea_id ON ideas(parent_idea_id)
             WHERE parent_idea_id IS NOT NULL;
+         CREATE INDEX idx_idea_embeddings_profile
+            ON idea_embeddings(embedding_provider, embedding_model, dimensions);
          CREATE INDEX idx_idea_tags_tag ON idea_tags(tag);
          CREATE INDEX idx_entity_edges_source ON entity_edges(source_kind, source_id);
          CREATE INDEX idx_entity_edges_target ON entity_edges(target_kind, target_id);
@@ -787,6 +792,40 @@ fn migration_v15_parent_and_properties(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_ideas_parent_idea_id \
          ON ideas(parent_idea_id) WHERE parent_idea_id IS NOT NULL",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v16 — record the embedding vector-space profile on every vector row.
+///
+/// Dimensions alone are not enough: two models can both emit 1536 floats but
+/// live in incompatible vector spaces. New writes populate provider/model;
+/// legacy NULL rows intentionally fail closed until a re-embed writes the
+/// active profile.
+fn migration_v16_embedding_profile(conn: &Connection) -> Result<()> {
+    let cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(idea_embeddings)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !cols.iter().any(|n| n == "embedding_provider") {
+        conn.execute(
+            "ALTER TABLE idea_embeddings ADD COLUMN embedding_provider TEXT",
+            [],
+        )?;
+    }
+    if !cols.iter().any(|n| n == "embedding_model") {
+        conn.execute(
+            "ALTER TABLE idea_embeddings ADD COLUMN embedding_model TEXT",
+            [],
+        )?;
+    }
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_idea_embeddings_profile \
+         ON idea_embeddings(embedding_provider, embedding_model, dimensions)",
         [],
     )?;
     Ok(())

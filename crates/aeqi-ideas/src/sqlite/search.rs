@@ -28,7 +28,7 @@
 //! Default WHERE: `status='active'` + excludes rows that are sources of
 //! any `supersedes` edge. `query.include_superseded = true` bypasses both.
 
-use super::SqliteIdeas;
+use super::{EmbeddingProfile, SqliteIdeas};
 use crate::hybrid::mmr_rerank;
 use crate::sqlite::fts::sanitise_fts5_query;
 use crate::sqlite::tags::tag_set_jaccard;
@@ -66,6 +66,15 @@ struct StagedHit {
     decay: f32,
     final_score: f32,
     picked_by_tag: String,
+}
+
+struct VectorSearchScope<'a> {
+    query: &'a IdeaQuery,
+    tag: &'a str,
+    limit: usize,
+    include_superseded: bool,
+    ban_after_wrong: Option<i64>,
+    profile: &'a EmbeddingProfile,
 }
 
 impl SqliteIdeas {
@@ -199,32 +208,28 @@ impl SqliteIdeas {
     fn vector_search_filtered(
         conn: &Connection,
         query_vec: &[f32],
-        query: &IdeaQuery,
-        tag: &str,
-        limit: usize,
-        include_superseded: bool,
-        ban_after_wrong: Option<i64>,
+        scope: &VectorSearchScope<'_>,
     ) -> Vec<(String, f32)> {
-        if let Some(hits) = Self::try_ann_search(
-            conn,
-            query_vec,
-            query,
-            tag,
-            limit,
-            include_superseded,
-            ban_after_wrong,
-        ) {
+        if let Some(hits) = Self::try_ann_search(conn, query_vec, scope) {
             return hits;
         }
 
         let mut conditions: Vec<String> = vec![
             "EXISTS(SELECT 1 FROM idea_tags it WHERE it.idea_id = m.id AND LOWER(it.tag) = ?1)"
                 .into(),
+            "me.embedding_provider = ?2".into(),
+            "me.embedding_model = ?3".into(),
+            "me.dimensions = ?4".into(),
         ];
-        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(tag.to_lowercase())];
-        let mut idx = 2usize;
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
+            Box::new(scope.tag.to_lowercase()),
+            Box::new(scope.profile.provider.clone()),
+            Box::new(scope.profile.model.clone()),
+            Box::new(scope.profile.dimensions as i64),
+        ];
+        let mut idx = 5usize;
 
-        if !include_superseded {
+        if !scope.include_superseded {
             // T1.8 collapse: the `supersedes` relation was retired. The
             // `ideas.status` column already says the same thing — every
             // superseded idea has its status flipped by
@@ -241,11 +246,11 @@ impl SqliteIdeas {
         conditions.push("m.embedding_pending = 0".into());
 
         apply_scope_clause(
-            query,
+            scope.query,
             &mut conditions,
             &mut params,
             &mut idx,
-            ban_after_wrong,
+            scope.ban_after_wrong,
         );
 
         let where_clause = conditions.join(" AND ");
@@ -271,7 +276,7 @@ impl SqliteIdeas {
             })
             .unwrap_or_default();
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        results.truncate(limit);
+        results.truncate(scope.limit);
         results
     }
 
@@ -290,11 +295,7 @@ impl SqliteIdeas {
     fn try_ann_search(
         conn: &Connection,
         query_vec: &[f32],
-        query: &IdeaQuery,
-        tag: &str,
-        limit: usize,
-        include_superseded: bool,
-        ban_after_wrong: Option<i64>,
+        scope: &VectorSearchScope<'_>,
     ) -> Option<Vec<(String, f32)>> {
         use crate::sqlite::embeddings::vec_extension_ready;
         use crate::vector::vec_to_bytes;
@@ -317,23 +318,31 @@ impl SqliteIdeas {
         // vec0 `k` controls how many neighbours the virtual table returns
         // before any JOIN filtering — over-fetch so the tag/scope filter has
         // room to drop candidates without starving the caller.
-        let k: i64 = (limit as i64).saturating_mul(4).max(limit as i64);
+        let k: i64 = (scope.limit as i64)
+            .saturating_mul(4)
+            .max(scope.limit as i64);
 
         let mut conditions: Vec<String> = vec![
             "iv.embedding MATCH ?1".into(),
             "iv.k = ?2".into(),
             "EXISTS(SELECT 1 FROM idea_tags it WHERE it.idea_id = m.id AND LOWER(it.tag) = ?3)"
                 .into(),
+            "me.embedding_provider = ?4".into(),
+            "me.embedding_model = ?5".into(),
+            "me.dimensions = ?6".into(),
         ];
         let query_bytes = vec_to_bytes(query_vec);
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
             Box::new(query_bytes),
             Box::new(k),
-            Box::new(tag.to_lowercase()),
+            Box::new(scope.tag.to_lowercase()),
+            Box::new(scope.profile.provider.clone()),
+            Box::new(scope.profile.model.clone()),
+            Box::new(scope.profile.dimensions as i64),
         ];
-        let mut idx = 4usize;
+        let mut idx = 7usize;
 
-        if !include_superseded {
+        if !scope.include_superseded {
             // T1.8 collapse: the `supersedes` relation was retired. The
             // `ideas.status` column already says the same thing — every
             // superseded idea has its status flipped by
@@ -350,11 +359,11 @@ impl SqliteIdeas {
         conditions.push("m.embedding_pending = 0".into());
 
         apply_scope_clause(
-            query,
+            scope.query,
             &mut conditions,
             &mut params,
             &mut idx,
-            ban_after_wrong,
+            scope.ban_after_wrong,
         );
 
         let where_clause = conditions.join(" AND ");
@@ -405,7 +414,7 @@ impl SqliteIdeas {
         // similarity so the shape matches the brute-force fallback exactly
         // (both paths feed the same downstream mixing code).
         hits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        hits.truncate(limit);
+        hits.truncate(scope.limit);
         Some(hits)
     }
 
@@ -415,11 +424,7 @@ impl SqliteIdeas {
     fn try_ann_search(
         _conn: &Connection,
         _query_vec: &[f32],
-        _query: &IdeaQuery,
-        _tag: &str,
-        _limit: usize,
-        _include_superseded: bool,
-        _ban_after_wrong: Option<i64>,
+        _scope: &VectorSearchScope<'_>,
     ) -> Option<Vec<(String, f32)>> {
         None
     }
@@ -661,6 +666,7 @@ impl SqliteIdeas {
     ) -> Result<Vec<StagedHit>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock: {e}"))?;
         let per_tag_width = (top_k * 3).max(5);
+        let embedding_profile = self.active_embedding_profile();
 
         // Per-tag retrieve + local score.
         let mut by_id: HashMap<String, StagedHit> = HashMap::new();
@@ -695,17 +701,19 @@ impl SqliteIdeas {
                 ban_after_wrong,
             )
             .unwrap_or_default();
-            let vec_list = match query_embedding {
-                Some(qv) => Self::vector_search_filtered(
-                    &conn,
-                    qv,
-                    query,
-                    tag,
-                    per_tag_width,
-                    include_superseded,
-                    ban_after_wrong,
-                ),
-                None => Vec::new(),
+            let vec_list = match (query_embedding, embedding_profile.as_ref()) {
+                (Some(qv), Some(profile)) => {
+                    let scope = VectorSearchScope {
+                        query,
+                        tag,
+                        limit: per_tag_width,
+                        include_superseded,
+                        ban_after_wrong,
+                        profile,
+                    };
+                    Self::vector_search_filtered(&conn, qv, &scope)
+                }
+                _ => Vec::new(),
             };
 
             let bm25_max = bm25_list
@@ -827,7 +835,8 @@ impl SqliteIdeas {
         // MMR diversify using loaded embeddings; Jaccard fallback per pair
         // when embeddings are missing on either side.
         let ids_for_embed: Vec<String> = hits.iter().map(|h| h.id.clone()).collect();
-        let embeddings = Self::load_embeddings_for_ids(&conn, &ids_for_embed);
+        let embeddings =
+            Self::load_embeddings_for_ids(&conn, &ids_for_embed, embedding_profile.as_ref());
         let tags_for_ids = Self::fetch_tags_for_ids(&conn, &ids_for_embed);
 
         let scored = hits
@@ -873,10 +882,14 @@ impl SqliteIdeas {
     pub(super) fn load_embeddings_for_ids(
         conn: &Connection,
         ids: &[String],
+        embedding_profile: Option<&EmbeddingProfile>,
     ) -> HashMap<String, Vec<f32>> {
         if ids.is_empty() {
             return HashMap::new();
         }
+        let Some(embedding_profile) = embedding_profile else {
+            return HashMap::new();
+        };
         let placeholders = ids
             .iter()
             .enumerate()
@@ -884,12 +897,20 @@ impl SqliteIdeas {
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
-            "SELECT idea_id, embedding FROM idea_embeddings WHERE idea_id IN ({placeholders})"
+            "SELECT idea_id, embedding FROM idea_embeddings
+             WHERE idea_id IN ({placeholders})
+               AND embedding_provider = ?
+               AND embedding_model = ?
+               AND dimensions = ?"
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = ids
             .iter()
             .map(|s| s as &dyn rusqlite::types::ToSql)
             .collect();
+        params.push(&embedding_profile.provider);
+        params.push(&embedding_profile.model);
+        let embedding_dimensions = embedding_profile.dimensions as i64;
+        params.push(&embedding_dimensions);
         let Ok(mut stmt) = conn.prepare(&sql) else {
             return HashMap::new();
         };
