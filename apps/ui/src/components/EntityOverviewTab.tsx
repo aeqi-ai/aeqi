@@ -10,6 +10,7 @@ import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
 import { entityBasePath } from "@/lib/entityPath";
 import EntityHeroStrip from "./EntityHeroStrip";
 import BlockAvatar from "./BlockAvatar";
+import { Tooltip } from "@/components/ui";
 import "@/styles/overview.css";
 
 /**
@@ -42,6 +43,20 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
   const entity = entities.find((e) => e.id === entityId);
   const trustAddress = entity?.trust_address;
   const trustId = entity?.trust_id;
+
+  // Click-to-copy the truncated TRUST pubkey: the demo moment where the
+  // audience can paste the address into any Solana explorer to verify
+  // the on-chain reality. `stopPropagation` lets the rest of the tile
+  // still navigate to /trust/<addr>.
+  const [trustCopied, setTrustCopied] = useState(false);
+  const handleCopyTrust = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!trustAddress) return;
+    navigator.clipboard.writeText(trustAddress);
+    setTrustCopied(true);
+    setTimeout(() => setTrustCopied(false), 1500);
+  };
 
   // Inbox: subscribe to raw fields and useMemo the entity-filtered slice.
   // A selector that filters inline returns a fresh array every call and
@@ -335,11 +350,22 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
             {trustsCount === null ? "—" : trustsCount}
           </span>
           {trustAddress ? (
-            <span className="entity-overview-stat-delta" title={trustAddress}>
-              {trustAddress.length > 12
-                ? `${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`
-                : trustAddress}
-            </span>
+            <Tooltip content={trustCopied ? "Copied" : "Copy full address"}>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={handleCopyTrust}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") handleCopyTrust(e);
+                }}
+                className="entity-overview-stat-delta entity-overview-trust-pubkey"
+              >
+                {trustAddress.length > 12
+                  ? `${trustAddress.slice(0, 6)}…${trustAddress.slice(-4)}`
+                  : trustAddress}
+                {trustCopied ? " ✓" : ""}
+              </span>
+            </Tooltip>
           ) : null}
         </Link>
 
