@@ -2179,7 +2179,7 @@ pub async fn handle_idea_prefix(
 /// when `ideas.session_id` is null, mint a standalone session and backfill the
 /// idea row. The result is the canonical session id for emitting comments,
 /// activity, or subscribing participants.
-async fn ensure_idea_session(
+pub(super) async fn ensure_idea_session(
     ctx: &super::CommandContext,
     idea_store: &dyn IdeaStore,
     idea_id: &str,

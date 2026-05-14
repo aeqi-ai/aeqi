@@ -114,6 +114,8 @@ export async function getIdeaActivity(ideaId: string): Promise<ActivityRow[]> {
     const res = await apiRequest<ActivityResponse>(`/ideas/${encodeURIComponent(ideaId)}/activity`);
     const items = res.items ?? [];
     return items.map((item, idx): ActivityRow => {
+      const payload =
+        typeof item.payload === "object" && item.payload !== null ? item.payload : undefined;
       const summary =
         item.kind === "system_message"
           ? (item.body ?? "")
@@ -127,7 +129,12 @@ export async function getIdeaActivity(ideaId: string): Promise<ActivityRow[]> {
         kind: "activity",
         timestamp: item.at,
         summary,
-        event_type: item.kind === "log" ? "activity" : undefined,
+        event_type:
+          typeof payload?.kind === "string"
+            ? payload.kind
+            : item.kind === "log"
+              ? "activity"
+              : undefined,
       };
     });
   } catch (err) {

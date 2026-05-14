@@ -87,12 +87,13 @@ function ActivityItem({ row }: { row: ActivityRow }) {
 
 interface IdeaActivityFeedProps {
   ideaId: string;
+  refreshKey?: unknown;
   /** Optional callback fired with the row count after each load — lets the
    *  parent section header render an item-count badge without re-fetching. */
   onCount?: (count: number) => void;
 }
 
-export default function IdeaActivityFeed({ ideaId, onCount }: IdeaActivityFeedProps) {
+export default function IdeaActivityFeed({ ideaId, refreshKey, onCount }: IdeaActivityFeedProps) {
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +121,7 @@ export default function IdeaActivityFeed({ ideaId, onCount }: IdeaActivityFeedPr
     return () => {
       cancelled = true;
     };
-  }, [ideaId, onCount]);
+  }, [ideaId, refreshKey, onCount]);
 
   if (loading) {
     return (

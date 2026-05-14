@@ -115,6 +115,9 @@ export interface IdeaCanvasProps {
    * idea-detail's "Cancel + Save only when dirty" UX.
    */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Bump this from an embedding surface when related non-idea activity
+   *  lands in the idea's backing session. */
+  activityRefreshKey?: unknown;
 }
 
 const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCanvas(
@@ -129,6 +132,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
     onPersisted,
     onCanCommitChange,
     onDirtyChange,
+    activityRefreshKey,
   },
   ref,
 ) {
@@ -169,6 +173,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [showRejectPanel, setShowRejectPanel] = useState(false);
   const [rejectRationale, setRejectRationale] = useState("");
+  const [activityRefreshSeq, setActivityRefreshSeq] = useState(0);
 
   // The block editor is always-editable when `editable` is true — no
   // separate view/edit toggle. The `editable` flag mirrors the
@@ -250,6 +255,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
         content: snapshot.content,
         tags,
       });
+      setActivityRefreshSeq((n) => n + 1);
       dirtyRef.current = false;
       setSaveState("saved");
       if (flashRef.current) window.clearTimeout(flashRef.current);
@@ -440,6 +446,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
       await ideasApi.updateIdea(idea.id, { tags: nextTags });
       patchIdea(idea.id, { tags: nextTags });
       setTypedTags(nextTags);
+      setActivityRefreshSeq((n) => n + 1);
       setDecisionState("done");
     } catch (e) {
       setDecisionState("idle");
@@ -463,6 +470,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
       patchIdea(idea.id, { tags: nextTags, content: nextContent });
       setTypedTags(nextTags);
       setContent(nextContent);
+      setActivityRefreshSeq((n) => n + 1);
       setDecisionState("done");
       setShowRejectPanel(false);
     } catch (e) {
@@ -499,6 +507,10 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
   const showCompose = !isEdit;
 
   const dirty = saveState === "dirty" || saveState === "saving";
+  const conversationActivityRefreshKey = useMemo(
+    () => [activityRefreshSeq, activityRefreshKey],
+    [activityRefreshSeq, activityRefreshKey],
+  );
 
   // Cancel = revert. In compose mode it bails back to the index;
   // in edit mode it restores name/content/tags/refs to the
@@ -629,7 +641,12 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
         )}
       </div>
       {/* Conversation panel — only shown when viewing an existing idea */}
-      {isEdit && idea && <IdeaConversationPanel ideaId={idea.id} />}
+      {isEdit && idea && (
+        <IdeaConversationPanel
+          ideaId={idea.id}
+          activityRefreshKey={conversationActivityRefreshKey}
+        />
+      )}
     </div>
   );
 });

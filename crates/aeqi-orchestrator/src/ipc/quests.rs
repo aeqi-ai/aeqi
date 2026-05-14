@@ -569,13 +569,16 @@ pub async fn handle_update_quest(
         return serde_json::json!({"ok": false, "error": "id is required"});
     }
 
+    let previous = match ctx.agent_registry.get_task(quest_id).await {
+        Ok(Some(q)) => q,
+        Ok(None) => return serde_json::json!({"ok": false, "error": "quest not found"}),
+        Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+    };
+
     if allowed.is_some() {
-        let ok = match ctx.agent_registry.get_task(quest_id).await {
-            Ok(Some(q)) => match q.agent_id.as_deref() {
-                Some(aid) => check_agent_access(&ctx.agent_registry, allowed, aid).await,
-                None => true,
-            },
-            _ => false,
+        let ok = match previous.agent_id.as_deref() {
+            Some(aid) => check_agent_access(&ctx.agent_registry, allowed, aid).await,
+            None => true,
         };
         if !ok {
             return serde_json::json!({"ok": false, "error": "access denied"});
@@ -694,6 +697,9 @@ pub async fn handle_update_quest(
         .await
     {
         Ok(quest) => {
+            let changes = quest_activity_changes(&previous, &quest);
+            emit_quest_update_activity(ctx, &quest, &changes).await;
+
             // Editorial fields live on the linked idea — fetch it lazily
             // for the response so the UI can refresh without a 2nd RPC.
             let idea = match ctx.idea_store.as_ref() {
@@ -720,6 +726,147 @@ pub async fn handle_update_quest(
             })
         }
         Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
+    }
+}
+
+fn opt_string_value(value: &Option<String>) -> serde_json::Value {
+    value
+        .as_ref()
+        .map(|v| serde_json::Value::String(v.clone()))
+        .unwrap_or(serde_json::Value::Null)
+}
+
+fn opt_datetime_value(value: &Option<chrono::DateTime<chrono::Utc>>) -> serde_json::Value {
+    value
+        .as_ref()
+        .map(|v| serde_json::Value::String(v.to_rfc3339()))
+        .unwrap_or(serde_json::Value::Null)
+}
+
+fn quest_activity_changes(
+    previous: &aeqi_quests::Quest,
+    next: &aeqi_quests::Quest,
+) -> Vec<serde_json::Value> {
+    let mut changes = Vec::new();
+    if previous.status != next.status {
+        changes.push(serde_json::json!({
+            "field": "status",
+            "from": previous.status.to_string(),
+            "to": next.status.to_string(),
+        }));
+    }
+    if previous.priority != next.priority {
+        changes.push(serde_json::json!({
+            "field": "priority",
+            "from": previous.priority.to_string(),
+            "to": next.priority.to_string(),
+        }));
+    }
+    if previous.agent_id != next.agent_id {
+        changes.push(serde_json::json!({
+            "field": "agent_id",
+            "from": opt_string_value(&previous.agent_id),
+            "to": opt_string_value(&next.agent_id),
+        }));
+    }
+    if previous.assignee != next.assignee {
+        changes.push(serde_json::json!({
+            "field": "assignee",
+            "from": opt_string_value(&previous.assignee),
+            "to": opt_string_value(&next.assignee),
+        }));
+    }
+    if previous.scope != next.scope {
+        changes.push(serde_json::json!({
+            "field": "scope",
+            "from": previous.scope.as_str(),
+            "to": next.scope.as_str(),
+        }));
+    }
+    if previous.due_at != next.due_at {
+        changes.push(serde_json::json!({
+            "field": "due_at",
+            "from": opt_datetime_value(&previous.due_at),
+            "to": opt_datetime_value(&next.due_at),
+        }));
+    }
+    changes
+}
+
+fn display_activity_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => "unset".to_string(),
+        serde_json::Value::String(s) if s.is_empty() => "unset".to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+fn quest_activity_summary(changes: &[serde_json::Value]) -> String {
+    let parts: Vec<String> = changes
+        .iter()
+        .filter_map(|change| {
+            let field = change.get("field")?.as_str()?;
+            let from =
+                display_activity_value(change.get("from").unwrap_or(&serde_json::Value::Null));
+            let to = display_activity_value(change.get("to").unwrap_or(&serde_json::Value::Null));
+            Some(format!("{field}: {from} -> {to}"))
+        })
+        .collect();
+    if parts.is_empty() {
+        "quest updated".to_string()
+    } else {
+        parts.join("; ")
+    }
+}
+
+async fn emit_quest_update_activity(
+    ctx: &super::CommandContext,
+    quest: &aeqi_quests::Quest,
+    changes: &[serde_json::Value],
+) {
+    if changes.is_empty() || quest.idea_id.is_empty() {
+        return;
+    }
+
+    let Some(ref idea_store) = ctx.idea_store else {
+        return;
+    };
+    let session_id =
+        match super::ideas::ensure_idea_session(ctx, idea_store.as_ref(), &quest.idea_id).await {
+            Ok(session_id) => session_id,
+            Err(e) => {
+                tracing::warn!(
+                    quest = %quest.id.0,
+                    idea = %quest.idea_id,
+                    error = %e,
+                    "emit_quest_update_activity: ensure_idea_session failed"
+                );
+                return;
+            }
+        };
+
+    let Some(ref ss) = ctx.session_store else {
+        return;
+    };
+    let summary = quest_activity_summary(changes);
+    let metadata = serde_json::json!({
+        "kind": "quest_updated",
+        "quest_id": quest.id.0,
+        "idea_id": quest.idea_id,
+        "changes": changes,
+        "actor_kind": "system",
+    });
+    if let Err(e) = ss
+        .append_system_activity(&session_id, &summary, &metadata)
+        .await
+    {
+        tracing::warn!(
+            quest = %quest.id.0,
+            idea = %quest.idea_id,
+            error = %e,
+            "emit_quest_update_activity: append_system_activity failed"
+        );
     }
 }
 
@@ -1128,6 +1275,60 @@ mod tests {
         }
     }
 
+    async fn quest_update_ctx() -> (
+        crate::ipc::CommandContext,
+        Arc<crate::agent_registry::AgentRegistry>,
+        Arc<crate::session_store::SessionStore>,
+        Arc<dyn aeqi_core::traits::IdeaStore>,
+        tempfile::TempDir,
+    ) {
+        use crate::dispatch::{DispatchConfig, Dispatcher};
+        use crate::ipc::ActivityBuffer;
+        use tokio::sync::Mutex as TokioMutex;
+
+        let dir = tempfile::tempdir().unwrap();
+        let registry = Arc::new(crate::agent_registry::AgentRegistry::open(dir.path()).unwrap());
+        let sessions_pool = crate::agent_registry::ConnectionPool::in_memory().unwrap();
+        {
+            let conn = sessions_pool.lock().await;
+            crate::session_store::SessionStore::create_tables(&conn).unwrap();
+        }
+        let session_store = Arc::new(crate::session_store::SessionStore::new(Arc::new(
+            sessions_pool,
+        )));
+        let idea_store: Arc<dyn aeqi_core::traits::IdeaStore> =
+            Arc::new(aeqi_ideas::SqliteIdeas::open(&dir.path().join("aeqi.db"), 30.0).unwrap());
+        let (embed_queue, _rx) = aeqi_ideas::embed_worker::EmbedQueue::channel(8);
+        let ctx = crate::ipc::CommandContext {
+            metrics: Arc::new(crate::metrics::AEQIMetrics::new()),
+            activity_log: Arc::new(crate::activity_log::ActivityLog::new(registry.db())),
+            session_store: Some(Arc::clone(&session_store)),
+            event_handler_store: None,
+            agent_registry: Arc::clone(&registry),
+            entity_registry: Arc::new(crate::entity_registry::EntityRegistry::open(registry.db())),
+            role_registry: Arc::new(crate::role_registry::RoleRegistry::open(registry.db())),
+            idea_store: Some(Arc::clone(&idea_store)),
+            message_router: None,
+            activity_buffer: Arc::new(TokioMutex::new(ActivityBuffer::default())),
+            default_provider: None,
+            default_model: "test".to_string(),
+            session_manager: Arc::new(crate::session_manager::SessionManager::new()),
+            dispatcher: Arc::new(Dispatcher::new(DispatchConfig::default())),
+            daily_budget_usd: 0.0,
+            skill_loader: None,
+            execution_registry: Arc::new(crate::execution_registry::ExecutionRegistry::new()),
+            stream_registry: Arc::new(crate::stream_registry::StreamRegistry::new()),
+            channel_spawner: None,
+            tag_policy_cache: Arc::new(aeqi_ideas::tag_policy::TagPolicyCache::new(60)),
+            embed_queue: Arc::new(embed_queue),
+            embedder: None,
+            recall_cache: Arc::new(aeqi_ideas::RecallCache::default()),
+            pattern_dispatcher: None,
+            credentials: None,
+        };
+        (ctx, registry, session_store, idea_store, dir)
+    }
+
     /// Regression lock: the IPC close path must fire `session:quest_end`
     /// through the wired `PatternDispatcher`. Before this fix the dispatch
     /// never happened, so the reflection loop had a `fire_count` of 0 in
@@ -1183,5 +1384,56 @@ mod tests {
         let quest = stub_quest("q-nop", None);
         // Passing `None` must not panic or hang.
         dispatch_quest_end_for_ipc_close(None, &quest.id.0, "no dispatcher wired", &quest).await;
+    }
+
+    #[tokio::test]
+    async fn update_quest_emits_activity_into_linked_idea_session() {
+        let (ctx, registry, session_store, idea_store, _dir) = quest_update_ctx().await;
+        let agent = registry.spawn("Quest Tester", None, None).await.unwrap();
+        let quest = registry
+            .create_task(&agent.id, "Track lifecycle", "body", &[], &[])
+            .await
+            .unwrap();
+
+        let resp = handle_update_quest(
+            &ctx,
+            &serde_json::json!({
+                "id": quest.id.0,
+                "status": "in_progress",
+                "assignee": "user:u1",
+            }),
+            &None,
+        )
+        .await;
+        assert_eq!(resp["ok"], true, "update response: {resp}");
+
+        let idea = idea_store
+            .get_by_ids(std::slice::from_ref(&quest.idea_id))
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+        let session_id = idea
+            .session_id
+            .expect("quest update must lazy-create the linked idea session");
+        let messages = session_store
+            .system_messages_by_session(&session_id, 10)
+            .await
+            .unwrap();
+        let activity = messages
+            .iter()
+            .find(|m| m.content.contains("status: todo -> in_progress"))
+            .expect("quest lifecycle activity row must exist");
+        assert!(
+            activity.content.contains("assignee: unset -> user:u1"),
+            "activity summary should include assignee change: {:?}",
+            activity.content
+        );
+        let metadata = activity.metadata.as_ref().expect("metadata must be set");
+        assert_eq!(metadata["kind"], "quest_updated");
+        assert_eq!(metadata["quest_id"], quest.id.0);
+        assert_eq!(metadata["idea_id"], quest.idea_id);
+        assert_eq!(metadata["changes"].as_array().unwrap().len(), 2);
     }
 }

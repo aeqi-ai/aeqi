@@ -27,6 +27,7 @@ import IdeaCommentComposer from "./IdeaCommentComposer";
 
 interface IdeaConversationPanelProps {
   ideaId: string;
+  activityRefreshKey?: unknown;
 }
 
 // ─── SubscribeBar ─────────────────────────────────────────────────────────────
@@ -87,7 +88,10 @@ function CheckIcon() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function IdeaConversationPanel({ ideaId }: IdeaConversationPanelProps) {
+export default function IdeaConversationPanel({
+  ideaId,
+  activityRefreshKey,
+}: IdeaConversationPanelProps) {
   const user = useAuthStore((s) => s.user);
   const { entityId } = useNav();
 
@@ -199,7 +203,11 @@ export default function IdeaConversationPanel({ ideaId }: IdeaConversationPanelP
           Activity
           {activityCount > 0 && <span className="idea-convo-section-count">{activityCount}</span>}
         </h3>
-        <IdeaActivityFeed ideaId={ideaId} onCount={setActivityCount} />
+        <IdeaActivityFeed
+          ideaId={ideaId}
+          refreshKey={activityRefreshKey}
+          onCount={setActivityCount}
+        />
       </section>
 
       <section className="idea-convo-section" aria-labelledby={`idea-convo-${ideaId}-comments`}>

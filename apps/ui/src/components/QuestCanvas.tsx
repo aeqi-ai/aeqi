@@ -265,6 +265,7 @@ function ViewCanvas({
   const [dueAt, setDueAt] = useState<string | null>(quest.due_at ?? null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [bodyDirty, setBodyDirty] = useState(false);
+  const [activityRefreshSeq, setActivityRefreshSeq] = useState(0);
 
   // Linear-style single-key shortcuts on the detail page open the
   // matching popover. Owning the open state up here is what lets `S`,
@@ -303,6 +304,7 @@ function ViewCanvas({
         due_at: du,
       });
       await fetchQuests();
+      setActivityRefreshSeq((n) => n + 1);
       setSaveState("idle");
     } catch {
       setSaveState("error");
@@ -393,6 +395,7 @@ function ViewCanvas({
       ref={canvasRef}
       agentId={quest.agent_id ?? resolvedAgentId}
       idea={quest.idea}
+      activityRefreshKey={activityRefreshSeq}
       onBack={() => goEntity(entityId, "quests", undefined, { replace: true })}
       onNew={() => goEntity(entityId, "quests", "new", { replace: false })}
       onDirtyChange={setBodyDirty}
