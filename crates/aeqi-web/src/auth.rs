@@ -102,9 +102,20 @@ fn extract_bearer(req: &Request) -> Option<&str> {
 
 pub fn signing_secret(state: &AppState) -> Result<&str, &'static str> {
     match state.auth_secret.as_deref() {
-        Some(s) if !s.is_empty() => Ok(s),
+        Some(s) if !s.trim().is_empty() => Ok(s),
         _ => Err("JWT signing secret not configured. Set AEQI_AUTH_SECRET environment variable."),
     }
+}
+
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (left, right) in a.bytes().zip(b.bytes()) {
+        diff |= left ^ right;
+    }
+    diff == 0
 }
 
 pub fn proxy_scope_from_headers(state: &AppState, headers: &HeaderMap) -> Option<UserScope> {
@@ -116,7 +127,11 @@ pub fn proxy_scope_from_headers(state: &AppState, headers: &HeaderMap) -> Option
         return None;
     }
 
-    let Some(expected_token) = state.auth_secret.as_deref().filter(|s| !s.is_empty()) else {
+    let Some(expected_token) = state
+        .auth_secret
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    else {
         tracing::warn!("proxy scope header ignored: auth_secret not configured");
         return None;
     };
@@ -125,7 +140,7 @@ pub fn proxy_scope_from_headers(state: &AppState, headers: &HeaderMap) -> Option
         .get(PROXY_SCOPE_TOKEN_HEADER)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    if provided_token != expected_token {
+    if !constant_time_eq(provided_token, expected_token) {
         tracing::warn!("proxy scope header ignored: invalid scope token");
         return None;
     }
@@ -534,10 +549,16 @@ mod tests {
     }
 
     #[test]
-    fn signing_secret_whitespace_only_falls_back() {
-        // A whitespace-only secret is not empty, so it should be used as-is.
+    fn signing_secret_errors_when_whitespace_only() {
         let state = test_state(Some("  ".to_string()));
-        assert_eq!(signing_secret(&state).unwrap(), "  ");
+        assert!(signing_secret(&state).is_err());
+    }
+
+    #[test]
+    fn constant_time_eq_matches_exact_strings_only() {
+        assert!(constant_time_eq("scope-secret", "scope-secret"));
+        assert!(!constant_time_eq("scope-secret", "scope-secretx"));
+        assert!(!constant_time_eq("scope-secret", "scope-secreu"));
     }
 
     // ── Proxy scope edge cases ───────────────────────────────
@@ -590,6 +611,15 @@ mod tests {
         headers.insert(PROXY_SCOPE_ROOTS_HEADER, HeaderValue::from_static("root-a"));
         headers.insert(PROXY_SCOPE_TOKEN_HEADER, HeaderValue::from_static(""));
         // Empty auth_secret -> proxy scope is ignored
+        assert!(proxy_scope_from_headers(&state, &headers).is_none());
+    }
+
+    #[test]
+    fn proxy_scope_whitespace_auth_secret_returns_none() {
+        let state = test_state(Some("   ".to_string()));
+        let mut headers = HeaderMap::new();
+        headers.insert(PROXY_SCOPE_ROOTS_HEADER, HeaderValue::from_static("root-a"));
+        headers.insert(PROXY_SCOPE_TOKEN_HEADER, HeaderValue::from_static("   "));
         assert!(proxy_scope_from_headers(&state, &headers).is_none());
     }
 

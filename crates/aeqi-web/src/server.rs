@@ -76,14 +76,14 @@ struct ResolvedAuthSecret {
 }
 
 fn resolve_auth_secret_from(web: &WebConfig, env_secret: Option<String>) -> ResolvedAuthSecret {
-    if let Some(value) = env_secret.filter(|s| !s.is_empty()) {
+    if let Some(value) = env_secret.filter(|s| !s.trim().is_empty()) {
         return ResolvedAuthSecret {
             value,
             source: AuthSecretSource::Env,
         };
     }
 
-    if let Some(value) = web.auth_secret.clone().filter(|s| !s.is_empty()) {
+    if let Some(value) = web.auth_secret.clone().filter(|s| !s.trim().is_empty()) {
         return ResolvedAuthSecret {
             value,
             source: AuthSecretSource::Config,
@@ -684,6 +684,32 @@ mod tests {
         assert_eq!(resolved.source, AuthSecretSource::Generated);
         assert_eq!(resolved.value.len(), 48);
         assert_ne!(resolved.value, "aeqi-dev");
+    }
+
+    #[test]
+    fn auth_secret_ignores_whitespace_env_and_uses_config() {
+        let web = WebConfig {
+            auth_secret: Some("config-secret".to_string()),
+            ..WebConfig::default()
+        };
+
+        let resolved = resolve_auth_secret_from(&web, Some("   ".to_string()));
+
+        assert_eq!(resolved.value, "config-secret");
+        assert_eq!(resolved.source, AuthSecretSource::Config);
+    }
+
+    #[test]
+    fn auth_secret_generates_fallback_for_whitespace_config() {
+        let web = WebConfig {
+            auth_secret: Some("   ".to_string()),
+            ..WebConfig::default()
+        };
+
+        let resolved = resolve_auth_secret_from(&web, None);
+
+        assert_eq!(resolved.source, AuthSecretSource::Generated);
+        assert_eq!(resolved.value.len(), 48);
     }
 }
 
