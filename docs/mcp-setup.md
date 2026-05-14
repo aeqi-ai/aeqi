@@ -25,7 +25,7 @@ hosted TRUST, provide both the TRUST secret and account key:
       "env": {
         "AEQI_SECRET_KEY": "sk_trust_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
-        "AEQI_API_URL": "https://cloud.aeqi.ai",
+        "AEQI_API_URL": "https://app.aeqi.ai",
         "AEQI_AGENT": "codex"
       }
     }
@@ -80,7 +80,7 @@ Claude Code are convenience shims only; authorization is not client-specific.
       "env": {
         "AEQI_SECRET_KEY": "sk_trust_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
-        "AEQI_API_URL": "https://cloud.aeqi.ai",
+        "AEQI_API_URL": "https://app.aeqi.ai",
         "AEQI_AGENT": "codex"
       }
     }

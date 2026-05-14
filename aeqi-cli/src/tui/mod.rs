@@ -714,7 +714,7 @@ pub async fn run(
         let remote_api_url = api_url
             .map(str::to_string)
             .or_else(|| std::env::var("AEQI_API_URL").ok())
-            .unwrap_or_else(|| "https://cloud.aeqi.ai".to_string());
+            .unwrap_or_else(|| "https://app.aeqi.ai".to_string());
         return run_remote_chat(
             remote_api_url,
             remote_api_key,

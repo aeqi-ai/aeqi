@@ -72,7 +72,7 @@ the terminal client; it does not run the hosted runtime on your machine.
 
 ```bash
 export AEQI_API_KEY=ak_account_xxxxx
-export AEQI_API_URL=https://cloud.aeqi.ai
+export AEQI_API_URL=https://app.aeqi.ai
 
 aeqi chat
 ```
@@ -94,7 +94,7 @@ stdio MCP server:
       "env": {
         "AEQI_SECRET_KEY": "sk_trust_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
-        "AEQI_API_URL": "https://cloud.aeqi.ai"
+        "AEQI_API_URL": "https://app.aeqi.ai"
       }
     }
   }

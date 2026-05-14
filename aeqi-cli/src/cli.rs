@@ -226,7 +226,7 @@ pub enum Commands {
         /// Root agent scope for agent selection and memory.
         #[arg(short = 'r', long = "root")]
         root: Option<String>,
-        /// Platform API base URL for account-key chat (defaults to AEQI_API_URL or https://cloud.aeqi.ai).
+        /// Platform API base URL for account-key chat (defaults to AEQI_API_URL or https://app.aeqi.ai).
         #[arg(long = "api-url")]
         api_url: Option<String>,
         /// Account API key (ak_...). Defaults to AEQI_API_KEY.
