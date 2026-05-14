@@ -77,7 +77,6 @@ const COMPANY_PAGE_TABS = new Set([
   "events",
   "quests",
   "ideas",
-  "library",
 ]);
 
 export default function AppLayout() {

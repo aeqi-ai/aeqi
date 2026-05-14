@@ -241,6 +241,7 @@ export default function App() {
             <Route path="roles/:roleId" element={null} />
             <Route path="roles/:roleId/edit" element={null} />
             <Route path="roles/:roleId/invite" element={null} />
+            <Route path="drive" element={null} />
             <Route path=":tab" element={null} />
             <Route path=":tab/:itemId" element={null} />
           </Route>

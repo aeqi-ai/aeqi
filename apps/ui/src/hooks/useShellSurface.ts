@@ -39,7 +39,7 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
     const isAccount = path === "/account" || path.startsWith("/account/");
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
-    const isDrive = tab === "drive";
+    const isDrive = tab === "drive" || /^\/trust\/[^/]+\/drive(?:\/|$)/.test(path);
 
     // In-shell role sub-pages on the canonical trust route.
     const rolePathMatch = path.match(/^\/trust\/[^/]+\/roles\/(.+)$/);
