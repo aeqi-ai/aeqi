@@ -5,6 +5,7 @@ import { useChatStore } from "@/store/chat";
 import { useDaemonStore } from "@/store/daemon";
 import { api } from "@/lib/api";
 import { entityPathFromId } from "@/lib/entityPath";
+import { logError } from "@/lib/logging";
 import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
 import { isRateLimited } from "@/lib/rateLimit";
 import { type Message, type SessionInfo } from "./types";
@@ -146,7 +147,7 @@ export function useSessionManager({
           setMessages(loaded);
         }
       })
-      .catch(() => {});
+      .catch((e) => logError("session-manager.load-history", e));
   }, [activeSessionId, processRawMessages]);
 
   // Poll for new messages on sessions not driven by local WebSocket.
@@ -176,7 +177,7 @@ export function useSessionManager({
             setMessages((prev) => (loaded.length > prev.length ? loaded : prev));
           }
         })
-        .catch(() => {});
+        .catch((e) => logError("session-manager.poll-history", e));
     }, 10000);
     return () => clearInterval(iv);
   }, [activeSessionId, processRawMessages]);

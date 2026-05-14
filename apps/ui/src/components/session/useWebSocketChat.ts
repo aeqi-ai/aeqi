@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { getScopedEntity } from "@/lib/appMode";
+import { logError } from "@/lib/logging";
 import { Events, useTrack } from "@/lib/analytics";
 import { useChatStore } from "@/store/chat";
 import { type Message, type MessageSegment, type SessionInfo, formatDuration } from "./types";
@@ -301,7 +302,7 @@ export function useWebSocketChat({
       .then((res) => {
         if (!cancelled && res?.active) attachToLiveStream(activeSessionId);
       })
-      .catch(() => {});
+      .catch((e) => logError("ws-chat.session-active-check", e));
     return () => {
       cancelled = true;
     };
@@ -314,7 +315,8 @@ export function useWebSocketChat({
   }, []);
 
   const handleStop = useCallback((sessionIdRefCurrent: string | null) => {
-    if (sessionIdRefCurrent) api.cancelSession(sessionIdRefCurrent).catch(() => {});
+    if (sessionIdRefCurrent)
+      api.cancelSession(sessionIdRefCurrent).catch((e) => logError("ws-chat.cancel-session", e));
     wsRef.current?.close();
     wsSessionRef.current = null;
     setStreaming(false);

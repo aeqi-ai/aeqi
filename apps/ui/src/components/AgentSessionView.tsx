@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
+import { logError } from "@/lib/logging";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { createDraftId, useChatStore, type PendingMessage } from "@/store/chat";
@@ -185,7 +186,7 @@ export default function AgentSessionView({ agentId, sessionId: urlSessionId }: A
             })),
           );
         })
-        .catch(() => {});
+        .catch((e) => logError("agent-session.load-ideas", e));
     }
     if (showAttachPicker === "quest" && availableTasks.length === 0) {
       api
@@ -200,7 +201,7 @@ export default function AgentSessionView({ agentId, sessionId: urlSessionId }: A
             })),
           );
         })
-        .catch(() => {});
+        .catch((e) => logError("agent-session.load-quests", e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-fetch only when picker opens
   }, [showAttachPicker]);

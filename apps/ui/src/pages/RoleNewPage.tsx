@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { GRANT_CATALOG, DEFAULT_GRANTS } from "@/lib/grants";
+import { logError } from "@/lib/logging";
 import type { OccupantKind, RoleType } from "@/lib/types";
 import { useDaemonStore } from "@/store/daemon";
 import { entityPathFromId } from "@/lib/entityPath";
@@ -55,7 +56,7 @@ export default function RoleNewPage() {
         const opts = r.roles.map((ro) => ({ value: ro.id, label: ro.title || "(untitled)" }));
         setParentOptions([{ value: "", label: "None" }, ...opts]);
       })
-      .catch(() => {});
+      .catch((e) => logError("role-new.load-parent-options", e));
   }, [entityId]);
 
   const handleRoleTypeChange = (val: string) => {

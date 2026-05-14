@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { logError } from "@/lib/logging";
 import { Badge, Banner, Button, Input } from "@/components/ui";
 import AvatarUploader from "./AvatarUploader";
 import EmailEditor from "@/pages/Settings/EmailEditor";
@@ -37,7 +38,7 @@ export default function ProfilePanel() {
         setLastName(parts.slice(1).join(" ") || "");
         if (typeof u.phone === "string") setPhone(u.phone);
       })
-      .catch(() => {});
+      .catch((e) => logError("profile.load-user", e));
   }, []);
 
   const displayName = `${firstName} ${lastName}`.trim() || "Profile";

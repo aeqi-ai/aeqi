@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { logError } from "@/lib/logging";
 import type { InvitationDetail } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
@@ -75,7 +76,7 @@ export default function InvitationAcceptPage() {
         setDirectedEntities(r.entities);
         if (r.entities.length > 0) setAsEntityId(r.entities[0].entity_id);
       })
-      .catch(() => {});
+      .catch((e) => logError("invitation.list-entities", e));
   }, [isLoggedIn]);
 
   const handleAccept = async () => {

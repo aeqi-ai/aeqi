@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { api } from "@/lib/api";
+import { logError } from "@/lib/logging";
 import * as ideasApi from "@/api/ideas";
 import { useNav } from "@/hooks/useNav";
 import { useAgentIdeas, useAgentIdeasCache } from "@/queries/ideas";
@@ -316,7 +317,11 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
       // means the canvas swap to edit mode still feels instant.
       if (pendingRefs.length > 0) {
         void Promise.all(
-          pendingRefs.map((r) => api.addIdeaEdge(res.id, r.target_id, "adjacent").catch(() => {})),
+          pendingRefs.map((r) =>
+            api
+              .addIdeaEdge(res.id, r.target_id, "adjacent")
+              .catch((e) => logError("idea-canvas.add-adjacent-edge", e)),
+          ),
         );
       }
       setSaveState("saved");

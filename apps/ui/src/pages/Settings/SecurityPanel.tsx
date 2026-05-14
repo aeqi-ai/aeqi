@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { api } from "@/lib/api";
+import { logError } from "@/lib/logging";
 import { goExternal } from "@/lib/navigation";
 import { Banner, Button, Input, ConfirmDialog, QRCode, StatusRow } from "@/components/ui";
 import { GoogleIcon, GitHubIcon } from "@/components/icons/Brand";
@@ -96,7 +97,7 @@ export default function SecurityPanel() {
         }
         setConnectedAuthKinds([...kinds]);
       })
-      .catch(() => {});
+      .catch((e) => logError("security-panel.list-auth-methods", e));
   }, []);
 
   const googleConnected = provider === "google" || connectedAuthKinds.includes("google");

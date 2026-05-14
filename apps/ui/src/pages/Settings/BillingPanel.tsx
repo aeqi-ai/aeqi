@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import { logError } from "@/lib/logging";
 import { goExternal } from "@/lib/navigation";
 import { formatCents, type LaunchPlanId } from "@/lib/pricing";
 import { useDaemonStore } from "@/store/daemon";
@@ -87,7 +88,7 @@ export default function BillingPanel() {
         const match = entities.find((e) => e.name === slug);
         if (match) {
           setActiveEntity(match.id);
-          await fetchAgents().catch(() => {});
+          await fetchAgents().catch((e) => logError("billing-panel.fetch-agents", e));
           setSearchParams(new URLSearchParams(), { replace: true });
           navigate(entityPath(match, "inbox"));
           return;
