@@ -1,9 +1,9 @@
 # aeqi MCP — Client-Agnostic Integration
 
-Connect any MCP-capable client to your aeqi company runtime. The same `aeqi`
+Connect any MCP-capable client to your aeqi TRUST runtime. The same `aeqi`
 binary supports two deployment shapes:
 
-- hosted organization: `aeqi mcp` is a local stdio bridge into the managed
+- hosted TRUST: `aeqi mcp` is a local stdio bridge into the managed
   runtime selected by your platform credentials.
 - self-hosted runtime: `aeqi mcp` connects to the daemon you run yourself.
 
@@ -14,7 +14,7 @@ surface.
 ## Setup
 
 For local stdio clients, add an `aeqi` MCP server that runs `aeqi mcp`. For a
-hosted organization, provide both the company secret and account key:
+hosted TRUST, provide both the TRUST secret and account key:
 
 ```json
 {
@@ -23,7 +23,7 @@ hosted organization, provide both the company secret and account key:
       "command": "aeqi",
       "args": ["mcp"],
       "env": {
-        "AEQI_SECRET_KEY": "sk_company_xxxxx",
+        "AEQI_SECRET_KEY": "sk_trust_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
         "AEQI_API_URL": "https://cloud.aeqi.ai",
         "AEQI_AGENT": "codex"
@@ -60,15 +60,15 @@ AEQI_API_KEY=ak_account_xxxxx aeqi chat
 
 The account key identifies you. The chat session then selects:
 
-- company/entity: where the session runs
+- TRUST: where the session runs
 - acting role: which human role context you are using, when applicable
 - target agent: which agent receives the session
 
 No extra key is required to choose the target agent.
 
-MCP is different: it is an entity-scoped tool bridge for external clients. It
-uses a company secret key to select the company runtime and should also carry
-the account key to bind the call to your user account. Wrappers for Codex or
+MCP is different: it is a TRUST-scoped tool bridge for external clients. It
+uses a TRUST secret key to select the runtime and should also carry the account
+key to bind the call to your user account. Wrappers for Codex or
 Claude Code are convenience shims only; authorization is not client-specific.
 
 ```json
@@ -78,7 +78,7 @@ Claude Code are convenience shims only; authorization is not client-specific.
       "command": "aeqi",
       "args": ["mcp"],
       "env": {
-        "AEQI_SECRET_KEY": "sk_company_xxxxx",
+        "AEQI_SECRET_KEY": "sk_trust_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
         "AEQI_API_URL": "https://cloud.aeqi.ai",
         "AEQI_AGENT": "codex"
@@ -88,7 +88,7 @@ Claude Code are convenience shims only; authorization is not client-specific.
 }
 ```
 
-- `AEQI_SECRET_KEY` — identifies the company runtime for hosted MCP
+- `AEQI_SECRET_KEY` — identifies the TRUST runtime for hosted MCP
 - `AEQI_API_KEY` — identifies the user account
 - `AEQI_API_URL` — platform API base URL; defaults to the production platform when omitted
 - `AEQI_AGENT` — client/agent hint for logs/context, not the human account identity. It does not automatically own new quests, filter quest lists, or scope idea memory.
@@ -99,8 +99,8 @@ Claude Code are convenience shims only; authorization is not client-specific.
 Work as yourself from Codex or Claude Code:
 
 1. Configure the MCP server with `AEQI_SECRET_KEY` and `AEQI_API_KEY`.
-2. Use `me(action="profile")` to confirm the actor and company scope.
-3. Use `ideas`, `quests`, `events`, and `code` as your organization memory and work ledger.
+2. Use `me(action="profile")` to confirm the actor and TRUST scope.
+3. Use `ideas`, `quests`, `events`, and `code` as your TRUST memory and work ledger.
 
 Delegate to an existing runtime agent:
 
@@ -115,7 +115,7 @@ Create a new persistent agent:
 3. Create quests assigned to that agent when it should own work.
 
 The CLI is still only the client in hosted mode. Hiring an agent changes the
-hosted runtime state; it does not spawn a local daemon on your machine.
+hosted TRUST runtime state; it does not spawn a local daemon on your machine.
 
 ### Hosted HTTP MCP
 
@@ -124,7 +124,7 @@ endpoint directly:
 
 ```http
 POST https://<host>/api/mcp
-Authorization: Bearer sk_company_xxxxx
+Authorization: Bearer sk_trust_xxxxx
 X-Api-Key: ak_account_xxxxx
 Content-Type: application/json
 
@@ -178,28 +178,28 @@ This calls `agents(action='get')` and prints the agent's assembled ideas. One MC
 
 | Tool     | Actions                                      | What it does                                                        |
 | -------- | -------------------------------------------- | ------------------------------------------------------------------- |
-| `me`     | profile, permissions                         | Authenticated actor, runtime transport, and entity scope            |
+| `me`     | profile, permissions                         | Authenticated actor, runtime transport, and TRUST scope             |
 | `ideas`  | store, search, update, delete, link, feedback, walk | Persistent knowledge: facts, procedures, preferences, context |
 | `quests` | create, list, show, update, close, cancel    | Work tracking: hierarchy, dependencies, assignment, outcomes        |
 | `agents` | get, hire, retire, list, projects            | Agent management: inspect, hire, retire, list projects              |
 | `events` | create, list, enable, disable, delete        | Reaction rules: lifecycle triggers and scheduled automation         |
 | `code`   | search, context, impact, file, stats, index  | Code intelligence: symbol search, blast radius, dependency graph    |
 
-Tool scope follows the authenticated actor and selected entity. In hosted mode,
-that is normally your user account inside the company selected by the secret
-key. Use explicit `agent` or `agent_id` parameters when you want a runtime agent
-to own the work.
+Tool scope follows the authenticated actor and selected TRUST. In hosted mode,
+that is normally your user account inside the TRUST selected by the secret key.
+Use explicit `agent` or `agent_id` parameters when you want a runtime agent to
+own the work.
 
 ## How it works
 
 For self-hosting, the aeqi daemon is the runtime. It manages agents, ideas,
 quests, events, sessions, and code intelligence in two databases:
 
-- **`aeqi.db`** — the company template (agents, events, ideas). Copy this file = clone the company.
+- **`aeqi.db`** — the TRUST template (agents, events, ideas). Copy this file = clone the TRUST.
 - **`sessions.db`** — the runtime journal (sessions, quests, activity, runs). Delete this = fresh start.
 
 The stdio MCP server connects to the daemon via Unix socket IPC. In hosted mode,
-the local stdio process connects to the platform, which resolves the company
+the local stdio process connects to the platform, which resolves the TRUST
 runtime and forwards the same MCP JSON-RPC calls to that runtime. The HTTP MCP
 endpoint lives in `aeqi-web` and forwards tool calls to the same daemon IPC with
 the same actor envelope. Every tool call translates to a daemon command. The

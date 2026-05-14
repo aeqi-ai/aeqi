@@ -2,9 +2,9 @@
 
 ## Start here
 
-- Existing hosted organization: install the CLI, set `AEQI_API_KEY`, and use
+- Existing hosted TRUST: install the CLI, set `AEQI_API_KEY`, and use
   `aeqi chat`; use [mcp-setup.md](mcp-setup.md) to connect Codex, Claude Code,
-  editors, or other MCP clients to the same company runtime.
+  editors, or other MCP clients to the same TRUST runtime.
 - [quickstart.md](quickstart.md) — install, set up, run the daemon and dashboard.
 - [self-hosting.md](self-hosting.md) — honest operator guide for running your own runtime.
 - [local-demo.md](local-demo.md) — end-to-end walkthrough with no API key (uses local Ollama).

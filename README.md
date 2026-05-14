@@ -12,8 +12,8 @@ workers, their memory, their work queues, and their event handlers.
 
 You can use the same `aeqi` binary in two modes:
 
-- as a client for an existing hosted aeqi organization, where the runtime is
-  managed by the platform and the CLI/MCP bridge connects you to it.
+- as a client for an existing hosted TRUST, where the runtime is managed by the
+  platform and the CLI/MCP bridge connects you to it.
 - as a self-hosted runtime, where `aeqi start` runs the daemon, API, dashboard,
   MCP server, local SQLite state, and event loop yourself.
 
@@ -41,7 +41,7 @@ release workflows, and source-available protocol work under
 | Dashboard       | Embedded into the `aeqi` binary; no separate frontend host is required for normal use                                            |
 | Providers       | OpenRouter, Anthropic, and local Ollama paths exist in the runtime                                                               |
 | Self-hosting    | Single-binary/systemd is the recommended path; Docker Compose exists for configured runtime deployments                          |
-| Hosted platform | Separate product boundary; this repo's CLI can connect to hosted organizations, but accounts, billing, and fleet placement live outside this repo |
+| Hosted platform | Separate product boundary; this repo's CLI can connect to hosted TRUSTs, but accounts, billing, and fleet placement live outside this repo |
 | Protocol work   | Solana trust work is active under `projects/aeqi-solana`; it is not required to run the local runtime                            |
 
 aeqi is under active development. Interfaces are usable, but they are not a
@@ -65,9 +65,9 @@ cargo build --release -p aeqi
 
 Then choose the path you are using.
 
-### Existing hosted organization
+### Existing hosted TRUST
 
-Use this path when you already have an aeqi account and organization. The CLI is
+Use this path when you already have an aeqi account and TRUST. The CLI is
 the terminal client; it does not run the hosted runtime on your machine.
 
 ```bash
@@ -77,7 +77,7 @@ export AEQI_API_URL=https://cloud.aeqi.ai
 aeqi chat
 ```
 
-`aeqi chat` authenticates as your account, lets you select the company/entity
+`aeqi chat` authenticates as your account, lets you select the TRUST
 when needed, and opens an interactive session with an agent in that runtime.
 From there you can talk to existing agents, create quests, or use the runtime's
 memory and work ledger.
@@ -92,7 +92,7 @@ stdio MCP server:
       "command": "aeqi",
       "args": ["mcp"],
       "env": {
-        "AEQI_SECRET_KEY": "sk_company_xxxxx",
+        "AEQI_SECRET_KEY": "sk_trust_xxxxx",
         "AEQI_API_KEY": "ak_account_xxxxx",
         "AEQI_API_URL": "https://cloud.aeqi.ai"
       }
@@ -102,7 +102,7 @@ stdio MCP server:
 ```
 
 In this shape the editor or coding agent is the client, `aeqi mcp` is the tool
-bridge, and the hosted aeqi runtime remains the system of record for agents,
+bridge, and the hosted TRUST runtime remains the system of record for agents,
 ideas, quests, events, and code intelligence. To delegate to an existing agent,
 use the MCP `agents`, `quests`, and `ideas` tools. To create a persistent new
 agent, use `agents(action="hire", ...)` or the CLI's local `aeqi agent spawn`
@@ -162,7 +162,7 @@ Run `aeqi <command> --help` for exact flags. Common commands:
 | `aeqi events install-defaults`           | Install the standard schedule events on existing agents            |
 | `aeqi monitor`                           | Show an operator monitor view                                      |
 | `aeqi graph index --root <ROOT>`         | Index a repository into the code graph                             |
-| `aeqi trust derive --entity-id <ENTITY>` | Derive the canonical trust identity for a company/entity           |
+| `aeqi trust derive --entity-id <ENTITY>` | Derive the canonical TRUST identity for a runtime entity id        |
 | `aeqi mcp`                               | Run the stdio MCP bridge for local or hosted runtimes              |
 
 ## Runtime Model
@@ -172,9 +172,9 @@ provider calls, middleware, tool execution, and persistence. The web server
 exposes the local dashboard and API through Axum and WebSocket routes. The UI is
 embedded into the release binary by default.
 
-When connecting to a hosted organization, the same primitives live in the
-managed runtime. The local CLI process is a client and transport: `aeqi chat`
-opens terminal sessions, and `aeqi mcp` exposes the runtime tools to MCP-aware
+When connecting to a hosted TRUST, the same primitives live in the managed
+runtime. The local CLI process is a client and transport: `aeqi chat` opens
+terminal sessions, and `aeqi mcp` exposes the runtime tools to MCP-aware
 clients.
 
 Default runtime data lives under `~/.aeqi`:
