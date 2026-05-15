@@ -178,6 +178,19 @@ mod tests {
         // Tests that depend on HOME re-derive it from env each call (no
         // OnceLock cache for HOME in this module). Use `unsafe` per
         // Rust 2024 edition trap (see workspace trap doc).
+        //
+        // `std::env::set_var` is process-global. Without serialization,
+        // parallel tests racing through `with_home` could see one test's
+        // restore step revert the env mid-read of another test (the
+        // failing assertions look like `denied_exact_paths_with_home`
+        // computing against the wrong HOME). Serialize via a static
+        // Mutex so each `with_home` body sees a consistent HOME.
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        // PoisonError can only happen if a prior holder panicked; we
+        // still want to restore env, so recover from the poison.
+        let _lock = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
         let old = std::env::var("HOME").ok();
         unsafe {
             std::env::set_var("HOME", home);
