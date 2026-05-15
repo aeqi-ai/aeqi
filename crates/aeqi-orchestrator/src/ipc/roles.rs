@@ -282,7 +282,52 @@ pub async fn handle_create_role(
         return serde_json::json!({"ok": false, "error": e.to_string()});
     }
 
+    // Quest 67-132 — accept an optional `description_idea_id` on create.
+    // Field shape: present non-empty string → set; null or empty string →
+    // clear (a fresh role starts cleared, so this is a no-op on create);
+    // field absent → leave alone.
+    if let Some(field) = request.get("description_idea_id")
+        && let Some(idea_id) = description_idea_from_field(field)
+        && let Err(e) = ctx
+            .role_registry
+            .set_description_idea(&role.id, idea_id.as_deref())
+            .await
+    {
+        return serde_json::json!({"ok": false, "error": e.to_string()});
+    }
+
+    // Re-fetch so the response reflects the description_idea_id we may
+    // have just stamped + the canonical updated_at.
+    let role = match ctx.role_registry.get(&role.id).await {
+        Ok(Some(r)) => r,
+        Ok(None) => return serde_json::json!({"ok": false, "error": "role vanished after create"}),
+        Err(e) => return serde_json::json!({"ok": false, "error": e.to_string()}),
+    };
+
     serde_json::json!({"ok": true, "role": role})
+}
+
+/// Quest 67-132 — extract the optional `description_idea_id` field shape.
+/// Outer `Option` distinguishes "field present but caller doesn't want a
+/// write" (`None`) from "write a value" (`Some(...)`). Inner `Option<String>`
+/// is the value to write — `Some("idea-id")` to set, `None` to clear.
+///
+/// Mappings:
+///   * `null`             → write `None` (clear)
+///   * `""` (empty string) → write `None` (clear)
+///   * non-empty string    → write `Some(s)` (set)
+///   * other JSON types    → no write (caller error; logged elsewhere)
+fn description_idea_from_field(field: &serde_json::Value) -> Option<Option<String>> {
+    if field.is_null() {
+        return Some(None);
+    }
+    field.as_str().map(|s| {
+        if s.is_empty() {
+            None
+        } else {
+            Some(s.to_string())
+        }
+    })
 }
 
 /// Handle an `update_role` IPC command.
@@ -341,6 +386,18 @@ pub async fn handle_update_role(
         .role_registry
         .update_role(&role_id, title.as_deref(), role_type, grants)
         .await
+    {
+        return serde_json::json!({"ok": false, "error": e.to_string()});
+    }
+
+    // Quest 67-132 — accept an optional `description_idea_id` on update.
+    // See `description_idea_from_field` for the field shape.
+    if let Some(field) = request.get("description_idea_id")
+        && let Some(idea_id) = description_idea_from_field(field)
+        && let Err(e) = ctx
+            .role_registry
+            .set_description_idea(&role_id, idea_id.as_deref())
+            .await
     {
         return serde_json::json!({"ok": false, "error": e.to_string()});
     }
@@ -838,6 +895,57 @@ mod tests {
                 .iter()
                 .any(|g| g == crate::role_registry::GRANT_ROLES_MANAGE),
             "director must have roles.manage"
+        );
+    }
+
+    /// Quest 67-132: create + update accept `description_idea_id`; absent
+    /// field leaves the column NULL; explicit null clears a previously-set
+    /// pointer.
+    #[tokio::test]
+    async fn description_idea_id_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _ss) = build_test_ctx(dir.path()).await;
+        let entity_id = make_entity_with_director(&ctx, "owner").await;
+
+        // Create with a description_idea_id present.
+        let create_req = serde_json::json!({
+            "entity_id": entity_id,
+            "title": "CFO",
+            "occupant_kind": "vacant",
+            "role_type": "director",
+            "description_idea_id": "idea-charter-cfo-v1",
+            "caller_user_id": "owner",
+        });
+        let resp = handle_create_role(&ctx, &create_req, &None).await;
+        assert_eq!(resp["ok"], true, "{resp}");
+        assert_eq!(resp["role"]["description_idea_id"], "idea-charter-cfo-v1");
+        let role_id = resp["role"]["id"].as_str().unwrap().to_string();
+
+        // Update with no description field — pointer must survive.
+        let update_req = serde_json::json!({
+            "role_id": role_id,
+            "title": "Chief Financial Officer",
+            "caller_user_id": "owner",
+        });
+        let resp = handle_update_role(&ctx, &update_req, &None).await;
+        assert_eq!(resp["ok"], true, "{resp}");
+        assert_eq!(
+            resp["role"]["description_idea_id"], "idea-charter-cfo-v1",
+            "absent field must NOT clear the pointer"
+        );
+
+        // Update with explicit null — pointer must clear.
+        let clear_req = serde_json::json!({
+            "role_id": role_id,
+            "description_idea_id": serde_json::Value::Null,
+            "caller_user_id": "owner",
+        });
+        let resp = handle_update_role(&ctx, &clear_req, &None).await;
+        assert_eq!(resp["ok"], true, "{resp}");
+        assert!(
+            resp["role"].get("description_idea_id").is_none()
+                || resp["role"]["description_idea_id"].is_null(),
+            "explicit null must clear the pointer (skip_serializing_if + None"
         );
     }
 }

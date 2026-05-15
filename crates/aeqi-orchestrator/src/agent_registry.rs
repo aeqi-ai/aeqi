@@ -733,6 +733,14 @@ fn bootstrap_role_tables(conn: &Connection) -> rusqlite::Result<()> {
 /// Add role_type + founder columns to `roles` and create the `role_grants` table.
 /// Idempotent: each ALTER TABLE is guarded by a PRAGMA table_info check; the
 /// table creation uses CREATE TABLE IF NOT EXISTS.
+///
+/// Also adds the `description_idea_id` column wired in quest 67-132 — a soft
+/// pointer into the `ideas` table so a role's description can be a first-class
+/// Idea (charter linking, audit trail, occupant rotation without rewriting the
+/// persona). FK is intentionally NOT enforced via REFERENCES on the ALTER:
+/// SQLite ALTER TABLE doesn't validate added FKs against existing rows, and
+/// the orchestrator already opens both tables in the same `aeqi.db` so any
+/// referential validation would belong to a write-time guard, not the schema.
 fn migrate_role_types_and_grants(conn: &Connection) -> rusqlite::Result<()> {
     let cols: Vec<String> = {
         let mut stmt = conn.prepare("PRAGMA table_info(roles)")?;
@@ -748,6 +756,9 @@ fn migrate_role_types_and_grants(conn: &Connection) -> rusqlite::Result<()> {
     }
     if !cols.iter().any(|c| c == "founder") {
         conn.execute_batch("ALTER TABLE roles ADD COLUMN founder INTEGER NOT NULL DEFAULT 0;")?;
+    }
+    if !cols.iter().any(|c| c == "description_idea_id") {
+        conn.execute_batch("ALTER TABLE roles ADD COLUMN description_idea_id TEXT;")?;
     }
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS role_grants (

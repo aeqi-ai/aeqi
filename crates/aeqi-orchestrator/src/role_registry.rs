@@ -134,6 +134,11 @@ pub struct Role {
     /// Grants associated with this role. Populated by registry reads;
     /// not stored on the role row itself.
     pub grants: Vec<String>,
+    /// Optional pointer into `ideas.id` carrying the role's first-class
+    /// description (charter, persona, mandate). NULL while the role uses
+    /// the legacy plain-text title alone. Quest 67-132.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description_idea_id: Option<String>,
     pub created_at: String,
     pub updated_at: Option<String>,
 }
@@ -164,6 +169,7 @@ fn row_to_role(row: &rusqlite::Row<'_>) -> rusqlite::Result<Role> {
             v != 0
         },
         grants: vec![],
+        description_idea_id: row.get(9)?,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
     })
@@ -196,7 +202,7 @@ impl RoleRegistry {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT id, entity_id, title, occupant_kind, occupant_id,
-                    role_type, founder, created_at, updated_at
+                    role_type, founder, created_at, updated_at, description_idea_id
              FROM roles
              WHERE entity_id = ?1
              ORDER BY created_at ASC",
@@ -218,7 +224,8 @@ impl RoleRegistry {
         let mut roles: Vec<Role> = {
             let mut stmt = db.prepare(
                 "SELECT r.id, r.entity_id, r.title, r.occupant_kind, r.occupant_id,
-                        r.role_type, r.founder, r.created_at, r.updated_at
+                        r.role_type, r.founder, r.created_at, r.updated_at,
+                        r.description_idea_id
                  FROM roles r
                  WHERE r.entity_id = ?1
                  ORDER BY r.created_at ASC",
@@ -288,7 +295,7 @@ impl RoleRegistry {
         let result = db
             .query_row(
                 "SELECT id, entity_id, title, occupant_kind, occupant_id,
-                        role_type, founder, created_at, updated_at
+                        role_type, founder, created_at, updated_at, description_idea_id
                  FROM roles WHERE id = ?1",
                 params![role_id],
                 row_to_role,
@@ -321,7 +328,7 @@ impl RoleRegistry {
         let result = db
             .query_row(
                 "SELECT id, entity_id, title, occupant_kind, occupant_id,
-                        role_type, founder, created_at, updated_at
+                        role_type, founder, created_at, updated_at, description_idea_id
                  FROM roles
                  WHERE entity_id = ?1 AND occupant_id = ?2
                  ORDER BY created_at ASC
@@ -486,7 +493,7 @@ impl RoleRegistry {
         let mut role = db
             .query_row(
                 "SELECT id, entity_id, title, occupant_kind, occupant_id,
-                        role_type, founder, created_at, updated_at
+                        role_type, founder, created_at, updated_at, description_idea_id
                  FROM roles WHERE id = ?1",
                 params![id],
                 row_to_role,
@@ -577,6 +584,20 @@ impl RoleRegistry {
     pub async fn archive_role(&self, role_id: &str) -> Result<()> {
         let db = self.db.lock().await;
         db.execute("DELETE FROM roles WHERE id = ?1", params![role_id])?;
+        Ok(())
+    }
+
+    /// Set (or clear, when `idea_id` is `None`) the role's description
+    /// pointer into the `ideas` table. Soft FK — see the migration note in
+    /// `agent_registry.rs::migrate_role_types_and_grants`. Stamps
+    /// `updated_at`. Quest 67-132.
+    pub async fn set_description_idea(&self, role_id: &str, idea_id: Option<&str>) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        let db = self.db.lock().await;
+        db.execute(
+            "UPDATE roles SET description_idea_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![idea_id, now, role_id],
+        )?;
         Ok(())
     }
 
