@@ -682,7 +682,7 @@ async fn dispatch_merge(
         .enqueue_priority(existing_id.to_string(), merged_content.clone());
 
     // Re-reconcile inline edges from the merged body.
-    reconcile_inline_edges_in_scope(
+    let unresolved_refs = reconcile_inline_edges_in_scope(
         ctx,
         idea_store.as_ref(),
         existing_id,
@@ -698,11 +698,15 @@ async fn dispatch_merge(
     check_consolidation_threshold(ctx, idea_store.as_ref(), &tag_union, effective, existing_id)
         .await;
 
-    serde_json::json!({
+    let mut payload = serde_json::json!({
         "ok": true,
         "id": existing_id,
         "action": "merge",
-    })
+    });
+    if !unresolved_refs.is_empty() {
+        payload["unresolved_refs"] = serde_json::json!(unresolved_refs);
+    }
+    payload
 }
 
 async fn dispatch_supersede(
@@ -806,8 +810,10 @@ async fn finalize_write(
         );
     }
 
-    // Inline body-parsed edges (mentions/embeds + typed prefixes).
-    reconcile_inline_edges_in_scope(
+    // Inline body-parsed edges (mentions/embeds + typed prefixes). The
+    // returned Vec<String> is the unresolved [[name]] tokens — see quest
+    // 67-148.
+    let unresolved_refs = reconcile_inline_edges_in_scope(
         ctx,
         idea_store.as_ref(),
         id,
@@ -834,6 +840,9 @@ async fn finalize_write(
     });
     if !input.link_errors.is_empty() {
         payload["link_errors"] = serde_json::json!(input.link_errors);
+    }
+    if !unresolved_refs.is_empty() {
+        payload["unresolved_refs"] = serde_json::json!(unresolved_refs);
     }
     payload
 }
@@ -981,13 +990,17 @@ async fn check_consolidation_threshold(
 ///
 /// Errors in scope resolution or reconciliation are swallowed — inline
 /// linking is a best-effort enrichment, not a store/update precondition.
+///
+/// Returns the case-preserved unresolved [[name]] tokens the body referenced.
+/// Quest 67-148 surfaces these via the IPC response so the caller knows their
+/// link silently dropped instead of training on broken bracket syntax.
 async fn reconcile_inline_edges_in_scope(
     ctx: &super::CommandContext,
     idea_store: &dyn aeqi_core::traits::IdeaStore,
     source_id: &str,
     body: &str,
     agent_id: Option<&str>,
-) {
+) -> Vec<String> {
     // Scope the resolver to what the agent can see; globals when unscoped.
     let scope: Vec<aeqi_core::traits::Idea> = match agent_id {
         Some(aid) => ctx
@@ -1001,17 +1014,23 @@ async fn reconcile_inline_edges_in_scope(
             .unwrap_or_default(),
     };
 
+    // Build the name → id lookup. On duplicate names the FIRST inserted wins
+    // (deterministic iteration of `scope` makes binding stable across runs;
+    // previous behaviour overwrote with whatever came last and trained agents
+    // on a mystery resolver). Quest 67-148.
     let mut lookup: HashMap<String, String> = HashMap::with_capacity(scope.len());
     for i in scope {
         let key = i.name.to_lowercase();
-        if let Some(existing) = lookup.insert(key.clone(), i.id.clone()) {
+        if let Some(existing) = lookup.get(&key) {
             tracing::warn!(
                 name = %i.name,
-                kept_id = %i.id,
-                displaced_id = %existing,
-                "duplicate idea name in resolver scope; later idea wins"
+                kept_id = %existing,
+                rejected_id = %i.id,
+                "duplicate idea name in resolver scope; first idea wins"
             );
+            continue;
         }
+        lookup.insert(key, i.id);
     }
     let lookup = Arc::new(lookup);
 
@@ -1019,11 +1038,15 @@ async fn reconcile_inline_edges_in_scope(
     let resolver =
         move |name: &str| -> Option<String> { lookup_cloned.get(&name.to_lowercase()).cloned() };
 
-    if let Err(e) = idea_store
+    match idea_store
         .reconcile_inline_edges(source_id, body, &resolver)
         .await
     {
-        tracing::warn!(source = %source_id, err = %e, "reconcile_inline_edges failed");
+        Ok(unresolved) => unresolved,
+        Err(e) => {
+            tracing::warn!(source = %source_id, err = %e, "reconcile_inline_edges failed");
+            Vec::new()
+        }
     }
 }
 
@@ -1350,12 +1373,15 @@ pub async fn handle_update_idea(
     }
 
     // Reconcile inline edges when the body changed. We need to know
-    // which agent owns the idea to scope the resolver correctly.
-    if let Some(body) = content {
+    // which agent owns the idea to scope the resolver correctly. Capture
+    // unresolved [[name]] tokens for the response — quest 67-148.
+    let unresolved_refs = if let Some(body) = content {
         let agent_id = lookup_idea_agent(idea_store.as_ref(), id).await;
         reconcile_inline_edges_in_scope(ctx, idea_store.as_ref(), id, body, agent_id.as_deref())
-            .await;
-    }
+            .await
+    } else {
+        Vec::new()
+    };
     ctx.recall_cache.invalidate();
     emit_idea_activity(
         ctx,
@@ -1365,7 +1391,11 @@ pub async fn handle_update_idea(
         caller_user_id.as_deref(),
     )
     .await;
-    serde_json::json!({"ok": true})
+    let mut payload = serde_json::json!({"ok": true});
+    if !unresolved_refs.is_empty() {
+        payload["unresolved_refs"] = serde_json::json!(unresolved_refs);
+    }
+    payload
 }
 
 /// IPC handler — `set_idea_properties`. Deep-merge a JSON patch into the

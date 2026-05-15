@@ -577,10 +577,13 @@ impl SqliteIdeas {
         source_id: &str,
         body: &str,
         resolver: &(dyn for<'r> Fn(&'r str) -> Option<String> + Send + Sync),
-    ) -> Result<()> {
+    ) -> Result<Vec<String>> {
         // Resolve every referenced idea name up front, before we suspend
-        // on the blocking task. Unresolved names are dropped; self-edges
-        // are dropped too (meaningless to link an idea to itself).
+        // on the blocking task. Unresolved names are dropped from the edge
+        // graph but collected into `unresolved` so the caller can surface
+        // them — see quest 67-148. Self-edges are dropped too (meaningless
+        // to link an idea to itself) and NOT reported as unresolved (they
+        // resolved fine; we just refuse to link).
         // Cross-kind refs (`[[session:abc]]` etc.) are written without
         // the resolver step — the id is taken verbatim.
         //
@@ -591,14 +594,28 @@ impl SqliteIdeas {
         let parsed = crate::inline_links::parse_links(body);
 
         // Pre-resolve idea-kind refs through the supplied lookup; non-idea
-        // refs pass through unchanged.
+        // refs pass through unchanged. Track unresolved names case-
+        // insensitively so a name appearing twice in the body (different
+        // relations or just typos) only surfaces once.
         let mut resolved: Vec<(String, String, String)> = Vec::new();
+        let mut unresolved: Vec<String> = Vec::new();
+        let mut unresolved_seen: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         for r in &parsed.refs {
             if r.target_kind == "idea" {
-                if let Some(target) = resolver(&r.target_id)
-                    && target != source_id
-                {
-                    resolved.push(("idea".to_string(), target, r.relation.clone()));
+                match resolver(&r.target_id) {
+                    Some(target) if target != source_id => {
+                        resolved.push(("idea".to_string(), target, r.relation.clone()));
+                    }
+                    Some(_self_id) => {
+                        // Self-edge — silently drop; not an unresolved ref.
+                    }
+                    None => {
+                        let key = r.target_id.to_lowercase();
+                        if unresolved_seen.insert(key) {
+                            unresolved.push(r.target_id.clone());
+                        }
+                    }
                 }
             } else {
                 resolved.push((
@@ -636,7 +653,8 @@ impl SqliteIdeas {
             tx.commit()?;
             Ok(())
         })
-        .await
+        .await?;
+        Ok(unresolved)
     }
 
     /// Cross-kind reference list for a single idea. Used by

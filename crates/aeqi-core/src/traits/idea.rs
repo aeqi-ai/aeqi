@@ -570,10 +570,18 @@ pub trait IdeaStore: Send + Sync {
     /// fresh parse of the idea's body. `adjacent` edges are never touched.
     ///
     /// `resolver` maps a referenced name (case-insensitively) to an idea id.
-    /// Unresolved names are silently skipped — no stub nodes are created and
-    /// no error is raised. Called inside a blocking context, so the resolver
-    /// must be `Send + Sync`. The `for<'r>` HRTB lets callers pass borrows
-    /// of any lifetime.
+    /// Unresolved names are dropped from the edge graph (no stub nodes are
+    /// created and no error is raised) but ARE returned in the result so the
+    /// caller can surface them — quest 67-148 closed the silent-drop hole
+    /// where agents had no signal that `[[Unknown]]` failed to bind.
+    ///
+    /// Returns the case-preserved unresolved name tokens in first-seen order,
+    /// deduplicated case-insensitively. The body parser already deduplicates
+    /// per (kind, relation, target_id), so a name appearing twice in the same
+    /// body produces one entry.
+    ///
+    /// Called inside a blocking context, so the resolver must be `Send + Sync`.
+    /// The `for<'r>` HRTB lets callers pass borrows of any lifetime.
     ///
     /// Default is a no-op for stores that don't track edges.
     async fn reconcile_inline_edges(
@@ -581,8 +589,8 @@ pub trait IdeaStore: Send + Sync {
         _source_id: &str,
         _body: &str,
         _resolver: &(dyn for<'r> Fn(&'r str) -> Option<String> + Send + Sync),
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> anyhow::Result<Vec<String>> {
+        Ok(Vec::new())
     }
 
     // ── Round 2 additions (Agent S) ─────────────────────────────────────

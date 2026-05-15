@@ -329,7 +329,7 @@ impl IdeaStore for SqliteIdeas {
         source_id: &str,
         body: &str,
         resolver: &(dyn for<'r> Fn(&'r str) -> Option<String> + Send + Sync),
-    ) -> Result<()> {
+    ) -> Result<Vec<String>> {
         self.reconcile_inline_edges_impl(source_id, body, resolver)
             .await
     }
@@ -1321,7 +1321,8 @@ mod tests {
 
         // Resolver maps nothing — the name is unresolvable.
         let resolver = resolver_from_pairs(&[]);
-        mem.reconcile_inline_edges(&src, "see [[nonexistent]]", resolver.as_ref())
+        let unresolved = mem
+            .reconcile_inline_edges(&src, "see [[nonexistent]]", resolver.as_ref())
             .await
             .expect("unresolved names must not error");
 
@@ -1329,6 +1330,49 @@ mod tests {
         assert!(
             edges.links.is_empty(),
             "unresolved names must not create edges"
+        );
+        assert_eq!(
+            unresolved,
+            vec!["nonexistent".to_string()],
+            "unresolved names must surface to the caller (quest 67-148)"
+        );
+    }
+
+    /// Quest 67-148: a name appearing twice (different relations or just
+    /// duplicate brackets) is reported once, in case-preserved first-seen
+    /// order. A resolved name never appears in the unresolved list.
+    #[tokio::test]
+    async fn test_reconcile_inline_edges_unresolved_dedup_and_mix() {
+        let (mem, _dir) = test_ideas();
+        let src = mem.store("src", "body", &[], None).await.unwrap();
+        let a = mem.store("known", "K body", &[], None).await.unwrap();
+
+        // Body has: one resolvable mention, one unresolved mention,
+        // the same unresolved name as embed (case-insensitive dedup),
+        // and a self-mention (must be silently dropped, not reported).
+        let resolver = resolver_from_pairs(&[("known", &a), ("src", &src)]);
+        let body = "see [[Known]] and [[Missing]] and ![[missing]] and [[src]]";
+        let unresolved = mem
+            .reconcile_inline_edges(&src, body, resolver.as_ref())
+            .await
+            .expect("reconciliation must not error");
+
+        assert_eq!(
+            unresolved,
+            vec!["Missing".to_string()],
+            "case-insensitive dedup; self-edges and resolved names excluded"
+        );
+        let edges = mem.idea_edges(&src).await.unwrap();
+        let known_edges: Vec<&str> = edges
+            .links
+            .iter()
+            .filter(|e| e.other_id == a)
+            .map(|e| e.relation.as_str())
+            .collect();
+        assert_eq!(
+            known_edges,
+            vec!["mention"],
+            "the resolvable name still wires its edge"
         );
     }
 }
