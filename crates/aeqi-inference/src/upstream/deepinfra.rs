@@ -15,7 +15,7 @@
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use reqwest::Client;
+use reqwest::{Client, Response, StatusCode};
 use serde_json::json;
 use tracing::debug;
 
@@ -27,6 +27,46 @@ use crate::{
         ChatMessage, ChunkChoice, ChunkDelta, UsageStats,
     },
 };
+
+/// Map a non-success HTTP response from DeepInfra into a typed
+/// `InferenceError`. Conservative: only the obvious status codes (401/403
+/// → Auth, 402 → NoBalance, 429 → RateLimit, 503 → Overloaded, other 5xx
+/// → ServerError) are typed; anything else falls back to
+/// `UpstreamUnavailable(text)` so callers preserve the original message.
+///
+/// Reads the body fully so the error message carries the upstream detail.
+/// The `Response` is consumed.
+async fn classify_response_error(resp: Response) -> InferenceError {
+    let status = resp.status();
+    let retry_after = resp
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u32>().ok());
+    let text = resp.text().await.unwrap_or_default();
+    match status {
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => InferenceError::Auth,
+        StatusCode::PAYMENT_REQUIRED => InferenceError::NoBalance,
+        StatusCode::TOO_MANY_REQUESTS => InferenceError::RateLimit {
+            retry_after_secs: retry_after,
+        },
+        StatusCode::SERVICE_UNAVAILABLE => InferenceError::Overloaded,
+        s if s.is_server_error() => {
+            InferenceError::ServerError(format!("DeepInfra returned {s}: {text}"))
+        }
+        s => InferenceError::UpstreamUnavailable(format!("DeepInfra returned {s}: {text}")),
+    }
+}
+
+/// Map a reqwest `.send()` error into a typed `InferenceError`. Distinguishes
+/// timeouts (which retry-loops handle differently from connection failures).
+fn classify_send_error(e: reqwest::Error) -> InferenceError {
+    if e.is_timeout() {
+        InferenceError::Timeout
+    } else {
+        InferenceError::UpstreamUnavailable(e.to_string())
+    }
+}
 
 /// DeepInfra base URL — OpenAI-compatible.
 pub const DEEPINFRA_BASE_URL: &str = "https://api.deepinfra.com/v1/openai";
@@ -173,14 +213,10 @@ impl UpstreamProvider for DeepInfraProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| InferenceError::UpstreamUnavailable(e.to_string()))?;
+            .map_err(classify_send_error)?;
 
         if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(InferenceError::UpstreamUnavailable(format!(
-                "DeepInfra returned {status}: {text}"
-            )));
+            return Err(classify_response_error(resp).await);
         }
 
         let raw: serde_json::Value = resp
@@ -210,14 +246,10 @@ impl UpstreamProvider for DeepInfraProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| InferenceError::UpstreamUnavailable(e.to_string()))?;
+            .map_err(classify_send_error)?;
 
         if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(InferenceError::UpstreamUnavailable(format!(
-                "DeepInfra returned {status}: {text}"
-            )));
+            return Err(classify_response_error(resp).await);
         }
 
         // Parse SSE stream from the response body.

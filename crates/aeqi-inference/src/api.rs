@@ -379,18 +379,60 @@ async fn models_handler(State(_state): State<AppState>) -> Json<ModelList> {
 /// Convert an `InferenceError` to an axum `Response` with the correct status.
 pub fn inference_error_response(err: InferenceError) -> Response {
     match err {
-        InferenceError::Auth => (
+        InferenceError::Auth | InferenceError::AuthPermanent => (
             StatusCode::UNAUTHORIZED,
             Json(
-                json!({ "error": { "message": "authentication required", "type": "auth_error" } }),
+                json!({ "error": { "message": err.to_string(), "type": "auth_error" } }),
             ),
         )
             .into_response(),
-        InferenceError::NoBalance => (
+        InferenceError::NoBalance | InferenceError::Billing => (
             StatusCode::PAYMENT_REQUIRED,
             Json(
-                json!({ "error": { "message": "insufficient balance", "type": "billing_error" } }),
+                json!({ "error": { "message": err.to_string(), "type": "billing_error" } }),
             ),
+        )
+            .into_response(),
+        InferenceError::RateLimit { retry_after_secs } => {
+            let msg = err.to_string();
+            let mut resp = (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({ "error": { "message": msg, "type": "rate_limit_error" } })),
+            )
+                .into_response();
+            if let Some(secs) = retry_after_secs
+                && let Ok(value) = secs.to_string().parse()
+            {
+                resp.headers_mut()
+                    .insert(axum::http::header::RETRY_AFTER, value);
+            }
+            resp
+        }
+        InferenceError::Overloaded => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": { "message": err.to_string(), "type": "overloaded_error" } })),
+        )
+            .into_response(),
+        InferenceError::ServerError(msg) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": { "message": msg, "type": "upstream_error" } })),
+        )
+            .into_response(),
+        InferenceError::Timeout => (
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(json!({ "error": { "message": err.to_string(), "type": "upstream_error" } })),
+        )
+            .into_response(),
+        InferenceError::ContextOverflow => (
+            StatusCode::BAD_REQUEST,
+            Json(
+                json!({ "error": { "message": err.to_string(), "type": "context_overflow_error" } }),
+            ),
+        )
+            .into_response(),
+        InferenceError::ModelNotFound(msg) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": { "message": msg, "type": "model_not_found" } })),
         )
             .into_response(),
         InferenceError::Unsupported(msg) => (

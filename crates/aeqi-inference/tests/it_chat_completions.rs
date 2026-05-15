@@ -180,11 +180,18 @@ async fn request_forwarded_with_bearer_auth() {
 }
 
 // ---------------------------------------------------------------------------
-// Test: upstream non-2xx → 502 Bad Gateway
+// Test: upstream 503 → 503 Service Unavailable (typed Overloaded variant)
+//
+// After quest 67-184, the upstream-error envelope is typed: 503 from a
+// provider maps to `InferenceError::Overloaded`, which propagates as a
+// 503 to the client rather than getting flattened into a generic 502.
+// Clients that respect the Retry-After header benefit from the
+// distinction; the pre-67-184 test asserted the flattened-to-502
+// behaviour.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn upstream_error_yields_502() {
+async fn upstream_503_surfaces_as_503_overloaded() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -209,8 +216,8 @@ async fn upstream_error_yields_502() {
     let response = app.oneshot(req).await.unwrap();
     assert_eq!(
         response.status(),
-        StatusCode::BAD_GATEWAY,
-        "upstream 503 should surface as 502"
+        StatusCode::SERVICE_UNAVAILABLE,
+        "upstream 503 should surface as 503 (typed Overloaded variant)"
     );
 }
 
