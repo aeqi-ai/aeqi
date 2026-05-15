@@ -672,30 +672,29 @@ async fn call_code(
             .first()
             .map(|p| p.name.as_str())
             .unwrap_or("code")
+            .to_string()
     } else {
-        project_arg
+        project_arg.to_string()
     };
     let action = args
         .get("action")
         .and_then(|v| v.as_str())
         .unwrap_or("stats");
-    let repo_path = state
-        .mcp_projects
-        .iter()
-        .find(|p| p.name == project)
-        .map(|p| std::path::PathBuf::from(expand_tilde(&p.repo)));
     let graph_dir = state.data_dir.join("codegraph");
     std::fs::create_dir_all(&graph_dir)?;
     let db_path = graph_dir.join(format!("{project}.db"));
 
     match action {
         "index" => {
-            let repo = repo_path.ok_or_else(|| anyhow::anyhow!("project '{project}' not found"))?;
             let store = aeqi_graph::GraphStore::open(&db_path)?;
+            let repo = resolve_code_repo_path(&args, &state.mcp_projects, &project, Some(&store))?
+                .ok_or_else(|| code_project_not_found(&project))?;
             let result = aeqi_graph::Indexer::new().index(&repo, &store)?;
+            store.set_meta("repo_path", &repo.to_string_lossy())?;
             Ok(serde_json::json!({
                 "ok": true,
                 "project": project,
+                "repo_path": repo.to_string_lossy(),
                 "result": result.to_string(),
                 "files": result.files_parsed,
                 "nodes": result.nodes,
@@ -752,9 +751,14 @@ async fn call_code(
             let store = aeqi_graph::GraphStore::open(&db_path)?;
             let stats = store.stats()?;
             let dirty_files = graph_dirty_files(&store)?;
+            let repo_path =
+                resolve_code_repo_path(&args, &state.mcp_projects, &project, Some(&store))
+                    .ok()
+                    .flatten();
             Ok(serde_json::json!({
                 "ok": true,
                 "project": project,
+                "repo_path": repo_path.as_ref().map(|p| p.to_string_lossy().to_string()),
                 "nodes": stats.node_count,
                 "edges": stats.edge_count,
                 "files": stats.file_count,
@@ -765,8 +769,9 @@ async fn call_code(
             }))
         }
         "diff_impact" => {
-            let repo = repo_path.ok_or_else(|| anyhow::anyhow!("project '{project}' not found"))?;
             let store = aeqi_graph::GraphStore::open(&db_path)?;
+            let repo = resolve_code_repo_path(&args, &state.mcp_projects, &project, Some(&store))?
+                .ok_or_else(|| code_project_not_found(&project))?;
             let impact = aeqi_graph::Indexer::new().diff_impact(
                 &repo,
                 &store,
@@ -774,6 +779,8 @@ async fn call_code(
             )?;
             Ok(serde_json::json!({
                 "ok": true,
+                "project": project,
+                "repo_path": repo.to_string_lossy(),
                 "changed_files": impact.changed_files,
                 "changed_symbols": impact.changed_symbols.iter().map(|s| {
                     serde_json::json!({"name": s.name, "label": s.label, "file": s.file_path, "line": s.start_line})
@@ -794,12 +801,15 @@ async fn call_code(
             }))
         }
         "incremental" => {
-            let repo = repo_path.ok_or_else(|| anyhow::anyhow!("project '{project}' not found"))?;
             let store = aeqi_graph::GraphStore::open(&db_path)?;
+            let repo = resolve_code_repo_path(&args, &state.mcp_projects, &project, Some(&store))?
+                .ok_or_else(|| code_project_not_found(&project))?;
             let result = aeqi_graph::Indexer::new().index_incremental(&repo, &store)?;
+            store.set_meta("repo_path", &repo.to_string_lossy())?;
             Ok(serde_json::json!({
                 "ok": true,
                 "project": project,
+                "repo_path": repo.to_string_lossy(),
                 "result": result.to_string(),
                 "files": result.files_parsed,
                 "parse_errors": result.parse_errors,
@@ -825,6 +835,86 @@ fn graph_dirty_files(store: &aeqi_graph::GraphStore) -> anyhow::Result<Vec<Strin
         .filter(|line| !line.is_empty())
         .map(ToOwned::to_owned)
         .collect())
+}
+
+fn resolve_code_repo_path(
+    args: &serde_json::Value,
+    projects: &[aeqi_core::config::AgentSpawnConfig],
+    project: &str,
+    store: Option<&aeqi_graph::GraphStore>,
+) -> anyhow::Result<Option<std::path::PathBuf>> {
+    if let Some(repo) = args
+        .get("repo_path")
+        .or_else(|| args.get("repo"))
+        .and_then(|v| v.as_str())
+        .map(expand_path)
+        .and_then(existing_dir)
+    {
+        return Ok(Some(repo));
+    }
+
+    if let Some(repo) = projects
+        .iter()
+        .find(|p| p.name == project)
+        .map(|p| expand_path(&p.repo))
+        .and_then(existing_dir)
+    {
+        return Ok(Some(repo));
+    }
+
+    if let Some(store) = store
+        && let Some(repo) = store
+            .get_meta("repo_path")?
+            .as_deref()
+            .map(expand_path)
+            .and_then(existing_dir)
+    {
+        return Ok(Some(repo));
+    }
+
+    Ok(discover_repo_by_project_name(project))
+}
+
+fn code_project_not_found(project: &str) -> anyhow::Error {
+    anyhow::anyhow!(
+        "project '{project}' not found; configure [[projects]], pass repo_path, or run a full index with repo_path once"
+    )
+}
+
+fn expand_path(path: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(expand_tilde(path))
+}
+
+fn existing_dir(path: std::path::PathBuf) -> Option<std::path::PathBuf> {
+    if path.is_dir() {
+        Some(std::fs::canonicalize(&path).unwrap_or(path))
+    } else {
+        None
+    }
+}
+
+fn discover_repo_by_project_name(project: &str) -> Option<std::path::PathBuf> {
+    if project.contains('/') || project.contains('\\') || project == "." || project == ".." {
+        return None;
+    }
+
+    let mut roots = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        roots.push(home);
+    }
+    roots.push(std::path::PathBuf::from("/workspace"));
+
+    if let Ok(home_entries) = std::fs::read_dir("/home") {
+        for entry in home_entries.flatten() {
+            roots.push(entry.path());
+        }
+    }
+
+    roots
+        .into_iter()
+        .map(|root| root.join(project))
+        .find(|candidate| candidate.is_dir() && candidate.join(".git").exists())
+        .and_then(existing_dir)
 }
 
 fn default_agent_name(ctx: &McpHttpContext, req: &mut serde_json::Value) {
@@ -1113,6 +1203,7 @@ fn tool_defs() -> serde_json::Value {
                 "properties": {
                     "action": {"type": "string", "enum": ["search", "context", "impact", "file", "stats", "index", "diff_impact", "file_summary", "incremental"], "description": "search/context/impact/file/stats/diff_impact/file_summary are read actions; index and incremental refresh the graph."},
                     "project": {"type": "string", "description": "Configured project name, for example aeqi or aeqi-platform."},
+                    "repo_path": {"type": "string", "description": "Optional checkout path for index, incremental, or diff_impact. Successful refreshes store it for future project-only calls."},
                     "query": {"type": "string", "description": "Symbol/name search query for search."},
                     "node_id": {"type": "string", "description": "Graph node ID for context or impact."},
                     "file_path": {"type": "string", "description": "Repository-relative path for file or file_summary."},
@@ -1128,6 +1219,27 @@ fn tool_defs() -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_project(name: &str, repo: &std::path::Path) -> aeqi_core::config::AgentSpawnConfig {
+        aeqi_core::config::AgentSpawnConfig {
+            id: None,
+            name: name.to_string(),
+            prefix: name.to_string(),
+            repo: repo.to_string_lossy().to_string(),
+            model: None,
+            runtime: None,
+            max_workers: 2,
+            worktree_root: None,
+            execution_mode: Default::default(),
+            max_steps: Some(25),
+            max_budget_usd: None,
+            worker_timeout_secs: 1800,
+            max_cost_per_day_usd: None,
+            orchestrator: None,
+            domain_hints: Vec::new(),
+            compact_instructions: None,
+        }
+    }
 
     #[test]
     fn http_mcp_context_builds_user_actor_from_scope() {
@@ -1250,6 +1362,50 @@ mod tests {
         assert_eq!(req["agent_id"], "a6107b6a-1959-45f9-901c-77fa1f333cbe");
         assert_eq!(req["scope"], "global");
         assert!(req["due_at"].is_null());
+    }
+
+    #[test]
+    fn http_mcp_code_repo_resolution_prefers_explicit_repo_path() {
+        let repo = tempfile::tempdir().unwrap();
+        let configured = tempfile::tempdir().unwrap();
+        let projects = vec![test_project("aeqi", configured.path())];
+
+        let resolved = resolve_code_repo_path(
+            &serde_json::json!({"repo_path": repo.path().to_string_lossy()}),
+            &projects,
+            "aeqi",
+            None,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(resolved, std::fs::canonicalize(repo.path()).unwrap());
+    }
+
+    #[test]
+    fn http_mcp_code_repo_resolution_uses_graph_metadata_without_config() {
+        let repo = tempfile::tempdir().unwrap();
+        let store = aeqi_graph::GraphStore::open_in_memory().unwrap();
+        store
+            .set_meta("repo_path", repo.path().to_string_lossy().as_ref())
+            .unwrap();
+
+        let resolved = resolve_code_repo_path(&serde_json::json!({}), &[], "aeqi", Some(&store))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(resolved, std::fs::canonicalize(repo.path()).unwrap());
+    }
+
+    #[test]
+    fn http_mcp_code_tool_contract_exposes_repo_path_override() {
+        let tools = tool_defs().as_array().cloned().unwrap();
+        let code = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(|v| v.as_str()) == Some("code"))
+            .unwrap();
+
+        assert!(code["inputSchema"]["properties"].get("repo_path").is_some());
     }
 
     #[test]

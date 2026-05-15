@@ -175,6 +175,7 @@ impl Indexer {
         // Store metadata + git commit for incremental tracking
         store.set_meta("indexed_at", &chrono::Utc::now().to_rfc3339())?;
         store.set_meta("file_count", &files.len().to_string())?;
+        store.set_meta("repo_path", &project_dir.to_string_lossy())?;
         if let Some(commit) = std::process::Command::new("git")
             .args(["rev-parse", "--short", "HEAD"])
             .current_dir(project_dir)
@@ -393,6 +394,7 @@ impl Indexer {
         store.set_meta("last_commit", head_commit)?;
         store.set_meta("dirty_files", &current_dirty.join("\n"))?;
         store.set_meta("indexed_at", &chrono::Utc::now().to_rfc3339())?;
+        store.set_meta("repo_path", &project_dir.to_string_lossy())?;
 
         let stats = store.stats()?;
         info!(
