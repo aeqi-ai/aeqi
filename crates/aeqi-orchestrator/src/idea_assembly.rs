@@ -45,6 +45,12 @@ pub struct ToolDispatch<'a> {
     pub session_store: Option<Arc<SessionStore>>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct EventToolCallOutcome {
+    produced_output: bool,
+    had_error: bool,
+}
+
 /// Runtime values available to tool_call placeholder substitution.
 /// Fields left `None` substitute to the empty string; placeholders that do
 /// not correspond to any known field pass through literally.
@@ -313,7 +319,7 @@ pub async fn assemble_ideas_for_patterns(
                 );
                 continue;
             };
-            let fired = dispatch_event_tool_calls(
+            let outcome = dispatch_event_tool_calls(
                 event,
                 dispatch,
                 context,
@@ -321,7 +327,7 @@ pub async fn assemble_ideas_for_patterns(
                 &mut parts,
             )
             .await;
-            if fired && fired_event_seen.insert(event.id.clone()) {
+            if outcome.produced_output && fired_event_seen.insert(event.id.clone()) {
                 fired_event_ids.push(event.id.clone());
             }
         }
@@ -402,9 +408,10 @@ fn truncate_summary(s: &str, max: usize) -> String {
     }
 }
 
-/// Execute the tool_calls declared on an event, appending their outputs to
-/// `parts`. Returns `true` if at least one tool call produced non-empty output
-/// (used to decide whether to add the event to `fired_event_ids`).
+/// Execute the tool_calls declared on an event, appending context-producing
+/// outputs to `parts`. Returns whether any context was produced and whether
+/// the chain failed. Event chains stop on the first tool error so downstream
+/// calls cannot consume unresolved placeholders such as `{last_tool_result}`.
 ///
 /// Steps:
 ///  1. Build substitution context from `AssemblyContext` (user_input, quest_description, etc.).
@@ -426,7 +433,7 @@ async fn dispatch_event_tool_calls(
     assembly_ctx: &AssemblyContext,
     placeholder_providers: Option<&HashMap<String, String>>,
     parts: &mut Vec<AssembledPromptSegment>,
-) -> bool {
+) -> EventToolCallOutcome {
     dispatch_event_tool_calls_with_trigger(
         event,
         dispatch,
@@ -450,7 +457,7 @@ async fn dispatch_event_tool_calls_with_trigger(
     trigger_args: Option<&serde_json::Value>,
     placeholder_providers: Option<&HashMap<String, String>>,
     parts: &mut Vec<AssembledPromptSegment>,
-) -> bool {
+) -> EventToolCallOutcome {
     // Build substitution context from AssemblyContext fields.
     let mut sub_ctx: HashMap<String, String> = HashMap::new();
     if let Some(ref v) = assembly_ctx.user_prompt {
@@ -624,6 +631,7 @@ async fn dispatch_event_tool_calls_with_trigger(
                     }
                     // Still record for index stability in {tool_calls.N.…} refs.
                     results_so_far.push(result);
+                    break;
                 } else {
                     // 5. Store result for chaining: scalar alias
                     //    `{last_tool_result}` and structured refs
@@ -694,6 +702,7 @@ async fn dispatch_event_tool_calls_with_trigger(
                 // Push a synthetic error result for index stability in
                 // {tool_calls.N.…} refs.
                 results_so_far.push(aeqi_core::traits::ToolResult::error(e.to_string()));
+                break;
             }
         }
     }
@@ -721,7 +730,10 @@ async fn dispatch_event_tool_calls_with_trigger(
         }
     }
 
-    produced_output
+    EventToolCallOutcome {
+        produced_output,
+        had_error: invocation_error.is_some(),
+    }
 }
 
 /// Clamp a tool-supplied `outcome_score` into `[0.0, 1.0]`. Logs a warning
@@ -1088,6 +1100,7 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
             let assembly_ctx = AssemblyContext::default();
             let mut parts: Vec<AssembledPromptSegment> = Vec::new();
             let mut handled = false;
+            let mut had_error = false;
 
             // T1.3: pre-resolve placeholder providers once for this dispatch
             // so every fired event in this batch sees the same map.
@@ -1117,7 +1130,7 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
                     // whether the event contributed to `parts`; that's separate
                     // from whether a matching event ran.
                     handled = true;
-                    let _produced_context = dispatch_event_tool_calls_with_trigger(
+                    let outcome = dispatch_event_tool_calls_with_trigger(
                         event,
                         &dispatch,
                         &assembly_ctx,
@@ -1126,6 +1139,9 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
                         &mut parts,
                     )
                     .await;
+                    if outcome.had_error {
+                        had_error = true;
+                    }
                     // Record fire — best effort.
                     if let Err(e) = self.event_store.record_fire(&event.id, 0.0).await {
                         tracing::warn!(
@@ -1138,7 +1154,7 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
                 }
             }
 
-            handled
+            handled && !had_error
         })
     }
 }
@@ -1146,6 +1162,35 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aeqi_core::traits::{Tool, ToolResult, ToolSpec};
+    use async_trait::async_trait;
+    use std::sync::Mutex;
+
+    struct RecordingTool {
+        name: &'static str,
+        result: ToolResult,
+        calls: Arc<Mutex<Vec<serde_json::Value>>>,
+    }
+
+    #[async_trait]
+    impl Tool for RecordingTool {
+        async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
+            self.calls.lock().unwrap().push(args);
+            Ok(self.result.clone())
+        }
+
+        fn spec(&self) -> ToolSpec {
+            ToolSpec {
+                name: self.name.to_string(),
+                description: "test tool".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+            }
+        }
+
+        fn name(&self) -> &str {
+            self.name
+        }
+    }
 
     #[test]
     fn expand_template_substitutes_known_placeholders() {
@@ -1357,6 +1402,76 @@ mod tests {
         let out = substitute_args_with_results(&args, &ctx, &results);
         assert_eq!(out["seed"].as_str(), Some("prior: hello"));
         assert_eq!(out["session"].as_str(), Some("sess-xyz"));
+    }
+
+    #[tokio::test]
+    async fn event_tool_dispatch_stops_after_tool_result_error() {
+        let first_calls = Arc::new(Mutex::new(Vec::new()));
+        let second_calls = Arc::new(Mutex::new(Vec::new()));
+        let registry = ToolRegistry::new(vec![
+            Arc::new(RecordingTool {
+                name: "first",
+                result: ToolResult::error("spawn failed"),
+                calls: first_calls.clone(),
+            }),
+            Arc::new(RecordingTool {
+                name: "second",
+                result: ToolResult::success("should not run"),
+                calls: second_calls.clone(),
+            }),
+        ]);
+        let ctx = ExecutionContext {
+            session_id: "sess-test".to_string(),
+            ..Default::default()
+        };
+        let dispatch = ToolDispatch {
+            registry: &registry,
+            ctx: &ctx,
+            session_store: None,
+        };
+        let event = crate::event_handler::Event {
+            id: "event-1".to_string(),
+            agent_id: None,
+            scope: aeqi_core::Scope::Global,
+            name: "test".to_string(),
+            pattern: "context:budget:exceeded".to_string(),
+            tool_calls: vec![
+                crate::event_handler::ToolCall {
+                    tool: "first".to_string(),
+                    args: serde_json::json!({"seed": "{transcript_preview}"}),
+                },
+                crate::event_handler::ToolCall {
+                    tool: "second".to_string(),
+                    args: serde_json::json!({"content": "{last_tool_result}"}),
+                },
+            ],
+            enabled: true,
+            cooldown_secs: 0,
+            last_fired: None,
+            fire_count: 0,
+            total_cost_usd: 0.0,
+            system: false,
+            created_at: chrono::Utc::now(),
+        };
+        let mut parts = Vec::new();
+
+        let outcome = dispatch_event_tool_calls_with_trigger(
+            &event,
+            &dispatch,
+            &AssemblyContext::default(),
+            Some(&serde_json::json!({"transcript_preview": "tail"})),
+            None,
+            &mut parts,
+        )
+        .await;
+
+        assert!(outcome.had_error);
+        assert!(!outcome.produced_output);
+        assert_eq!(first_calls.lock().unwrap().len(), 1);
+        assert!(
+            second_calls.lock().unwrap().is_empty(),
+            "event chains must fail closed so downstream calls cannot consume unresolved placeholders"
+        );
     }
 
     /// Phase-1: events with non-empty `tool_calls` must NOT contribute ideas
