@@ -347,10 +347,21 @@ impl QuestsTool {
             .ok_or_else(|| anyhow::anyhow!("missing quest_id"))?;
         let status_str = args.get("status").and_then(|v| v.as_str());
         let priority_str = args.get("priority").and_then(|v| v.as_str());
+        let assignee_update: Option<Option<String>> = match args.get("assignee") {
+            None => None,
+            Some(serde_json::Value::Null) => Some(None),
+            Some(serde_json::Value::String(s)) if s.is_empty() => Some(None),
+            Some(serde_json::Value::String(s)) => Some(Some(s.clone())),
+            _ => {
+                return Ok(ToolResult::error(
+                    "Invalid assignee. Use 'agent:<id>', 'user:<id>', empty string, or null.",
+                ));
+            }
+        };
 
-        if status_str.is_none() && priority_str.is_none() {
+        if status_str.is_none() && priority_str.is_none() && assignee_update.is_none() {
             return Ok(ToolResult::error(
-                "Provide at least one of 'status' or 'priority' to update.",
+                "Provide at least one of 'status', 'priority', or 'assignee' to update.",
             ));
         }
 
@@ -405,11 +416,16 @@ impl QuestsTool {
             )));
         }
 
-        if let Some(new_priority) = priority
+        if (priority.is_some() || assignee_update.is_some())
             && let Err(e) = self
                 .agent_registry
                 .update_task(quest_id, |q| {
-                    q.priority = new_priority;
+                    if let Some(new_priority) = priority {
+                        q.priority = new_priority;
+                    }
+                    if let Some(next_assignee) = assignee_update.clone() {
+                        q.assignee = next_assignee;
+                    }
                 })
                 .await
         {
@@ -424,6 +440,9 @@ impl QuestsTool {
         }
         if let Some(p) = priority_str {
             msg.push_str(&format!(" priority={p}"));
+        }
+        if assignee_update.is_some() {
+            msg.push_str(" assignee=updated");
         }
         Ok(ToolResult::success(msg))
     }
@@ -574,14 +593,14 @@ impl Tool for QuestsTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "quests".to_string(),
-            description: "Manage quests: create, list, show details, update status/priority, close with result, or cancel. list returns all quests visible to this agent.".to_string(),
+            description: "Manage quests: create, list, show details, update status/priority/assignee, close with result, or cancel. list returns all quests visible to this agent.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": ["create", "list", "show", "update", "close", "cancel"],
-                        "description": "create: make a new quest (needs subject). list: show quests (optional status, agent). show: quest details (needs quest_id). update: change status/priority (needs quest_id). close: complete with result (needs quest_id, result). cancel: abort (needs quest_id)."
+                        "description": "create: make a new quest (needs subject). list: show quests (optional status, agent). show: quest details (needs quest_id). update: change status/priority/assignee (needs quest_id). close: complete with result (needs quest_id, result). cancel: abort (needs quest_id)."
                     },
                     "quest_id": { "type": "string", "description": "Quest ID (for show/update/close/cancel)" },
                     "subject": { "type": "string", "description": "Quest subject (for create)" },
@@ -595,6 +614,7 @@ impl Tool for QuestsTool {
                     },
                     "status": { "type": "string", "enum": ["backlog", "todo", "in_progress", "done", "cancelled"], "description": "Filter or new status (for list, update). Legacy 'pending'/'blocked' values still accepted." },
                     "priority": { "type": "string", "enum": ["low", "normal", "high", "critical"], "description": "Priority (for create, update)" },
+                    "assignee": { "type": ["string", "null"], "description": "Polymorphic assignee for update: agent:<id>, user:<id>, empty string, or null to unassign" },
                     "result": { "type": "string", "description": "Completion result (for close)" },
                     "reason": { "type": "string", "description": "Cancellation reason (for cancel)" }
                 },

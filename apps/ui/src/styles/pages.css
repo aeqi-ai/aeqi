@@ -3326,6 +3326,34 @@
   gap: 6px;
   justify-content: space-between;
 }
+.quest-take-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  background: var(--color-card-elevated);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.quest-take-btn:hover,
+.quest-take-btn:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent-strong, var(--accent));
+  outline: none;
+}
 /* Card timestamps — same readability lift as the list row. */
 .quest-card-time {
   font-family: var(--font-sans);

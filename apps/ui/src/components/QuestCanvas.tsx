@@ -5,6 +5,7 @@ import { useNav } from "@/hooks/useNav";
 import { useAgentIdeas } from "@/queries/ideas";
 import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
+import { formatAssignee } from "@/lib/assignee";
 import type { Idea, Quest, QuestPriority, QuestStatus, ScopeValue, User } from "@/lib/types";
 import { Events, useTrack } from "@/lib/analytics";
 import IdeaCanvas, { type IdeaCanvasHandle } from "./IdeaCanvas";
@@ -266,6 +267,15 @@ function ViewCanvas({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [bodyDirty, setBodyDirty] = useState(false);
   const [activityRefreshSeq, setActivityRefreshSeq] = useState(0);
+  const defaultAssignee = useMemo(
+    () =>
+      currentUser?.id
+        ? formatAssignee("user", currentUser.id)
+        : resolvedAgentId
+          ? formatAssignee("agent", resolvedAgentId)
+          : null,
+    [currentUser?.id, resolvedAgentId],
+  );
 
   // Linear-style single-key shortcuts on the detail page open the
   // matching popover. Owning the open state up here is what lets `S`,
@@ -418,6 +428,9 @@ function ViewCanvas({
           showCancelSave={bodyDirty}
           onStatusChange={(next) => {
             setStatus(next);
+            if (next === "in_progress" && !assignee && defaultAssignee) {
+              setAssignee(defaultAssignee);
+            }
             scheduleLifecycleSave();
           }}
           onPriorityChange={(next) => {

@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { Button } from "../ui";
 import { ImportMenu } from "../blueprints/ImportMenu";
 import type { Quest, QuestStatus, User } from "@/lib/types";
+import { formatAssignee } from "@/lib/assignee";
 import { dueLabel, isOverdue, timeAgo } from "@/lib/format";
 import { formatDateTime } from "@/lib/i18n";
 import QuestsViewPopover, { type QuestsView } from "./QuestsViewPopover";
@@ -14,12 +15,7 @@ import QuestsFilterPopover from "./QuestsFilterPopover";
 import QuestScopeChip from "./QuestScopeChip";
 import StatusDot from "./StatusDot";
 import QuestList from "./QuestList";
-import {
-  byUpdatedDesc,
-  importQuestFromMarkdown,
-  sortQuests,
-  type QuestFilter,
-} from "./agentQuestsHelpers";
+import { importQuestFromMarkdown, sortQuests, type QuestFilter } from "./agentQuestsHelpers";
 
 /**
  * Board view shown when no quest is selected.
@@ -104,6 +100,16 @@ export default function QuestBoard({
   // clear the outline without blurring anything visible.
   const [focusId, setFocusId] = useState<string | null>(null);
 
+  const defaultAssignee = useMemo(
+    () =>
+      users[0]?.id
+        ? formatAssignee("user", users[0].id)
+        : resolvedAgentId
+          ? formatAssignee("agent", resolvedAgentId)
+          : null,
+    [resolvedAgentId, users],
+  );
+
   const handleDrop = useCallback(
     async (questId: string, next: QuestStatus) => {
       const q = quests.find((x) => x.id === questId);
@@ -112,7 +118,10 @@ export default function QuestBoard({
       if (current === next) return;
       setOptimistic((s) => ({ ...s, [questId]: next }));
       try {
-        await api.updateQuest(questId, { status: next });
+        await api.updateQuest(questId, {
+          status: next,
+          assignee: next === "in_progress" && !q.assignee ? defaultAssignee : undefined,
+        });
         onCreated();
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Failed to move quest");
@@ -124,7 +133,31 @@ export default function QuestBoard({
         });
       }
     },
-    [quests, optimistic, onCreated],
+    [quests, optimistic, defaultAssignee, onCreated],
+  );
+
+  const handleTake = useCallback(
+    async (questId: string) => {
+      const q = quests.find((x) => x.id === questId);
+      if (!q) return;
+      setOptimistic((s) => ({ ...s, [questId]: "in_progress" }));
+      try {
+        await api.updateQuest(questId, {
+          status: "in_progress",
+          assignee: q.assignee ?? defaultAssignee,
+        });
+        onCreated();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Failed to take quest");
+      } finally {
+        setOptimistic((s) => {
+          const copy = { ...s };
+          delete copy[questId];
+          return copy;
+        });
+      }
+    },
+    [quests, defaultAssignee, onCreated],
   );
 
   // v5.2: five-status Linear ladder. Backlog (parked) → Todo (ready) →
@@ -140,9 +173,9 @@ export default function QuestBoard({
 
   // Bucket the already-sorted source by displayed status. Stable sort
   // means within-column order honors the active sort mode without a
-  // secondary pass. Done + Cancelled are capped at the 10 MOST-RECENT
-  // regardless of sort mode (terminal columns are recency archives, not
-  // leaderboards); the chosen sort then orders that 10 for display.
+  // secondary pass. Terminal columns deliberately show the full matching
+  // set: hiding old completed quests made the board disagree with the
+  // ledger and turned reconciliation into guesswork.
   const grouped: Record<QuestStatus, Quest[]> = useMemo(() => {
     const buckets: Record<QuestStatus, Quest[]> = {
       backlog: [],
@@ -155,14 +188,8 @@ export default function QuestBoard({
       const s = optimistic[q.id] ?? q.status;
       buckets[s]?.push(q);
     }
-    for (const terminal of ["done", "cancelled"] as const) {
-      if (buckets[terminal].length > 10) {
-        const recent = [...buckets[terminal]].sort(byUpdatedDesc).slice(0, 10);
-        buckets[terminal] = sortQuests(recent, sort);
-      }
-    }
     return buckets;
-  }, [sortedVisibleQuests, optimistic, sort]);
+  }, [sortedVisibleQuests, optimistic]);
 
   // Flat traversal order used by j/k. In Board view: column-major over
   // backlog → todo → in_progress → done → cancelled. In List view:
@@ -366,6 +393,7 @@ export default function QuestBoard({
               setErr(e instanceof Error ? e.message : "Failed to reassign");
             }
           }}
+          onTake={handleTake}
           search={search}
           agents={agents}
           users={users}
@@ -458,6 +486,20 @@ export default function QuestBoard({
                         <div className="quest-card-meta">
                           <PriorityIcon priority={q.priority} />
                           {q.scope && q.scope !== "self" && <QuestScopeChip scope={q.scope} />}
+                          {q.status !== "in_progress" &&
+                            q.status !== "done" &&
+                            q.status !== "cancelled" && (
+                              <button
+                                type="button"
+                                className="quest-take-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleTake(q.id);
+                                }}
+                              >
+                                Take
+                              </button>
+                            )}
                           <span
                             className="quest-card-assignee"
                             onClick={(e) => e.stopPropagation()}

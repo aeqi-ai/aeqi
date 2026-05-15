@@ -27,6 +27,7 @@ export default function QuestList({
   onNew,
   onCompose,
   onAssigneeChange,
+  onTake,
   search,
   agents,
   users,
@@ -39,6 +40,7 @@ export default function QuestList({
   onNew: () => void;
   onCompose: (status?: QuestStatus) => void;
   onAssigneeChange: (questId: string, next: string | null) => void;
+  onTake: (questId: string) => void;
   search: string;
   agents: { id: string; name: string }[];
   users: Pick<User, "id" | "name" | "email" | "avatar_url">[];
@@ -168,6 +170,20 @@ export default function QuestList({
                         <span className="ideas-list-row-name">{q.idea?.name ?? q.id}</span>
                         {q.scope && q.scope !== "self" && <QuestScopeChip scope={q.scope} />}
                         <PriorityIcon priority={q.priority} />
+                        {status !== "in_progress" &&
+                          status !== "done" &&
+                          status !== "cancelled" && (
+                            <button
+                              type="button"
+                              className="quest-take-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onTake(q.id);
+                              }}
+                            >
+                              Take
+                            </button>
+                          )}
                         <span
                           className="ideas-list-row-assignee"
                           onClick={(e) => e.stopPropagation()}
