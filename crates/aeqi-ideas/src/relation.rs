@@ -9,8 +9,9 @@
 //!
 //! - `mention` — body parser extracts `[[X]]` from content. Lightweight
 //!   reference; surrounding prose carries semantic meaning.
-//! - `embed` — body parser extracts `![[X]]` from content. Transclusion-class
-//!   reference; rendering pulls X's content into here.
+//! - `embed` — body parser extracts `![[X]]` from content. Stronger
+//!   body-level reference than `mention`; it is a graph edge, not a
+//!   promise that rendering inlines X's content.
 //! - `link` — direct API write OR explicit "+ Link" UI button. Bare metadata
 //!   connection with no body involvement.
 //!

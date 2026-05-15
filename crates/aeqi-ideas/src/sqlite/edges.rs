@@ -673,7 +673,8 @@ impl SqliteIdeas {
 
 /// Per-relation weighting factor applied on every hop of the graph walk.
 ///
-/// - `embed` propagates strongest (transclusion implies tight coupling).
+/// - `embed` propagates strongest because authors marked the target as
+///   tightly coupled to the source.
 /// - `mention` and `link` carry full weight for one-hop boosts.
 /// - `co_retrieved` decays at 0.7 — usage-derived, weaker signal.
 /// - `contradiction` propagates at 0.5 — surfaces but ranks below

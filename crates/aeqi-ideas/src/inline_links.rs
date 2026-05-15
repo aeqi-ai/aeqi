@@ -4,15 +4,14 @@
 //!
 //! - `[[X]]` — **mention**: lightweight reference; surrounding prose carries
 //!   the semantic meaning.
-//! - `![[X]]` — **embed**: transclude the target's full content when
-//!   rendering.
+//! - `![[X]]` — **embed**: stronger body-level reference; the graph stores
+//!   an `embed` edge, but the parser does not inline the target's content.
 //!
 //! Targets default to `kind = "idea"` and `id = X`. T1.8 added a
 //! `<kind>:<id>` form recognised inside `[[...]]` and `![[...]]`:
 //!
 //! - `[[session:abc-123]]` — mention of a session.
-//! - `![[session:abc-123]]` — embed of a session (transcludes the
-//!   transcript on render).
+//! - `![[session:abc-123]]` — embed edge to a session.
 //! - `[[quest:<id>]]`, `[[agent:<id>]]` — same pattern, future-proof.
 //!
 //! Unknown kinds (`[[unknown:foo]]`) fall back to a plain idea-mention with
@@ -333,7 +332,7 @@ mod tests {
 
     #[test]
     fn session_embed_parses() {
-        let p = parse_links("transclude: ![[session:abc-123]]");
+        let p = parse_links("session embed: ![[session:abc-123]]");
         assert_eq!(p.refs, vec![embed("session", "abc-123")]);
     }
 
