@@ -145,7 +145,7 @@ export default function PlanTab({ agentId }: PlanTabProps) {
         <Card padding="lg" className="billing-summary">
           <div className="billing-summary-main">
             <p className="billing-eyebrow">Plan</p>
-            <p className="billing-summary-sub">Couldn't resolve this Company's root agent.</p>
+            <p className="billing-summary-sub">Couldn't resolve this Company's first agent.</p>
           </div>
         </Card>
       </div>
