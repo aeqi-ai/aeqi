@@ -50,25 +50,28 @@ export default function LinkedIdeaPicker({
           aria-haspopup="dialog"
           aria-expanded={open}
           title={pinnedIdea ? `Linked idea: ${pinnedIdea.name}` : "Composing a new idea"}
+          trailingIconMode="inline"
+          trailingIcon={
+            <svg
+              className="quest-compose-link-chevron"
+              width="9"
+              height="9"
+              viewBox="0 0 9 9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M2 3.5 L4.5 6 L7 3.5" />
+            </svg>
+          }
         >
           {pinnedIdea && <span className="quest-compose-link-prefix">Idea ·</span>}
           <span className="quest-compose-link-label">
             {pinnedIdea ? pinnedIdea.name : "New idea"}
           </span>
-          <svg
-            className="quest-compose-link-chevron"
-            width="9"
-            height="9"
-            viewBox="0 0 9 9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M2 3.5 L4.5 6 L7 3.5" />
-          </svg>
         </Button>
       }
     >

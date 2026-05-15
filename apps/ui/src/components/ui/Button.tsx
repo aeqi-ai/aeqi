@@ -13,8 +13,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
       ("Continue →"), use `trailingIcon`. Pass a stroked SVG sized to match the
       button (sm: 13px, md/lg: 14px, xl: 16px). Hidden while `loading`. */
   leadingIcon?: ReactNode;
-  /** Icon or element rendered to the right of the label. Animated on hover with translate-x. */
+  /** Icon or element rendered to the right of the label. */
   trailingIcon?: ReactNode;
+  /** `forward` gives continuation arrows extra offset + hover nudge.
+      `inline` keeps dropdown/status glyphs optically attached to the label. */
+  trailingIconMode?: "forward" | "inline";
   /** Screen-reader label for the loading spinner. Prevents double-announce when button label
       already describes the action (e.g. "Save" + spinner should announce "Save", not "Save Loading").
       Defaults to "Loading". Set to empty string to suppress sr-only announcement. */
@@ -29,6 +32,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     fullWidth = false,
     leadingIcon,
     trailingIcon,
+    trailingIconMode = "forward",
     loadingLabel = "Loading",
     className,
     children,
@@ -63,7 +67,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         )}
         <span className={styles.label}>{children}</span>
         {trailingIcon && (
-          <span className={styles.trailingIcon} aria-hidden="true">
+          <span
+            className={[
+              styles.trailingIcon,
+              trailingIconMode === "forward" ? styles.trailingIconForward : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-hidden="true"
+          >
             {trailingIcon}
           </span>
         )}

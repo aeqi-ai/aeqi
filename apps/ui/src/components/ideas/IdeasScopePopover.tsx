@@ -36,6 +36,7 @@ export default function IdeasScopePopover({
           aria-controls={popoverId}
           title={locked ? "Scope (set at creation)" : `Scope: ${SCOPE_LABEL[scope]}`}
           leadingIcon={<span className={`scope-dot scope-dot--${scope}`} />}
+          trailingIconMode="inline"
           trailingIcon={
             <svg
               className="ideas-scope-btn-chevron"

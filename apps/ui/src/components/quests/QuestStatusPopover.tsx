@@ -56,23 +56,26 @@ export default function QuestStatusPopover({
           aria-expanded={open}
           aria-controls={popoverId}
           title={`Status: ${STATUS_LABEL[status]}`}
+          leadingIcon={<span className={`quest-status-dot quest-status-dot--${status}`} />}
+          trailingIconMode="inline"
+          trailingIcon={
+            <svg
+              className="ideas-scope-btn-chevron"
+              width="9"
+              height="9"
+              viewBox="0 0 9 9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M2 3.5 L4.5 6 L7 3.5" />
+            </svg>
+          }
         >
-          <span className={`quest-status-dot quest-status-dot--${status}`} aria-hidden />
           {STATUS_LABEL[status]}
-          <svg
-            className="ideas-scope-btn-chevron"
-            width="9"
-            height="9"
-            viewBox="0 0 9 9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M2 3.5 L4.5 6 L7 3.5" />
-          </svg>
         </Button>
       }
     >

@@ -234,12 +234,16 @@
   flex-shrink: 0;
 }
 
-/* Trailing icon — positioned to the right with gap, animates on hover */
+/* Trailing icon — follows the label with the inherited content gap. */
 .trailingIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+/* Forward/continuation glyphs get a little extra air and hover nudge. */
+.trailingIconForward {
   margin-left: var(--space-2-5);
 }
 
@@ -250,11 +254,11 @@
   display: block;
 }
 
-.button:not(:disabled):not([aria-disabled="true"]) .trailingIcon {
+.button:not(:disabled):not([aria-disabled="true"]) .trailingIconForward {
   transition: transform var(--transition-fast);
 }
 
-.button:not(:disabled):not([aria-disabled="true"]):hover .trailingIcon {
+.button:not(:disabled):not([aria-disabled="true"]):hover .trailingIconForward {
   transform: translateX(3px);
 }
 
@@ -267,11 +271,11 @@
     animation: none;
   }
 
-  .button:not(:disabled):not([aria-disabled="true"]) .trailingIcon {
+  .button:not(:disabled):not([aria-disabled="true"]) .trailingIconForward {
     transition: none;
   }
 
-  .button:not(:disabled):not([aria-disabled="true"]):hover .trailingIcon {
+  .button:not(:disabled):not([aria-disabled="true"]):hover .trailingIconForward {
     transform: none;
   }
 }

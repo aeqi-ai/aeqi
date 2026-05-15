@@ -167,23 +167,28 @@ export default function QuestToolbar({
             aria-haspopup="dialog"
             aria-expanded={open}
             title={display ? `Assigned to ${display.name}` : "Unassigned"}
+            leadingIcon={
+              <AssigneeAvatar assignee={assignee} agents={agents} users={users} size={16} />
+            }
+            trailingIconMode="inline"
+            trailingIcon={
+              <svg
+                className="ideas-scope-btn-chevron"
+                width="9"
+                height="9"
+                viewBox="0 0 9 9"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M2 3.5 L4.5 6 L7 3.5" />
+              </svg>
+            }
           >
-            <AssigneeAvatar assignee={assignee} agents={agents} users={users} size={16} />
             <span className="quest-assignee-btn-name">{display?.name ?? "Unassigned"}</span>
-            <svg
-              className="ideas-scope-btn-chevron"
-              width="9"
-              height="9"
-              viewBox="0 0 9 9"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M2 3.5 L4.5 6 L7 3.5" />
-            </svg>
           </Button>
         )}
       />

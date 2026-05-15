@@ -97,37 +97,42 @@ export default function QuestDueDatePopover({
           aria-expanded={open}
           aria-controls={popoverId}
           title={due_at ? `Due: ${formatDateTime(due_at)}` : "No due date"}
+          leadingIcon={
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 13 13"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <rect x="2.5" y="3" width="8" height="7.5" rx="1" />
+              <path d="M2.5 5.5 H10.5" />
+              <path d="M5 2 V4 M8 2 V4" />
+            </svg>
+          }
+          trailingIconMode="inline"
+          trailingIcon={
+            <svg
+              className="ideas-scope-btn-chevron"
+              width="9"
+              height="9"
+              viewBox="0 0 9 9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M2 3.5 L4.5 6 L7 3.5" />
+            </svg>
+          }
         >
-          <svg
-            width="11"
-            height="11"
-            viewBox="0 0 13 13"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <rect x="2.5" y="3" width="8" height="7.5" rx="1" />
-            <path d="M2.5 5.5 H10.5" />
-            <path d="M5 2 V4 M8 2 V4" />
-          </svg>
           {triggerLabel}
-          <svg
-            className="ideas-scope-btn-chevron"
-            width="9"
-            height="9"
-            viewBox="0 0 9 9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M2 3.5 L4.5 6 L7 3.5" />
-          </svg>
         </Button>
       }
     >

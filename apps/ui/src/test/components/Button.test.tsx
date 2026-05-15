@@ -111,4 +111,15 @@ describe("Button", () => {
     );
     expect(screen.queryByTestId("lead")).toBeNull();
   });
+
+  it("renders static trailing icons for dropdown-style buttons", () => {
+    render(
+      <Button trailingIcon={<span data-testid="chevron">⌄</span>} trailingIconMode="inline">
+        Status
+      </Button>,
+    );
+    const chevron = screen.getByTestId("chevron");
+    expect(chevron.parentElement).toHaveAttribute("aria-hidden", "true");
+    expect(chevron.parentElement?.className).not.toContain("trailingIconForward");
+  });
 });

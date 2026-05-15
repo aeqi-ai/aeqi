@@ -57,23 +57,26 @@ export default function QuestPriorityPopover({
           aria-expanded={open}
           aria-controls={popoverId}
           title={`Priority: ${PRIORITY_LABEL[priority]}`}
+          leadingIcon={<PriorityIcon priority={priority} />}
+          trailingIconMode="inline"
+          trailingIcon={
+            <svg
+              className="ideas-scope-btn-chevron"
+              width="9"
+              height="9"
+              viewBox="0 0 9 9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M2 3.5 L4.5 6 L7 3.5" />
+            </svg>
+          }
         >
-          <PriorityIcon priority={priority} />
           {PRIORITY_LABEL[priority]}
-          <svg
-            className="ideas-scope-btn-chevron"
-            width="9"
-            height="9"
-            viewBox="0 0 9 9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M2 3.5 L4.5 6 L7 3.5" />
-          </svg>
         </Button>
       }
     >

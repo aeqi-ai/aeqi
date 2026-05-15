@@ -431,11 +431,12 @@ export const WithTrailingIcon: Story = {
       </div>
       <div>
         <p style={{ fontSize: 12, color: "rgba(0,0,0,0.4)", margin: "0 0 8px" }}>
-          Standard size with arrow
+          Static dropdown chevron
         </p>
         <Button
           variant="secondary"
           size="md"
+          trailingIconMode="inline"
           trailingIcon={
             <svg
               width="14"
@@ -458,7 +459,7 @@ export const WithTrailingIcon: Story = {
     docs: {
       description: {
         story:
-          "Trailing icon (chevron, arrow, etc.) rendered to the right of the label. Animates with a 3px translate-x on hover for a subtle forward-motion micro-interaction.",
+          "`trailingIcon` renders to the right of the label. The default `forward` mode adds extra offset and a 3px hover nudge for continuation arrows; `inline` keeps dropdown chevrons optically attached with no hover motion.",
       },
     },
   },
