@@ -16,6 +16,15 @@ pub struct ChatMessage {
     pub role: String,
     /// Text content of the message.
     pub content: String,
+    /// Model reasoning / chain-of-thought, normalized across providers.
+    /// DeepSeek R1 and SiliconFlow expose it as upstream `reasoning_content`;
+    /// other providers use `reasoning` or `reasoning_details[].text`
+    /// (OpenRouter). Adapters normalize to this canonical field so tool
+    /// callers see clean `content` while observability has reasoning
+    /// available separately. `None` when the provider/model returned no
+    /// reasoning (most non-reasoning models, redacted OpenAI `o1`/`o3`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 /// Request body for `POST /v1/chat/completions`.
@@ -76,6 +85,11 @@ pub struct ChunkDelta {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    /// Reasoning delta — same normalization rules as
+    /// [`ChatMessage::reasoning_content`]. Streaming SSE consumers can
+    /// interleave reasoning + content as they arrive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 /// A single choice inside a streaming chunk.

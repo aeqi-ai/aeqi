@@ -335,6 +335,9 @@ fn parse_chat_response(
                             .unwrap_or("assistant")
                             .to_owned(),
                         content: c["message"]["content"].as_str().unwrap_or("").to_owned(),
+                        reasoning_content: c["message"]["reasoning_content"]
+                            .as_str()
+                            .map(|s| s.to_owned()),
                     },
                     finish_reason: c["finish_reason"].as_str().map(|s| s.to_owned()),
                 })
@@ -375,6 +378,9 @@ fn parse_chunk(
                     delta: ChunkDelta {
                         role: c["delta"]["role"].as_str().map(|s| s.to_owned()),
                         content: c["delta"]["content"].as_str().map(|s| s.to_owned()),
+                        reasoning_content: c["delta"]["reasoning_content"]
+                            .as_str()
+                            .map(|s| s.to_owned()),
                     },
                     finish_reason: c["finish_reason"].as_str().map(|s| s.to_owned()),
                 })

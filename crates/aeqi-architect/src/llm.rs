@@ -593,10 +593,12 @@ fn build_messages(brief: &str) -> Vec<ChatMessage> {
         ChatMessage {
             role: "system".to_string(),
             content: SYSTEM_PROMPT.to_string(),
+            reasoning_content: None,
         },
         ChatMessage {
             role: "user".to_string(),
             content: brief.to_string(),
+            reasoning_content: None,
         },
     ]
 }
@@ -618,11 +620,13 @@ fn build_refine_messages(
     out.push(ChatMessage {
         role: "system".to_string(),
         content: SYSTEM_PROMPT.to_string(),
+        reasoning_content: None,
     });
     for (brief, draft) in prior_briefs.iter().zip(prior_drafts.iter()) {
         out.push(ChatMessage {
             role: "user".to_string(),
             content: brief.clone(),
+            reasoning_content: None,
         });
         let envelope = json!({
             "rationale": draft.rationale,
@@ -631,6 +635,7 @@ fn build_refine_messages(
         out.push(ChatMessage {
             role: "assistant".to_string(),
             content: envelope.to_string(),
+            reasoning_content: None,
         });
     }
     out.push(ChatMessage {
@@ -639,6 +644,7 @@ fn build_refine_messages(
             "Refine the previous Blueprint based on this feedback (keep the same JSON envelope shape; \
              change only what the feedback implies, and update the rationale to explain the diff):\n\n{instruction}"
         ),
+        reasoning_content: None,
     });
     out
 }
