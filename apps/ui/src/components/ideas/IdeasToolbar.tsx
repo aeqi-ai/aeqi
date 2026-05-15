@@ -1,3 +1,4 @@
+import type React from "react";
 import { Button, Tooltip } from "../ui";
 import IdeasFilterPopover from "./IdeasFilterPopover";
 import IdeasSortPopover from "./IdeasSortPopover";
@@ -5,11 +6,23 @@ import IdeasViewPopover, { type IdeasView } from "./IdeasViewPopover";
 import type { FilterState, IdeasFilter } from "./types";
 
 /**
- * Shared toolbar for non-list Ideas views (Table, Kanban). Mirrors the
- * canonical search · sort · filter · view · +New row used by IdeasListView
- * so users land in any view with the same controls. List view keeps its
- * inline toolbar — it has list-specific keyboard bindings (Enter-to-create,
- * ArrowDown-to-rows) that don't belong here.
+ * Canonical toolbar for every Ideas view (List, Table, Kanban, Graph).
+ *
+ * Required surface is the locked search · sort · filter · view · +New row.
+ * View-specific extensions land via optional slots:
+ *
+ * - `searchInputRef` + `onSearchKeyDown` — list-style keyboard navigation
+ *   (Enter-to-create, ArrowDown-to-rows) without coupling the toolbar to a
+ *   particular view's handlers. Escape-to-clear is universal and handled
+ *   internally before delegating.
+ * - `showKbdHint` — render the "/" focus-hint kbd (list-only today).
+ * - `toolbarMeta` — inline meta slot between search and sort (graph uses it
+ *   for the "N nodes · M links" pill).
+ * - `importMenu` — extra primary-row affordance for the list view's
+ *   markdown / blueprint import surface.
+ *
+ * Replaces the prior `IdeasListToolbar` + `IdeasToolbar` + inline graph
+ * shell trio so every view stays in lockstep on chrome + design tokens.
  */
 export interface IdeasToolbarProps {
   filter: FilterState;
@@ -19,6 +32,11 @@ export interface IdeasToolbarProps {
   view: IdeasView;
   onViewChange: (next: IdeasView) => void;
   onNew: () => void;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  onSearchKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  showKbdHint?: boolean;
+  toolbarMeta?: React.ReactNode;
+  importMenu?: React.ReactNode;
 }
 
 export default function IdeasToolbar({
@@ -29,6 +47,11 @@ export default function IdeasToolbar({
   view,
   onViewChange,
   onNew,
+  searchInputRef,
+  onSearchKeyDown,
+  showKbdHint = false,
+  toolbarMeta,
+  importMenu,
 }: IdeasToolbarProps) {
   const searchActive = filter.search.trim() !== "";
   return (
@@ -50,6 +73,7 @@ export default function IdeasToolbar({
             <path d="M7.6 7.6 L10 10" />
           </svg>
           <input
+            ref={searchInputRef}
             className="ideas-list-search"
             type="text"
             placeholder="Search ideas"
@@ -62,9 +86,16 @@ export default function IdeasToolbar({
                 } else {
                   (e.target as HTMLInputElement).blur();
                 }
+                return;
               }
+              onSearchKeyDown?.(e);
             }}
           />
+          {showKbdHint && !filter.search && (
+            <kbd className="ideas-list-search-kbd" aria-hidden>
+              /
+            </kbd>
+          )}
           {filter.search && (
             <button
               type="button"
@@ -76,6 +107,7 @@ export default function IdeasToolbar({
             </button>
           )}
         </span>
+        {toolbarMeta}
         <IdeasSortPopover
           sort={filter.sort}
           disabled={searchActive}
@@ -88,6 +120,7 @@ export default function IdeasToolbar({
           onChange={onFilter}
         />
         <IdeasViewPopover view={view} onChange={onViewChange} />
+        {importMenu}
         <Tooltip content="New idea (N)">
           <Button
             variant="primary"

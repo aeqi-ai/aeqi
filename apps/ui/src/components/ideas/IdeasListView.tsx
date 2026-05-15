@@ -8,7 +8,8 @@ import { asStringArray, parseFrontmatter } from "@/lib/frontmatter";
 import { formatDateTime } from "@/lib/i18n";
 import { useAgentIdeasCache } from "@/queries/ideas";
 import { blockTreeToPlainText } from "@/components/editor/blockEditorContent";
-import IdeasListToolbar from "./IdeasListToolbar";
+import { ImportMenu } from "@/components/blueprints/ImportMenu";
+import IdeasToolbar from "./IdeasToolbar";
 import IdeasListFilterChips from "./IdeasListFilterChips";
 import {
   type FilterState,
@@ -277,29 +278,44 @@ export default function IdeasListView({
   const noMatchTrimmed = filter.search.trim();
   const totalInScope = scoped.length;
 
+  const rankedFirstId = ranked[0]?.id ?? null;
+  const filteredCount = filtered.length;
+
   return (
     <div className="ideas-list">
-      <div className="ideas-list-head">
-        <IdeasListToolbar
-          filter={filter}
-          onFilter={onFilter}
-          view={view}
-          onViewChange={onViewChange}
-          searchActive={searchActive}
-          scopeCounts={scopeCounts}
-          needsReviewCount={needsReviewCount}
-          entityId={entityId}
-          filteredCount={filtered.length}
-          rankedFirstId={ranked[0]?.id ?? null}
-          noMatchTrimmed={noMatchTrimmed}
-          searchRef={searchRef}
-          rowRefs={rowRefs}
-          goEntity={(eid, scope, id) => goEntity(eid, scope as Parameters<typeof goEntity>[1], id)}
-          fireNew={fireNew}
-          onMarkdownPicked={(files) => void handleMarkdownImport(files)}
-          onBlueprintSpawned={() => void invalidateIdeas()}
-        />
-      </div>
+      <IdeasToolbar
+        filter={filter}
+        scopeCounts={scopeCounts}
+        needsReviewCount={needsReviewCount}
+        onFilter={onFilter}
+        view={view}
+        onViewChange={onViewChange}
+        onNew={() => fireNew()}
+        searchInputRef={searchRef}
+        showKbdHint
+        onSearchKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (filteredCount > 0 && rankedFirstId) {
+              goEntity(entityId, "ideas", rankedFirstId);
+            } else if (noMatchTrimmed) {
+              fireNew(noMatchTrimmed);
+            }
+          } else if (e.key === "ArrowDown" && filteredCount > 0) {
+            e.preventDefault();
+            rowRefs.current?.[0]?.focus();
+          }
+        }}
+        importMenu={
+          <ImportMenu
+            entityId={entityId}
+            parts={["ideas"]}
+            blueprintTitle="Import ideas from a Blueprint"
+            onMarkdownPicked={(files) => void handleMarkdownImport(files)}
+            onBlueprintSpawned={() => void invalidateIdeas()}
+          />
+        }
+      />
       {importError && (
         <div className="bp-error" role="alert">
           {importError}
