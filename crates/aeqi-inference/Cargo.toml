@@ -19,6 +19,7 @@ reqwest = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 async-stream = { workspace = true }
+aeqi-redact = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

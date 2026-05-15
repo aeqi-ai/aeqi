@@ -37,7 +37,9 @@ async fn main() -> Result<()> {
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&cli.log_level)),
         )
         .with_target(false)
+        .with_writer(aeqi_redact::RedactingMakeWriter::stdout())
         .init();
+    aeqi_redact::log_status();
 
     match cli.command {
         None => tui::run(&cli.config, None, None, None, None, None, None).await,

@@ -1,0 +1,11 @@
+[package]
+name = "aeqi-redact"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Regex-based secret redaction for tracing output, error strings, and tool bodies. Ported from hermes-agent/agent/redact.py."
+
+[dependencies]
+regex = "1"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

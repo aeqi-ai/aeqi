@@ -44,6 +44,11 @@ async fn classify_response_error(resp: Response) -> InferenceError {
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u32>().ok());
     let text = resp.text().await.unwrap_or_default();
+    // Upstream bodies can echo `Authorization: Bearer <token>` or other secret
+    // material on auth failures. Redact at construction time so the secret
+    // never enters the error chain — defense in depth on top of the catch-all
+    // tracing writer.
+    let text = aeqi_redact::redact_forced(&text);
     match status {
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => InferenceError::Auth,
         StatusCode::PAYMENT_REQUIRED => InferenceError::NoBalance,
@@ -64,7 +69,9 @@ fn classify_send_error(e: reqwest::Error) -> InferenceError {
     if e.is_timeout() {
         InferenceError::Timeout
     } else {
-        InferenceError::UpstreamUnavailable(e.to_string())
+        // reqwest's Display can include partial response data; redact before
+        // stashing the string into the error variant.
+        InferenceError::UpstreamUnavailable(aeqi_redact::redact_forced(&e.to_string()))
     }
 }
 

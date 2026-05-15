@@ -20,6 +20,7 @@ aeqi-ideas = { workspace = true }
 aeqi-web = { workspace = true }
 aeqi-graph = { workspace = true }
 aeqi-trust = { workspace = true }
+aeqi-redact = { workspace = true }
 
 tokio = { workspace = true }
 clap = { workspace = true }
