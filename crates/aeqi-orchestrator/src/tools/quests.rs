@@ -6,6 +6,9 @@ use std::sync::Arc;
 
 use crate::activity_log::ActivityLog;
 use crate::agent_registry::AgentRegistry;
+use crate::quest_assignee::{
+    QuestCallerPrincipal, auto_assignee_for_in_progress, validate_assignee_update,
+};
 
 /// Format an `aeqi_quests::Quest` into a human-readable detail string.
 pub(crate) fn format_quest_detail(quest: &aeqi_quests::Quest) -> String {
@@ -404,6 +407,19 @@ impl QuestsTool {
             }
             None => None,
         };
+        let assignee_update = match auto_assignee_for_in_progress(
+            status,
+            assignee_update,
+            Some(QuestCallerPrincipal::Agent(self.agent_id.clone())),
+        ) {
+            Ok(update) => update,
+            Err(e) => return Ok(ToolResult::error(e)),
+        };
+        let assignee_update =
+            match validate_assignee_update(&self.agent_registry, assignee_update).await {
+                Ok(update) => update,
+                Err(e) => return Ok(ToolResult::error(e)),
+            };
 
         if let Some(new_status) = status
             && let Err(e) = self
@@ -699,6 +715,7 @@ async fn dispatch_quest_end_for_llm_close(
 mod tests {
     use super::*;
     use aeqi_core::tool_registry::PatternDispatcher;
+    use std::sync::Arc;
     use std::sync::Mutex;
 
     /// Recording dispatcher: captures every `dispatch` call so tests can
@@ -828,5 +845,85 @@ mod tests {
     async fn llm_close_without_dispatcher_is_a_no_op() {
         let quest = stub_quest("q-nop", None);
         dispatch_quest_end_for_llm_close(None, &quest.id.0, "no dispatcher", &quest, None).await;
+    }
+
+    async fn quest_tool_fixture() -> (
+        QuestsTool,
+        Arc<AgentRegistry>,
+        aeqi_quests::Quest,
+        tempfile::TempDir,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = Arc::new(AgentRegistry::open(dir.path()).unwrap());
+        let agent = registry
+            .spawn("Quest Tool Tester", None, None)
+            .await
+            .unwrap();
+        let quest = registry
+            .create_task(&agent.id, "Harden assignee", "body", &[], &[])
+            .await
+            .unwrap();
+        let tool = QuestsTool::new(
+            Arc::clone(&registry),
+            agent.id,
+            Arc::new(ActivityLog::new(registry.db())),
+        );
+        (tool, registry, quest, dir)
+    }
+
+    #[tokio::test]
+    async fn llm_update_rejects_invalid_assignee_string() {
+        let (tool, registry, quest, _dir) = quest_tool_fixture().await;
+
+        let result = tool
+            .action_update(&serde_json::json!({
+                "quest_id": quest.id.0,
+                "assignee": "claude",
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.is_error, "result: {}", result.output);
+        assert!(result.output.contains("Invalid assignee"));
+        let stored = registry.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.assignee, None);
+    }
+
+    #[tokio::test]
+    async fn llm_update_rejects_unknown_agent_assignee() {
+        let (tool, registry, quest, _dir) = quest_tool_fixture().await;
+        let unknown = uuid::Uuid::new_v4();
+
+        let result = tool
+            .action_update(&serde_json::json!({
+                "quest_id": quest.id.0,
+                "assignee": format!("agent:{unknown}"),
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.is_error, "result: {}", result.output);
+        assert!(result.output.contains("Unknown assignee agent"));
+        let stored = registry.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.assignee, None);
+    }
+
+    #[tokio::test]
+    async fn llm_update_auto_binds_in_progress_to_calling_agent() {
+        let (tool, registry, quest, _dir) = quest_tool_fixture().await;
+        let expected = format!("agent:{}", tool.agent_id);
+
+        let result = tool
+            .action_update(&serde_json::json!({
+                "quest_id": quest.id.0,
+                "status": "in_progress",
+            }))
+            .await
+            .unwrap();
+
+        assert!(!result.is_error, "result: {}", result.output);
+        let stored = registry.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.status, aeqi_quests::QuestStatus::InProgress);
+        assert_eq!(stored.assignee.as_deref(), Some(expected.as_str()));
     }
 }

@@ -2,6 +2,10 @@
 
 use aeqi_core::Scope;
 
+use crate::quest_assignee::{
+    auto_assignee_for_in_progress, caller_principal_from_request, validate_assignee_update,
+};
+
 use super::tenancy::{check_agent_access, is_allowed};
 pub async fn handle_quests(
     ctx: &super::CommandContext,
@@ -603,7 +607,12 @@ pub async fn handle_update_quest(
         Some(serde_json::Value::Null) => Some(None),
         Some(serde_json::Value::String(s)) if s.is_empty() => Some(None),
         Some(serde_json::Value::String(s)) => Some(Some(s.clone())),
-        _ => None,
+        _ => {
+            return serde_json::json!({
+                "ok": false,
+                "error": "Invalid assignee. Use 'user:<uuid>', 'agent:<uuid>', empty string, or null."
+            });
+        }
     };
 
     // `due_at` mirrors the assignee three-state pattern: absent → leave
@@ -665,6 +674,20 @@ pub async fn handle_update_quest(
         "critical" => aeqi_quests::Priority::Critical,
         _ => aeqi_quests::Priority::Normal,
     });
+
+    let assignee_update = match auto_assignee_for_in_progress(
+        status,
+        assignee_update,
+        caller_principal_from_request(request),
+    ) {
+        Ok(update) => update,
+        Err(e) => return serde_json::json!({"ok": false, "error": e}),
+    };
+    let assignee_update = match validate_assignee_update(&ctx.agent_registry, assignee_update).await
+    {
+        Ok(update) => update,
+        Err(e) => return serde_json::json!({"ok": false, "error": e}),
+    };
 
     match ctx
         .agent_registry
@@ -1394,13 +1417,15 @@ mod tests {
             .create_task(&agent.id, "Track lifecycle", "body", &[], &[])
             .await
             .unwrap();
+        let user_id = uuid::Uuid::new_v4().to_string();
+        let assignee = format!("user:{user_id}");
 
         let resp = handle_update_quest(
             &ctx,
             &serde_json::json!({
                 "id": quest.id.0,
                 "status": "in_progress",
-                "assignee": "user:u1",
+                "assignee": assignee,
             }),
             &None,
         )
@@ -1426,7 +1451,9 @@ mod tests {
             .find(|m| m.content.contains("status: todo -> in_progress"))
             .expect("quest lifecycle activity row must exist");
         assert!(
-            activity.content.contains("assignee: unset -> user:u1"),
+            activity
+                .content
+                .contains(&format!("assignee: unset -> {assignee}")),
             "activity summary should include assignee change: {:?}",
             activity.content
         );
@@ -1435,5 +1462,90 @@ mod tests {
         assert_eq!(metadata["quest_id"], quest.id.0);
         assert_eq!(metadata["idea_id"], quest.idea_id);
         assert_eq!(metadata["changes"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn update_quest_rejects_invalid_assignee_string() {
+        let (ctx, registry, _session_store, _idea_store, _dir) = quest_update_ctx().await;
+        let agent = registry.spawn("Quest Tester", None, None).await.unwrap();
+        let quest = registry
+            .create_task(&agent.id, "Track lifecycle", "body", &[], &[])
+            .await
+            .unwrap();
+
+        let resp = handle_update_quest(
+            &ctx,
+            &serde_json::json!({
+                "id": quest.id.0,
+                "assignee": "claude",
+            }),
+            &None,
+        )
+        .await;
+
+        assert_eq!(resp["ok"], false, "update response: {resp}");
+        assert!(resp["error"].as_str().unwrap().contains("Invalid assignee"));
+        let stored = registry.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.assignee, None);
+    }
+
+    #[tokio::test]
+    async fn update_quest_rejects_unknown_agent_assignee() {
+        let (ctx, registry, _session_store, _idea_store, _dir) = quest_update_ctx().await;
+        let agent = registry.spawn("Quest Tester", None, None).await.unwrap();
+        let quest = registry
+            .create_task(&agent.id, "Track lifecycle", "body", &[], &[])
+            .await
+            .unwrap();
+        let unknown = uuid::Uuid::new_v4();
+
+        let resp = handle_update_quest(
+            &ctx,
+            &serde_json::json!({
+                "id": quest.id.0,
+                "assignee": format!("agent:{unknown}"),
+            }),
+            &None,
+        )
+        .await;
+
+        assert_eq!(resp["ok"], false, "update response: {resp}");
+        assert!(
+            resp["error"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown assignee agent")
+        );
+        let stored = registry.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.assignee, None);
+    }
+
+    #[tokio::test]
+    async fn update_quest_auto_binds_in_progress_to_caller_user() {
+        let (ctx, registry, _session_store, _idea_store, _dir) = quest_update_ctx().await;
+        let agent = registry.spawn("Quest Tester", None, None).await.unwrap();
+        let quest = registry
+            .create_task(&agent.id, "Track lifecycle", "body", &[], &[])
+            .await
+            .unwrap();
+        let user_id = uuid::Uuid::new_v4().to_string();
+        let expected = format!("user:{user_id}");
+
+        let resp = handle_update_quest(
+            &ctx,
+            &serde_json::json!({
+                "id": quest.id.0,
+                "status": "in_progress",
+                "caller_user_id": user_id,
+            }),
+            &None,
+        )
+        .await;
+
+        assert_eq!(resp["ok"], true, "update response: {resp}");
+        assert_eq!(resp["quest"]["assignee"], expected);
+        let stored = registry.get_task(&quest.id.0).await.unwrap().unwrap();
+        assert_eq!(stored.status, aeqi_quests::QuestStatus::InProgress);
+        assert_eq!(stored.assignee.as_deref(), Some(expected.as_str()));
     }
 }

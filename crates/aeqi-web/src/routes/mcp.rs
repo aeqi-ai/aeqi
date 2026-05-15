@@ -303,6 +303,9 @@ fn apply_actor(ctx: &McpHttpContext, request: &mut serde_json::Value) {
     if let Some(user_id) = ctx.actor.user_id.as_deref() {
         request["caller_user_id"] = serde_json::json!(user_id);
     }
+    if let Some(agent_id) = ctx.agent_id.as_deref() {
+        request["caller_agent_id"] = serde_json::json!(agent_id);
+    }
     if let Some(entity_id) = ctx.actor.entity_id.as_deref() {
         request["caller_entity_id"] = serde_json::json!(entity_id);
     }
