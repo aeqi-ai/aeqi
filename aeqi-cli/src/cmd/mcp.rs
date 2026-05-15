@@ -61,7 +61,7 @@ const IDEAS_MCP_ACTIONS: &[&str] = &[
 ];
 
 fn ipc_request_sync(sock_path: &Path, request: &serde_json::Value) -> Result<serde_json::Value> {
-    let stream = std::os::unix::net::UnixStream::connect(sock_path)?;
+    let stream = connect_with_retry(sock_path)?;
     let mut writer = io::BufWriter::new(&stream);
     let mut reader = io::BufReader::new(&stream);
 
@@ -74,6 +74,48 @@ fn ipc_request_sync(sock_path: &Path, request: &serde_json::Value) -> Result<ser
     reader.read_line(&mut line)?;
     let response: serde_json::Value = serde_json::from_str(&line)?;
     Ok(response)
+}
+
+/// Connect to the runtime IPC socket, retrying briefly on `NotFound` /
+/// `ConnectionRefused` so the caller doesn't see a raw `No such file or
+/// directory (os error 2)` during the host-restart cutover window.
+///
+/// The host runtime binds `rm.sock` as a side-effect of `spawn_ipc_listener`
+/// in `aeqi-orchestrator/src/daemon.rs`, which runs after config load and
+/// SQLite store setup — typically 1–5s, up to ~30s on a cold start. Without
+/// this retry, any `mcp__aeqi__*` call landing in that window fails the
+/// agent's tool call instead of riding through the bounce. Quest 67-152.
+fn connect_with_retry(sock_path: &Path) -> Result<std::os::unix::net::UnixStream> {
+    use std::os::unix::net::UnixStream;
+    use std::time::{Duration, Instant};
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut attempt = 0u32;
+    loop {
+        match UnixStream::connect(sock_path) {
+            Ok(stream) => {
+                if attempt > 0 {
+                    eprintln!(
+                        "[aeqi-mcp] connected to {} after {} retry(s)",
+                        sock_path.display(),
+                        attempt
+                    );
+                }
+                return Ok(stream);
+            }
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
+                ) && Instant::now() < deadline =>
+            {
+                let backoff_ms = std::cmp::min(100 + u64::from(attempt) * 100, 1000);
+                std::thread::sleep(Duration::from_millis(backoff_ms));
+                attempt += 1;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1486,6 +1528,32 @@ mod tests {
              whether the change also belongs on the REST surface in \
              crates/aeqi-web/src/routes/ideas.rs. Then update this snapshot."
         );
+    }
+
+    #[test]
+    fn connect_with_retry_succeeds_immediately_when_socket_exists() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let sock_path = tmp.path().join("rm.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&sock_path).expect("bind listener");
+
+        let stream = connect_with_retry(&sock_path).expect("connect should succeed");
+        drop(stream);
+    }
+
+    #[test]
+    fn connect_with_retry_rides_through_late_socket_bind() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let sock_path = tmp.path().join("rm.sock");
+
+        let bind_path = sock_path.clone();
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            std::os::unix::net::UnixListener::bind(&bind_path).expect("late bind")
+        });
+
+        let stream = connect_with_retry(&sock_path).expect("connect should ride the retry");
+        drop(stream);
+        let _listener = handle.join().expect("bind thread joined");
     }
 
     #[test]
