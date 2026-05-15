@@ -21,14 +21,45 @@ pub(crate) async fn cmd_start(config_path: &Option<PathBuf>, bind: Option<String
 
     let web_action = WebAction::Start { bind };
 
+    let ipc_socket = load_config_with_agents(config_path)
+        .ok()
+        .map(|(c, _)| c.data_dir().join("rm.sock"));
+
     tokio::select! {
         result = super::daemon::cmd_daemon(config_path, DaemonAction::Start) => result,
         result = async {
-            // Brief delay for daemon to bind the IPC socket before
-            // the web server starts accepting requests.
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            // Wait for the daemon to bind rm.sock before the web server
+            // starts accepting requests. The web server's internal IPC
+            // dispatch (e.g. /api/mcp -> state.ipc.request) calls into
+            // rm.sock — serving HTTP before that bind opens a window where
+            // every MCP call surfaces "No such file or directory (os error
+            // 2)". A blind 500ms sleep used to live here; on a contended
+            // host (post-deploy with neighbour cargo builds, embed worker
+            // init) the daemon takes longer than 500ms to reach
+            // `spawn_ipc_listener`. Quest 67-152.
+            wait_for_ipc_socket(ipc_socket.as_deref(), Duration::from_secs(30)).await;
             super::web::cmd_web(config_path, web_action).await
         } => result,
+    }
+}
+
+/// Block until the daemon's IPC socket is dialable, or until `timeout`
+/// elapses. Returns silently on either outcome — the caller proceeds either
+/// way; the per-request retry inside `IpcClient::connect_with_retry` is the
+/// last line of defence if this gate gives up.
+async fn wait_for_ipc_socket(sock: Option<&Path>, timeout: Duration) {
+    let Some(sock) = sock else {
+        // No config / no resolvable data_dir: fall back to the legacy
+        // 500ms hint so we still leave the daemon a head start.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        return;
+    };
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if ipc_socket_responsive(sock).await {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
 

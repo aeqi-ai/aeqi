@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::UnixStream;
 
 /// Client for the AEQI daemon's Unix socket IPC.
 /// Protocol: one JSON line in → one JSON line out (or multiple for streaming).
@@ -51,21 +53,7 @@ impl IpcClient {
     }
 
     async fn request_inner(&self, request: &serde_json::Value) -> Result<serde_json::Value> {
-        if !self.socket_path.exists() {
-            anyhow::bail!(
-                "IPC socket not found: {}. Is the daemon running?",
-                self.socket_path.display()
-            );
-        }
-
-        let stream = tokio::net::UnixStream::connect(&self.socket_path)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to connect to IPC socket: {}",
-                    self.socket_path.display()
-                )
-            })?;
+        let stream = connect_with_retry(&self.socket_path).await?;
 
         let (reader, mut writer) = stream.into_split();
         let mut req_bytes = serde_json::to_vec(request)?;
@@ -91,21 +79,7 @@ impl IpcClient {
     where
         F: FnMut(serde_json::Value) -> bool,
     {
-        if !self.socket_path.exists() {
-            anyhow::bail!(
-                "IPC socket not found: {}. Is the daemon running?",
-                self.socket_path.display()
-            );
-        }
-
-        let stream = tokio::net::UnixStream::connect(&self.socket_path)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to connect to IPC socket: {}",
-                    self.socket_path.display()
-                )
-            })?;
+        let stream = connect_with_retry(&self.socket_path).await?;
 
         let (reader, mut writer) = stream.into_split();
         let mut req_bytes = serde_json::to_vec(request)?;
@@ -169,5 +143,47 @@ impl IpcClient {
         let mut req = params;
         req["cmd"] = serde_json::Value::String(cmd.to_string());
         self.request_stream(&req, on_event).await
+    }
+}
+
+/// Connect to the runtime IPC socket with a bounded retry on transient
+/// `NotFound` (ENOENT) and `ConnectionRefused`.
+///
+/// The host runtime binds `rm.sock` as a side-effect of `spawn_ipc_listener`
+/// in `aeqi-orchestrator/src/daemon.rs`, which runs after config load and
+/// SQLite store setup. The web server in the same process can begin
+/// accepting `/api/mcp` requests up to a few seconds before that bind
+/// completes — every internal IPC dispatch in that window used to surface
+/// "No such file or directory (os error 2)" to MCP callers.
+///
+/// Mirrors the CLI-side helper in `aeqi-cli/src/cmd/mcp.rs`. ~5 attempts
+/// across a 2s budget — long enough to ride through the cutover window,
+/// short enough to leave 8s for the actual request inside the per-call 10s
+/// timeout enforced by `IpcClient::request_with_timeout`. The 30s
+/// `wait_for_ipc_socket` gate in `aeqi-cli/src/cmd/start.rs` is the primary
+/// guard at process startup; this retry catches the rarer steady-state
+/// flap (daemon SIGKILL/restart while the web server stays up). Quest 67-152.
+async fn connect_with_retry(sock_path: &Path) -> Result<UnixStream> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut attempt = 0u32;
+    loop {
+        match UnixStream::connect(sock_path).await {
+            Ok(stream) => return Ok(stream),
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+                ) && Instant::now() < deadline =>
+            {
+                let backoff = Duration::from_millis(100 + u64::from(attempt) * 100);
+                tokio::time::sleep(backoff).await;
+                attempt += 1;
+            }
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!("failed to connect to IPC socket: {}", sock_path.display())
+                });
+            }
+        }
     }
 }
