@@ -107,6 +107,19 @@ impl aeqi_core::traits::Tool for ShellTool {
         // Validate command for safety
         self.validate_command(command)?;
 
+        // Tier-aware denylist scan — defense-in-depth for host-tier
+        // runtimes that lack the bwrap mount that sandbox-tier carries.
+        // Sandbox-tier short-circuits inside the scanner. See
+        // `crate::file_safety` and idea
+        // `architecture/aeqi-sandbox-audit-2026-05-15` for the audit
+        // that motivated this gate.
+        let tier = crate::file_safety::current_tier();
+        if let Some(needle) = crate::file_safety::scan_command_for_denied_paths(tier, command) {
+            return Err(anyhow::anyhow!(
+                "shell command refers to a protected path ({needle}); refused on tier={tier}"
+            ));
+        }
+
         let workdir = args
             .get("workdir")
             .and_then(|v| v.as_str())

@@ -1,6 +1,7 @@
 pub mod edit;
 pub mod execute_plan;
 pub mod file;
+pub mod file_safety;
 pub mod git;
 pub mod glob;
 pub mod grep;
