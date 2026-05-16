@@ -1018,6 +1018,18 @@ pub async fn handle_close_quest(
         .await
     {
         Ok(quest) => {
+            // Mirror to the linked GitHub issue (quest 67-218.1). Best-effort
+            // — the local close is already durable; a failed mirror logs warn
+            // and returns to here without touching the response shape.
+            let state_reason = if matches!(quest.status, aeqi_quests::QuestStatus::Cancelled) {
+                "not_planned"
+            } else {
+                "completed"
+            };
+            let comment = format!("Closed via AEQI quest {quest_id}: {reason}");
+            crate::tools::quests::mirror_quest_close_to_github(&quest, &comment, state_reason)
+                .await;
+
             // Fire `session:quest_end` through the daemon-level pattern
             // dispatcher so the seeded reflect-after-quest chain
             // (session.spawn → ideas.store_many) runs. Without this, every

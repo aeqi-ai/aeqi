@@ -571,3 +571,132 @@ pub fn all_tools() -> Vec<std::sync::Arc<dyn Tool>> {
         std::sync::Arc::new(IssuesCloseTool),
     ]
 }
+
+// ------------------------------------------------------------------------
+// quest-close mirror — used by the orchestrator's quests tool (67-218.1).
+// ------------------------------------------------------------------------
+
+/// Decompose a canonical GitHub issue URL into `(owner, repo, number)`.
+///
+/// Accepts exactly `https://github.com/<owner>/<repo>/issues/<n>`. Returns
+/// `Err` for any other shape — PR URLs, comment anchors, GitHub Enterprise
+/// hosts, etc. Used both as a validator (the orchestrator's quest tool
+/// checks shape at attach time) and as a parser (the close mirror needs
+/// the parts).
+pub fn parse_issue_url(url: &str) -> Result<(String, String, u64), String> {
+    let rest = url
+        .strip_prefix("https://github.com/")
+        .ok_or_else(|| format!("not a github.com issue URL: {url}"))?;
+    let parts: Vec<&str> = rest.split('/').collect();
+    if parts.len() != 4 || parts[2] != "issues" || parts[0].is_empty() || parts[1].is_empty() {
+        return Err(format!(
+            "URL must match https://github.com/<owner>/<repo>/issues/<n>, got: {url}"
+        ));
+    }
+    let number = parts[3]
+        .parse::<u64>()
+        .map_err(|_| format!("issue number is not an integer: {}", parts[3]))?;
+    Ok((parts[0].to_string(), parts[1].to_string(), number))
+}
+
+/// Outcome of a `mirror_quest_close` call. The orchestrator treats every
+/// variant as non-fatal — the quest close has already succeeded by the time
+/// this runs, and a failed mirror should never prevent the close.
+#[derive(Debug)]
+pub enum MirrorOutcome {
+    /// Comment posted and issue state set to closed.
+    Closed,
+    /// Comment posted but the close PATCH failed; the mirror is partial.
+    /// The orchestrator logs a warn but still considers the quest closed.
+    CommentedButCloseFailed(String),
+    /// Comment-post failed; nothing was done on the GitHub side.
+    CommentFailed(String),
+}
+
+/// Mirror a quest close to the linked GitHub issue: post a comment, then
+/// PATCH the issue state to `closed`. Returns a [`MirrorOutcome`] describing
+/// what landed.
+///
+/// `state_reason` accepts `"completed"` (default for quest done) or
+/// `"not_planned"` (canceled quests). The orchestrator picks the right value
+/// based on `QuestStatus` at the call site.
+pub async fn mirror_quest_close(
+    client: &GithubApiClient<'_>,
+    issue_url: &str,
+    comment_body: &str,
+    state_reason: &str,
+) -> Result<MirrorOutcome, String> {
+    let (owner, repo, number) = parse_issue_url(issue_url)?;
+
+    // 1. Post the comment first. Even if the close PATCH fails afterward,
+    //    the audit trail on the GH issue is preserved.
+    let comment_url = format!(
+        "{}/repos/{}/{}/issues/{}/comments",
+        client.base().trim_end_matches('/'),
+        urlencoding::encode(&owner),
+        urlencoding::encode(&repo),
+        number,
+    );
+    if let Err(e) = client
+        .post_json::<Value>(comment_url, json!({ "body": comment_body }))
+        .await
+    {
+        return Ok(MirrorOutcome::CommentFailed(format!("{e:?}")));
+    }
+
+    // 2. PATCH the issue state. `state_reason` is documented but only
+    //    honoured when `state` is `closed`.
+    let issue_url_api = format!(
+        "{}/repos/{}/{}/issues/{}",
+        client.base().trim_end_matches('/'),
+        urlencoding::encode(&owner),
+        urlencoding::encode(&repo),
+        number,
+    );
+    if let Err(e) = client
+        .patch_json::<Value>(
+            issue_url_api,
+            json!({ "state": "closed", "state_reason": state_reason }),
+        )
+        .await
+    {
+        return Ok(MirrorOutcome::CommentedButCloseFailed(format!("{e:?}")));
+    }
+
+    Ok(MirrorOutcome::Closed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_issue_url_accepts_canonical() {
+        let (owner, repo, n) =
+            parse_issue_url("https://github.com/aeqi-ai/aeqi/issues/218").unwrap();
+        assert_eq!(owner, "aeqi-ai");
+        assert_eq!(repo, "aeqi");
+        assert_eq!(n, 218);
+    }
+
+    #[test]
+    fn parse_issue_url_rejects_pull_request() {
+        assert!(parse_issue_url("https://github.com/o/r/pull/1").is_err());
+    }
+
+    #[test]
+    fn parse_issue_url_rejects_trailing_segments() {
+        assert!(parse_issue_url("https://github.com/o/r/issues/1/comments").is_err());
+    }
+
+    #[test]
+    fn parse_issue_url_rejects_non_github_host() {
+        assert!(parse_issue_url("https://gitlab.com/o/r/issues/1").is_err());
+        assert!(parse_issue_url("http://github.com/o/r/issues/1").is_err());
+    }
+
+    #[test]
+    fn parse_issue_url_rejects_non_numeric() {
+        assert!(parse_issue_url("https://github.com/o/r/issues/abc").is_err());
+    }
+}

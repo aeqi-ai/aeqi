@@ -14,12 +14,111 @@ use crate::quest_assignee::{
 ///
 /// Stored in `quest.metadata.github_issue_url`. Returns `None` if absent or
 /// non-string. Centralised so the read shape stays consistent — the close
-/// mirror path (filed as 67-218.1) will call this same helper.
+/// mirror path (67-218.1) calls this same helper.
 pub(crate) fn quest_github_issue_url(quest: &aeqi_quests::Quest) -> Option<&str> {
     quest
         .metadata
         .get("github_issue_url")
         .and_then(|v| v.as_str())
+}
+
+/// Env var holding the platform-wide GitHub token used to mirror quest
+/// close/cancel back onto the linked GitHub issue (quest 67-218.1). Unset =
+/// no mirror, the close is purely local. The token needs `Issues: write` on
+/// the target repos (a fine-grained PAT or installation token both work).
+pub(crate) const GITHUB_MIRROR_TOKEN_ENV: &str = "AEQI_GITHUB_MIRROR_TOKEN";
+
+/// Mirror a quest close/cancel onto the linked GitHub issue, if any. Reads
+/// the URL from `quest.metadata.github_issue_url` and the auth token from
+/// `AEQI_GITHUB_MIRROR_TOKEN`. Best-effort: every failure is logged at WARN
+/// and swallowed — the quest close has already succeeded by the time this
+/// runs and a failed mirror must never propagate as a close error.
+///
+/// `state_reason` is `"completed"` for done quests and `"not_planned"` for
+/// cancellations; GitHub records this on the issue.
+#[cfg(feature = "github")]
+pub(crate) async fn mirror_quest_close_to_github(
+    quest: &aeqi_quests::Quest,
+    comment_body: &str,
+    state_reason: &str,
+) {
+    let Some(issue_url) = quest_github_issue_url(quest) else {
+        return;
+    };
+    let token = match std::env::var(GITHUB_MIRROR_TOKEN_ENV) {
+        Ok(t) if !t.is_empty() => t,
+        _ => {
+            tracing::debug!(
+                quest_id = %quest.id,
+                issue_url,
+                env = GITHUB_MIRROR_TOKEN_ENV,
+                "github mirror skipped: no token configured"
+            );
+            return;
+        }
+    };
+
+    let cred = aeqi_core::credentials::UsableCredential {
+        id: "github-mirror-env".to_string(),
+        provider: "github".to_string(),
+        name: "platform-mirror-token".to_string(),
+        headers: vec![("Authorization".to_string(), format!("Bearer {token}"))],
+        bearer: Some(token),
+        raw: Vec::new(),
+        metadata: serde_json::Value::Null,
+    };
+    let client = aeqi_pack_github::api::GithubApiClient::new(&cred);
+    match aeqi_pack_github::issues::mirror_quest_close(
+        &client,
+        issue_url,
+        comment_body,
+        state_reason,
+    )
+    .await
+    {
+        Ok(aeqi_pack_github::issues::MirrorOutcome::Closed) => {
+            tracing::info!(
+                quest_id = %quest.id,
+                issue_url,
+                state_reason,
+                "github mirror: issue closed with comment"
+            );
+        }
+        Ok(aeqi_pack_github::issues::MirrorOutcome::CommentedButCloseFailed(e)) => {
+            tracing::warn!(
+                quest_id = %quest.id,
+                issue_url,
+                error = %e,
+                "github mirror: comment posted but close PATCH failed (partial mirror)"
+            );
+        }
+        Ok(aeqi_pack_github::issues::MirrorOutcome::CommentFailed(e)) => {
+            tracing::warn!(
+                quest_id = %quest.id,
+                issue_url,
+                error = %e,
+                "github mirror: comment post failed (no GH side-effects)"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                quest_id = %quest.id,
+                issue_url,
+                error = %e,
+                "github mirror: URL parse failed"
+            );
+        }
+    }
+}
+
+/// Stub when the `github` feature is disabled — keeps the call sites in
+/// `action_close` / `action_cancel` / IPC paths feature-agnostic.
+#[cfg(not(feature = "github"))]
+pub(crate) async fn mirror_quest_close_to_github(
+    _quest: &aeqi_quests::Quest,
+    _comment_body: &str,
+    _state_reason: &str,
+) {
 }
 
 /// Validate a `https://github.com/<owner>/<repo>/issues/<n>` URL shape.
@@ -532,6 +631,11 @@ impl QuestsTool {
             .await
         {
             Ok(quest) => {
+                // Mirror to the linked GitHub issue (quest 67-218.1) — best
+                // effort, logs on failure, never blocks the close.
+                let comment = format!("Closed via AEQI quest {quest_id}: {result_owned}");
+                mirror_quest_close_to_github(&quest, &comment, "completed").await;
+
                 // Fire `session:quest_end` through the daemon-level pattern
                 // dispatcher so the seeded reflect-after-quest chain
                 // (`session.spawn(meta:reflector-template)` → `ideas.store_many`)
@@ -694,7 +798,12 @@ impl QuestsTool {
             })
             .await
         {
-            Ok(_) => Ok(ToolResult::success(format!("Quest {quest_id} cancelled."))),
+            Ok(quest) => {
+                // Mirror to GitHub with state_reason=not_planned (67-218.1).
+                let comment = format!("Cancelled via AEQI quest {quest_id}: {reason_owned}");
+                mirror_quest_close_to_github(&quest, &comment, "not_planned").await;
+                Ok(ToolResult::success(format!("Quest {quest_id} cancelled.")))
+            }
             Err(e) => Ok(ToolResult::error(format!(
                 "Failed to cancel quest {quest_id}: {e}"
             ))),
