@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { Banner, Button, Card, EmptyState, Input, Spinner, Textarea } from "@/components/ui";
 import { BlueprintTreePreview } from "@/components/blueprints/BlueprintTreePreview";
+import { LaunchingReveal } from "@/components/LaunchingReveal";
 import "@/styles/blueprints-store.css";
 import "@/styles/blueprint-launch-picker.css";
 
@@ -359,68 +360,13 @@ export default function CompanySetupPage() {
     );
   }
 
-  if (provisioning) {
-    const launchState =
-      activeLaunchEntity?.launch_state ?? activeLaunchEntity?.placement_status ?? "";
-    const launchLabel =
-      launchState === "checkout_pending"
-        ? "Waiting for checkout"
-        : launchState === "checkout_completed"
-          ? "Payment confirmed"
-          : launchState === "trust_provisioning"
-            ? "Provisioning trust"
-            : launchState === "runtime_provisioning"
-              ? "Installing runtime"
-              : activeLaunchEntity?.trust_address
-                ? "Trust ready"
-                : launchState === "complete" || launchState === "ready"
-                  ? "Organization ready"
-                  : "Provisioning";
-
-    const launchSteps = [
-      { key: "checkout_completed", label: "Payment received" },
-      { key: "trust_provisioning", label: "Trust provisioning" },
-      { key: "runtime_provisioning", label: "Runtime install" },
-      { key: "complete", label: "Organization ready" },
-    ];
-
+  if (provisioning && launchId) {
     return (
       <div className="launch-page launch-page--provisioning">
-        <Card variant="default" padding="lg" className="launch-provisioning-card">
-          <p className="start-section-kicker">Provisioning</p>
-          <h1 className="page-title">Your organization is being created.</h1>
-          <p className="start-sub">{launchLabel}. Refreshing the launch state.</p>
-          <div className="launch-provisioning-status">
-            <Spinner size="sm" /> Waiting for the organization to appear…
-          </div>
-          <ol className="launch-provisioning-steps">
-            {launchSteps.map((step) => {
-              const active =
-                launchState === step.key ||
-                (step.key === "checkout_completed" && launchState === "checkout_pending");
-              const done =
-                Boolean(activeLaunchEntity?.trust_address) ||
-                launchState === "complete" ||
-                launchState === "ready" ||
-                (step.key === "checkout_completed" && launchState !== "checkout_pending") ||
-                (step.key === "trust_provisioning" &&
-                  ["runtime_provisioning", "complete", "ready"].includes(launchState)) ||
-                (step.key === "runtime_provisioning" &&
-                  ["complete", "ready"].includes(launchState));
-              return (
-                <li
-                  key={step.key}
-                  className={`launch-provisioning-step ${active ? "is-active" : ""} ${
-                    done ? "is-done" : ""
-                  }`}
-                >
-                  <span className="launch-provisioning-step-dot" aria-hidden="true" />
-                  <span>{step.label}</span>
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
+        <LaunchingReveal
+          entityId={launchId}
+          fallbackDisplayName={activeLaunchEntity?.name || organizationName.trim() || undefined}
+        />
       </div>
     );
   }

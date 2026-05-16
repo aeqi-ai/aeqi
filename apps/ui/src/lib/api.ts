@@ -659,6 +659,25 @@ export const api = {
       body: JSON.stringify({ display_name }),
     }),
 
+  getLaunchStatus: (entityId: string) =>
+    request<{
+      ok: boolean;
+      entity_id: string;
+      display_name: string;
+      placement_status: string;
+      trust_status: string;
+      trust_address: string | null;
+      trust_error: string | null;
+      runtime_error: string | null;
+      org_lifecycle: string;
+      milestones: {
+        creating_trust: { reached: boolean; at: string | null };
+        signing_on_solana: { reached: boolean; at: string | null };
+        loading_roles: { reached: boolean; at: string | null };
+        spawning_agent: { reached: boolean; at: string | null };
+      };
+    }>(`/start/launch/status/${encodeURIComponent(entityId)}`),
+
   spawnAgent: (data: {
     name: string;
     template?: string;
