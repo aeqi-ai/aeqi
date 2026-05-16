@@ -1,5 +1,6 @@
 export const ideaKeys = {
   all: ["ideas"] as const,
+  visible: ["ideas", "visible"] as const,
   byAgent: (agentId: string) => ["ideas", "agent", agentId] as const,
   graph: (agentId?: string) => ["ideas", "graph", agentId ?? "global"] as const,
 };

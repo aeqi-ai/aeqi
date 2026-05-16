@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 import { useParams, useSearchParams } from "react-router-dom";
 import { getIdeaGraph } from "@/api/ideas";
 import { useNav } from "@/hooks/useNav";
-import { useAgentIdeas } from "@/queries/ideas";
+import { useAgentIdeas, useVisibleIdeas } from "@/queries/ideas";
 import type { Idea } from "@/lib/types";
 import type { GraphNode, GraphEdge } from "./IdeaGraph";
 import IdeasListView from "./ideas/IdeasListView";
@@ -43,7 +43,13 @@ const viewFallback = (
  * between list and graph keeps the frame; the graph view applies the same
  * filters to its nodes so the two views stay coherent.
  */
-export default function AgentIdeasTab({ agentId }: { agentId: string }) {
+export default function AgentIdeasTab({
+  agentId,
+  scope = "agent",
+}: {
+  agentId: string;
+  scope?: "agent" | "entity";
+}) {
   const { goEntity, entityId } = useNav();
   const { itemId } = useParams<{ itemId?: string }>();
   const selectedId = itemId || null;
@@ -114,7 +120,10 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
     [patchParams],
   );
 
-  const { data: ideas = NO_IDEAS, isLoading: ideasLoading } = useAgentIdeas(agentId);
+  const agentIdeas = useAgentIdeas(agentId, scope === "agent");
+  const visibleIdeas = useVisibleIdeas(scope === "entity");
+  const ideasQuery = scope === "entity" ? visibleIdeas : agentIdeas;
+  const { data: ideas = NO_IDEAS, isLoading: ideasLoading } = ideasQuery;
 
   // Apply scope + search + tag to the agent's ideas. The graph view
   // filters its own nodes against this same universe so the two views
@@ -224,7 +233,7 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
   useEffect(() => {
     if (view !== "graph") return;
     setGraphLoading(true);
-    getIdeaGraph({ agent_id: agentId, limit: 200 })
+    getIdeaGraph({ agent_id: scope === "entity" ? undefined : agentId, limit: 200 })
       .then((d) => {
         setGraphData({
           nodes: ((d.nodes || []) as GraphNode[]).map((n) => ({
@@ -236,7 +245,7 @@ export default function AgentIdeasTab({ agentId }: { agentId: string }) {
       })
       .catch(() => setGraphData({ nodes: [], edges: [] }))
       .finally(() => setGraphLoading(false));
-  }, [view, agentId]);
+  }, [view, agentId, scope]);
 
   // Cross-view filter projection — the list already honors scope + tag +
   // search against the full `ideas` store; the graph view receives the

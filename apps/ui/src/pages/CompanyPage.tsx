@@ -13,10 +13,9 @@ const OwnershipPage = lazy(() => import("@/pages/OwnershipPage"));
 const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
 const GovernancePage = lazy(() => import("@/pages/GovernancePage"));
 // Entity-scope primitive tabs. `EntityAgentsTab` is entity-typed (takes
-// entityId, filters the directory). The remaining three render the
-// agent-scoped tab against the entity's ROOT agent. Without these explicit branches,
-// the fallthrough to `<AgentPage tab=...>` rendered the root agent's chat
-// surface (AgentPage ignores `tab`) — see "Dispatch hole fix 2026-05-09".
+// entityId, filters the directory). Events still render against the default
+// agent, while Quests and Ideas ask their shared components for entity-wide
+// data so sibling-agent work remains visible on `/trust/<addr>/...`.
 const EntityAgentsTab = lazy(() => import("@/components/EntityAgentsTab"));
 const EntityRolesTab = lazy(() => import("@/components/EntityRolesTab"));
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
@@ -46,8 +45,8 @@ interface CompanyPageProps {
  *   /c/:entityId/governance    → GovernancePage
  *   /c/:entityId/agents        → EntityAgentsTab (LIST)
  *   /c/:entityId/events        → AgentEventsTab(defaultAgent)
- *   /c/:entityId/quests        → AgentQuestsTab(defaultAgent)
- *   /c/:entityId/ideas         → AgentIdeasTab(defaultAgent)
+ *   /c/:entityId/quests        → AgentQuestsTab(entity scope)
+ *   /c/:entityId/ideas         → AgentIdeasTab(entity scope)
  *
  * The former `/c/:entityId/settings` tab was retired — workspace label,
  * tagline, public toggle, and plan link now live in the EntityHeroStrip
@@ -169,14 +168,14 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "quests") {
     return (
       <Suspense>
-        <AgentQuestsTab agentId={agentId} />
+        <AgentQuestsTab agentId={agentId} scope="entity" />
       </Suspense>
     );
   }
   if (tab === "ideas") {
     return (
       <Suspense>
-        <AgentIdeasTab agentId={agentId} />
+        <AgentIdeasTab agentId={agentId} scope="entity" />
       </Suspense>
     );
   }

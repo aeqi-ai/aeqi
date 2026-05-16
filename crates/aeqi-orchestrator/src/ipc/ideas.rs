@@ -1921,7 +1921,7 @@ pub async fn handle_idea_graph(
 
     // Ancestry-aware scoping: self + descendants + globals (agent_id IS NULL)
     // is handled inside list_ideas_visible_to on AgentRegistry. Without an
-    // agent_id we return globals only.
+    // agent_id we mirror `list_ideas` and return the full visible corpus.
     let ideas: Vec<aeqi_core::traits::Idea> = if let Some(aid) = agent_id {
         match ctx.agent_registry.list_ideas_visible_to(aid).await {
             Ok(mut items) => {
@@ -1931,10 +1931,7 @@ pub async fn handle_idea_graph(
             Err(_) => Vec::new(),
         }
     } else {
-        idea_store
-            .list_global_ideas(limit)
-            .await
-            .unwrap_or_default()
+        idea_store.search_by_prefix("", limit).unwrap_or_default()
     };
 
     let nodes: Vec<serde_json::Value> = ideas.iter().map(idea_to_graph_node).collect();

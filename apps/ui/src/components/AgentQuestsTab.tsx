@@ -12,7 +12,13 @@ import type { QuestSort } from "./quests/QuestsSortPopover";
 import QuestBoard from "./quests/QuestBoard";
 import { matchesQuestFilter, parseQuestSort, type QuestFilter } from "./quests/agentQuestsHelpers";
 
-export default function AgentQuestsTab({ agentId }: { agentId: string }) {
+export default function AgentQuestsTab({
+  agentId,
+  scope = "agent",
+}: {
+  agentId: string;
+  scope?: "agent" | "entity";
+}) {
   const { goEntity, entityId } = useNav();
   const { itemId } = useParams<{ itemId?: string }>();
   // `/<agentId>/quests/new` is the dedicated compose surface; any other
@@ -150,8 +156,13 @@ export default function AgentQuestsTab({ agentId }: { agentId: string }) {
         </div>
       );
     }
-    // agent.id match + cross-agent quests surfaced by the API.
-    const visibleQuests = quests.filter((q) => q.agent_id === agent?.id || q.agent_id == null);
+    // Entity tabs are already scoped by the X-Entity header. Do not
+    // re-narrow them to the default agent, or quests owned by sibling
+    // agents disappear from /trust/<addr>/quests.
+    const visibleQuests =
+      scope === "entity"
+        ? quests
+        : quests.filter((q) => q.agent_id === agent?.id || q.agent_id == null);
     const filteredQuests =
       questFilter === "all"
         ? visibleQuests

@@ -132,6 +132,49 @@ describe("AgentQuestsTab smoke", () => {
     expect(trigger).not.toBeNull();
   });
 
+  it("entity scope keeps sibling-agent quests visible", () => {
+    useDaemonStore.setState({
+      quests: [
+        {
+          id: "67-root",
+          idea_id: "idea-root",
+          status: "todo",
+          priority: "normal",
+          agent_id: "root-1",
+          scope: "self",
+          created_at: "2026-05-16T00:00:00Z",
+          idea: { id: "idea-root", name: "Root quest", content: "", tags: [] },
+        },
+        {
+          id: "67-child",
+          idea_id: "idea-child",
+          status: "todo",
+          priority: "normal",
+          agent_id: "child-1",
+          scope: "self",
+          created_at: "2026-05-16T00:00:00Z",
+          idea: { id: "idea-child", name: "Child quest", content: "", tags: [] },
+        },
+      ] as never,
+    });
+
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={["/c/root-1/quests"]}>
+          <Routes>
+            <Route
+              path="c/:entityId/:tab/*"
+              element={<AgentQuestsTab agentId="root-1" scope="entity" />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    expect(screen.getByText("Root quest")).toBeInTheDocument();
+    expect(screen.getByText("Child quest")).toBeInTheDocument();
+  });
+
   it("does not log a React error during render", () => {
     const errors = captureRenderErrors(
       <StrictMode>
