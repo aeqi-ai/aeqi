@@ -388,30 +388,54 @@ Your entire response must be plain text: an <analysis> block followed by a <summ
 You are summarizing an autonomous agent's execution context. This summary \
 replaces the compacted messages — the agent will use it to continue working. \
 Anything you omit is lost forever.\n\n\
+## How the resumed agent reads this summary\n\n\
+The agent that reads your summary will treat it as **reference-only memory**, \
+not as a fresh set of instructions. Your `## All User Messages` section is a \
+**record of what the user asked in the past**, not a queue to replay. Your \
+`## Resolved Questions` section is a record of decisions already made — those \
+questions must NOT be re-asked. The agent will act on `## Active Task`, \
+`## Next Step`, and `## Pending User Asks` only; everything else is context.\n\n\
+This summary IS the **memory authority** for the compacted past. If a detail \
+disappears from your summary, it disappears from the agent's memory of those \
+messages — there is no second source. Write defensively: when in doubt, \
+preserve.\n\n\
 First write an <analysis> block as a drafting scratchpad (it will be stripped), \
 then a <summary> block with ALL of these sections:\n\n\
-1. **Primary Request and Intent** — What was the user's original request? \
-What are the acceptance criteria? What is the end goal?\n\
-2. **Key Technical Concepts** — Domain-specific terms, patterns, and \
+1. **Active Task** — One sentence: the single task the resumed agent is in \
+the middle of right now. This is the resume target. If multiple tasks are \
+in flight, name the one currently being worked on; the rest go to Pending \
+Tasks.\n\
+2. **Primary Request and Intent** — What was the user's original request? \
+What are the acceptance criteria? What is the end goal? (Reference only — \
+not an instruction to replay.)\n\
+3. **Key Technical Concepts** — Domain-specific terms, patterns, and \
 constraints that affect the work. Include library versions, API contracts, \
 architectural decisions.\n\
-3. **Files and Code Sections** — Every file read, edited, or created. \
+4. **Files and Code Sections** — Every file read, edited, or created. \
 Include filenames with paths, what changed, and **full code snippets** for \
 any code that is currently being worked on or was recently modified.\n\
-4. **Errors and Fixes** — Every error encountered and exactly how it was \
+5. **Errors and Fixes** — Every error encountered and exactly how it was \
 resolved. Include error messages verbatim. This prevents re-encountering \
 the same issues.\n\
-5. **Problem Solving** — The reasoning chain: what was tried, what worked, \
+6. **Problem Solving** — The reasoning chain: what was tried, what worked, \
 what was rejected and why. Include rejected approaches to prevent retry.\n\
-6. **All User Messages** — Reproduce every user instruction, clarification, \
+7. **All User Messages** — Reproduce every user instruction, clarification, \
 or correction. Do not paraphrase — use the user's exact words for requests \
-and corrections.\n\
-7. **Pending Tasks** — What remains to be done, in dependency order. \
+and corrections. (Reference only — past record, not a fresh queue.)\n\
+8. **Resolved Questions** — Questions the user has already answered or \
+decisions that have already been made. The resumed agent MUST NOT re-ask \
+these; include the resolution next to each so future-self doesn't relitigate. \
+Empty section if none.\n\
+9. **Pending User Asks** — Questions awaiting the user's answer, in the \
+order they were asked. Format each as a single line: `<topic> — <question>`. \
+This is the ONLY place the resumed agent should look for things to ask the \
+user. Empty section if none.\n\
+10. **Pending Tasks** — What remains to be done, in dependency order. \
 Include any task IDs, branch names, or tracking references.\n\
-8. **Current Work** — What the agent was doing at the moment of compaction. \
+11. **Current Work** — What the agent was doing at the moment of compaction. \
 Be precise: filename, function name, line range, what operation was in \
 progress. Include enough detail to resume without re-reading.\n\
-9. **Next Step** — The single immediate next action the agent should take. \
+12. **Next Step** — The single immediate next action the agent should take. \
 Include direct quotes from tool output or code that show where work left off.\n\n\
 Be precise. Include filenames, function signatures, error messages, and \
 code snippets where they affect the next action. Vague summaries cause \
@@ -2413,5 +2437,59 @@ mod tests {
 
         assert_eq!(fired, vec!["test:pattern"]);
         assert_eq!(dispatched.lock().unwrap().as_slice(), ["test:pattern"]);
+    }
+
+    // ── Default compaction prompt — anti-drift pins (quest 67-180.2) ──
+
+    #[test]
+    fn default_compact_prompt_preserves_placeholders() {
+        // session_manager's idea-store lookup format()s these in; missing
+        // either placeholder produces a runtime template with the raw
+        // brace string verbatim in the LLM prompt — silent failure.
+        assert!(DEFAULT_COMPACT_PROMPT.contains("{custom_instructions}"));
+        assert!(DEFAULT_COMPACT_PROMPT.contains("{transcript}"));
+    }
+
+    #[test]
+    fn default_compact_prompt_carries_reference_only_framing() {
+        // Quest 67-180.2 — without these phrases, resumed agents replay
+        // resolved user requests and re-ask answered questions. Test pins
+        // the framing so an edit that drops them fails CI rather than
+        // silently regressing compaction behaviour.
+        assert!(
+            DEFAULT_COMPACT_PROMPT.contains("reference-only memory"),
+            "missing reference-only framing"
+        );
+        assert!(
+            DEFAULT_COMPACT_PROMPT.contains("memory authority"),
+            "missing memory-authority framing"
+        );
+    }
+
+    #[test]
+    fn default_compact_prompt_includes_required_sections() {
+        // Anti-drift pin — 67-180.2 added Active Task / Resolved Questions
+        // / Pending User Asks alongside the existing sections. A summary
+        // missing any of these breaks the resume contract.
+        let required = [
+            "Active Task",
+            "Primary Request and Intent",
+            "Key Technical Concepts",
+            "Files and Code Sections",
+            "Errors and Fixes",
+            "Problem Solving",
+            "All User Messages",
+            "Resolved Questions",
+            "Pending User Asks",
+            "Pending Tasks",
+            "Current Work",
+            "Next Step",
+        ];
+        for section in required {
+            assert!(
+                DEFAULT_COMPACT_PROMPT.contains(section),
+                "missing required section heading: {section}"
+            );
+        }
     }
 }

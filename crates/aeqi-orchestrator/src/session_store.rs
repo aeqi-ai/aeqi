@@ -974,7 +974,18 @@ impl SessionStore {
         let mut ctx = String::from("## Conversation History\n\n");
 
         if let Some(ref s) = summary {
-            ctx.push_str(&format!("*Earlier context:* {s}\n\n"));
+            // Quest 67-180.2 — frame the prior-session summary as
+            // reference-only memory, not as a queue to replay. Matches the
+            // DEFAULT_COMPACT_PROMPT framing: the resumed agent reads
+            // earlier messages as a record of the past, not as fresh
+            // instructions. Without this guardrail, agents resuming with a
+            // non-empty summary tend to re-ask resolved questions and
+            // replay user requests that have already been answered.
+            ctx.push_str(
+                "*Earlier context (reference only — record of the past, not a fresh queue):* ",
+            );
+            ctx.push_str(s);
+            ctx.push_str("\n\n");
         }
 
         for msg in &messages {
