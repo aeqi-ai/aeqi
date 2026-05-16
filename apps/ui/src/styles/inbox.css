@@ -208,6 +208,34 @@
   flex-shrink: 0;
 }
 
+.inbox-awaiting-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  background: color-mix(in srgb, var(--color-ink-primary) 5%, var(--color-card));
+  box-shadow: inset 0 -1px 0 var(--border);
+  flex-shrink: 0;
+}
+
+.inbox-awaiting-strip-label {
+  flex-shrink: 0;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  color: var(--color-ink-text);
+}
+
+.inbox-awaiting-strip-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  color: var(--color-ink-muted);
+}
+
 @media (max-width: 1024px) {
   .session-detail-header {
     flex-direction: column;

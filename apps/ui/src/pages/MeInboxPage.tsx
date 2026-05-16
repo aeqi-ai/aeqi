@@ -512,6 +512,12 @@ export default function MeInboxPage() {
           stepOffset={wsChat.liveStepOffset}
         />
       ) : undefined;
+    const preThreadSlot = selectedRow.awaiting ? (
+      <div className="inbox-awaiting-strip" role="status">
+        <span className="inbox-awaiting-strip-label">Awaiting reply</span>
+        {subtitle && <span className="inbox-awaiting-strip-subject">{subtitle}</span>}
+      </div>
+    ) : undefined;
 
     return (
       <SessionDetail
@@ -531,6 +537,7 @@ export default function MeInboxPage() {
         composerPlaceholder={`Message ${selectedRow.from.name}…`}
         emptyTitle={contextLoading ? "Loading context…" : "No prior messages."}
         errorMessage={sendError}
+        preThreadSlot={preThreadSlot}
         threadTrailingSlot={threadTrailingSlot}
       />
     );
