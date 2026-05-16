@@ -62,9 +62,9 @@ const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ide
 //
 // The four primitive tabs (agents/events/quests/ideas) ALSO route through
 // CompanyPage at the entity scope. Without this, `/trust/<addr>/agents`
-// falls through to AgentPage(rootAgent) — which ignores its `tab` prop and
-// renders the root agent's chat surface instead of the entity-scope LIST.
-// Dispatch hole fix: 2026-05-09. The drilled-agent route
+// falls through to AgentPage(defaultAgent) — which ignores its `tab` prop
+// and renders the default agent's chat surface instead of the entity-scope
+// LIST. Dispatch hole fix: 2026-05-09. The drilled-agent route
 // `/trust/<addr>/agents/<aid>/...` is unaffected — that path has a
 // non-null `routeAgentId` and bypasses CompanyPage entirely upstream.
 const COMPANY_PAGE_TABS = new Set([
@@ -80,7 +80,7 @@ const COMPANY_PAGE_TABS = new Set([
   "ideas",
 ]);
 
-export function resolveCompanyRootAgent(
+export function resolveDefaultAgent(
   agents: Agent[],
   entity: Pick<Entity, "agent_id"> | null,
   effectiveRouteEntityId: string,
@@ -130,11 +130,11 @@ export default function AppLayout() {
   // route and fall back to any raw route token only if one was somehow present.
   const effectiveRouteEntityId = resolvedEntityId || routeEntityId;
 
-  // Prefer the platform placement's root-agent id from `/api/entities`.
+  // Prefer the platform placement's default-agent id from `/api/entities`.
   // Some hosted runtimes carry a runtime-local `agent.entity_id`, so the
   // older `agent.entity_id === entityId` match is only a fallback.
-  const rootAgent = useMemo(
-    () => resolveCompanyRootAgent(agents, entity, effectiveRouteEntityId),
+  const defaultAgent = useMemo(
+    () => resolveDefaultAgent(agents, entity, effectiveRouteEntityId),
     [agents, entity, effectiveRouteEntityId],
   );
 
@@ -226,7 +226,7 @@ export default function AppLayout() {
   //
   // Welcome users land on `/trust/<addr>/` immediately after auth, BEFORE
   // any aeqi-host runtime is provisioned for their company — `/api/agents`
-  // returns []. Don't gate the shell on `rootAgent`; render the entity
+  // returns []. Don't gate the shell on `defaultAgent`; render the entity
   // shell as soon as entities is settled and the entity is known. Surfaces
   // that need an agent (drilled-agent routes, sessions) handle their own
   // empty state.
@@ -245,14 +245,14 @@ export default function AppLayout() {
       return <BootLoader />;
     }
     // entity exists in the list — fall through and render the shell,
-    // even when rootAgent is null (no runtime provisioned yet).
+    // even when defaultAgent is null (no runtime provisioned yet).
   }
 
-  // The agent surface mounts on either the entity-root agent (company
+  // The agent surface mounts on either the entity's default agent (company
   // tabs: /trust/<addr>/quests, /trust/<addr>/events, …) or the drilled
   // agent (per-agent tab: /trust/<addr>/agents/<agent>/…). The active id
   // is the agent record's id — what AgentPage and the sub-tabs expect.
-  const activeAgent = drilledAgent ?? rootAgent;
+  const activeAgent = drilledAgent ?? defaultAgent;
   const activeAgentId = activeAgent?.id ?? "";
 
   // Base path for the current entity. Everything is trust-scoped now.

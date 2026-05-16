@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import AgentQuestsTab from "@/components/AgentQuestsTab";
-import AppLayout, { resolveCompanyRootAgent } from "@/components/AppLayout";
+import AppLayout, { resolveDefaultAgent } from "@/components/AppLayout";
 import LeftSidebar from "@/components/shell/LeftSidebar";
 import ComposerRow from "@/components/shell/ComposerRow";
 import BootLoader from "@/components/shell/BootLoader";
@@ -269,29 +269,29 @@ describe("shell components smoke", () => {
     expect(errors.find(isLoopError)).toBeUndefined();
   });
 
-  it("resolves the company root agent from the platform placement agent id", () => {
-    const root = resolveCompanyRootAgent(
+  it("resolves the entity's default agent from the platform placement agent id", () => {
+    const resolved = resolveDefaultAgent(
       [
         {
-          id: "agent-root",
-          name: "Root",
+          id: "agent-default",
+          name: "Default",
           status: "active",
           entity_id: "runtime-local-entity",
         },
       ],
-      { agent_id: "agent-root" },
+      { agent_id: "agent-default" },
       "platform-entity",
     );
 
-    expect(root?.id).toBe("agent-root");
+    expect(resolved?.id).toBe("agent-default");
   });
 
   it("falls back to the legacy agent entity_id match", () => {
-    const root = resolveCompanyRootAgent(
+    const resolved = resolveDefaultAgent(
       [
         {
-          id: "legacy-root",
-          name: "Root",
+          id: "legacy-default",
+          name: "Default",
           status: "active",
           entity_id: "platform-entity",
         },
@@ -300,7 +300,7 @@ describe("shell components smoke", () => {
       "platform-entity",
     );
 
-    expect(root?.id).toBe("legacy-root");
+    expect(resolved?.id).toBe("legacy-default");
   });
 });
 

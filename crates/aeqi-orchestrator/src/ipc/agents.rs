@@ -22,8 +22,11 @@ pub async fn handle_agents_registry(
     match ctx.agent_registry.list(entity_id, status).await {
         Ok(agents) => {
             let filtered_agents = if let Some(list) = allowed.as_ref() {
-                // An agent is reachable iff its entity matches a name/id in
-                // the allowed scope. Tenancy maps to entity, not parent_id.
+                // Tenancy resolves through the entity, not the agent's name.
+                // Agents are owned by entities; an agent is reachable iff its
+                // owning entity (or its own id) is in the allowed scope.
+                // Matching on `agent.name` is a legacy footgun — renaming
+                // an agent would silently strand it from /api/agents.
                 agents
                     .into_iter()
                     .filter(|a| {
@@ -31,7 +34,7 @@ pub async fn handle_agents_registry(
                             .as_deref()
                             .map(|eid| list.iter().any(|c| c == eid))
                             .unwrap_or(false)
-                            || list.iter().any(|c| c == &a.name || c == &a.id)
+                            || list.iter().any(|c| c == &a.id)
                     })
                     .collect::<Vec<_>>()
             } else {

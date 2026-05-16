@@ -1479,13 +1479,21 @@ impl Daemon {
                 "worker_events" => {
                     crate::ipc::status::handle_worker_events(&ctx, &request, &allowed_roots).await
                 }
-                "roots" => crate::ipc::roots::handle_roots(&ctx, &request, &allowed_roots).await,
-
-                "create_root" => {
-                    crate::ipc::roots::handle_create_root(&ctx, &request, &allowed_roots).await
+                "create_default_agent" => {
+                    crate::ipc::entity_agents::handle_create_default_agent(
+                        &ctx,
+                        &request,
+                        &allowed_roots,
+                    )
+                    .await
                 }
-                "update_root" => {
-                    crate::ipc::roots::handle_update_root(&ctx, &request, &allowed_roots).await
+                "update_default_agent" => {
+                    crate::ipc::entity_agents::handle_update_default_agent(
+                        &ctx,
+                        &request,
+                        &allowed_roots,
+                    )
+                    .await
                 }
 
                 "entities" => {

@@ -373,7 +373,7 @@ export interface BlueprintSeedQuest {
   priority?: string;
 }
 
-export interface RootAgentSpec {
+export interface DefaultAgentSpec {
   name: string;
   model?: string;
   color?: string;
@@ -429,7 +429,7 @@ export interface SingleBlueprint {
    *  company blueprints map to entity or venture; foundation → foundation; fund → fund. */
   template?: BlueprintTemplate;
   tags?: string[];
-  root?: RootAgentSpec;
+  root?: DefaultAgentSpec;
   seed_agents?: BlueprintSeedAgent[];
   seed_events?: BlueprintSeedEvent[];
   seed_ideas?: BlueprintSeedIdea[];

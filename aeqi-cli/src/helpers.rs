@@ -247,7 +247,7 @@ pub(crate) fn build_provider_for_runtime(
 
 pub(crate) fn one_shot_agent_name(config: &AEQIConfig, _project_name: Option<&str>) -> String {
     config
-        .root_agent()
+        .default_agent()
         .map(|agent| agent.name.clone())
         .unwrap_or_default()
 }

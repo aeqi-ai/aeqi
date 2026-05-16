@@ -1,11 +1,11 @@
 //! Company blueprint IPC handlers.
 //!
-//! A "blueprint" here is a pre-threaded starter kit for a company: one root
-//! agent plus seed agents, events, ideas, and quests. The shipped catalog
-//! is embedded at compile time (see [`crate::blueprints`]) so the runtime is
-//! self-contained regardless of the cwd it launches from. The on-disk
-//! `presets/blueprints/*.json` files remain the source of truth for editing
-//! — rebuilding the binary re-embeds them.
+//! A "blueprint" here is a pre-threaded starter kit for a company: one
+//! default agent plus seed agents, events, ideas, and quests. The shipped
+//! catalog is embedded at compile time (see [`crate::blueprints`]) so the
+//! runtime is self-contained regardless of the cwd it launches from. The
+//! on-disk `presets/blueprints/*.json` files remain the source of truth
+//! for editing — rebuilding the binary re-embeds them.
 //!
 //! The schema is intentionally flat JSON (not TOML) so Stream D's landing /
 //! dashboard can fetch the catalog and render cards without a Rust build.
@@ -21,9 +21,11 @@ use crate::event_handler::{EventHandlerStore, NewEvent, ToolCall};
 // Schema
 // ---------------------------------------------------------------------------
 
-/// Root-agent definition. Always the owner of the spawned company.
+/// Default-agent definition. The default agent occupies the topmost role
+/// when the company spawns; the entity owns it (and every other seed agent)
+/// through the role tree.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RootAgentSpec {
+pub struct DefaultAgentSpec {
     pub name: String,
     #[serde(default)]
     pub model: Option<String>,
@@ -59,7 +61,9 @@ pub struct RootAgentSpec {
 }
 
 /// Child agent. `owner` is always "root" for seed_agents — they sit directly
-/// under the blueprint's root agent. Nested hierarchies are deferred to v2.
+/// under the blueprint's default agent. ("root" is a stable JSON owner
+/// token, not a structural concept: it names the topmost role in the
+/// blueprint's role tree.) Nested hierarchies are deferred to v2.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SeedAgentSpec {
     /// Currently must be "root". Reserved for future nested templates.
@@ -74,7 +78,7 @@ pub struct SeedAgentSpec {
     pub avatar: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
-    /// Optional spawn-time greeting — see [`RootAgentSpec::proactive_greeting`].
+    /// Optional spawn-time greeting — see [`DefaultAgentSpec::proactive_greeting`].
     #[serde(default)]
     pub proactive_greeting: Option<String>,
     /// Additional spawn-time messages — see [`RootAgentSpec::seed_messages`].
@@ -194,7 +198,7 @@ pub struct RoleOverride {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum OverrideOccupant {
-    /// Use a seed_agent by name (or "root" for the root agent).
+    /// Use a seed_agent by name (or "root" for the default agent).
     Agent { agent: String },
     /// Slot a human user as the occupant. `user_id` is the
     /// platform-side user UUID; usually the operator's own.
@@ -221,7 +225,7 @@ pub struct Blueprint {
     /// `templateId = keccak256(template)`. Defaults to empty string.
     #[serde(default)]
     pub template: String,
-    pub root: RootAgentSpec,
+    pub root: DefaultAgentSpec,
     #[serde(default)]
     pub seed_agents: Vec<SeedAgentSpec>,
     #[serde(default)]
@@ -246,8 +250,8 @@ pub struct Blueprint {
 pub struct SpawnOutcome {
     /// The entity (company) that was just minted. Distinct from any agent UUID.
     pub entity_id: String,
-    pub root_agent_id: String,
-    pub root_agent_name: String,
+    pub default_agent_id: String,
+    pub default_agent_name: String,
     pub spawned_agents: Vec<SpawnedAgent>,
     pub created_events: usize,
     pub created_ideas: usize,
@@ -339,19 +343,20 @@ fn parse_role_overrides(request: &serde_json::Value) -> Vec<RoleOverride> {
 /// Spawn a company from a blueprint. Pure logic: everything external is
 /// injected so tests can drive this without the full daemon context.
 ///
-/// When `parent_agent_id` is `Some`, the blueprint's root attaches as a
-/// sub-agent under that parent (reusing the parent's entity); seed_agents
-/// nest under the blueprint's root just like a normal spawn. This is the
-/// "import blueprint into existing entity" path that powers `+ New agent`.
-/// When `None`, a fresh entity is minted unless `entity_id_override` is
-/// supplied — the platform mints the canonical UUID and passes it through
-/// for the `/start/launch` path so the runtime adopts the platform-side ID
-/// instead of minting its own.
+/// When `parent_agent_id` is `Some`, the blueprint's default agent attaches
+/// as a sub-agent under that parent (reusing the parent's entity);
+/// seed_agents nest under the blueprint's default agent just like a normal
+/// spawn. This is the "import blueprint into existing entity" path that
+/// powers `+ New agent`. When `None`, a fresh entity is minted unless
+/// `entity_id_override` is supplied — the platform mints the canonical
+/// UUID and passes it through for the `/start/launch` path so the runtime
+/// adopts the platform-side ID instead of minting its own.
 ///
-/// `parts` selects which seed blocks to materialize. The root agent is
-/// always created (it owns the entity); seed_agents/events/ideas/quests
-/// are gated on the corresponding `BlueprintPart` flag. The Import flows
-/// pass `[Ideas]` or `[Quests]` to scope a spawn to one primitive.
+/// `parts` selects which seed blocks to materialize. The default agent is
+/// always created (the entity has to point somewhere on landing);
+/// seed_agents/events/ideas/quests are gated on the corresponding
+/// `BlueprintPart` flag. The Import flows pass `[Ideas]` or `[Quests]` to
+/// scope a spawn to one primitive.
 #[allow(clippy::too_many_arguments)]
 pub async fn spawn_blueprint(
     blueprint: &Blueprint,
@@ -367,10 +372,10 @@ pub async fn spawn_blueprint(
 ) -> anyhow::Result<SpawnOutcome> {
     let mut warnings: Vec<String> = Vec::new();
 
-    // ---- root agent ----
+    // ---- default agent ----
     // Pass `blueprint.slug` as the entity-slug override so the canonical
     // marketing brand (e.g. `meridian-supply`) lands on the entity row,
-    // not the root agent's persona name. This decouples the entity
+    // not the default agent's persona name. This decouples the entity
     // identity from the agent-level canonical_name; slug collisions key
     // off the brand, not the persona, so a founder deploying two
     // companies with the same default persona (`founder`) but different
@@ -383,7 +388,7 @@ pub async fn spawn_blueprint(
     } else {
         None
     };
-    let root = agent_registry
+    let default_agent = agent_registry
         .spawn_with_entity_id(
             override_name.unwrap_or(&blueprint.root.name),
             parent_agent_id,
@@ -394,7 +399,7 @@ pub async fn spawn_blueprint(
         .await?;
     apply_visual_identity(
         agent_registry,
-        &root.id,
+        &default_agent.id,
         blueprint.root.color.as_deref(),
         blueprint.root.avatar.as_deref(),
     )
@@ -403,18 +408,25 @@ pub async fn spawn_blueprint(
     // Persist persona as an identity idea so assemble_ideas picks it up on
     // session:start. No separate persona table needed.
     if let (Some(store), Some(prompt)) = (idea_store, blueprint.root.system_prompt.as_ref()) {
-        store_identity_idea(store.as_ref(), &root.id, &root.name, prompt, &mut warnings).await;
+        store_identity_idea(
+            store.as_ref(),
+            &default_agent.id,
+            &default_agent.name,
+            prompt,
+            &mut warnings,
+        )
+        .await;
     }
 
     // ---- seed agents ----
     let mut owner_to_agent_id: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
-    owner_to_agent_id.insert("root".to_string(), root.id.clone());
-    owner_to_agent_id.insert(blueprint.root.name.clone(), root.id.clone());
+    owner_to_agent_id.insert("root".to_string(), default_agent.id.clone());
+    owner_to_agent_id.insert(blueprint.root.name.clone(), default_agent.id.clone());
 
     let mut spawned_agents = vec![SpawnedAgent {
-        id: root.id.clone(),
-        name: root.name.clone(),
+        id: default_agent.id.clone(),
+        name: default_agent.name.clone(),
     }];
 
     let want_agents = parts.contains(&BlueprintPart::Agents);
@@ -426,12 +438,12 @@ pub async fn spawn_blueprint(
         for seed in &blueprint.seed_agents {
             if seed.owner != "root" && seed.owner != blueprint.root.name {
                 warnings.push(format!(
-                    "seed_agent '{}' owner '{}' not supported; attaching under root",
+                    "seed_agent '{}' owner '{}' not supported; attaching under the default agent",
                     seed.name, seed.owner,
                 ));
             }
             let child = match agent_registry
-                .spawn(&seed.name, Some(&root.id), seed.model.as_deref())
+                .spawn(&seed.name, Some(&default_agent.id), seed.model.as_deref())
                 .await
             {
                 Ok(a) => a,
@@ -580,8 +592,8 @@ pub async fn spawn_blueprint(
         }
     }
 
-    let entity_id = root.entity_id.clone().ok_or_else(|| {
-        anyhow::anyhow!("spawned root agent has no entity_id (post-Phase-4 invariant)")
+    let entity_id = default_agent.entity_id.clone().ok_or_else(|| {
+        anyhow::anyhow!("spawned default agent has no entity_id (post-Phase-4 invariant)")
     })?;
 
     // Install declared roles when the blueprint provides them. The
@@ -607,8 +619,8 @@ pub async fn spawn_blueprint(
 
     Ok(SpawnOutcome {
         entity_id,
-        root_agent_id: root.id.clone(),
-        root_agent_name: root.name.clone(),
+        default_agent_id: default_agent.id.clone(),
+        default_agent_name: default_agent.name.clone(),
         spawned_agents,
         created_events,
         created_ideas,
@@ -808,16 +820,17 @@ async fn seed_proactive_greetings(
     outcome: &SpawnOutcome,
     creator_user_id: &str,
 ) {
-    // Walk every agent the blueprint declares — root + seeds — and pair its
-    // declared greeting with the just-spawned agent_id by name. The root's
-    // id is on the outcome under `root_agent_id`; seed agent ids land in
-    // `outcome.spawned_agents` keyed by name. `seed_messages` rides
-    // alongside each greeting so a multi-beat reveal posts to the SAME DM
-    // session that carries the opener.
+    // Walk every agent the blueprint declares — default agent + seeds —
+    // and pair its declared greeting with the just-spawned agent_id by
+    // name. The default agent's id is on the outcome under
+    // `default_agent_id`; seed agent ids land in `outcome.spawned_agents`
+    // keyed by name. `seed_messages` rides alongside each greeting so a
+    // multi-beat reveal posts to the SAME DM session that carries the
+    // opener.
     let mut greetings: Vec<(String, String, String, Vec<SeedMessageSpec>)> = Vec::new();
     if let Some(ref content) = blueprint.root.proactive_greeting {
         greetings.push((
-            outcome.root_agent_id.clone(),
+            outcome.default_agent_id.clone(),
             blueprint.root.name.clone(),
             content.clone(),
             blueprint.root.seed_messages.clone(),
@@ -1087,7 +1100,7 @@ pub async fn handle_spawn_blueprint(
 
     let requested_display_name = display_name.as_deref().unwrap_or(&blueprint.root.name);
 
-    // Reject if a root agent with this name already exists — blueprint spawns
+    // Reject if an agent with this name already exists — blueprint spawns
     // are meant to be the beginning of a fresh company, not a silent merge
     // into an existing one.
     match ctx
@@ -1165,8 +1178,8 @@ pub async fn handle_spawn_blueprint(
             serde_json::json!({
                 "ok": true,
                 "entity_id": outcome.entity_id,
-                "root_agent_id": outcome.root_agent_id,
-                "root_agent_name": outcome.root_agent_name,
+                "default_agent_id": outcome.default_agent_id,
+                "default_agent_name": outcome.default_agent_name,
                 "spawned_agents": outcome.spawned_agents,
                 "created_events": outcome.created_events,
                 "created_ideas": outcome.created_ideas,
@@ -1182,9 +1195,10 @@ pub async fn handle_spawn_blueprint(
     }
 }
 
-/// Spawn a Blueprint INTO an existing entity. The blueprint's root attaches
-/// as a sub-agent under the entity's root agent; seed_agents nest under the
-/// blueprint's root in the position DAG. Powers the `+ New agent` UX.
+/// Spawn a Blueprint INTO an existing entity. The blueprint's default agent
+/// attaches as a sub-agent under the entity's existing default agent;
+/// seed_agents nest under the blueprint's default agent in the role DAG.
+/// Powers the `+ New agent` UX.
 pub async fn handle_spawn_blueprint_into_entity(
     ctx: &super::CommandContext,
     request: &serde_json::Value,
@@ -1215,19 +1229,20 @@ pub async fn handle_spawn_blueprint_into_entity(
         }
     };
 
-    // Resolve the entity's root agent — the blueprint's root will attach
-    // as a child of this agent. A position-DAG model can in principle host
-    // multiple roots per entity; today every entity has exactly one.
-    let entity_root = match ctx.agent_registry.list_root_agents().await {
-        Ok(roots) => roots
+    // Resolve the entity's default agent — the blueprint's default agent
+    // will attach as a child of this agent. The role DAG can in principle
+    // host multiple topmost agents per entity; today every entity has
+    // exactly one.
+    let entity_default_agent = match ctx.agent_registry.list_entity_agents().await {
+        Ok(agents) => agents
             .into_iter()
             .find(|a| a.entity_id.as_deref() == Some(entity_id)),
         Err(err) => return serde_json::json!({"ok": false, "error": err.to_string()}),
     };
-    let Some(parent) = entity_root else {
+    let Some(parent) = entity_default_agent else {
         return serde_json::json!({
             "ok": false,
-            "error": format!("entity '{entity_id}' has no root agent"),
+            "error": format!("entity '{entity_id}' has no default agent"),
             "code": "not_found",
         });
     };
@@ -1260,8 +1275,8 @@ pub async fn handle_spawn_blueprint_into_entity(
         Ok(outcome) => serde_json::json!({
             "ok": true,
             "entity_id": outcome.entity_id,
-            "root_agent_id": outcome.root_agent_id,
-            "root_agent_name": outcome.root_agent_name,
+            "default_agent_id": outcome.default_agent_id,
+            "default_agent_name": outcome.default_agent_name,
             // Counts (not the SpawnedAgent array) so the import-flow
             // frontend can render "Spawned 3 agents · 2 ideas · 1 quest"
             // without iterating. The full array is a fresh-spawn-only
@@ -1297,7 +1312,7 @@ mod tests {
             description: "fixture blueprint".to_string(),
             category: String::new(),
             template: String::new(),
-            root: RootAgentSpec {
+            root: DefaultAgentSpec {
                 name: "Director".to_string(),
                 model: Some("anthropic/claude-sonnet-4.6".to_string()),
                 color: Some("#3fae8c".to_string()),
@@ -1414,7 +1429,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn spawn_blueprint_creates_root_and_seeds_atomically() {
+    async fn spawn_blueprint_creates_default_agent_and_seeds_atomically() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
         let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
@@ -1436,7 +1451,7 @@ mod tests {
         .await
         .expect("spawn should succeed");
 
-        // Root + 2 seed agents.
+        // Default agent + 2 seed agents.
         assert_eq!(outcome.spawned_agents.len(), 3);
         assert_eq!(outcome.spawned_agents[0].name, "Director");
         assert!(
@@ -1445,12 +1460,12 @@ mod tests {
             outcome.warnings
         );
         assert_eq!(outcome.created_events, 2);
-        // 2 seed ideas + 2 identity ideas (root + editor with system_prompt).
+        // 2 seed ideas + 2 identity ideas (default agent + editor with system_prompt).
         assert_eq!(outcome.created_ideas, 2);
         assert_eq!(outcome.created_quests, 2);
 
-        // Verify children actually point at root.
-        let root = registry
+        // Verify children actually point at the default agent.
+        let default_agent = registry
             .get_active_by_name("Director")
             .await
             .unwrap()
@@ -1467,15 +1482,18 @@ mod tests {
             .unwrap();
         let editor_ancestors = registry.get_ancestor_ids(&editor.id).await.unwrap();
         let dist_ancestors = registry.get_ancestor_ids(&dist.id).await.unwrap();
-        assert!(editor_ancestors.contains(&root.id));
-        assert!(dist_ancestors.contains(&root.id));
+        assert!(editor_ancestors.contains(&default_agent.id));
+        assert!(dist_ancestors.contains(&default_agent.id));
 
         // Verify events were attached to the correct owners.
-        let root_events = event_store.list_for_agent(&root.id).await.unwrap();
+        let default_agent_events = event_store.list_for_agent(&default_agent.id).await.unwrap();
         assert!(
-            root_events.iter().any(|e| e.name == "weekly"),
-            "root should have 'weekly' event; got {:?}",
-            root_events.iter().map(|e| &e.name).collect::<Vec<_>>(),
+            default_agent_events.iter().any(|e| e.name == "weekly"),
+            "default agent should have 'weekly' event; got {:?}",
+            default_agent_events
+                .iter()
+                .map(|e| &e.name)
+                .collect::<Vec<_>>(),
         );
         let editor_events = event_store.list_for_agent(&editor.id).await.unwrap();
         assert!(
@@ -1483,17 +1501,17 @@ mod tests {
             "editor should have 'on_draft' event",
         );
 
-        // Verify at least one persona idea landed under root.
-        let root_ideas = idea_store
+        // Verify at least one persona idea landed under the default agent.
+        let identity_ideas = idea_store
             .ideas_by_tags(&["identity".to_string()], 50)
             .await
             .unwrap();
         assert!(
-            root_ideas
+            identity_ideas
                 .iter()
-                .any(|i| i.agent_id.as_deref() == Some(root.id.as_str())),
-            "root should have an identity idea; got {:?}",
-            root_ideas.iter().map(|i| &i.name).collect::<Vec<_>>(),
+                .any(|i| i.agent_id.as_deref() == Some(default_agent.id.as_str())),
+            "default agent should have an identity idea; got {:?}",
+            identity_ideas.iter().map(|i| &i.name).collect::<Vec<_>>(),
         );
     }
 
@@ -1633,17 +1651,17 @@ mod tests {
         .await
         .expect("spawn should succeed");
 
-        let root = registry
+        let topmost = registry
             .get_active_by_name("My Cool Studio")
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(root.id, outcome.root_agent_id);
-        assert_eq!(root.name, "My Cool Studio");
+        assert_eq!(topmost.id, outcome.default_agent_id);
+        assert_eq!(topmost.name, "My Cool Studio");
     }
 
     #[tokio::test]
-    async fn spawn_blueprint_into_existing_entity_attaches_under_root() {
+    async fn spawn_blueprint_into_existing_entity_attaches_under_default_agent() {
         let registry = test_registry().await;
         let event_store = EventHandlerStore::new(registry.db());
         let role_registry = crate::role_registry::RoleRegistry::open(registry.db());
@@ -1665,7 +1683,7 @@ mod tests {
         )
         .await
         .expect("host spawn should succeed");
-        let host_root_id = host.root_agent_id.clone();
+        let host_default_agent_id = host.default_agent_id.clone();
         let host_entity_id = host.entity_id.clone();
 
         // Now import a second blueprint into that entity.
@@ -1676,8 +1694,8 @@ mod tests {
             description: String::new(),
             category: String::new(),
             template: String::new(),
-            root: RootAgentSpec {
-                name: "Imported Root".to_string(),
+            root: DefaultAgentSpec {
+                name: "Imported Default".to_string(),
                 model: None,
                 color: None,
                 avatar: None,
@@ -1704,7 +1722,7 @@ mod tests {
         let imported = spawn_blueprint(
             &imported_blueprint,
             None,
-            Some(&host_root_id),
+            Some(&host_default_agent_id),
             None,
             &BlueprintPart::ALL,
             &registry,
@@ -1720,24 +1738,24 @@ mod tests {
         assert_eq!(imported.entity_id, host_entity_id);
         assert_eq!(imported.spawned_agents.len(), 2);
 
-        // Imported root is now a descendant of the host root.
+        // Imported default agent is now a descendant of the host's.
         let ancestors = registry
-            .get_ancestor_ids(&imported.root_agent_id)
+            .get_ancestor_ids(&imported.default_agent_id)
             .await
             .unwrap();
         assert!(
-            ancestors.contains(&host_root_id),
-            "imported root should be a descendant of the host root; ancestors: {ancestors:?}",
+            ancestors.contains(&host_default_agent_id),
+            "imported default agent should be a descendant of the host's; ancestors: {ancestors:?}",
         );
 
-        // Helper still nests under the imported root (not the host root).
+        // Helper still nests under the imported default agent (not the host's).
         let helper = registry
             .get_active_by_name("Imported Helper")
             .await
             .unwrap()
             .unwrap();
         let helper_ancestors = registry.get_ancestor_ids(&helper.id).await.unwrap();
-        assert!(helper_ancestors.contains(&imported.root_agent_id));
+        assert!(helper_ancestors.contains(&imported.default_agent_id));
     }
 
     #[tokio::test]

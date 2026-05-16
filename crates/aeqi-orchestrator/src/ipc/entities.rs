@@ -2,9 +2,9 @@
 //!
 //! Four commands: `entities`, `create_entity`, `update_entity`, `delete_entity`.
 //!
-//! Wire shape for `handle_entities` uses `{"ok": true, "roots": [...]}` so the
-//! existing daemon parser at `apps/ui/src/store/daemon.ts:80-93` keeps working
-//! without any frontend changes.
+//! Wire shape for `handle_entities` returns `{"ok": true, "roots": [...]}`.
+//! The `roots` key name is preserved here for the platform proxy that
+//! reshapes it into the `{ entities: [...] }` HTTP response the UI expects.
 
 use crate::entity_registry::EntityType;
 
@@ -32,19 +32,18 @@ pub async fn handle_entities(
         entities
     };
 
-    // Pre-resolve the backing root agent per entity so the response can
-    // surface `agent_id` (used by the daemon store to keep the legacy
-    // sidebar wiring intact while we shift the rest of the UI to entity
-    // ids).
-    let all_roots = ctx
+    // Pre-resolve each entity's default agent so the response can surface
+    // `agent_id` — the agent_id column on `placement` rows is what the UI
+    // uses to land /trust/<addr>/ on the right agent.
+    let all_default_agents = ctx
         .agent_registry
-        .list_root_agents()
+        .list_entity_agents()
         .await
         .unwrap_or_default();
 
     let mut result: Vec<serde_json::Value> = Vec::new();
     for entity in &entities {
-        let backing_agent = all_roots
+        let backing_agent = all_default_agents
             .iter()
             .find(|a| a.entity_id.as_deref() == Some(&entity.id))
             .map(|a| a.id.clone());
@@ -168,8 +167,8 @@ pub async fn handle_create_entity(
         }
     };
 
-    // For agent-backed entities, ensure the project directory exists (mirrors
-    // handle_create_root behaviour).
+    // For agent-backed entities, ensure the project directory exists
+    // (mirrors `handle_create_default_agent` behaviour).
     if agent_spawned && let Ok(cwd) = std::env::current_dir() {
         let project_dir = cwd.join("projects").join(name);
         let _ = std::fs::create_dir_all(&project_dir);
@@ -269,16 +268,19 @@ pub async fn handle_update_entity(
         return serde_json::json!({"ok": false, "error": e.to_string()});
     }
 
-    // Also update the backing agent name (when present) so the agent label
-    // and the entity name stay in sync. The backing agent is the (single)
-    // agent inside this entity that has no incoming position edges.
+    // Also update the default agent's name (when present) so the agent
+    // label and the entity name stay in sync. The default agent is the
+    // (single) agent inside this entity whose role has no incoming edges.
     if let Some(new_name) = new_name
-        && let Ok(roots) = ctx.agent_registry.list_root_agents().await
-        && let Some(root) = roots
+        && let Ok(agents) = ctx.agent_registry.list_entity_agents().await
+        && let Some(default_agent) = agents
             .into_iter()
             .find(|a| a.entity_id.as_deref() == Some(&entity.id))
     {
-        let _ = ctx.agent_registry.update_name(&root.id, new_name).await;
+        let _ = ctx
+            .agent_registry
+            .update_name(&default_agent.id, new_name)
+            .await;
     }
 
     serde_json::json!({"ok": true})

@@ -58,8 +58,8 @@ pub(crate) async fn cmd_daemon(config_path: &Option<PathBuf>, action: DaemonActi
             let _data_dir = config.data_dir();
             let activity_stream = Arc::new(aeqi_orchestrator::ActivityStream::new());
             let daily_budget_usd = config.security.max_cost_per_day_usd;
-            let root_agent_name = config
-                .root_agent()
+            let default_agent_name = config
+                .default_agent()
                 .map(|a| a.name.clone())
                 .unwrap_or_default();
 
@@ -75,7 +75,7 @@ pub(crate) async fn cmd_daemon(config_path: &Option<PathBuf>, action: DaemonActi
                 config.team.router_cooldown_secs,
             )));
 
-            // Pre-create task notify so the completion listener and root agent project share it.
+            // Pre-create task notify so the completion listener and default agent project share it.
             let fa_task_notify: Arc<tokio::sync::Notify> = Arc::new(tokio::sync::Notify::new());
 
             // Open a single insights DB for the entire daemon. Keep a
@@ -178,7 +178,7 @@ pub(crate) async fn cmd_daemon(config_path: &Option<PathBuf>, action: DaemonActi
                     agent_router: agent_router.clone(),
                     council_advisors: council_advisors.clone(),
                     auto_council_enabled,
-                    default_agent_name: root_agent_name.clone(),
+                    default_agent_name: default_agent_name.clone(),
                     default_project: sm_default_project.clone(),
                     pending_tasks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                     task_notify: fa_task_notify.clone(),

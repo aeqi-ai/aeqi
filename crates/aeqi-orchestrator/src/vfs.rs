@@ -99,10 +99,6 @@ impl VfsTree {
             ["agents"] => self.list_agents().await?,
             ["agents", name] => self.list_agent_detail(name).await?,
             ["agents", name, "sessions"] => self.list_agent_sessions(name).await?,
-            ["roots"] => self.list_root_agents_vfs().await?,
-            ["roots", name] => self.list_root_agent_detail(name).await?,
-            ["roots", name, "knowledge"] => self.list_root_agent_knowledge(name).await?,
-            ["roots", name, "quests"] => self.list_root_agent_quests(name).await?,
             ["skills"] => self.list_skills().await?,
             ["sessions"] => self.list_sessions().await?,
             ["sessions", id] => self.list_session_detail(id).await?,
@@ -123,7 +119,6 @@ impl VfsTree {
         match segments.as_slice() {
             ["agents", name, "identity.md"] => self.read_agent_identity(name).await,
             ["agents", name, "stats.json"] => self.read_agent_stats(name).await,
-            ["roots", name, "info.json"] => self.read_root_agent_info(name).await,
             ["sessions", id, "transcript.json"] => self.read_session_transcript(id).await,
             ["sessions", id, "messages.json"] => self.read_session_messages(id).await,
             ["config", "aeqi.toml"] => self.read_config().await,
@@ -150,20 +145,6 @@ impl VfsTree {
             }
         }
 
-        // Search root agents (agents whose position has no incoming edges).
-        if let Ok(agents) = self.agent_registry.list_root_agents().await {
-            for a in &agents {
-                if a.name.to_lowercase().contains(&q) {
-                    results.push(VfsSearchResult {
-                        path: format!("/roots/{}", a.name),
-                        name: a.name.clone(),
-                        snippet: None,
-                        node_type: VfsNodeType::Directory,
-                    });
-                }
-            }
-        }
-
         Ok(VfsSearchResponse {
             query: query.to_string(),
             results,
@@ -175,7 +156,6 @@ impl VfsTree {
     async fn list_root(&self) -> anyhow::Result<Vec<VfsNode>> {
         Ok(vec![
             dir_node("agents", "/agents", Some("🤖"), None),
-            dir_node("roots", "/roots", Some("🏢"), None),
             dir_node("skills", "/skills", Some("⚡"), None),
             dir_node("sessions", "/sessions", Some("💬"), None),
             dir_node("ideas", "/ideas", Some("🧠"), None),
@@ -275,51 +255,6 @@ impl VfsTree {
             }
         }
         Ok(nodes)
-    }
-
-    // --- Root agents (exposed under /roots in the VFS) ---
-
-    async fn list_root_agents_vfs(&self) -> anyhow::Result<Vec<VfsNode>> {
-        let mut nodes = Vec::new();
-        if let Ok(agents) = self.agent_registry.list_root_agents().await {
-            for a in &agents {
-                nodes.push(dir_node(
-                    &a.name,
-                    &format!("/roots/{}", a.name),
-                    Some("🏢"),
-                    None,
-                ));
-            }
-        }
-        Ok(nodes)
-    }
-
-    async fn list_root_agent_detail(&self, name: &str) -> anyhow::Result<Vec<VfsNode>> {
-        Ok(vec![
-            file_node(
-                "info.json",
-                &format!("/roots/{name}/info.json"),
-                "application/json",
-                Some("ℹ️"),
-            ),
-            dir_node(
-                "knowledge",
-                &format!("/roots/{name}/knowledge"),
-                Some("🧠"),
-                None,
-            ),
-            dir_node("quests", &format!("/roots/{name}/quests"), Some("📋"), None),
-        ])
-    }
-
-    async fn list_root_agent_knowledge(&self, _name: &str) -> anyhow::Result<Vec<VfsNode>> {
-        // Knowledge now lives in the idea store, not notes.
-        Ok(vec![])
-    }
-
-    async fn list_root_agent_quests(&self, _name: &str) -> anyhow::Result<Vec<VfsNode>> {
-        // Quests are agent-scoped; stub for VFS compatibility.
-        Ok(vec![])
     }
 
     // --- Skills ---
@@ -467,31 +402,6 @@ impl VfsTree {
         Ok(VfsReadResponse {
             path: format!("/agents/{name}/stats.json"),
             content: serde_json::to_string_pretty(&stats)?,
-            mime: "application/json".to_string(),
-            editable: false,
-        })
-    }
-
-    async fn read_root_agent_info(&self, name: &str) -> anyhow::Result<VfsReadResponse> {
-        // Look up the root agent matching this name.
-        let info = if let Ok(agents) = self.agent_registry.list_root_agents().await {
-            agents
-                .iter()
-                .find(|a| a.name == *name)
-                .map(|a| {
-                    serde_json::json!({
-                        "name": a.name,
-                        "status": a.status.to_string(),
-                        "model": a.model,
-                    })
-                })
-                .unwrap_or_else(|| serde_json::json!({"error": "root agent not found"}))
-        } else {
-            serde_json::json!({"error": "root agent not found"})
-        };
-        Ok(VfsReadResponse {
-            path: format!("/roots/{name}/info.json"),
-            content: serde_json::to_string_pretty(&info)?,
             mime: "application/json".to_string(),
             editable: false,
         })

@@ -1253,9 +1253,10 @@ impl AEQIConfig {
         PathBuf::from(&self.aeqi.data_dir)
     }
 
-    /// Get the root agent — the first orchestrator-role agent, or the first agent.
-    /// With no leader concept, hierarchy comes from the agent tree (parent_id).
-    pub fn root_agent(&self) -> Option<&PeerAgentConfig> {
+    /// Get the entity's default agent — the first orchestrator-role agent,
+    /// or the first agent. Hierarchy resolves through the role tree, not
+    /// the agent list.
+    pub fn default_agent(&self) -> Option<&PeerAgentConfig> {
         self.agents
             .iter()
             .find(|a| a.role == "orchestrator")
@@ -1849,8 +1850,8 @@ repo = "/home/user/backend"
         assert_eq!(config.agents[0].role, "orchestrator".to_string());
         assert_eq!(config.agents[1].role, "advisor".to_string());
         assert_eq!(config.repos.len(), 2);
-        let root = config.root_agent().unwrap();
-        assert_eq!(root.name, "alpha");
+        let default_agent = config.default_agent().unwrap();
+        assert_eq!(default_agent.name, "alpha");
         let advisors = config.advisor_agents();
         assert_eq!(advisors.len(), 1);
         assert_eq!(advisors[0].name, "beta");
@@ -1902,7 +1903,7 @@ project = "aeqi"
     }
 
     #[test]
-    fn test_root_agent_is_first_orchestrator() {
+    fn test_default_agent_is_first_orchestrator() {
         let toml = r#"
 [aeqi]
 name = "test"
@@ -1913,7 +1914,7 @@ prefix = "au"
 role = "orchestrator"
 "#;
         let config = AEQIConfig::parse(toml).unwrap();
-        assert_eq!(config.root_agent().unwrap().name, "alpha");
+        assert_eq!(config.default_agent().unwrap().name, "alpha");
     }
 
     #[test]

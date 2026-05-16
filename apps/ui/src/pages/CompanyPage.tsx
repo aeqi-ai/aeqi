@@ -45,9 +45,9 @@ interface CompanyPageProps {
  *   /c/:entityId/treasury      → TreasuryPage
  *   /c/:entityId/governance    → GovernancePage
  *   /c/:entityId/agents        → EntityAgentsTab (LIST)
- *   /c/:entityId/events        → AgentEventsTab(rootAgent)
- *   /c/:entityId/quests        → AgentQuestsTab(rootAgent)
- *   /c/:entityId/ideas         → AgentIdeasTab(rootAgent)
+ *   /c/:entityId/events        → AgentEventsTab(defaultAgent)
+ *   /c/:entityId/quests        → AgentQuestsTab(defaultAgent)
+ *   /c/:entityId/ideas         → AgentIdeasTab(defaultAgent)
  *
  * The former `/c/:entityId/settings` tab was retired — workspace label,
  * tagline, public toggle, and plan link now live in the EntityHeroStrip

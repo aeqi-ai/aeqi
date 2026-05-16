@@ -2015,10 +2015,10 @@ impl AgentRegistry {
         self.get_active_by_name(hint).await
     }
 
-    /// Return the first active root agent — the agent whose role has
+    /// Return the entity's default agent — the active agent whose role has
     /// no incoming edges in the role DAG. Returns `None` when no agent
     /// occupies a topmost role.
-    pub async fn get_root_agent(&self) -> Result<Option<Agent>> {
+    pub async fn get_default_agent(&self) -> Result<Option<Agent>> {
         let db = self.db.lock().await;
         db.query_row(
             "SELECT a.* FROM agents a
@@ -2082,12 +2082,6 @@ impl AgentRegistry {
     // -----------------------------------------------------------------------
     // Tree operations
     // -----------------------------------------------------------------------
-
-    /// Return an active topmost agent — same semantics as `get_root_agent`.
-    /// Kept as an alias because callers historically used both names.
-    pub async fn get_root(&self) -> Result<Option<Agent>> {
-        self.get_root_agent().await
-    }
 
     /// Direct reports of `agent_id` resolved through the role DAG.
     pub async fn get_children(&self, agent_id: &str) -> Result<Vec<Agent>> {
@@ -2430,14 +2424,15 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Find the default agent to talk to — the root, or a named child.
+    /// Find the default agent to talk to — the entity's default, or a
+    /// named child.
     pub async fn default_agent(&self, hint: Option<&str>) -> Result<Option<Agent>> {
         if let Some(h) = hint
             && let Some(agent) = self.resolve_by_hint(h).await?
         {
             return Ok(Some(agent));
         }
-        self.get_root().await
+        self.get_default_agent().await
     }
 
     // -----------------------------------------------------------------------
@@ -4257,10 +4252,11 @@ impl AgentRegistry {
         Ok(total_affected)
     }
 
-    /// List root agents — agents whose role has no incoming edges in
-    /// the role DAG. A role-DAG model can carry multiple roots per
-    /// entity (e.g. a board); today every entity has exactly one.
-    pub async fn list_root_agents(&self) -> Result<Vec<Agent>> {
+    /// List the default agent for every entity — the agent whose role has
+    /// no incoming edges in the role DAG. A role-DAG model can carry
+    /// multiple topmost roles per entity (e.g. a board); today every
+    /// entity has exactly one.
+    pub async fn list_entity_agents(&self) -> Result<Vec<Agent>> {
         let db = self.db.lock().await;
         let mut stmt = db.prepare(
             "SELECT DISTINCT a.* FROM agents a
@@ -5085,13 +5081,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_root() {
+    async fn get_default_agent() {
         let reg = test_registry().await;
-        let root = reg.spawn("assistant", None, None).await.unwrap();
-        let _child = reg.spawn("worker", Some(&root.id), None).await.unwrap();
+        let topmost = reg.spawn("assistant", None, None).await.unwrap();
+        let _child = reg.spawn("worker", Some(&topmost.id), None).await.unwrap();
 
-        let found = reg.get_root().await.unwrap().unwrap();
-        assert_eq!(found.id, root.id);
+        let found = reg.get_default_agent().await.unwrap().unwrap();
+        assert_eq!(found.id, topmost.id);
     }
 
     #[tokio::test]
@@ -5336,9 +5332,9 @@ mod tests {
         let entity_agents = reg.list(Some(entity_id), None).await.unwrap();
         assert_eq!(entity_agents.len(), 3);
 
-        let roots = reg.list_root_agents().await.unwrap();
-        assert_eq!(roots.len(), 1);
-        assert_eq!(roots[0].name, "root");
+        let entity_agents = reg.list_entity_agents().await.unwrap();
+        assert_eq!(entity_agents.len(), 1);
+        assert_eq!(entity_agents[0].name, "root");
 
         let active_in_entity = reg
             .list(Some(entity_id), Some(AgentStatus::Active))

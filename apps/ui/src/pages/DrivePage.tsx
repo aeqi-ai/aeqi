@@ -24,8 +24,8 @@ function resolveDriveAgentId(
 ) {
   if (entityAgentId) return entityAgentId;
   if (entityId) {
-    const rootAgent = agents.find((a) => a.entity_id === entityId);
-    if (rootAgent) return rootAgent.id;
+    const defaultAgent = agents.find((a) => a.entity_id === entityId);
+    if (defaultAgent) return defaultAgent.id;
   }
   if (routeAgentId) {
     const found =

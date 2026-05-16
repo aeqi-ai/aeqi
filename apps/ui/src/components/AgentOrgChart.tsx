@@ -19,15 +19,15 @@ interface OrgNode {
 }
 
 /**
- * Build a tree of agent OrgNodes from the position DAG. Roots are
- * positions with no incoming edges. The DAG is rendered as a tree by
- * walking each child position once (cycle-safe via a visited set).
+ * Build a tree of agent OrgNodes from the role DAG. The tree is anchored
+ * at the role currently occupied by `defaultAgentId`. The DAG is rendered
+ * as a tree by walking each child role once (cycle-safe via a visited set).
  */
 function buildOrgFromPositions(
   agents: Agent[],
   positions: Role[],
   edges: RoleEdge[],
-  rootAgentId: string,
+  defaultAgentId: string,
 ): OrgNode | null {
   const agentById = new Map<string, Agent>(agents.map((a) => [a.id, a]));
   const positionById = new Map<string, Role>(positions.map((p) => [p.id, p]));
@@ -43,10 +43,10 @@ function buildOrgFromPositions(
   }
 
   const rootPosition = positions.find(
-    (p) => p.occupant_kind === "agent" && p.occupant_id === rootAgentId,
+    (p) => p.occupant_kind === "agent" && p.occupant_id === defaultAgentId,
   );
   if (!rootPosition) {
-    const fallback = agentById.get(rootAgentId);
+    const fallback = agentById.get(defaultAgentId);
     if (!fallback) return null;
     return {
       id: fallback.id,
