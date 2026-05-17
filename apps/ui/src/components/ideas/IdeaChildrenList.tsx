@@ -34,7 +34,7 @@ function statusOf(idea: Idea): string | null {
 }
 
 export default function IdeaChildrenList({ ideaId, agentId, scope }: IdeaChildrenListProps) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const queryClient = useQueryClient();
   const [children, setChildren] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +115,7 @@ export default function IdeaChildrenList({ ideaId, agentId, scope }: IdeaChildre
                 <button
                   type="button"
                   className="idea-children-card"
-                  onClick={() => goEntity(entityId, "ideas", child.id)}
+                  onClick={() => goEntity(trustId, "ideas", child.id)}
                 >
                   <span className="idea-children-card-name">{child.name || "Untitled"}</span>
                   {status && <span className="idea-children-card-status">{status}</span>}

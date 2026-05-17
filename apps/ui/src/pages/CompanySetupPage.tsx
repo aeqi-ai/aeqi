@@ -288,7 +288,7 @@ export default function CompanySetupPage() {
 
         setSearchParams(
           new URLSearchParams({
-            launch: resp.entity_id,
+            launch: resp.trust_id,
           }),
           { replace: true },
         );
@@ -364,7 +364,7 @@ export default function CompanySetupPage() {
     return (
       <div className="launch-page launch-page--provisioning">
         <LaunchingReveal
-          entityId={launchId}
+          trustId={launchId}
           fallbackDisplayName={activeLaunchEntity?.name || organizationName.trim() || undefined}
         />
       </div>

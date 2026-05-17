@@ -5,7 +5,7 @@ import * as entitiesApi from "@/api/entities";
 import * as questsApi from "@/api/quests";
 import * as runtimeApi from "@/api/runtime";
 import { getScopedEntity } from "@/lib/appMode";
-import type { Agent, ActivityEntry, Entity, Quest } from "@/lib/types";
+import type { Agent, ActivityEntry, Trust, Quest } from "@/lib/types";
 
 interface WorkerEvent {
   id?: string | number;
@@ -18,7 +18,7 @@ interface DaemonState {
   status: Record<string, unknown> | null;
   dashboard: Record<string, unknown> | null;
   cost: Record<string, unknown> | null;
-  entities: Entity[];
+  entities: Trust[];
   agents: Agent[];
   quests: Quest[];
   events: ActivityEntry[];
@@ -88,7 +88,7 @@ export const useDaemonStore = create<DaemonState>((set, get) => ({
       // genuinely has no companies; commit the empty list.
       if (nextEntities.length === 0 && !Array.isArray(data.entities)) return;
       set({ entities: nextEntities, initialLoaded: true });
-      // Trust-first migration (2026-05-17): trust_address IS the entity_id
+      // Trust-first migration (2026-05-17): trust_address IS the trust_id
       // at the platform boundary now, so the prior trust→entity mirror is
       // retired. `getScopedEntity` reads the URL slug directly.
       // Clear any stale map from pre-migration browser sessions so the
@@ -104,10 +104,10 @@ export const useDaemonStore = create<DaemonState>((set, get) => ({
   },
 
   fetchAgents: async () => {
-    // `/api/entities` is user-scoped (no X-Entity required) and always
+    // `/api/entities` is user-scoped (no X-Trust required) and always
     // lists every company the user owns. `/api/agents` is scoped to the
-    // active X-Entity and returns the full subtree. We fetch both so the
-    // sidebar has roots to show on `/` (where no X-Entity is set) and the
+    // active X-Trust and returns the full subtree. We fetch both so the
+    // sidebar has roots to show on `/` (where no X-Trust is set) and the
     // agent subtree is available for per-company pages.
     const nextAgents = await agentsApi.listAgentDirectory();
 
@@ -139,10 +139,10 @@ export const useDaemonStore = create<DaemonState>((set, get) => ({
 
   fetchAll: async () => {
     const s = get();
-    // fetchEntities is user-scoped (no X-Entity required) and produces the
+    // fetchEntities is user-scoped (no X-Trust required) and produces the
     // companies the user owns. Run it first so that on first ever load we
     // don't fire the entity-scoped proxy fetches against an empty scope —
-    // the proxy 400s with "X-Entity required" and the dashboard ends up
+    // the proxy 400s with "X-Trust required" and the dashboard ends up
     // with five red entries before fetchEntities has resolved.
     await s.fetchEntities();
     if (!getScopedEntity()) {

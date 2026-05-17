@@ -68,7 +68,7 @@ export default function BillingPanel() {
   // matching entity to appear and redirect into it. The webhook's call
   // to `provision_personal_company` is the source of truth — this
   // panel does not spawn directly (it'd hit the runtime proxy which
-  // requires X-Entity, and the user has no entity scoped yet).
+  // requires X-Trust, and the user has no entity scoped yet).
   useEffect(() => {
     if (spawnHandled.current) return;
     const slug = searchParams.get("spawn");

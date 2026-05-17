@@ -15,7 +15,7 @@ interface BlueprintLaunchPickerProps {
   mode: BlueprintLaunchMode;
   /** Required when `mode === "spawn-into-entity"`. The host entity that
    *  the picked Blueprint attaches under. */
-  entityId?: string;
+  trustId?: string;
   /** Optional `parts` filter for `spawn-into-entity`. When set, only the
    *  named seed blocks materialize on spawn (e.g. `["ideas"]` for the
    *  Ideas Import flow). Omit for full-company import. */
@@ -49,7 +49,7 @@ interface BlueprintLaunchPickerProps {
  */
 export function BlueprintLaunchPicker({
   mode,
-  entityId,
+  trustId,
   parts,
   onSpawnedAgent,
   launchQuery,
@@ -119,10 +119,10 @@ export function BlueprintLaunchPicker({
       setSubmittingBlueprintId(id);
       setSubmitError(null);
       try {
-        if (!entityId) throw new Error("Missing entity id for spawn-into-entity.");
+        if (!trustId) throw new Error("Missing entity id for spawn-into-entity.");
         await api.spawnBlueprintIntoEntity({
           blueprint: blueprintId(tpl),
-          entity_id: entityId,
+          trust_id: trustId,
           parts,
         });
         onSpawnedAgent?.(blueprintId(tpl));
@@ -132,7 +132,7 @@ export function BlueprintLaunchPicker({
         setSubmittingBlueprintId(null);
       }
     },
-    [byId, mode, entityId, parts, onSpawnedAgent, navigate, launchQuery],
+    [byId, mode, trustId, parts, onSpawnedAgent, navigate, launchQuery],
   );
 
   const isBusy = submittingBlueprintId !== null;

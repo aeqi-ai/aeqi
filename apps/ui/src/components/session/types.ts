@@ -49,7 +49,7 @@ export interface EntityRef {
   primitive: EntityPrimitive;
   /** Backend-supplied entity ID. May be empty when the ref came from a
    * label-only parse — render falls back to plain text in that case. */
-  entityId: string;
+  trustId: string;
   label: string;
   status?: string;
 }

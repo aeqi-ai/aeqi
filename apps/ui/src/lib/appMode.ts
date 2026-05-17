@@ -10,13 +10,13 @@ export function isPlatformAppMode(mode: AppMode | null | undefined): mode is "pl
 }
 
 /**
- * Resolve the routing key (`X-Entity` header / WS `?root=`) for the current
+ * Resolve the routing key (`X-Trust` header / WS `?root=`) for the current
  * URL. The canonical shell is `/trust/:trustAddress/...`; user-scope routes
  * (`/account`, `/launch`, `/sessions/:id`, …) return "" so the caller falls
  * back to the cached active entity.
  *
  * The URL slug after `/trust/` is the on-chain TRUST address (Solana base58)
- * AND the canonical entity_id the platform proxy expects — they're the same
+ * AND the canonical trust_id the platform proxy expects — they're the same
  * value post-migration (2026-05-17). No translation needed; the prior
  * `aeqi_trust_to_entity` mirror is retired.
  */

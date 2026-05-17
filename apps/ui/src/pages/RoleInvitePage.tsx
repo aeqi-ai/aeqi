@@ -13,7 +13,7 @@ const TARGET_OPTIONS: { value: TargetKind; label: string }[] = [
 ];
 
 export default function RoleInvitePage() {
-  const { entityId = "", roleId = "" } = useParams<{ entityId: string; roleId: string }>();
+  const { trustId = "", roleId = "" } = useParams<{ trustId: string; roleId: string }>();
   const navigate = useNavigate();
   const entitiesList = useDaemonStore((s) => s.entities);
 
@@ -31,7 +31,7 @@ export default function RoleInvitePage() {
     document.title = "aeqi";
   }, []);
 
-  const detailHref = entityPathFromId(entitiesList, entityId, "roles", encodeURIComponent(roleId));
+  const detailHref = entityPathFromId(entitiesList, trustId, "roles", encodeURIComponent(roleId));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +51,7 @@ export default function RoleInvitePage() {
 
     setSubmitting(true);
     try {
-      const resp = await api.createRoleInvitation(entityId, roleId, {
+      const resp = await api.createRoleInvitation(trustId, roleId, {
         target_kind: targetKind,
         ...(targetKind === "email" ? { target_email: targetEmail.trim() } : {}),
         ...(welcomeNote.trim() ? { welcome_note: welcomeNote.trim() } : {}),
@@ -84,7 +84,7 @@ export default function RoleInvitePage() {
       <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 560 }}>
         <div className="page-header">
           <div className="page-header-breadcrumbs">
-            <Link to={entityPathFromId(entitiesList, entityId, "roles")}>Roles</Link>
+            <Link to={entityPathFromId(entitiesList, trustId, "roles")}>Roles</Link>
             <span>/</span>
             <Link to={detailHref}>Role</Link>
             <span>/</span>
@@ -151,7 +151,7 @@ export default function RoleInvitePage() {
     <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 560 }}>
       <div className="page-header">
         <div className="page-header-breadcrumbs">
-          <Link to={entityPathFromId(entitiesList, entityId, "roles")}>Roles</Link>
+          <Link to={entityPathFromId(entitiesList, trustId, "roles")}>Roles</Link>
           <span>/</span>
           <Link to={detailHref}>Role</Link>
           <span>/</span>

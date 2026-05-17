@@ -15,7 +15,7 @@ import { isRateLimited } from "@/lib/rateLimit";
 import RateLimitBanner from "./shell/RateLimitBanner";
 import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 import { AGENT_RAIL_TABS } from "@/components/agentRailTabs";
-import type { Agent, Entity } from "@/lib/types";
+import type { Agent, Trust } from "@/lib/types";
 
 const CommandPalette = lazy(() => import("./CommandPalette"));
 const AgentPage = lazy(() => import("./AgentPage"));
@@ -83,7 +83,7 @@ const COMPANY_PAGE_TABS = new Set([
 
 export function resolveDefaultAgent(
   agents: Agent[],
-  entity: Pick<Entity, "agent_id"> | null,
+  entity: Pick<Trust, "agent_id"> | null,
   effectiveRouteEntityId: string,
 ): Agent | null {
   if (entity?.agent_id) {
@@ -92,7 +92,7 @@ export function resolveDefaultAgent(
   }
 
   return effectiveRouteEntityId
-    ? (agents.find((a) => a.entity_id === effectiveRouteEntityId) ?? null)
+    ? (agents.find((a) => a.trust_id === effectiveRouteEntityId) ?? null)
     : null;
 }
 
@@ -103,14 +103,14 @@ export default function AppLayout() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const {
-    entityId: routeEntityId = "",
+    trustId: routeEntityId = "",
     trustAddress: routeTrustAddress = "",
     agentId: routeAgentId = "",
     tab,
     itemId,
     settingsTab,
   } = useParams<{
-    entityId?: string;
+    trustId?: string;
     trustAddress?: string;
     agentId?: string;
     tab?: string;
@@ -126,14 +126,14 @@ export default function AppLayout() {
   const surface = useShellSurface(path);
 
   // Resolve entity from the canonical trust route and return a stable id.
-  const { entity, entityId: resolvedEntityId } = useCurrentCompany();
+  const { entity, trustId: resolvedEntityId } = useCurrentCompany();
   // The effective route entity id — prefer the resolved id from the trust
   // route and fall back to any raw route token only if one was somehow present.
   const effectiveRouteEntityId = resolvedEntityId || routeEntityId;
 
   // Prefer the platform placement's default-agent id from `/api/entities`.
-  // Some hosted runtimes carry a runtime-local `agent.entity_id`, so the
-  // older `agent.entity_id === entityId` match is only a fallback.
+  // Some hosted runtimes carry a runtime-local `agent.trust_id`, so the
+  // older `agent.trust_id === trustId` match is only a fallback.
   const defaultAgent = useMemo(
     () => resolveDefaultAgent(agents, entity, effectiveRouteEntityId),
     [agents, entity, effectiveRouteEntityId],
@@ -154,13 +154,13 @@ export default function AppLayout() {
     () => (activeEntity && entities.some((e) => e.id === activeEntity) ? activeEntity : null),
     [entities, activeEntity],
   );
-  const entityId = effectiveRouteEntityId || activeEntityValid || firstRoot || "";
+  const trustId = effectiveRouteEntityId || activeEntityValid || firstRoot || "";
 
   // Only commit a verified-real entity — otherwise the pre-load render
   // can persist a bogus value into localStorage.
   useEffect(() => {
-    if (entityId && entities.some((e) => e.id === entityId)) setActiveEntity(entityId);
-  }, [entityId, entities, setActiveEntity]);
+    if (trustId && entities.some((e) => e.id === trustId)) setActiveEntity(trustId);
+  }, [trustId, entities, setActiveEntity]);
 
   useEffect(() => {
     document.title = "aeqi";
@@ -186,13 +186,13 @@ export default function AppLayout() {
       invalidateShellQueries();
     }, 30000);
     return () => clearInterval(i);
-  }, [fetchAll, entityId, invalidateShellQueries]);
+  }, [fetchAll, trustId, invalidateShellQueries]);
   useDaemonSocket();
 
   const openSearch = useCallback(() => setSearching(true), []);
   const closeSearch = useCallback(() => setSearching(false), []);
   useGlobalShortcuts({
-    entityId,
+    trustId,
     searching,
     shortcutsOpen,
     openSearch,
@@ -217,7 +217,7 @@ export default function AppLayout() {
 
   if (!initialLoaded) return <BootLoader />;
 
-  const encodedEntityId = entityId ? encodeURIComponent(entityId) : "";
+  const encodedEntityId = trustId ? encodeURIComponent(trustId) : "";
   const search = location.search || "";
 
   // Stale entity ref after a data reset would point at a non-existent
@@ -377,7 +377,7 @@ export default function AppLayout() {
       return (
         <CompanyPage
           agentId={activeAgentId}
-          entityId={effectiveRouteEntityId}
+          trustId={effectiveRouteEntityId}
           tab={effectiveTab}
           itemId={itemId}
         />
@@ -430,7 +430,7 @@ export default function AppLayout() {
         Skip to main content
       </a>
       <div className="shell">
-        <LeftSidebar entityId={entityId} path={path} />
+        <LeftSidebar trustId={trustId} path={path} />
 
         <div className="content-column">
           <div className="content-card">

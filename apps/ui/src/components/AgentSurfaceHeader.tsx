@@ -34,15 +34,15 @@ export default function AgentSurfaceHeader({
   const agents = useDaemonStore((s) => s.agents);
   const agent = agents.find((a) => a.id === agentId);
   const agentName = agent?.name || agentId;
-  const entityId = agent?.entity_id || "";
+  const trustId = agent?.trust_id || "";
 
   // Back link target. Default surface goes back to the entity's
   // Agents list; settings goes back to the agent's default (chat).
   const backHref =
     variant === "settings"
       ? `${base}/agents/${encodeURIComponent(agentId)}`
-      : entityId
-        ? entityPath(entityId, "agents")
+      : trustId
+        ? entityPath(trustId, "agents")
         : "/";
   const backLabel = variant === "settings" ? agentName : "Agents";
   const settingsHref = `${base}/agents/${encodeURIComponent(agentId)}/settings`;

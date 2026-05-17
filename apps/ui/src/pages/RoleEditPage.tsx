@@ -14,7 +14,7 @@ const ROLE_TYPE_OPTIONS: { value: RoleType; label: string; desc: string }[] = [
 ];
 
 export default function RoleEditPage() {
-  const { entityId = "", roleId = "" } = useParams<{ entityId: string; roleId: string }>();
+  const { trustId = "", roleId = "" } = useParams<{ trustId: string; roleId: string }>();
   const navigate = useNavigate();
   const entitiesList = useDaemonStore((s) => s.entities);
 
@@ -65,7 +65,7 @@ export default function RoleEditPage() {
 
     try {
       await api.updateRole(roleId, patch);
-      navigate(entityPathFromId(entitiesList, entityId, "roles", encodeURIComponent(roleId)), {
+      navigate(entityPathFromId(entitiesList, trustId, "roles", encodeURIComponent(roleId)), {
         replace: true,
       });
     } catch (err) {
@@ -74,7 +74,7 @@ export default function RoleEditPage() {
     }
   };
 
-  const backHref = entityPathFromId(entitiesList, entityId, "roles", encodeURIComponent(roleId));
+  const backHref = entityPathFromId(entitiesList, trustId, "roles", encodeURIComponent(roleId));
 
   if (loading) {
     return (
@@ -113,7 +113,7 @@ export default function RoleEditPage() {
     <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 680 }}>
       <div className="page-header">
         <div className="page-header-breadcrumbs">
-          <Link to={entityPathFromId(entitiesList, entityId, "roles")}>Roles</Link>
+          <Link to={entityPathFromId(entitiesList, trustId, "roles")}>Roles</Link>
           <span>/</span>
           <Link to={backHref}>{role.title || "(untitled)"}</Link>
           <span>/</span>

@@ -34,7 +34,7 @@ const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
 /**
  * Top-level URL segments that must NEVER resolve to a public profile.
  * These collide with auth pages, app shell, API, and assets surfaces; if
- * a Company's entity_id ever matched one of them the public-profile
+ * a Company's trust_id ever matched one of them the public-profile
  * route would shadow real product surfaces. Listed here once so the
  * `<PublicProfileRoute />` guard and any future entity-id validator can
  * agree on the deny list.
@@ -193,7 +193,7 @@ function RootRouteSwitch() {
 // sidebar tabs never generate bogus top-level paths like `/quests`.
 
 /**
- * Entity-root URL architecture. The app shell lives at
+ * Trust-root URL architecture. The app shell lives at
  * `/trust/:trustAddress/...` (canonical); the sidebar always navigates
  * inside that entity. Child
  * agents remain addressable at `/trust/<addr>/agents/:agentId/...`.

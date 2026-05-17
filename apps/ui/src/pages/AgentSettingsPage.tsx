@@ -47,7 +47,7 @@ export default function AgentSettingsPage({ agentId }: { agentId: string }) {
   const agents = useDaemonStore((s) => s.agents);
   const agent = agents.find((a) => a.id === agentId);
   const resolvedAgentId = agent?.id || agentId;
-  const resolvedEntityId = agent?.entity_id || resolvedAgentId;
+  const resolvedEntityId = agent?.trust_id || resolvedAgentId;
   const isDrilledAgent = resolvedAgentId !== resolvedEntityId;
 
   const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null);
@@ -79,7 +79,7 @@ export default function AgentSettingsPage({ agentId }: { agentId: string }) {
 
       <Suspense>
         {activeTab === "overview" && isDrilledAgent && (
-          <AgentOverviewTab agentId={resolvedAgentId} entityId={resolvedEntityId} />
+          <AgentOverviewTab agentId={resolvedAgentId} trustId={resolvedEntityId} />
         )}
         {activeTab === "quests" && <AgentQuestsTab agentId={resolvedAgentId} />}
         {activeTab === "events" && <AgentEventsTab agentId={resolvedAgentId} />}
@@ -258,8 +258,8 @@ function SettingsPanel({
   const fetchAgents = useDaemonStore((s) => s.fetchAgents);
   const childAgents = useMemo(() => {
     const self = agents.find((a) => a.id === resolvedAgentId);
-    if (!self?.entity_id) return [];
-    return agents.filter((a) => a.entity_id === self.entity_id && a.id !== resolvedAgentId);
+    if (!self?.trust_id) return [];
+    return agents.filter((a) => a.trust_id === self.trust_id && a.id !== resolvedAgentId);
   }, [agents, resolvedAgentId]);
 
   const [localModel, setLocalModel] = useState(agent?.model || "");
@@ -386,7 +386,7 @@ function DangerZone({
   const otherAgentsInEntity = useDaemonStore
     .getState()
     .agents.filter(
-      (a) => a.entity_id && a.entity_id === agent?.entity_id && a.id !== agent?.id,
+      (a) => a.trust_id && a.trust_id === agent?.trust_id && a.id !== agent?.id,
     ).length;
   const isRoot = otherAgentsInEntity === 0;
   const canConfirm = confirmText.trim() === agentName && !deleting;
@@ -404,8 +404,8 @@ function DangerZone({
       const count = res.deleted ?? 1;
       showToast(`Deleted ${count} agent${count === 1 ? "" : "s"}`);
       await fetchAgents();
-      if (agent?.entity_id) {
-        navigate(entityPathFromId(entitiesList, agent.entity_id));
+      if (agent?.trust_id) {
+        navigate(entityPathFromId(entitiesList, agent.trust_id));
       } else {
         navigate("/");
       }

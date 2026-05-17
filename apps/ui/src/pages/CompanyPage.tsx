@@ -8,8 +8,8 @@ import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 // dispatch shell light. Mirrors the lazy pattern used in AgentPage.
 const TrustOverviewTab = lazy(() => import("@/components/TrustOverviewTab"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
-// Entity-scope primitive tabs. `TrustAgentsTab` is entity-typed (takes
-// entityId, filters the directory). Events still render against the default
+// Trust-scope primitive tabs. `TrustAgentsTab` is entity-typed (takes
+// trustId, filters the directory). Events still render against the default
 // agent, while Quests and Ideas ask their shared components for entity-wide
 // data so sibling-agent work remains visible on `/trust/<addr>/...`.
 const TrustAgentsTab = lazy(() => import("@/components/TrustAgentsTab"));
@@ -23,7 +23,7 @@ const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
 
 interface CompanyPageProps {
   agentId: string;
-  entityId: string;
+  trustId: string;
   /** Resolved tab — defaulted to "overview" upstream. The bare
    *  `/c/<entity>` URL renders Overview through this tab default. */
   tab: string;
@@ -36,20 +36,20 @@ interface CompanyPageProps {
  * dispatches the right component per tab.
  *
  * Routes:
- *   /c/:entityId               → TrustOverviewTab (cockpit — Health folded in)
- *   /c/:entityId/inbox         → MeInboxPage
- *   /c/:entityId/health        → 308 redirect to bare cockpit (legacy URL)
- *   /c/:entityId/roles         → TrustRolesTab (org chart)
- *   /c/:entityId/agents        → TrustAgentsTab (LIST)
- *   /c/:entityId/events        → AgentEventsTab(defaultAgent)
- *   /c/:entityId/quests        → AgentQuestsTab(entity scope)
- *   /c/:entityId/ideas         → AgentIdeasTab(entity scope)
+ *   /c/:trustId               → TrustOverviewTab (cockpit — Health folded in)
+ *   /c/:trustId/inbox         → MeInboxPage
+ *   /c/:trustId/health        → 308 redirect to bare cockpit (legacy URL)
+ *   /c/:trustId/roles         → TrustRolesTab (org chart)
+ *   /c/:trustId/agents        → TrustAgentsTab (LIST)
+ *   /c/:trustId/events        → AgentEventsTab(defaultAgent)
+ *   /c/:trustId/quests        → AgentQuestsTab(entity scope)
+ *   /c/:trustId/ideas         → AgentIdeasTab(entity scope)
  *
- * The former `/c/:entityId/settings` tab was retired — workspace label,
+ * The former `/c/:trustId/settings` tab was retired — workspace label,
  * tagline, public toggle, and plan link now live in the TrustHeroStrip
  * on Overview. Workspace billing remains at `/account/billing`.
  */
-export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
+export default function CompanyPage({ agentId, trustId, tab, itemId }: CompanyPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { entity } = useCurrentCompany();
@@ -106,7 +106,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   // Bare `/c/<id>/` Overview renders TrustOverviewTab directly — the
   // canonical entity cockpit (TrustHeroStrip + roles / quests / activity).
   // Routing through AgentPage's `isDrilledAgent` branch was wrong for
-  // root agents whose `entity_id` is populated and differs from
+  // root agents whose `trust_id` is populated and differs from
   // `agent.id` (the post-2026-04-29 schema): the branch flagged the
   // root agent as "drilled" and rendered AgentOverviewTab instead, so
   // TrustHeroStrip never mounted. CompanyPage already knows it's the
@@ -115,12 +115,12 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "overview") {
     return (
       <Suspense>
-        <TrustOverviewTab entityId={entityId} />
+        <TrustOverviewTab trustId={trustId} />
       </Suspense>
     );
   }
 
-  // Entity-scope primitive tabs. Without these explicit branches the
+  // Trust-scope primitive tabs. Without these explicit branches the
   // fallthrough to AgentPage rendered the root agent's chat surface
   // (AgentPage's `tab` prop has been a no-op since 2026-05-08), which
   // is why `/c/<id>/agents` and siblings landed on a header with no
@@ -128,7 +128,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "agents") {
     return (
       <Suspense>
-        <TrustAgentsTab entityId={entityId} />
+        <TrustAgentsTab trustId={trustId} />
       </Suspense>
     );
   }
@@ -136,7 +136,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "identity") {
     return (
       <Suspense>
-        <TrustRolesTab entityId={entityId} />
+        <TrustRolesTab trustId={trustId} />
       </Suspense>
     );
   }

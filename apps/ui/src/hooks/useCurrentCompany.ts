@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useDaemonStore } from "@/store/daemon";
-import type { Entity } from "@/lib/types";
+import type { Trust } from "@/lib/types";
 
 /**
  * Resolves the active company entity from the current route.
@@ -11,17 +11,17 @@ import type { Entity } from "@/lib/types";
  * or when the entity cannot be found in the local store.
  */
 export function useCurrentCompany(): {
-  entity: Entity | null;
+  entity: Trust | null;
   /** The entity id, regardless of which route shape matched. */
-  entityId: string;
+  trustId: string;
 } {
-  const { trustAddress, entityId: routeEntityId } = useParams<{
+  const { trustAddress, trustId: routeEntityId } = useParams<{
     trustAddress?: string;
-    entityId?: string;
+    trustId?: string;
   }>();
   const entities = useDaemonStore((s) => s.entities);
 
-  const entity = useMemo<Entity | null>(() => {
+  const entity = useMemo<Trust | null>(() => {
     if (trustAddress) {
       return entities.find((e) => e.trust_address === trustAddress) ?? null;
     }
@@ -33,6 +33,6 @@ export function useCurrentCompany(): {
 
   return {
     entity,
-    entityId: entity?.id ?? routeEntityId ?? "",
+    trustId: entity?.id ?? routeEntityId ?? "",
   };
 }

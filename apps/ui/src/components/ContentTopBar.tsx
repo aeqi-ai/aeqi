@@ -38,9 +38,9 @@ const PRIMITIVE_WORDS: Record<string, string> = {
 };
 
 export default function ContentTopBar() {
-  const { tab, entityId, agentId } = useParams<{
+  const { tab, trustId, agentId } = useParams<{
     tab?: string;
-    entityId?: string;
+    trustId?: string;
     agentId?: string;
   }>();
   const navigate = useNavigate();
@@ -56,14 +56,14 @@ export default function ContentTopBar() {
   // entity's root agent for breadcrumb context.
   const agent =
     (agentId ? agents.find((a) => a.id === agentId) : null) ??
-    (entityId ? (agents.find((a) => a.entity_id === entityId) ?? null) : null);
+    (trustId ? (agents.find((a) => a.trust_id === trustId) ?? null) : null);
   const section = tab || "overview";
   const primitiveWord = PRIMITIVE_WORDS[section];
   // User-scoped topbar: mirror the agent-topbar shape when we're on
   // the user's own surfaces (/, /settings). Avatar + name on the left,
   // gear button on the right. Runtime mode has no concept of a user
   // account, so skip it there.
-  const isUserScope = !entityId && (path === "/" || path === "/settings" || path === "/profile");
+  const isUserScope = !trustId && (path === "/" || path === "/settings" || path === "/profile");
   const userName =
     user?.name || user?.email?.split("@")[0] || (authMode === "none" ? "Local" : "You");
   // The crumb is always a link once a primitive + agent are resolved —
@@ -110,7 +110,7 @@ export default function ContentTopBar() {
           ) : (
             <Tooltip content={`Back to ${agentName}'s home`}>
               <Link
-                to={entityPathFromId(entitiesList, entityId ?? agent.entity_id ?? agent.id)}
+                to={entityPathFromId(entitiesList, trustId ?? agent.trust_id ?? agent.id)}
                 className="content-topbar-agent content-topbar-agent-link"
               >
                 <span className="content-topbar-agent-avatar" aria-hidden>
@@ -127,7 +127,7 @@ export default function ContentTopBar() {
               <Link
                 to={entityPathFromId(
                   entitiesList,
-                  entityId ?? agent!.entity_id ?? agent!.id,
+                  trustId ?? agent!.trust_id ?? agent!.id,
                   section,
                 )}
                 className="content-topbar-crumb content-topbar-crumb-link"
@@ -149,11 +149,7 @@ export default function ContentTopBar() {
               className={`topbar-settings-btn${settingsActive ? " active" : ""}`}
               onClick={() =>
                 navigate(
-                  entityPathFromId(
-                    entitiesList,
-                    entityId ?? agent.entity_id ?? agent.id,
-                    "settings",
-                  ),
+                  entityPathFromId(entitiesList, trustId ?? agent.trust_id ?? agent.id, "settings"),
                 )
               }
               leadingIcon={

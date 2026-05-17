@@ -59,14 +59,14 @@ describe("agent API normalization", () => {
           agents: [
             {
               id: "agent_root",
-              entity_id: "ent_1",
+              trust_id: "ent_1",
               name: "Acme Runtime",
               status: "running",
               budget_usd: 42,
             },
             {
               id: "agent_child",
-              entity_id: "ent_1",
+              trust_id: "ent_1",
               name: "Ops",
               status: "idle",
             },
@@ -76,14 +76,14 @@ describe("agent API normalization", () => {
     ).toEqual([
       {
         id: "agent_root",
-        entity_id: "ent_1",
+        trust_id: "ent_1",
         name: "Acme Runtime",
         status: "running",
         budget_usd: 42,
       },
       {
         id: "agent_child",
-        entity_id: "ent_1",
+        trust_id: "ent_1",
         name: "Ops",
         status: "idle",
       },

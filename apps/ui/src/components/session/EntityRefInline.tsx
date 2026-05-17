@@ -14,17 +14,17 @@ const TAB_BY_PRIMITIVE: Record<EntityPrimitive, string> = {
 
 /**
  * Inline mention for an AEQI primitive. Resolves via backend-supplied
- * entityId first, falling back to daemon-store name lookup for agent/quest.
+ * trustId first, falling back to daemon-store name lookup for agent/quest.
  * Renders unresolved refs as plain text — no link, no chip.
  */
 export default function EntityRefInline({ ref }: { ref: EntityRef }) {
-  const { entityId } = useNav();
+  const { trustId } = useNav();
   const entities = useDaemonStore((s) => s.entities);
   const agents = useDaemonStore((s) => s.agents);
   const quests = useDaemonStore((s) => s.quests);
 
   const resolved = useMemo(() => {
-    if (ref.entityId) return ref.entityId;
+    if (ref.trustId) return ref.trustId;
     const lc = ref.label.trim().toLowerCase();
     if (!lc) return "";
     if (ref.primitive === "agent") {
@@ -34,15 +34,15 @@ export default function EntityRefInline({ ref }: { ref: EntityRef }) {
       return quests.find((q) => (q.idea?.name ?? "").toLowerCase() === lc)?.id ?? "";
     }
     return "";
-  }, [ref.entityId, ref.label, ref.primitive, agents, quests]);
+  }, [ref.trustId, ref.label, ref.primitive, agents, quests]);
 
-  if (!entityId || !resolved) {
+  if (!trustId || !resolved) {
     return <span className="asv-entity-ref asv-entity-ref--unresolved">{ref.label}</span>;
   }
 
   const href = entityPathFromId(
     entities,
-    entityId,
+    trustId,
     TAB_BY_PRIMITIVE[ref.primitive],
     encodeURIComponent(resolved),
   );

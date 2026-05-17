@@ -47,7 +47,7 @@ export default function QuestCanvas(props: QuestCanvasMode) {
 //  Compose mode
 // ─────────────────────────────────────────────────────────────────────
 function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolvedAgentId: string }) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const [searchParams] = useSearchParams();
   const track = useTrack();
   const fromIdeaId = searchParams.get("fromIdea") ?? null;
@@ -96,8 +96,8 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
   }, [fromIdeaId, ideas]);
 
   const cancel = useCallback(() => {
-    goEntity(entityId, "quests", undefined, { replace: true });
-  }, [entityId, goEntity]);
+    goEntity(trustId, "quests", undefined, { replace: true });
+  }, [trustId, goEntity]);
 
   const submit = useCallback(async () => {
     if (busy) return;
@@ -135,7 +135,7 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
         }
       }
       await fetchQuests();
-      goEntity(entityId, "quests", newId ?? undefined, { replace: true });
+      goEntity(trustId, "quests", newId ?? undefined, { replace: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to create quest");
       setBusy(false);
@@ -150,7 +150,7 @@ function ComposeCanvas({ agentId, resolvedAgentId }: { agentId: string; resolved
     resolvedAgentId,
     fetchQuests,
     goEntity,
-    entityId,
+    trustId,
     track,
   ]);
 
@@ -240,7 +240,7 @@ function ViewCanvas({
   resolvedAgentId: string;
   quest: Quest;
 }) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const fetchQuests = useDaemonStore((s) => s.fetchQuests);
   const agents = useDaemonStore((s) => s.agents);
   const currentUser = useAuthStore((s) => s.user);
@@ -406,8 +406,8 @@ function ViewCanvas({
       agentId={quest.agent_id ?? resolvedAgentId}
       idea={quest.idea}
       activityRefreshKey={activityRefreshSeq}
-      onBack={() => goEntity(entityId, "quests", undefined, { replace: true })}
-      onNew={() => goEntity(entityId, "quests", "new", { replace: false })}
+      onBack={() => goEntity(trustId, "quests", undefined, { replace: true })}
+      onNew={() => goEntity(trustId, "quests", "new", { replace: false })}
       onDirtyChange={setBodyDirty}
       headerSlot={
         <QuestToolbar
@@ -449,8 +449,8 @@ function ViewCanvas({
             setDueAt(next);
             scheduleLifecycleSave();
           }}
-          onBack={() => goEntity(entityId, "quests", undefined, { replace: true })}
-          onNew={() => goEntity(entityId, "quests", "new", { replace: false })}
+          onBack={() => goEntity(trustId, "quests", undefined, { replace: true })}
+          onNew={() => goEntity(trustId, "quests", "new", { replace: false })}
           onCancel={handleRevertBody}
           onSave={handleSaveBody}
           statusOpen={statusOpen}

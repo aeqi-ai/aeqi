@@ -1,11 +1,11 @@
 import type { QuestMetadata, QuestRuntime } from "./runtime";
 
-export type EntityType = "company" | "human" | "agent" | "fund" | "dao" | "holding" | "protocol";
+export type TrustType = "company" | "human" | "agent" | "fund" | "dao" | "holding" | "protocol";
 
-export interface Entity {
+export interface Trust {
   id: string;
   name: string;
-  type: EntityType;
+  type: TrustType;
   status: "active" | "paused" | "archived";
   avatar?: string;
   color?: string;
@@ -16,7 +16,7 @@ export interface Entity {
   trust_id?: string;
   /** On-chain TRUST proxy address. NULL until indexer-confirmed. */
   trust_address?: string;
-  /** EOA that created this Entity's on-chain TRUST mirror. */
+  /** EOA that created this Trust's on-chain TRUST mirror. */
   creator_address?: string;
   /** Root agent UUID for this entity. Surfaced by the platform's
    *  `/api/entities` payload as `agent_id` so per-entity surfaces (`/me/*`,
@@ -41,7 +41,7 @@ export interface Entity {
 export interface Agent {
   id: string;
   name: string;
-  entity_id?: string | null;
+  trust_id?: string | null;
   status: string;
   model?: string;
   session_id?: string;
@@ -498,7 +498,7 @@ export type RoleType = "director" | "operational" | "advisor";
  *  closure over `RoleEdge` (DAG, not tree). */
 export interface Role {
   id: string;
-  entity_id: string;
+  trust_id: string;
   title: string;
   occupant_kind: OccupantKind;
   occupant_id: string | null;
@@ -523,7 +523,7 @@ export interface RoleEdge {
 
 export interface RoleInvitation {
   token: string;
-  entity_id: string;
+  trust_id: string;
   role_id: string;
   inviter_user_id: string;
   target_kind: "email" | "slug" | "open";
@@ -540,13 +540,13 @@ export interface RoleInvitation {
 }
 
 /** Public invitation detail — returned by GET /api/invitations/:token.
- *  Note: entity_id is NOT in the platform response; entity_display_name is.
+ *  Note: trust_id is NOT in the platform response; entity_display_name is.
  *  role_id is included for cross-referencing. */
 export interface InvitationDetail {
   token: string;
   role_title?: string;
   role_id: string;
-  entity_id?: string;
+  trust_id?: string;
   entity_display_name: string;
   inviter_name: string;
   target_kind?: "email" | "slug" | "open";

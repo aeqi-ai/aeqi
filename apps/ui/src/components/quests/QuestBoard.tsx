@@ -29,7 +29,7 @@ import { importQuestFromMarkdown, sortQuests, type QuestFilter } from "./agentQu
 export default function QuestBoard({
   agentId: _agentId,
   resolvedAgentId,
-  entityId,
+  trustId,
   quests,
   allQuests,
   scopeFilter,
@@ -46,7 +46,7 @@ export default function QuestBoard({
 }: {
   agentId: string;
   resolvedAgentId: string;
-  entityId: string;
+  trustId: string;
   quests: Quest[];
   allQuests: Quest[];
   scopeFilter: QuestFilter;
@@ -338,7 +338,7 @@ export default function QuestBoard({
           />
           <QuestsViewPopover view={view} onChange={onViewChange} />
           <ImportMenu
-            entityId={entityId}
+            trustId={trustId}
             parts={["quests"]}
             blueprintTitle="Import quests from a Blueprint"
             onMarkdownPicked={async (files) => {

@@ -27,9 +27,9 @@ import { useUIStore } from "@/store/ui";
  * We render each component under StrictMode + MemoryRouter with realistic
  * URL shapes and watch for React's "error" console output during render.
  *
- * Canonical routes: `/c/:entityId/[:tab[/:itemId]]`. The entity-root
- * agent renders at `/c/:entityId/...`; per-agent drilldowns live at
- * `/c/:entityId/agents/:agentId/...`.
+ * Canonical routes: `/c/:trustId/[:tab[/:itemId]]`. The entity-root
+ * agent renders at `/c/:trustId/...`; per-agent drilldowns live at
+ * `/c/:trustId/agents/:agentId/...`.
  */
 
 /** Inline helper — renders the component tree, returns any errors React logged. */
@@ -89,7 +89,7 @@ describe("AgentQuestsTab smoke", () => {
           name: "Root",
           model: "opus",
           status: "active",
-          entity_id: "root-1",
+          trust_id: "root-1",
         },
       ] as never,
       quests: [],
@@ -107,7 +107,7 @@ describe("AgentQuestsTab smoke", () => {
         <StrictMode>
           <MemoryRouter initialEntries={["/c/root-1/quests"]}>
             <Routes>
-              <Route path="c/:entityId/:tab/*" element={<AgentQuestsTab agentId="root-1" />} />
+              <Route path="c/:trustId/:tab/*" element={<AgentQuestsTab agentId="root-1" />} />
             </Routes>
           </MemoryRouter>
         </StrictMode>,
@@ -120,7 +120,7 @@ describe("AgentQuestsTab smoke", () => {
       <StrictMode>
         <MemoryRouter initialEntries={["/c/root-1/quests"]}>
           <Routes>
-            <Route path="c/:entityId/:tab/*" element={<AgentQuestsTab agentId="root-1" />} />
+            <Route path="c/:trustId/:tab/*" element={<AgentQuestsTab agentId="root-1" />} />
           </Routes>
         </MemoryRouter>
       </StrictMode>,
@@ -163,7 +163,7 @@ describe("AgentQuestsTab smoke", () => {
         <MemoryRouter initialEntries={["/c/root-1/quests"]}>
           <Routes>
             <Route
-              path="c/:entityId/:tab/*"
+              path="c/:trustId/:tab/*"
               element={<AgentQuestsTab agentId="root-1" scope="entity" />}
             />
           </Routes>
@@ -180,7 +180,7 @@ describe("AgentQuestsTab smoke", () => {
       <StrictMode>
         <MemoryRouter initialEntries={["/c/root-1/quests"]}>
           <Routes>
-            <Route path="c/:entityId/:tab/*" element={<AgentQuestsTab agentId="root-1" />} />
+            <Route path="c/:trustId/:tab/*" element={<AgentQuestsTab agentId="root-1" />} />
           </Routes>
         </MemoryRouter>
       </StrictMode>,
@@ -206,7 +206,7 @@ describe("shell components smoke", () => {
           created_at: "2026-04-28T00:00:00Z",
         },
       ],
-      agents: [{ id: "root-1", name: "Root", status: "active", entity_id: "root-1" }] as never,
+      agents: [{ id: "root-1", name: "Root", status: "active", trust_id: "root-1" }] as never,
       quests: [],
       events: [],
       workerEvents: [],
@@ -223,9 +223,9 @@ describe("shell components smoke", () => {
           <MemoryRouter initialEntries={["/"]}>
             <Routes>
               <Route index element={<ShellUnderTest />} />
-              <Route path="c/:entityId" element={<ShellUnderTest />} />
-              <Route path="c/:entityId/:tab" element={<ShellUnderTest />} />
-              <Route path="c/:entityId/:tab/:itemId" element={<ShellUnderTest />} />
+              <Route path="c/:trustId" element={<ShellUnderTest />} />
+              <Route path="c/:trustId/:tab" element={<ShellUnderTest />} />
+              <Route path="c/:trustId/:tab/:itemId" element={<ShellUnderTest />} />
             </Routes>
           </MemoryRouter>
         </StrictMode>,
@@ -251,8 +251,8 @@ describe("shell components smoke", () => {
           <MemoryRouter initialEntries={["/c/root-1"]}>
             <Routes>
               <Route
-                path="c/:entityId/*"
-                element={<LeftSidebar entityId="root-1" path="/c/root-1" />}
+                path="c/:trustId/*"
+                element={<LeftSidebar trustId="root-1" path="/c/root-1" />}
               />
             </Routes>
           </MemoryRouter>
@@ -269,8 +269,8 @@ describe("shell components smoke", () => {
           <MemoryRouter initialEntries={["/c/root-1/agents/child-1/inbox"]}>
             <Routes>
               <Route
-                path="c/:entityId/*"
-                element={<LeftSidebar entityId="root-1" path="/c/root-1/agents/child-1/inbox" />}
+                path="c/:trustId/*"
+                element={<LeftSidebar trustId="root-1" path="/c/root-1/agents/child-1/inbox" />}
               />
             </Routes>
           </MemoryRouter>
@@ -286,7 +286,7 @@ describe("shell components smoke", () => {
         <MemoryRouter initialEntries={["/c/root-1"]}>
           <Routes>
             <Route
-              path="c/:entityId/*"
+              path="c/:trustId/*"
               element={<ComposerRow agentId={null} base="/c/root-1" sessionsMounted={false} />}
             />
           </Routes>
@@ -302,7 +302,7 @@ describe("shell components smoke", () => {
         <MemoryRouter initialEntries={["/c/root-1/inbox"]}>
           <Routes>
             <Route
-              path="c/:entityId/*"
+              path="c/:trustId/*"
               element={<ComposerRow agentId="root-1" base="/c/root-1" sessionsMounted={true} />}
             />
           </Routes>
@@ -319,7 +319,7 @@ describe("shell components smoke", () => {
           id: "agent-default",
           name: "Default",
           status: "active",
-          entity_id: "runtime-local-entity",
+          trust_id: "runtime-local-entity",
         },
       ],
       { agent_id: "agent-default" },
@@ -329,14 +329,14 @@ describe("shell components smoke", () => {
     expect(resolved?.id).toBe("agent-default");
   });
 
-  it("falls back to the legacy agent entity_id match", () => {
+  it("falls back to the legacy agent trust_id match", () => {
     const resolved = resolveDefaultAgent(
       [
         {
           id: "legacy-default",
           name: "Default",
           status: "active",
-          entity_id: "platform-entity",
+          trust_id: "platform-entity",
         },
       ],
       null,
@@ -376,10 +376,10 @@ describe("AgentOrgChart smoke", () => {
   it("renders without loop errors when given a known root agent", () => {
     useDaemonStore.setState({
       agents: [
-        { id: "root", name: "Root", status: "active", entity_id: "root-1" },
-        { id: "ceo", name: "CEO", status: "active", entity_id: "root-1" },
-        { id: "cto", name: "CTO", status: "active", entity_id: "root-1" },
-        { id: "eng", name: "Engineer", status: "idle", entity_id: "root-1" },
+        { id: "root", name: "Root", status: "active", trust_id: "root-1" },
+        { id: "ceo", name: "CEO", status: "active", trust_id: "root-1" },
+        { id: "cto", name: "CTO", status: "active", trust_id: "root-1" },
+        { id: "eng", name: "Engineer", status: "idle", trust_id: "root-1" },
       ] as never,
     });
     const errors = captureRenderErrors(
@@ -395,8 +395,8 @@ describe("AgentOrgChart smoke", () => {
   it("renders the chart shell when the entity has at least one agent", () => {
     useDaemonStore.setState({
       agents: [
-        { id: "root", name: "Root", status: "active", entity_id: "root-1" },
-        { id: "only", name: "Only", status: "active", entity_id: "root-1" },
+        { id: "root", name: "Root", status: "active", trust_id: "root-1" },
+        { id: "only", name: "Only", status: "active", trust_id: "root-1" },
       ] as never,
     });
     const { container } = render(

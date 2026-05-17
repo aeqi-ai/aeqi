@@ -55,13 +55,13 @@ const STATUS_VALUES = new Set<StatusFilter>(STATUS_ORDER);
  * tabs answer the same shape from different lenses — Positions reads
  * "what slots exist", Agents-chart reads "who fills those slots".
  */
-export default function TrustAgentsTab({ entityId }: { entityId: string }) {
+export default function TrustAgentsTab({ trustId }: { trustId: string }) {
   const navigate = useNavigate();
   const entitiesList = useDaemonStore((s) => s.entities);
   const openAgent = useCallback(
     (agentId: string) =>
-      navigate(entityPathFromId(entitiesList, entityId, "agents", encodeURIComponent(agentId))),
-    [navigate, entityId, entitiesList],
+      navigate(entityPathFromId(entitiesList, trustId, "agents", encodeURIComponent(agentId))),
+    [navigate, trustId, entitiesList],
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -81,8 +81,8 @@ export default function TrustAgentsTab({ entityId }: { entityId: string }) {
   // this filter the tab renders the sidebar entity switcher.
   const allAgents = useDaemonStore((s) => s.agents);
   const entityAgents = useMemo(
-    () => allAgents.filter((a) => a.entity_id === entityId),
-    [allAgents, entityId],
+    () => allAgents.filter((a) => a.trust_id === trustId),
+    [allAgents, trustId],
   );
 
   // Roles + edges power the chart view; the list view is flat. Load once
@@ -98,7 +98,7 @@ export default function TrustAgentsTab({ entityId }: { entityId: string }) {
     setRolesLoading(true);
     setChartError(null);
     api
-      .getRoles(entityId)
+      .getRoles(trustId)
       .then((resp) => {
         if (cancelled) return;
         setPositions(resp.roles ?? []);
@@ -114,7 +114,7 @@ export default function TrustAgentsTab({ entityId }: { entityId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [entityId]);
+  }, [trustId]);
 
   const patchParams = useCallback(
     (mut: (p: URLSearchParams) => void) => {
@@ -336,7 +336,7 @@ export default function TrustAgentsTab({ entityId }: { entityId: string }) {
       <BlueprintPickerModal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        entityId={entityId}
+        trustId={trustId}
       />
     </div>
   );

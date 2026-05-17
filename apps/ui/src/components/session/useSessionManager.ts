@@ -25,7 +25,7 @@ export function useSessionManager({
   urlSessionId,
   processRawMessages,
 }: UseSessionManagerOptions) {
-  const { entityId } = useNav();
+  const { trustId } = useNav();
   const navigate = useNavigate();
   const entities = useDaemonStore((s) => s.entities);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -46,14 +46,14 @@ export function useSessionManager({
   // new session via the WS dispatch path; we don't pre-create one.
   const setSession = useCallback(
     (sid: string | null) => {
-      if (!entityId || !agentId) return;
+      if (!trustId || !agentId) return;
       if (sid) {
-        navigate(sessionDeepUrlFromId(entities, entityId, agentId, sid), { replace: true });
+        navigate(sessionDeepUrlFromId(entities, trustId, agentId, sid), { replace: true });
       } else {
-        navigate(entityPathFromId(entities, entityId, "agents", agentId), { replace: true });
+        navigate(entityPathFromId(entities, trustId, "agents", agentId), { replace: true });
       }
     },
-    [entityId, agentId, entities, navigate],
+    [trustId, agentId, entities, navigate],
   );
 
   // Load sessions for this agent

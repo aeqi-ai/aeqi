@@ -28,8 +28,8 @@ function deepEqualToolCalls(a: ToolCall[], b: ToolCall[]): boolean {
 
 export default function EventDetail({ event, agentId, onSave, onDelete }: EventDetailProps) {
   const navigate = useNavigate();
-  const { entityPath, entityId } = useNav();
-  const backHref = entityId ? entityPath(entityId, "events") : "/";
+  const { entityPath, trustId } = useNav();
+  const backHref = trustId ? entityPath(trustId, "events") : "/";
   const isGlobal = event.agent_id == null;
   const isSystem = event.system === true;
   const readOnly = isGlobal || isSystem;

@@ -35,12 +35,12 @@ const DEFAULT_FILTER: SessionsFilterState = { status: "all" };
 export default function SessionsRail() {
   // Mounted under both `/c/<entity>/agents/<agent>/inbox[/...]` and
   // `/trust/<addr>/agents/<agent>/inbox[/...]`. The trust shape exposes
-  // `trustAddress` as the route param; resolve it back to an entityId via
+  // `trustAddress` as the route param; resolve it back to an trustId via
   // the daemon entities array so the URL builder can pick the canonical
   // base. Without this, clicks on the agent rail no-op'd on `/trust/...`
-  // routes because `entityId` was undefined and the early return fired.
-  const { entityId, trustAddress, agentId, itemId } = useParams<{
-    entityId?: string;
+  // routes because `trustId` was undefined and the early return fired.
+  const { trustId, trustAddress, agentId, itemId } = useParams<{
+    trustId?: string;
     trustAddress?: string;
     agentId?: string;
     itemId?: string;
@@ -98,11 +98,11 @@ export default function SessionsRail() {
 
   const navigate = useNavigate();
   const entities = useDaemonStore((s) => s.entities);
-  // Resolve a concrete entityId from either the /c/<id> param or a /trust/<addr>
+  // Resolve a concrete trustId from either the /c/<id> param or a /trust/<addr>
   // lookup against the daemon entities array. `sessionDeepUrlFromId` then
   // re-derives the canonical /trust/<addr> base when the entity is on-chain.
   const resolvedEntityId =
-    entityId ||
+    trustId ||
     (trustAddress ? entities.find((e) => e.trust_address === trustAddress)?.id : undefined);
   const handleSelect = useCallback(
     (id: string) => {

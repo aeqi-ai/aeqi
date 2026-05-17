@@ -107,7 +107,7 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   }
   const entity = getScopedEntity();
   if (entity && !path.startsWith("/auth/")) {
-    headers["X-Entity"] = entity;
+    headers["X-Trust"] = entity;
   }
 
   const res = await fetch(url, { ...options, headers });

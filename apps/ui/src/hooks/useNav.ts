@@ -12,7 +12,7 @@ import { entityBasePath, entityPath as makeEntityPath } from "@/lib/entityPath";
  */
 export function useNav() {
   const navigate = useNavigate();
-  const { entityId, trustAddress } = useParams<{ entityId?: string; trustAddress?: string }>();
+  const { trustId, trustAddress } = useParams<{ trustId?: string; trustAddress?: string }>();
   const entities = useDaemonStore((s) => s.entities);
 
   // Resolve the base path for the current route's entity. Trust-backed
@@ -22,10 +22,10 @@ export function useNav() {
     if (trustAddress) {
       return `/trust/${trustAddress}`;
     }
-    if (!entityId) return "";
-    const entity = entities.find((e) => e.id === entityId);
+    if (!trustId) return "";
+    const entity = entities.find((e) => e.id === trustId);
     return entity ? entityBasePath(entity) : "/launch";
-  }, [trustAddress, entityId, entities]);
+  }, [trustAddress, trustId, entities]);
 
   const go = useCallback(
     (path: string, options?: { replace?: boolean }) => {
@@ -73,14 +73,14 @@ export function useNav() {
     [navigate, entityPath],
   );
 
-  // Resolve a stable `entityId` regardless of which route shape is active.
-  // On the trust route `useParams.entityId` is undefined, so fall back to
+  // Resolve a stable `trustId` regardless of which route shape is active.
+  // On the trust route `useParams.trustId` is undefined, so fall back to
   // the entity matching `trustAddress` and keep nested navigation stable.
   const trustEntityId = useMemo(() => {
-    if (entityId) return entityId;
+    if (trustId) return trustId;
     if (!trustAddress) return "";
     return entities.find((e) => e.trust_address === trustAddress)?.id ?? "";
-  }, [entityId, trustAddress, entities]);
+  }, [trustId, trustAddress, entities]);
 
-  return { go, href, entityPath, goEntity, entityId: trustEntityId, base };
+  return { go, href, entityPath, goEntity, trustId: trustEntityId, base };
 }

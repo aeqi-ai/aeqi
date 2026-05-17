@@ -37,7 +37,7 @@ interface UserRow {
 }
 
 interface PlacementRow {
-  entity_id: string;
+  trust_id: string;
   display_name: string;
   user_id: string;
   user_email?: string | null;
@@ -47,7 +47,6 @@ interface PlacementRow {
   placement_status?: string | null;
   org_lifecycle?: string | null;
   trust_status?: string | null;
-  trust_id?: string | null;
   trust_address?: string | null;
   creator_address?: string | null;
   target_host?: string | null;
@@ -296,7 +295,7 @@ export default function AdminPage() {
       placements: data.placements.filter((p) =>
         matchesQuery(
           [
-            p.entity_id,
+            p.trust_id,
             p.display_name,
             p.user_id,
             p.user_email,
@@ -462,15 +461,15 @@ export default function AdminPage() {
                 <Server size={14} aria-hidden="true" />
                 {labelize(p.placement_type)}
               </span>
-              <span className="admin-mono-cell" title={p.entity_id}>
-                {shortId(p.entity_id)}
+              <span className="admin-mono-cell" title={p.trust_id}>
+                {shortId(p.trust_id)}
               </span>
             </span>
           </div>
         ),
         width: "240px",
         sortable: true,
-        sortAccessor: (p) => p.display_name || p.entity_id,
+        sortAccessor: (p) => p.display_name || p.trust_id,
       },
       {
         key: "lifecycle",
@@ -680,7 +679,7 @@ export default function AdminPage() {
               <Table
                 columns={placementColumns}
                 data={filtered.placements}
-                rowKey={(p) => p.entity_id}
+                rowKey={(p) => p.trust_id}
                 density="compact"
                 ariaLabel="Admin runtime placements"
                 empty={normalizedQuery ? emptyForQuery : emptyDataset("No runtime placements")}

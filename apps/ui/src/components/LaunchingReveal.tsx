@@ -40,10 +40,10 @@ function truncate(addr: string): string {
  * effect handles it via the entities store).
  */
 export function LaunchingReveal({
-  entityId,
+  trustId,
   fallbackDisplayName,
 }: {
-  entityId: string;
+  trustId: string;
   fallbackDisplayName?: string;
 }) {
   const [status, setStatus] = useState<LaunchStatus | null>(null);
@@ -55,7 +55,7 @@ export function LaunchingReveal({
 
     const tick = async () => {
       try {
-        const data = await api.getLaunchStatus(entityId);
+        const data = await api.getLaunchStatus(trustId);
         if (cancelled) return;
         setStatus(data);
         setPollError(null);
@@ -74,7 +74,7 @@ export function LaunchingReveal({
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [entityId]);
+  }, [trustId]);
 
   const milestones = status?.milestones;
   const trustAddress = status?.trust_address ?? null;

@@ -41,7 +41,7 @@ describe("PrimitivePreview", () => {
         <MemoryRouter initialEntries={["/c/root-1/inbox"]}>
           <Routes>
             <Route
-              path="c/:entityId/:tab"
+              path="c/:trustId/:tab"
               element={<PrimitivePreview kind="event" id="event-1" />}
             />
           </Routes>
@@ -80,7 +80,7 @@ describe("PrimitivePreview", () => {
         <MemoryRouter initialEntries={["/c/root-1/inbox"]}>
           <Routes>
             <Route
-              path="c/:entityId/:tab"
+              path="c/:trustId/:tab"
               element={<PrimitivePreview kind="quest" id="quest-1" />}
             />
           </Routes>

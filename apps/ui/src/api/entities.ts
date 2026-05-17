@@ -1,5 +1,5 @@
 import { apiRequest } from "@/api/client";
-import type { Entity } from "@/lib/types";
+import type { Trust } from "@/lib/types";
 
 export interface EntitiesResponse {
   entities?: Array<Record<string, unknown>>;
@@ -18,10 +18,10 @@ function optionalString(value: unknown): string | undefined {
  *  is the human-readable label, `id` is the canonical UUID. Items with
  *  no `display_name` are stale or in-flight placements; they're filtered
  *  out so the switcher doesn't render unnamed rows. */
-export function normalizeEntityRoots(data: EntitiesResponse | null | undefined): Entity[] {
+export function normalizeEntityRoots(data: EntitiesResponse | null | undefined): Trust[] {
   const raw = Array.isArray(data?.entities) ? data.entities : [];
   return raw
-    .map<Entity>((entity) => ({
+    .map<Trust>((entity) => ({
       id: stringValue(entity.id),
       name: stringValue(entity.display_name),
       type: "company",
@@ -46,7 +46,7 @@ export function normalizeEntityRoots(data: EntitiesResponse | null | undefined):
     .filter((entity) => entity.id && entity.name);
 }
 
-export async function listEntityRoots(): Promise<Entity[]> {
+export async function listEntityRoots(): Promise<Trust[]> {
   const data = await apiRequest<EntitiesResponse>("/entities");
   return normalizeEntityRoots(data);
 }

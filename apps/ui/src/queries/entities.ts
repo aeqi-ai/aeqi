@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as entitiesApi from "@/api/entities";
-import type { Entity } from "@/lib/types";
+import type { Trust } from "@/lib/types";
 import { entityKeys } from "./keys";
 
-const EMPTY_ENTITIES: Entity[] = [];
+const EMPTY_ENTITIES: Trust[] = [];
 
 export function useEntitiesQuery() {
   return useQuery({

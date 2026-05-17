@@ -19,7 +19,7 @@ export default function AgentQuestsTab({
   agentId: string;
   scope?: "agent" | "entity";
 }) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const { itemId } = useParams<{ itemId?: string }>();
   // `/<agentId>/quests/new` is the dedicated compose surface; any other
   // `:itemId` is a quest id to look up. The literal `"new"` slug is
@@ -40,12 +40,12 @@ export default function AgentQuestsTab({
       const search: Record<string, string> = {};
       if (opts?.fromIdea) search.fromIdea = opts.fromIdea;
       if (opts?.status) search.status = opts.status;
-      goEntity(entityId, "quests", "new", {
+      goEntity(trustId, "quests", "new", {
         replace: false,
         search: Object.keys(search).length > 0 ? search : undefined,
       });
     },
-    [entityId, goEntity],
+    [trustId, goEntity],
   );
 
   const setView = useCallback(
@@ -156,7 +156,7 @@ export default function AgentQuestsTab({
         </div>
       );
     }
-    // Entity tabs are already scoped by the X-Entity header. Do not
+    // Trust tabs are already scoped by the X-Trust header. Do not
     // re-narrow them to the default agent, or quests owned by sibling
     // agents disappear from /trust/<addr>/quests.
     const visibleQuests =
@@ -171,13 +171,13 @@ export default function AgentQuestsTab({
       <QuestBoard
         agentId={agentId}
         resolvedAgentId={agent?.id || agentId}
-        entityId={entityId}
+        trustId={trustId}
         quests={filteredQuests}
         allQuests={visibleQuests}
         scopeFilter={questFilter}
         onScopeChange={setQuestFilter}
         onCreated={fetchQuests}
-        onPick={(id) => goEntity(entityId, "quests", id)}
+        onPick={(id) => goEntity(trustId, "quests", id)}
         onCompose={(status) => openCompose(status ? { status } : undefined)}
         view={view}
         onViewChange={setView}

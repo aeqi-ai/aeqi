@@ -5,7 +5,7 @@ import { Button, EmptyState, Spinner } from "@/components/ui";
 
 /**
  * Public profile page — Phase 2 of public-profiles. Renders at the
- * top-level URL `<host>/<slug>` where `<slug>` is the entity_id
+ * top-level URL `<host>/<slug>` where `<slug>` is the trust_id
  * UUID. Reads from the unauth `/api/public/entities/<slug>` endpoint;
  * 404s when the entity is not marked `public=true` (or doesn't exist —
  * the public-read endpoint deliberately doesn't distinguish, so private
@@ -34,7 +34,7 @@ interface PublicIdea {
 }
 
 interface PublicProfile {
-  entity_id: string;
+  trust_id: string;
   display_name: string;
   tagline: string | null;
   public: true;
@@ -160,7 +160,7 @@ export default function PublicProfilePage() {
       }}
     >
       <TrustHeroStrip
-        entityId={profile.entity_id}
+        trustId={profile.trust_id}
         public
         publicEntity={{
           display_name: profile.display_name,

@@ -10,7 +10,7 @@ function makeItem(
     session_id: sessionId,
     agent_id: `agent-${sessionId}`,
     agent_name: `Agent ${sessionId}`,
-    entity_id: `entity-${sessionId}`,
+    trust_id: `entity-${sessionId}`,
     session_name: `session ${sessionId}`,
     awaiting_subject: "subject",
     awaiting_at: awaitingAt,

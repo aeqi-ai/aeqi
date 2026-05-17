@@ -25,10 +25,10 @@ import { entityPathFromId } from "@/lib/entityPath";
  */
 export default function AgentOverviewTab({
   agentId,
-  entityId,
+  trustId,
 }: {
   agentId: string;
-  entityId: string;
+  trustId: string;
 }) {
   const navigate = useNavigate();
   const agents = useDaemonStore((s) => s.agents);
@@ -76,12 +76,12 @@ export default function AgentOverviewTab({
   // Roles this agent occupies inside the active entity. Slice of the
   // entity's full org chart — same data the entity Roles tab renders.
   // Cross-entity roles aren't surfaced here yet; the API is
-  // entity-scoped (`getRoles(entityId)`).
+  // entity-scoped (`getRoles(trustId)`).
   const [roles, setRoles] = useState<Role[]>([]);
   useEffect(() => {
     let cancelled = false;
     api
-      .getRoles(entityId)
+      .getRoles(trustId)
       .then((resp) => {
         if (cancelled) return;
         const held = (resp.roles ?? []).filter(
@@ -96,7 +96,7 @@ export default function AgentOverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [agentId, entityId]);
+  }, [agentId, trustId]);
 
   // Mission: fetch this agent's identity idea (the "Persona" seed
   // every blueprint creates) and take its first paragraph. If the
@@ -132,8 +132,8 @@ export default function AgentOverviewTab({
     return parts.join(" · ");
   }, [openQuestCount, agentInbox.length]);
 
-  const basePath = entityPathFromId(entities, entityId, "agents", encodeURIComponent(agentId));
-  const entityBase = entityPathFromId(entities, entityId);
+  const basePath = entityPathFromId(entities, trustId, "agents", encodeURIComponent(agentId));
+  const entityBase = entityPathFromId(entities, trustId);
 
   return (
     <div className="dashboard">
@@ -222,7 +222,7 @@ export default function AgentOverviewTab({
             </h2>
             {agentInbox.length > 0 && (
               <Link
-                to={entityPathFromId(entities, entityId, "inbox")}
+                to={entityPathFromId(entities, trustId, "inbox")}
                 className="dashboard-card-link"
               >
                 Open inbox →
@@ -242,7 +242,7 @@ export default function AgentOverviewTab({
                       navigate(
                         sessionDeepUrlFromId(
                           entities,
-                          item.entity_id,
+                          item.trust_id,
                           item.agent_id,
                           item.session_id,
                         ),

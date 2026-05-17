@@ -5,7 +5,7 @@ import { useDaemonStore } from "@/store/daemon";
 import { entityPathFromId } from "@/lib/entityPath";
 
 interface Options {
-  entityId: string;
+  trustId: string;
   searching: boolean;
   shortcutsOpen: boolean;
   openSearch: () => void;
@@ -35,7 +35,7 @@ interface Options {
  *   aeqi:open-shortcuts  — open the cheatsheet overlay
  */
 export function useGlobalShortcuts({
-  entityId,
+  trustId,
   searching,
   shortcutsOpen,
   openSearch,
@@ -100,14 +100,14 @@ export function useGlobalShortcuts({
           q: "quests",
           i: "ideas",
         };
-        if (key in tabs && entityId) {
+        if (key in tabs && trustId) {
           e.preventDefault();
           gDeadlineRef.current = 0;
           const seg = tabs[key];
           navigate(
             seg
-              ? entityPathFromId(entitiesList, entityId, seg)
-              : entityPathFromId(entitiesList, entityId),
+              ? entityPathFromId(entitiesList, trustId, seg)
+              : entityPathFromId(entitiesList, trustId),
           );
           return;
         }
@@ -135,8 +135,8 @@ export function useGlobalShortcuts({
         // `aeqi:create` event so the AgentsTab listener opens the
         // Blueprint picker. At user scope (no entity) fall back to /launch
         // (company creation).
-        if (entityId) {
-          navigate(entityPathFromId(entitiesList, entityId, "agents"));
+        if (trustId) {
+          navigate(entityPathFromId(entitiesList, trustId, "agents"));
           // Give the route swap a tick before dispatching so the agents
           // tab is mounted and listening.
           setTimeout(() => window.dispatchEvent(new CustomEvent("aeqi:create")), 0);
@@ -158,7 +158,7 @@ export function useGlobalShortcuts({
     openSearch,
     closeSearch,
     setShortcutsOpen,
-    entityId,
+    trustId,
     entitiesList,
     navigate,
   ]);

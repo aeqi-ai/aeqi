@@ -168,7 +168,7 @@ interface AvatarResolution {
 function resolveAvatar(
   author: ResolvedAuthor,
   ctx: {
-    entityId: string | undefined;
+    trustId: string | undefined;
     entitiesList: ReturnType<typeof useDaemonStore.getState>["entities"];
     currentUserId: string;
     currentUserName: string;
@@ -176,19 +176,13 @@ function resolveAvatar(
     userEmail: string;
   },
 ): AvatarResolution | null {
-  const {
-    entityId,
-    entitiesList,
-    currentUserId,
-    currentUserName,
-    currentUserAvatarUrl,
-    userEmail,
-  } = ctx;
+  const { trustId, entitiesList, currentUserId, currentUserName, currentUserAvatarUrl, userEmail } =
+    ctx;
   if (author.kind === "system") return null;
 
   if (author.kind === "agent") {
-    const href = entityId
-      ? entityPathFromId(entitiesList, entityId, "agents", encodeURIComponent(author.id))
+    const href = trustId
+      ? entityPathFromId(entitiesList, trustId, "agents", encodeURIComponent(author.id))
       : undefined;
     return {
       href,
@@ -199,8 +193,8 @@ function resolveAvatar(
     };
   }
   if (author.kind === "position") {
-    const href = entityId
-      ? entityPathFromId(entitiesList, entityId, "roles", encodeURIComponent(author.id))
+    const href = trustId
+      ? entityPathFromId(entitiesList, trustId, "roles", encodeURIComponent(author.id))
       : undefined;
     return {
       href,
@@ -362,7 +356,7 @@ const MessageItem = memo(function MessageItem({
   /** The agent ID for this session — used by resolveAuthor for legacy fallback. */
   sessionAgentId?: string;
 }) {
-  const { entityId } = useNav();
+  const { trustId } = useNav();
   const agents = useDaemonStore((s) => s.agents);
   const entitiesList = useDaemonStore((s) => s.entities);
   const userEmail = useAuthStore((s) => s.user?.email ?? "");
@@ -376,7 +370,7 @@ const MessageItem = memo(function MessageItem({
     return m;
   }, [agents]);
 
-  const resolvedAgentId = sessionAgentId ?? entityId ?? "";
+  const resolvedAgentId = sessionAgentId ?? trustId ?? "";
   const authorCtx = useMemo(
     () => ({ sessionAgentId: resolvedAgentId, agentNames, userName: userEmail }),
     [resolvedAgentId, agentNames, userEmail],
@@ -420,7 +414,7 @@ const MessageItem = memo(function MessageItem({
   const isAsk = msg.source === "question.ask";
 
   const avatar = resolveAvatar(author, {
-    entityId,
+    trustId,
     entitiesList,
     currentUserId,
     currentUserName,
@@ -471,7 +465,7 @@ const MessageItem = memo(function MessageItem({
             {isAssistantRole ? (
               <SessionMarkdown body={msg.content} />
             ) : (
-              <MentionText body={msg.content} entityId={entityId ?? ""} />
+              <MentionText body={msg.content} trustId={trustId ?? ""} />
             )}
           </div>
         )}

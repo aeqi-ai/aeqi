@@ -16,7 +16,7 @@ const NO_IDEAS: Idea[] = [];
  * uses RefsRow directly with local pendingRefs state inside IdeaCanvas.
  */
 export default function IdeaLinksPanel({ ideaId, agentId }: { ideaId: string; agentId: string }) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const { data: ideas = NO_IDEAS } = useAgentIdeas(agentId);
   const [edges, setEdges] = useState<IdeaEdges>(NO_EDGES);
 
@@ -82,7 +82,7 @@ export default function IdeaLinksPanel({ ideaId, agentId }: { ideaId: string; ag
       refs={refs}
       onAdd={handleAdd}
       onRemove={handleRemove}
-      onOpen={(id) => goEntity(entityId, "ideas", id)}
+      onOpen={(id) => goEntity(trustId, "ideas", id)}
     />
   );
 }

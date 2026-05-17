@@ -6,7 +6,7 @@ import { Button, Input, Modal, Select } from "@/components/ui";
 interface NewRoleModalProps {
   open: boolean;
   onClose: () => void;
-  entityId: string;
+  trustId: string;
   roles: Role[];
   agents: Agent[];
   onCreated: (role: Role) => void;
@@ -26,7 +26,7 @@ const KIND_OPTIONS = [
 export default function NewRoleModal({
   open,
   onClose,
-  entityId,
+  trustId,
   roles,
   agents,
   onCreated,
@@ -40,8 +40,8 @@ export default function NewRoleModal({
   const [error, setError] = useState<string | null>(null);
 
   const scopedAgents = useMemo(
-    () => agents.filter((a) => a.entity_id === entityId || a.id === entityId),
-    [agents, entityId],
+    () => agents.filter((a) => a.trust_id === trustId || a.id === trustId),
+    [agents, trustId],
   );
 
   const agentOptions = useMemo(
@@ -102,7 +102,7 @@ export default function NewRoleModal({
     setSubmitting(true);
     try {
       const resp = await api.createRole({
-        entity_id: entityId,
+        trust_id: trustId,
         title: trimmedTitle,
         occupant_kind: kind,
         ...(occupantId ? { occupant_id: occupantId } : {}),

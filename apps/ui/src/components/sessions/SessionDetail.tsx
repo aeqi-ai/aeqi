@@ -42,8 +42,8 @@ export interface SessionDetailProps {
   // Session identity — drives ParticipantStrip, MessageItem author resolution.
   sessionId: string | null;
   /** When provided, scoped to this entity (proxy injects authed
-   * X-Entity for participant lookups). */
-  entityId?: string;
+   * X-Trust for participant lookups). */
+  trustId?: string;
   /** Agent ID for the session — used by MessageItem's resolveAuthor for
    * legacy fallback when from_kind is not set on the row. Optional. */
   agentId?: string;
@@ -113,7 +113,7 @@ const SCROLL_BOTTOM_TOLERANCE = 32;
 
 export default function SessionDetail({
   sessionId,
-  entityId,
+  trustId,
   agentId,
   title,
   subtitle,
@@ -288,7 +288,7 @@ export default function SessionDetail({
             </div>
           </div>
           <div className="session-detail-header-extras">
-            {sessionId && <ParticipantStrip sessionId={sessionId} entityId={entityId} />}
+            {sessionId && <ParticipantStrip sessionId={sessionId} trustId={trustId} />}
             {headerExtras}
           </div>
         </div>

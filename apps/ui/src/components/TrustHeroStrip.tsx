@@ -31,7 +31,7 @@ interface PublicEntityShape {
 }
 
 interface TrustHeroStripProps {
-  entityId: string;
+  trustId: string;
   /**
    * When true, render the strip read-only — hides edit affordances, plan
    * label, and public/private toggle. Used by the unauthenticated public
@@ -46,13 +46,13 @@ interface TrustHeroStripProps {
 }
 
 export default function TrustHeroStrip({
-  entityId,
+  trustId,
   public: isPublicMode = false,
   publicEntity,
 }: TrustHeroStripProps) {
   const entities = useDaemonStore((s) => s.entities);
   const fetchEntities = useDaemonStore((s) => s.fetchEntities);
-  const entity = entities.find((e) => e.id === entityId);
+  const entity = entities.find((e) => e.id === trustId);
 
   // Local edit state — switches between display and inline-input modes.
   const [editingName, setEditingName] = useState(false);
@@ -99,7 +99,7 @@ export default function TrustHeroStrip({
     setEditingName(false);
     if (!trimmed || trimmed === entity?.name) return;
     try {
-      await api.updateEntity(entityId, { name: trimmed });
+      await api.updateEntity(trustId, { name: trimmed });
       await fetchEntities();
     } catch (e) {
       console.error("rename entity failed", e);
@@ -111,7 +111,7 @@ export default function TrustHeroStrip({
     setEditingTagline(false);
     if (trimmed === (entity?.tagline ?? "")) return;
     try {
-      await api.updateEntity(entityId, { tagline: trimmed });
+      await api.updateEntity(trustId, { tagline: trimmed });
       await fetchEntities();
     } catch (e) {
       console.error("update tagline failed", e);
@@ -124,7 +124,7 @@ export default function TrustHeroStrip({
     setIsPublic(next);
     setSavingPublic(true);
     try {
-      await api.updateEntity(entityId, { public: next });
+      await api.updateEntity(trustId, { public: next });
       await fetchEntities();
     } catch (e) {
       console.error("toggle public failed", e);
@@ -140,7 +140,7 @@ export default function TrustHeroStrip({
     return `${plan.name} · ${plan.price}/mo`;
   })();
 
-  const name = isPublicMode ? (publicEntity?.display_name ?? entityId) : (entity?.name ?? entityId);
+  const name = isPublicMode ? (publicEntity?.display_name ?? trustId) : (entity?.name ?? trustId);
   const tagline = isPublicMode ? (publicEntity?.tagline ?? "") : (entity?.tagline ?? "");
 
   return (

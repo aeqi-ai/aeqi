@@ -49,7 +49,7 @@ export default function AgentIdeasTab({
   agentId: string;
   scope?: "agent" | "entity";
 }) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const { itemId } = useParams<{ itemId?: string }>();
   const selectedId = itemId || null;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -270,7 +270,7 @@ export default function AgentIdeasTab({
   // mode entirely.
   const handleGraphSelect = (node: GraphNode | null) => {
     if (!node) return;
-    goEntity(entityId, "ideas", node.id);
+    goEntity(trustId, "ideas", node.id);
   };
 
   // "+ New idea" — compose mode is an explicit search param so the default
@@ -279,7 +279,7 @@ export default function AgentIdeasTab({
   useEffect(() => {
     const handler = (e: Event) => {
       const name = (e as CustomEvent<{ name?: string }>).detail?.name;
-      goEntity(entityId, "ideas", undefined, { replace: true });
+      goEntity(trustId, "ideas", undefined, { replace: true });
       requestAnimationFrame(() => {
         const next = new URLSearchParams(window.location.search);
         next.set("compose", "1");
@@ -290,7 +290,7 @@ export default function AgentIdeasTab({
     };
     window.addEventListener("aeqi:new-idea", handler);
     return () => window.removeEventListener("aeqi:new-idea", handler);
-  }, [entityId, goEntity, setSearchParams]);
+  }, [trustId, goEntity, setSearchParams]);
 
   const fireNewIdea = (name?: string) =>
     window.dispatchEvent(new CustomEvent("aeqi:new-idea", { detail: name ? { name } : {} }));
@@ -354,7 +354,7 @@ export default function AgentIdeasTab({
           view={view}
           onViewChange={setView}
           onNew={() => fireNewIdea()}
-          onOpen={(id) => goEntity(entityId, "ideas", id)}
+          onOpen={(id) => goEntity(trustId, "ideas", id)}
         />
       </Suspense>
     );
@@ -370,7 +370,7 @@ export default function AgentIdeasTab({
           agentId={agentId}
           idea={selected}
           presetName={presetName}
-          onBack={() => goEntity(entityId, "ideas")}
+          onBack={() => goEntity(trustId, "ideas")}
           onNew={() => fireNewIdea()}
         />
       </Suspense>

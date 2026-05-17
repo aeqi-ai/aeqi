@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useDaemonStore } from "@/store/daemon";
-import type { Entity } from "@/lib/types";
+import type { Trust } from "@/lib/types";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
 const ENTITY_ID = "ent-abc-123";
 const TRUST_ADDR = "0xdeadbeefcafe0000000000000000000000000001";
 
-const ENTITY_WITH_TRUST: Entity = {
+const ENTITY_WITH_TRUST: Trust = {
   id: ENTITY_ID,
   name: "Acme Corp",
   type: "company",
@@ -16,7 +16,7 @@ const ENTITY_WITH_TRUST: Entity = {
   trust_address: TRUST_ADDR,
 };
 
-const ENTITY_WITHOUT_TRUST: Entity = {
+const ENTITY_WITHOUT_TRUST: Trust = {
   id: ENTITY_ID,
   name: "Pending Corp",
   type: "company",
@@ -27,7 +27,7 @@ const ENTITY_WITHOUT_TRUST: Entity = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function seedEntities(entities: Entity[]) {
+function seedEntities(entities: Trust[]) {
   useDaemonStore.setState({ entities });
 }
 

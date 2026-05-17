@@ -21,12 +21,10 @@ import EntityRefInline from "./EntityRefInline";
 // ── Markdown wrapper ─────────────────────────────────────────────────────
 
 export function SessionMarkdown({ body }: { body: string }) {
-  const { entityId } = useNav();
-  const { data: ideas } = useAgentIdeas(entityId);
+  const { trustId } = useNav();
+  const { data: ideas } = useAgentIdeas(trustId);
   const ideasByName = useMemo(() => buildIdeasByName(ideas), [ideas]);
-  return (
-    <RichMarkdown body={body} variant="session" ideasByName={ideasByName} agentId={entityId} />
-  );
+  return <RichMarkdown body={body} variant="session" ideasByName={ideasByName} agentId={trustId} />;
 }
 
 // ── Inline group: text + entity_ref runs ────────────────────────────────
@@ -212,7 +210,7 @@ function ToolSummarizedChip({ event }: { event: ToolSummarizedEvent }) {
 // ── Event-fire item — exported for direct use by event_fire role messages ──
 
 export function EventFireItem({ msg }: { msg: Message }) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const fire = msg.eventFire;
   if (!fire) return null;
 
@@ -221,7 +219,7 @@ export function EventFireItem({ msg }: { msg: Message }) {
       <button
         type="button"
         className="asv-event-fire-name"
-        onClick={() => entityId && goEntity(entityId, "events", fire.eventId)}
+        onClick={() => trustId && goEntity(trustId, "events", fire.eventId)}
         title={fire.pattern}
       >
         {fire.eventName || fire.pattern || "event"}

@@ -21,7 +21,7 @@ const OCCUPANT_OPTIONS = [
 ];
 
 export default function RoleNewPage() {
-  const { entityId = "" } = useParams<{ entityId: string }>();
+  const { trustId = "" } = useParams<{ trustId: string }>();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
@@ -40,8 +40,8 @@ export default function RoleNewPage() {
   const agents = useDaemonStore((s) => s.agents);
   const entitiesList = useDaemonStore((s) => s.entities);
   const scopedAgents = useMemo(
-    () => agents.filter((a) => a.entity_id === entityId || a.id === entityId),
-    [agents, entityId],
+    () => agents.filter((a) => a.trust_id === trustId || a.id === trustId),
+    [agents, trustId],
   );
   const agentOptions = useMemo(
     () => scopedAgents.map((a) => ({ value: a.id, label: a.name })),
@@ -51,13 +51,13 @@ export default function RoleNewPage() {
   useEffect(() => {
     document.title = "aeqi";
     api
-      .getRoles(entityId)
+      .getRoles(trustId)
       .then((r) => {
         const opts = r.roles.map((ro) => ({ value: ro.id, label: ro.title || "(untitled)" }));
         setParentOptions([{ value: "", label: "None" }, ...opts]);
       })
       .catch((e) => logError("role-new.load-parent-options", e));
-  }, [entityId]);
+  }, [trustId]);
 
   const handleRoleTypeChange = (val: string) => {
     const t = val as RoleType;
@@ -97,7 +97,7 @@ export default function RoleNewPage() {
     setError(null);
     try {
       const resp = await api.createRole({
-        entity_id: entityId,
+        trust_id: trustId,
         title: trimmedTitle,
         occupant_kind: occupantKind,
         ...(occupantId ? { occupant_id: occupantId } : {}),
@@ -105,7 +105,7 @@ export default function RoleNewPage() {
         role_type: roleType,
         grants,
       });
-      navigate(entityPathFromId(entitiesList, entityId, "roles", resp.role.id), {
+      navigate(entityPathFromId(entitiesList, trustId, "roles", resp.role.id), {
         replace: true,
       });
     } catch (err) {
@@ -114,7 +114,7 @@ export default function RoleNewPage() {
     }
   };
 
-  const backHref = entityPathFromId(entitiesList, entityId, "roles");
+  const backHref = entityPathFromId(entitiesList, trustId, "roles");
 
   return (
     <div className="asv-main" style={{ padding: "var(--space-6) var(--space-8)", maxWidth: 680 }}>

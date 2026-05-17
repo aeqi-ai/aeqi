@@ -234,7 +234,7 @@ function appendStatus(state: StreamState, text: string): StreamState {
  * Recognises `[Agent: Name]` / `[Quest: Name]` / `[Idea: Name]` /
  * `[Event: Name]` in a TextDelta and splits them into structured
  * `entity_ref` segments. Backend-emitted `EntityRef` events are the
- * canonical path (they carry the real entity_id); this is the fallback
+ * canonical path (they carry the real trust_id); this is the fallback
  * when only a label is on the wire. Stateless — uses `matchAll`, not a
  * shared regex with `lastIndex` mutation.
  */
@@ -253,7 +253,7 @@ function appendTextWithEntityParsing(state: StreamState, delta: string): StreamS
       kind: "entity_ref",
       ref: {
         primitive: match[1].toLowerCase() as EntityPrimitive,
-        entityId: "",
+        trustId: "",
         label: match[2].trim(),
       },
     });
@@ -272,7 +272,7 @@ function entityRefFromEvent(event: RawEvent): EntityRef {
     : "agent";
   return {
     primitive,
-    entityId: typeof event.entity_id === "string" ? event.entity_id : "",
+    trustId: typeof event.trust_id === "string" ? event.trust_id : "",
     label: String(event.label ?? event.name ?? ""),
     status: typeof event.status === "string" ? event.status : undefined,
   };

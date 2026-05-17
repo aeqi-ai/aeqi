@@ -142,7 +142,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
   },
   ref,
 ) {
-  const { goEntity, entityId } = useNav();
+  const { goEntity, trustId } = useNav();
   const track = useTrack();
   const { data: ideas } = useAgentIdeas(agentId);
   const { patchIdea, removeIdea, addIdea, invalidateIdeas } = useAgentIdeasCache(agentId);
@@ -342,7 +342,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
       if (onPersisted) {
         onPersisted(res.id);
       } else {
-        goEntity(entityId, "ideas", res.id, { replace: true });
+        goEntity(trustId, "ideas", res.id, { replace: true });
       }
       return res.id;
     } catch (e) {
@@ -350,7 +350,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
       setError(e instanceof Error ? e.message : "Save failed");
       throw e;
     }
-  }, [isEdit, agentId, entityId, addIdea, goEntity, composeScope, pendingRefs, onPersisted, track]);
+  }, [isEdit, agentId, trustId, addIdea, goEntity, composeScope, pendingRefs, onPersisted, track]);
 
   // Edit-mode revert: drop the in-memory snapshot back to the
   // persisted idea. Used by both the canvas's own Cancel button
@@ -437,7 +437,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
         return;
       }
       removeIdea(idea.id);
-      goEntity(entityId, "ideas", undefined, { replace: true });
+      goEntity(trustId, "ideas", undefined, { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
     }
@@ -606,7 +606,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
             onNew={onNew}
             onTrackAsQuest={() =>
               idea &&
-              goEntity(entityId, "quests", "new", {
+              goEntity(trustId, "quests", "new", {
                 replace: false,
                 search: { fromIdea: idea.id },
               })
@@ -616,7 +616,7 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
             onSave={isEdit ? flushSave : handleCreate}
             importMenu={
               <ImportMenu
-                entityId={entityId}
+                trustId={trustId}
                 parts={["ideas"]}
                 blueprintTitle="Import child ideas from a Blueprint"
                 accept="*/*"

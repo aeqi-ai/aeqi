@@ -181,8 +181,8 @@ export default function MeInboxPage() {
       result = result.filter((r) => r.kind === filter.kind);
     }
 
-    if (filter.entityId !== null) {
-      result = result.filter((r) => r.entity_id === filter.entityId);
+    if (filter.trustId !== null) {
+      result = result.filter((r) => r.trust_id === filter.trustId);
     }
 
     if (filter.unreadOnly) {
@@ -229,7 +229,7 @@ export default function MeInboxPage() {
   const selectedRow = visible.find((r) => r.id === selectedId) ?? null;
   const activeSessionId = selectedRow?.id ?? null;
 
-  // Entity options for the filter popover
+  // Trust options for the filter popover
   const entityOptions = useMemo(
     () => entities.map((e) => ({ id: e.id, name: e.name ?? e.id })),
     [entities],
@@ -411,12 +411,12 @@ export default function MeInboxPage() {
       onRemove: () => patchFilter({ kind: "all" }),
     });
   }
-  if (filter.entityId !== null) {
-    const entityName = entityOptions.find((e) => e.id === filter.entityId)?.name ?? filter.entityId;
+  if (filter.trustId !== null) {
+    const entityName = entityOptions.find((e) => e.id === filter.trustId)?.name ?? filter.trustId;
     activeChips.push({
       key: "entity",
       label: entityName,
-      onRemove: () => patchFilter({ entityId: null }),
+      onRemove: () => patchFilter({ trustId: null }),
     });
   }
 
@@ -432,7 +432,7 @@ export default function MeInboxPage() {
 
     const deepUrl = sessionDeepUrlFromId(
       entities,
-      selectedRow.entity_id,
+      selectedRow.trust_id,
       selectedRow.agent_id,
       selectedRow.id,
     );
@@ -529,7 +529,7 @@ export default function MeInboxPage() {
     return (
       <SessionDetail
         sessionId={selectedRow.id}
-        entityId={selectedRow.entity_id ?? undefined}
+        trustId={selectedRow.trust_id ?? undefined}
         agentId={selectedRow.agent_id ?? undefined}
         title={selectedRow.from.name}
         subtitle={subtitle}

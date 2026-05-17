@@ -108,7 +108,7 @@ export default function IdeasListView({
   view,
   onViewChange,
 }: IdeasListViewProps) {
-  const { goEntity, entityPath, entityId } = useNav();
+  const { goEntity, entityPath, trustId } = useNav();
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const searchActive = filter.search.trim() !== "";
@@ -325,7 +325,7 @@ export default function IdeasListView({
           if (e.key === "Enter") {
             e.preventDefault();
             if (filteredCount > 0 && rankedFirstId) {
-              goEntity(entityId, "ideas", rankedFirstId);
+              goEntity(trustId, "ideas", rankedFirstId);
             } else if (noMatchTrimmed) {
               fireNew(noMatchTrimmed);
             }
@@ -336,7 +336,7 @@ export default function IdeasListView({
         }}
         importMenu={
           <ImportMenu
-            entityId={entityId}
+            trustId={trustId}
             parts={["ideas"]}
             blueprintTitle="Import ideas from a Blueprint"
             accept="*/*"
@@ -514,7 +514,7 @@ export default function IdeasListView({
                         ref={(el) => {
                           rowRefs.current[myIndex] = el;
                         }}
-                        to={entityPath(entityId, "ideas", idea.id)}
+                        to={entityPath(trustId, "ideas", idea.id)}
                         className="ideas-list-row"
                         data-testid="idea-row"
                         data-idea-id={idea.id}

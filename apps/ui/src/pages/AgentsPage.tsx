@@ -7,7 +7,7 @@ import BlockAvatar from "@/components/BlockAvatar";
 import { Button, EmptyState, Spinner } from "@/components/ui";
 import type { Agent } from "@/lib/types";
 
-interface Entity {
+interface Trust {
   id: string;
   name: string;
   tagline?: string;
@@ -24,12 +24,12 @@ interface RootApiItem {
   agent_count?: number;
 }
 
-function deriveEntitiesFromAgents(agents: Agent[]): Entity[] {
-  // After Phase 4 every agent carries entity_id; group by it to surface a
+function deriveEntitiesFromAgents(agents: Agent[]): Trust[] {
+  // After Phase 4 every agent carries trust_id; group by it to surface a
   // company list when the dedicated `/api/entities` payload is unavailable.
   const byEntity = new Map<string, Agent[]>();
   for (const a of agents) {
-    const eid = a.entity_id ?? a.id;
+    const eid = a.trust_id ?? a.id;
     const list = byEntity.get(eid) ?? [];
     list.push(a);
     byEntity.set(eid, list);
@@ -46,7 +46,7 @@ export default function AgentsPage() {
   const setActiveEntity = useUIStore((s) => s.setActiveEntity);
   const agents = useDaemonStore((s) => s.agents);
   const navigate = useNavigate();
-  const [entities, setEntities] = useState<Entity[]>([]);
+  const [entities, setEntities] = useState<Trust[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,10 +78,10 @@ export default function AgentsPage() {
         } else {
           return api.getAgents({ root: true }).then((agentData) => {
             const agentList = agentData?.agents ?? [];
-            // Group by entity_id — one row per entity.
+            // Group by trust_id — one row per entity.
             const byEntity = new Map<string, { id: string; name: string; agentCount: number }>();
             for (const a of agentList) {
-              const eid = a.entity_id ?? a.id ?? "";
+              const eid = a.trust_id ?? a.id ?? "";
               if (!eid) continue;
               const existing = byEntity.get(eid);
               if (existing) {
@@ -115,7 +115,7 @@ export default function AgentsPage() {
     return () => window.removeEventListener("aeqi:create", handler);
   }, [navigate]);
 
-  const selectEntity = (entity: Entity) => {
+  const selectEntity = (entity: Trust) => {
     setActiveEntity(entity.id);
     navigate(`/${encodeURIComponent(entity.id)}`);
   };

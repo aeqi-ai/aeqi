@@ -18,7 +18,7 @@ export interface InboxRow {
   kind: InboxKind;
   from: { kind: "agent"; id: string; name: string };
   subject: string; // awaiting_subject, last_agent_message, or session_name
-  entity_id: string | null;
+  trust_id: string | null;
   agent_id: string | null;
   created_at: string; // last_active — recency anchor for sort/grouping
   unread: boolean;
@@ -26,13 +26,13 @@ export interface InboxRow {
 }
 
 export interface InboxFilterState {
-  entityId: string | null; // "all" = null
+  trustId: string | null; // "all" = null
   kind: InboxKind | "all";
   unreadOnly: boolean;
 }
 
 export const DEFAULT_FILTER: InboxFilterState = {
-  entityId: null,
+  trustId: null,
   kind: "all",
   unreadOnly: false,
 };
@@ -49,7 +49,7 @@ export function toInboxRow(item: InboxItem): InboxRow {
       name: item.agent_name ?? "Agent",
     },
     subject: item.awaiting_subject ?? item.last_agent_message ?? item.session_name,
-    entity_id: item.entity_id ?? null,
+    trust_id: item.trust_id ?? null,
     agent_id: item.agent_id ?? null,
     created_at: item.last_active,
     unread: awaiting,

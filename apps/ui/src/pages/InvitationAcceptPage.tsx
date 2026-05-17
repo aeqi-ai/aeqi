@@ -31,7 +31,7 @@ export default function InvitationAcceptPage() {
 
   // Directed entities (only fetched when logged in)
   const [directedEntities, setDirectedEntities] = useState<
-    Array<{ entity_id: string; display_name: string }>
+    Array<{ trust_id: string; display_name: string }>
   >([]);
   const [asEntityId, setAsEntityId] = useState("");
 
@@ -74,7 +74,7 @@ export default function InvitationAcceptPage() {
       .getDirectedEntities()
       .then((r) => {
         setDirectedEntities(r.entities);
-        if (r.entities.length > 0) setAsEntityId(r.entities[0].entity_id);
+        if (r.entities.length > 0) setAsEntityId(r.entities[0].trust_id);
       })
       .catch((e) => logError("invitation.list-entities", e));
   }, [isLoggedIn]);
@@ -89,9 +89,9 @@ export default function InvitationAcceptPage() {
     try {
       await api.acceptInvitation(token, asEntityId);
       // Navigate to the company that now holds the role
-      const entity = directedEntities.find((e) => e.entity_id === invitation?.entity_id);
+      const entity = directedEntities.find((e) => e.trust_id === invitation?.trust_id);
       if (entity) {
-        navigate(entityPathFromId(daemonEntities, entity.entity_id, "roles"), { replace: true });
+        navigate(entityPathFromId(daemonEntities, entity.trust_id, "roles"), { replace: true });
       } else {
         navigate("/", { replace: true });
       }
@@ -114,7 +114,7 @@ export default function InvitationAcceptPage() {
   };
 
   const entityOptions = directedEntities.map((e) => ({
-    value: e.entity_id,
+    value: e.trust_id,
     label: e.display_name,
   }));
 

@@ -19,7 +19,7 @@ function grantLabel(id: string): string {
 }
 
 export default function RoleDetailPage() {
-  const { entityId = "", roleId = "" } = useParams<{ entityId: string; roleId: string }>();
+  const { trustId = "", roleId = "" } = useParams<{ trustId: string; roleId: string }>();
   const navigate = useNavigate();
 
   const [role, setRole] = useState<Role | null>(null);
@@ -44,7 +44,7 @@ export default function RoleDetailPage() {
 
     Promise.all([
       api.getRole(roleId),
-      api.listEntityInvitations(entityId).catch(() => ({ ok: false, invitations: [] })),
+      api.listEntityInvitations(trustId).catch(() => ({ ok: false, invitations: [] })),
     ])
       .then(([roleResp, invResp]) => {
         setRole(roleResp.role);
@@ -56,31 +56,31 @@ export default function RoleDetailPage() {
         setError(e.message || "Could not load role.");
       })
       .finally(() => setLoading(false));
-  }, [entityId, roleId]);
+  }, [trustId, roleId]);
 
   const handleArchive = async () => {
     if (!role) return;
     setArchiving(true);
     try {
       await api.archiveRole(roleId);
-      navigate(entityPathFromId(entitiesList, entityId, "roles"), { replace: true });
+      navigate(entityPathFromId(entitiesList, trustId, "roles"), { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not archive role.");
       setArchiving(false);
     }
   };
 
-  const backHref = entityPathFromId(entitiesList, entityId, "roles");
+  const backHref = entityPathFromId(entitiesList, trustId, "roles");
   const editHref = entityPathFromId(
     entitiesList,
-    entityId,
+    trustId,
     "roles",
     encodeURIComponent(roleId),
     "edit",
   );
   const inviteHref = entityPathFromId(
     entitiesList,
-    entityId,
+    trustId,
     "roles",
     encodeURIComponent(roleId),
     "invite",

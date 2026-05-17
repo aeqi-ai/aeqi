@@ -36,7 +36,7 @@ type HandleCreateDeps = {
   displayName: string;
   mission: string;
   plan: string;
-  onSuccess: (entityId: string) => void;
+  onSuccess: (trustId: string) => void;
   onError: (msg: string) => void;
   navigateTo: (url: string) => void;
 };
@@ -58,7 +58,7 @@ async function composeHandleCreate({
       mission,
       plan,
     });
-    onSuccess((resp as { entity_id: string }).entity_id);
+    onSuccess((resp as { trust_id: string }).trust_id);
   } catch (e) {
     if (e instanceof ApiError && e.status === 402) {
       try {
@@ -145,7 +145,7 @@ describe("company create 402 handling", () => {
   });
 
   it("calls onSuccess on a successful launch without touching checkout", async () => {
-    startLaunch.mockResolvedValueOnce({ entity_id: "ent_abc" });
+    startLaunch.mockResolvedValueOnce({ trust_id: "ent_abc" });
 
     await composeHandleCreate(deps());
 

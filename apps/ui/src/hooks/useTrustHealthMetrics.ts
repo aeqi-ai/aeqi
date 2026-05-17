@@ -103,7 +103,7 @@ export interface HealthMetrics {
    *  the lifetime total for the interpretation copy. */
   decisionsThisWeek: number;
   /** Agent-only quality metric: quest reopen-like events in the trailing
-   *  28d divided by closed quests in the same period. Entity health
+   *  28d divided by closed quests in the same period. Trust health
    *  callers can ignore it. */
   questReopenRate28d: {
     reopened: number;
@@ -405,16 +405,16 @@ export function useTrustHealthMetrics(
     );
   }, [addr, entities]);
 
-  const entityId = entity?.id ?? null;
+  const trustId = entity?.id ?? null;
 
-  // Subtree agents = root + descendants (every agent whose entity_id is
+  // Subtree agents = root + descendants (every agent whose trust_id is
   // this entity, plus the entity-as-agent itself when present). Mirrors
   // TrustOverviewTab's subtree derivation so the metric scope agrees
   // with the cockpit numbers.
   const subtreeAgents = useMemo(() => {
-    if (!entityId) return [];
-    return allAgents.filter((a) => a.entity_id === entityId || a.id === entityId);
-  }, [allAgents, entityId]);
+    if (!trustId) return [];
+    return allAgents.filter((a) => a.trust_id === trustId || a.id === trustId);
+  }, [allAgents, trustId]);
 
   const scopedAgents = useMemo(() => {
     if (!options.agentId) return subtreeAgents;
@@ -444,7 +444,7 @@ export function useTrustHealthMetrics(
   // whenever the resolved entity changes. The brief allows poll-on-mount
   // + nav-to-tab; we deliberately do NOT subscribe to a live feed.
   useEffect(() => {
-    if (!entityId) {
+    if (!trustId) {
       setWindowedEvents(null);
       setIdeas(null);
       setIsLoading(false);
@@ -481,7 +481,7 @@ export function useTrustHealthMetrics(
     return () => {
       cancelled = true;
     };
-  }, [entityId]);
+  }, [trustId]);
 
   // Merge windowed events with the daemon-store events (the latter is
   // live-updated via the worker WS) so the metric reflects activity
@@ -498,7 +498,7 @@ export function useTrustHealthMetrics(
   // Pin `nowMs` once per metric recompute so the day-boundary bucketing
   // doesn't shift midway through a render.
   const metrics = useMemo<HealthMetrics | null>(() => {
-    if (!entityId) return null;
+    if (!trustId) return null;
     if (isLoading) return null;
     const nowMs = Date.now();
     return computeHealthMetrics({
@@ -513,7 +513,7 @@ export function useTrustHealthMetrics(
     // We intentionally exclude `nowMs` from deps — recomputing every
     // render tick would defeat the memo. The poll-on-mount contract
     // means a tab nav remount is the refresh signal.
-  }, [entityId, isLoading, windowDays, allQuests, mergedEvents, ideas, agentNames, agentIds]);
+  }, [trustId, isLoading, windowDays, allQuests, mergedEvents, ideas, agentNames, agentIds]);
 
   return { metrics, isLoading, error };
 }

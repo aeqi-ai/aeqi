@@ -250,12 +250,12 @@ export const api = {
   // Roles — the org-chart primitive. Returns the full set of roles +
   // edges for the entity so the caller can render either a flat list or
   // a DAG.
-  getRoles: async (entityId: string) => {
+  getRoles: async (trustId: string) => {
     const r = await request<{
       ok: boolean;
       roles: Role[];
       edges: RoleEdge[];
-    }>(`/roles?entity_id=${encodeURIComponent(entityId)}`);
+    }>(`/roles?trust_id=${encodeURIComponent(trustId)}`);
     return {
       ok: r.ok,
       roles: r.roles,
@@ -267,7 +267,7 @@ export const api = {
     request<{ ok: boolean; role: Role }>(`/roles/${encodeURIComponent(roleId)}`),
 
   createRole: (data: {
-    entity_id: string;
+    trust_id: string;
     title: string;
     occupant_kind: OccupantKind;
     occupant_id?: string;
@@ -276,7 +276,7 @@ export const api = {
     grants?: string[];
   }) => {
     const wire = {
-      entity_id: data.entity_id,
+      trust_id: data.trust_id,
       title: data.title,
       occupant_kind: data.occupant_kind,
       ...(data.occupant_id ? { occupant_id: data.occupant_id } : {}),
@@ -311,15 +311,15 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  getUserGrants: (entityId: string, userId: string) =>
+  getUserGrants: (trustId: string, userId: string) =>
     request<{ ok: boolean; grants: string[] }>(
-      `/roles/grants?entity_id=${encodeURIComponent(entityId)}&user_id=${encodeURIComponent(userId)}`,
+      `/roles/grants?trust_id=${encodeURIComponent(trustId)}&user_id=${encodeURIComponent(userId)}`,
     ),
 
   // Invitation endpoints — platform-side, no entity scope in the path
   // for the public-facing ones.
   createRoleInvitation: (
-    entityId: string,
+    trustId: string,
     roleId: string,
     data: {
       target_kind: "email" | "slug" | "open";
@@ -329,13 +329,13 @@ export const api = {
     },
   ) =>
     request<{ ok: boolean; invitation: RoleInvitation }>(
-      `/entities/${encodeURIComponent(entityId)}/roles/${encodeURIComponent(roleId)}/invitations`,
+      `/entities/${encodeURIComponent(trustId)}/roles/${encodeURIComponent(roleId)}/invitations`,
       { method: "POST", body: JSON.stringify(data) },
     ),
 
-  listEntityInvitations: (entityId: string) =>
+  listEntityInvitations: (trustId: string) =>
     request<{ ok: boolean; invitations: RoleInvitation[] }>(
-      `/entities/${encodeURIComponent(entityId)}/invitations`,
+      `/entities/${encodeURIComponent(trustId)}/invitations`,
     ),
 
   getInvitation: (token: string) =>
@@ -356,7 +356,7 @@ export const api = {
     }),
 
   getDirectedEntities: () =>
-    request<{ ok: boolean; entities: Array<{ entity_id: string; display_name: string }> }>(
+    request<{ ok: boolean; entities: Array<{ trust_id: string; display_name: string }> }>(
       `/me/directed-entities`,
     ),
 
@@ -618,7 +618,7 @@ export const api = {
     display_name?: string;
     role_overrides?: RoleOverride[];
   }) =>
-    request<{ ok: boolean; entity_id: string }>("/blueprints/spawn", {
+    request<{ ok: boolean; trust_id: string }>("/blueprints/spawn", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -627,7 +627,7 @@ export const api = {
   // company merge) and Import-from-blueprint on Ideas / Quests (scoped
   // via `parts`). Server defaults to all four parts when `parts` is
   // omitted; pass e.g. `["ideas"]` to materialize only seed_ideas.
-  spawnBlueprintIntoEntity: (data: { blueprint: string; entity_id: string; parts?: string[] }) =>
+  spawnBlueprintIntoEntity: (data: { blueprint: string; trust_id: string; parts?: string[] }) =>
     request<{
       ok: boolean;
       spawned_agents: number;
@@ -636,7 +636,7 @@ export const api = {
       created_quests: number;
     }>("/blueprints/spawn-into", { method: "POST", body: JSON.stringify(data) }),
 
-  // Platform-side launch — mints the canonical entity_id (UUID) on the
+  // Platform-side launch — mints the canonical trust_id (UUID) on the
   // platform host and provisions a sandbox runtime. Only callable by users
   // with subscription_status="invited" (sandbox tier) or "active" (paid).
   // Anyone else gets 402 PAYMENT_REQUIRED — they go through Stripe via
@@ -647,7 +647,7 @@ export const api = {
     mission?: string;
     plan?: LaunchPlanId | string;
   }) =>
-    request<{ ok: boolean; entity_id: string; display_name: string }>("/start/launch", {
+    request<{ ok: boolean; trust_id: string; display_name: string }>("/start/launch", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -663,10 +663,10 @@ export const api = {
       body: JSON.stringify({ display_name }),
     }),
 
-  getLaunchStatus: (entityId: string) =>
+  getLaunchStatus: (trustId: string) =>
     request<{
       ok: boolean;
-      entity_id: string;
+      trust_id: string;
       display_name: string;
       placement_status: string;
       trust_status: string;
@@ -680,7 +680,7 @@ export const api = {
         loading_roles: { reached: boolean; at: string | null };
         spawning_agent: { reached: boolean; at: string | null };
       };
-    }>(`/start/launch/status/${encodeURIComponent(entityId)}`),
+    }>(`/start/launch/status/${encodeURIComponent(trustId)}`),
 
   spawnAgent: (data: {
     name: string;
@@ -691,7 +691,7 @@ export const api = {
   }) =>
     request<{
       ok: boolean;
-      agent: { id: string; name: string; entity_id?: string | null; status?: string };
+      agent: { id: string; name: string; trust_id?: string | null; status?: string };
       warnings?: string[];
     }>("/agents/spawn", { method: "POST", body: JSON.stringify(data) }),
 
@@ -861,7 +861,7 @@ export const api = {
   // metadata for provisioning and billing display.
   createCheckoutSession: (data: {
     blueprint?: string;
-    // not entity_id — entity is minted post-checkout when launch resumes.
+    // not trust_id — entity is minted post-checkout when launch resumes.
     display_name?: string;
     mission?: string;
     plan?: LaunchPlanId | string;
@@ -1192,13 +1192,13 @@ export interface TreasuryEvent {
 /// indicator only, no longer used for filtering. `last_active` is the
 /// recency anchor used for sort.
 ///
-/// `agent_name` and `entity_id` are joined server-side; `last_agent_message`
+/// `agent_name` and `trust_id` are joined server-side; `last_agent_message`
 /// is the truncated assistant message body.
 export interface InboxItem {
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;
-  entity_id: string | null;
+  trust_id: string | null;
   session_name: string;
   awaiting_subject: string | null;
   awaiting_at: string | null;

@@ -36,7 +36,7 @@ const OCCUPANT_RANK: Record<string, number> = { agent: 0, human: 1, vacant: 2 };
  * appends additional slots (vacant or occupied) inside the entity's
  * DAG.
  */
-export default function TrustRolesTab({ entityId }: { entityId: string }) {
+export default function TrustRolesTab({ trustId }: { trustId: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const view = parseView(searchParams.get("view"));
@@ -69,7 +69,7 @@ export default function TrustRolesTab({ entityId }: { entityId: string }) {
     setLoading(true);
     setError(null);
     api
-      .getRoles(entityId)
+      .getRoles(trustId)
       .then((resp) => {
         if (cancelled) return;
         setRoles(resp.roles ?? []);
@@ -85,7 +85,7 @@ export default function TrustRolesTab({ entityId }: { entityId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [entityId]);
+  }, [trustId]);
 
   const patchParams = useCallback(
     (mut: (p: URLSearchParams) => void) => {
@@ -181,9 +181,9 @@ export default function TrustRolesTab({ entityId }: { entityId: string }) {
 
   const handleSelectRole = useCallback(
     (role: Role) => {
-      navigate(entityPathFromId(entities, entityId, "roles", encodeURIComponent(role.id)));
+      navigate(entityPathFromId(entities, trustId, "roles", encodeURIComponent(role.id)));
     },
-    [navigate, entityId, entities],
+    [navigate, trustId, entities],
   );
 
   const showEmpty = !loading && !error && roles.length === 0;
@@ -240,7 +240,7 @@ export default function TrustRolesTab({ entityId }: { entityId: string }) {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate(entityPathFromId(entities, entityId, "roles", "new"))}
+              onClick={() => navigate(entityPathFromId(entities, trustId, "roles", "new"))}
               leadingIcon={
                 <svg
                   width="13"

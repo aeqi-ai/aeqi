@@ -42,17 +42,17 @@ function normalize(raw: RawParticipant): Participant {
   return { id, name, kind, avatar_url: raw.avatar_url ?? null };
 }
 
-function ParticipantAvatar({ p, entityId }: { p: Participant; entityId?: string }) {
+function ParticipantAvatar({ p, trustId }: { p: Participant; trustId?: string }) {
   // Resolve a navigation target so clicking the avatar jumps to that
   // identity's surface. Agent → /<entityBase>/agents/<id>; position
   // → /<entityBase>/roles/<id>; user / external are unlinked (no public
   // surface today).
   const entitiesList = useDaemonStore((s) => s.entities);
   const href =
-    entityId && p.id && p.kind === "agent"
-      ? entityPathFromId(entitiesList, entityId, "agents", encodeURIComponent(p.id))
-      : entityId && p.id && p.kind === "position"
-        ? entityPathFromId(entitiesList, entityId, "roles", encodeURIComponent(p.id))
+    trustId && p.id && p.kind === "agent"
+      ? entityPathFromId(entitiesList, trustId, "agents", encodeURIComponent(p.id))
+      : trustId && p.id && p.kind === "position"
+        ? entityPathFromId(entitiesList, trustId, "roles", encodeURIComponent(p.id))
         : undefined;
 
   // Avatar shape is determined by KIND, not by whether a photo URL exists.
@@ -105,13 +105,13 @@ function ParticipantAvatar({ p, entityId }: { p: Participant; entityId?: string 
 
 export default function ParticipantStrip({
   sessionId,
-  entityId,
+  trustId,
 }: {
   sessionId: string | null;
   /** Optional entity scope override — needed when the host route doesn't
    *  resolve an entity via `useNav` (e.g. when the inbox surface is
-   *  mounted in a context without a matching :entityId/:trustAddress). */
-  entityId?: string;
+   *  mounted in a context without a matching :trustId/:trustAddress). */
+  trustId?: string;
 }) {
   const [participants, setParticipants] = useState<Participant[] | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -187,7 +187,7 @@ export default function ParticipantStrip({
       <div className="asv-participant-strip">
         <div className="asv-participant-strip-avatars">
           {inline.map((p) => (
-            <ParticipantAvatar key={`${p.kind}:${p.id}`} p={p} entityId={entityId} />
+            <ParticipantAvatar key={`${p.kind}:${p.id}`} p={p} trustId={trustId} />
           ))}
           {overflow > 0 && (
             <div className="asv-participant-overflow" title={`${overflow} more`}>
@@ -219,7 +219,7 @@ export default function ParticipantStrip({
       <AddParticipantModal
         open={showModal}
         sessionId={sessionId}
-        entityId={entityId}
+        trustId={trustId}
         onClose={() => setShowModal(false)}
         onAdded={() => {
           setShowModal(false);

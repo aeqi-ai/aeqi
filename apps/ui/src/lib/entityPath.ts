@@ -1,4 +1,4 @@
-import type { Entity } from "@/lib/types";
+import type { Trust } from "@/lib/types";
 
 /**
  * Canonical URL base for an entity.
@@ -6,7 +6,7 @@ import type { Entity } from "@/lib/types";
  * Trust-backed entities use the trust route. Anything without a trust
  * address should not be treated as a live organization surface.
  */
-export function entityBasePath(entity: Pick<Entity, "id" | "trust_address">): string {
+export function entityBasePath(entity: Pick<Trust, "id" | "trust_address">): string {
   if (entity.trust_address) {
     return `/trust/${entity.trust_address}`;
   }
@@ -21,7 +21,7 @@ export function entityBasePath(entity: Pick<Entity, "id" | "trust_address">): st
  * route redirects back to the bare URL via AppLayout.
  */
 export function entityPath(
-  entity: Pick<Entity, "id" | "trust_address">,
+  entity: Pick<Trust, "id" | "trust_address">,
   ...segments: string[]
 ): string {
   const base = entityBasePath(entity);
@@ -31,17 +31,17 @@ export function entityPath(
 
 /**
  * Build a canonical path when the call site only has the entity id (not
- * the full Entity object). Resolves to the trust route when the entities
+ * the full Trust object). Resolves to the trust route when the entities
  * lookup hits a row with `trust_address`; otherwise returns the launch
  * surface rather than inventing a legacy route.
  *
- * Use this in components that hold `entityId: string` and have access to
+ * Use this in components that hold `trustId: string` and have access to
  * the daemon store's `entities` array. Prefer `entityPath(entity, ...)`
- * when an Entity object is in scope — this helper is the id-keyed
+ * when an Trust object is in scope — this helper is the id-keyed
  * alternative.
  */
 export function entityPathFromId(
-  entities: ReadonlyArray<Pick<Entity, "id" | "trust_address">>,
+  entities: ReadonlyArray<Pick<Trust, "id" | "trust_address">>,
   id: string,
   ...segments: string[]
 ): string {
@@ -52,7 +52,7 @@ export function entityPathFromId(
 
 /** Same as `entityBasePath` but keyed by id with an entities-array lookup. */
 export function entityBasePathFromId(
-  entities: ReadonlyArray<Pick<Entity, "id" | "trust_address">>,
+  entities: ReadonlyArray<Pick<Trust, "id" | "trust_address">>,
   id: string,
 ): string {
   return entityPathFromId(entities, id);

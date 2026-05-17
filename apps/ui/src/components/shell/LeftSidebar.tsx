@@ -11,7 +11,7 @@ import { entityBasePath } from "@/lib/entityPath";
 
 interface LeftSidebarProps {
   /** Canonical entity (organization) id. Sidebar tabs are org-scoped, not child-agent scoped. */
-  entityId: string | null;
+  trustId: string | null;
   path: string;
 }
 
@@ -149,7 +149,7 @@ const PanelGlyph = () => (
   </svg>
 );
 
-export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
+export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
   const navigate = useNavigate();
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
@@ -185,9 +185,9 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
   // Derive canonical base path for sidebar tabs.
   const entities = useDaemonStore((s) => s.entities);
-  const activeEntityObj = entityId ? (entities.find((e) => e.id === entityId) ?? null) : null;
+  const activeEntityObj = trustId ? (entities.find((e) => e.id === trustId) ?? null) : null;
   const base = activeEntityObj ? entityBasePath(activeEntityObj) : "";
-  const hasCompany = !!entityId;
+  const hasCompany = !!trustId;
 
   const navHref = (id: string) => `${base}/${id}`;
 

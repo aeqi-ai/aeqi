@@ -37,11 +37,11 @@ import styles from "./HealthPage.module.css";
 /** Minimum signal age before we treat trend deltas as meaningful. */
 const COMPOUNDING_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export default function HealthBlock({ entityId }: { entityId: string }) {
+export default function HealthBlock({ trustId }: { trustId: string }) {
   const { entity } = useCurrentCompany();
   // Prefer trust_address (canonical /trust/<addr>) when present; fall
   // back to the entity id for entities that haven't registered TRUST yet.
-  const addr = entity?.trust_address ?? entityId;
+  const addr = entity?.trust_address ?? trustId;
   const { metrics, isLoading, error } = useTrustHealthMetrics(addr);
 
   // Fresh-TRUST gate: when the earliest known activity is less than a

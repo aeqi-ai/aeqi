@@ -18,7 +18,7 @@ const KIND_OPTIONS: (InboxKind | "all")[] = ["all", "decision_request", "system"
 
 function activeCount(f: InboxFilterState): number {
   let n = 0;
-  if (f.entityId !== null) n += 1;
+  if (f.trustId !== null) n += 1;
   if (f.kind !== "all") n += 1;
   if (f.unreadOnly) n += 1;
   return n;
@@ -115,18 +115,18 @@ export default function InboxFilterPopover({
           </div>
         </section>
 
-        {/* Entity filter — only when there's more than one company */}
+        {/* Trust filter — only when there's more than one company */}
         {entityOptions.length > 1 && (
           <>
             <hr className="ideas-filter-popover-rule" />
             <section className="ideas-filter-popover-section">
               <header className="ideas-filter-popover-head">
                 <span className="ideas-filter-popover-label">company</span>
-                {filter.entityId !== null && (
+                {filter.trustId !== null && (
                   <button
                     type="button"
                     className="ideas-filter-popover-reset"
-                    onClick={() => onChange({ entityId: null })}
+                    onClick={() => onChange({ trustId: null })}
                   >
                     reset
                   </button>
@@ -136,15 +136,15 @@ export default function InboxFilterPopover({
                 <button
                   type="button"
                   role="radio"
-                  aria-checked={filter.entityId === null}
-                  className={`ideas-filter-row${filter.entityId === null ? " active" : ""}`}
+                  aria-checked={filter.trustId === null}
+                  className={`ideas-filter-row${filter.trustId === null ? " active" : ""}`}
                   onClick={() => {
-                    onChange({ entityId: null });
+                    onChange({ trustId: null });
                     setOpen(false);
                   }}
                 >
                   <span className="ideas-filter-row-mark" aria-hidden>
-                    {filter.entityId === null && (
+                    {filter.trustId === null && (
                       <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
                         <path
                           d="M2 5.2 L4.2 7.4 L8 3"
@@ -160,7 +160,7 @@ export default function InboxFilterPopover({
                   <span className="ideas-filter-row-label">All companies</span>
                 </button>
                 {entityOptions.map((e) => {
-                  const isActive = filter.entityId === e.id;
+                  const isActive = filter.trustId === e.id;
                   return (
                     <button
                       key={e.id}
@@ -169,7 +169,7 @@ export default function InboxFilterPopover({
                       aria-checked={isActive}
                       className={`ideas-filter-row${isActive ? " active" : ""}`}
                       onClick={() => {
-                        onChange({ entityId: e.id });
+                        onChange({ trustId: e.id });
                         setOpen(false);
                       }}
                     >

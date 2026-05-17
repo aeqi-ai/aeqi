@@ -7,7 +7,7 @@ import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
 
 interface Resolved {
   agentId: string;
-  entityId: string;
+  trustId: string;
 }
 
 /**
@@ -30,10 +30,10 @@ export default function SessionRedirect() {
 
   const inboxResolved: Resolved | null = useMemo(
     () =>
-      inboxItem?.agent_id && inboxItem?.entity_id
-        ? { agentId: inboxItem.agent_id, entityId: inboxItem.entity_id }
+      inboxItem?.agent_id && inboxItem?.trust_id
+        ? { agentId: inboxItem.agent_id, trustId: inboxItem.trust_id }
         : null,
-    [inboxItem?.agent_id, inboxItem?.entity_id],
+    [inboxItem?.agent_id, inboxItem?.trust_id],
   );
 
   const [resolved, setResolved] = useState<Resolved | null>(inboxResolved);
@@ -64,18 +64,18 @@ export default function SessionRedirect() {
         const sessions = (data?.sessions || []) as Array<Record<string, unknown>>;
         const match = sessions.find((s) => (s.id as string) === sessionId);
         const agentId = match?.agent_id as string | undefined;
-        const entityIdFromRow = match?.entity_id as string | undefined;
+        const entityIdFromRow = match?.trust_id as string | undefined;
         if (!agentId) {
           setResolveFailed(true);
           return;
         }
-        const entityFromStore = agents.find((a) => a.id === agentId)?.entity_id;
-        const entityId = entityIdFromRow ?? entityFromStore ?? null;
-        if (!entityId) {
+        const entityFromStore = agents.find((a) => a.id === agentId)?.trust_id;
+        const trustId = entityIdFromRow ?? entityFromStore ?? null;
+        if (!trustId) {
           setResolveFailed(true);
           return;
         }
-        setResolved({ agentId, entityId });
+        setResolved({ agentId, trustId });
       })
       .catch(() => {
         if (!cancelled) setResolveFailed(true);
@@ -88,6 +88,6 @@ export default function SessionRedirect() {
   if (resolveFailed) return <Navigate to="/" replace />;
   if (!resolved) return null;
 
-  const deep = sessionDeepUrlFromId(entities, resolved.entityId, resolved.agentId, sessionId);
+  const deep = sessionDeepUrlFromId(entities, resolved.trustId, resolved.agentId, sessionId);
   return <Navigate to={deep} replace />;
 }

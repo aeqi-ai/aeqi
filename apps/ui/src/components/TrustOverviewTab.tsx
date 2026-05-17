@@ -43,16 +43,15 @@ const HealthBlock = lazy(() => import("@/pages/HealthPage"));
  * Pulse cards and routed stat tiles click through to their full surface.
  * Empty states render gracefully and surface the next action inline.
  */
-export default function TrustOverviewTab({ entityId }: { entityId: string }) {
+export default function TrustOverviewTab({ trustId }: { trustId: string }) {
   const navigate = useNavigate();
   const entities = useDaemonStore((s) => s.entities);
   const agents = useDaemonStore((s) => s.agents);
   const quests = useDaemonStore((s) => s.quests) as unknown as Quest[];
   const events = useDaemonStore((s) => s.events);
 
-  const entity = entities.find((e) => e.id === entityId);
+  const entity = entities.find((e) => e.id === trustId);
   const trustAddress = entity?.trust_address;
-  const trustId = entity?.trust_id;
 
   // Click-to-copy the truncated TRUST pubkey: the demo moment where the
   // audience can paste the address into any Solana explorer to verify
@@ -80,14 +79,14 @@ export default function TrustOverviewTab({ entityId }: { entityId: string }) {
   const entityInbox = useMemo(
     () =>
       inboxAllItems.filter(
-        (i) => i.entity_id === entityId && !!i.awaiting_at && !inboxPending.has(i.session_id),
+        (i) => i.trust_id === trustId && !!i.awaiting_at && !inboxPending.has(i.session_id),
       ),
-    [inboxAllItems, inboxPending, entityId],
+    [inboxAllItems, inboxPending, trustId],
   );
 
   const subtreeAgents = useMemo(
-    () => agents.filter((a) => a.entity_id === entityId || a.id === entityId),
-    [agents, entityId],
+    () => agents.filter((a) => a.trust_id === trustId || a.id === trustId),
+    [agents, trustId],
   );
   const subtreeIds = useMemo(
     () => new Set<string>(subtreeAgents.map((a) => a.id)),
@@ -105,7 +104,7 @@ export default function TrustOverviewTab({ entityId }: { entityId: string }) {
         .filter(
           (q) =>
             (q.status === "in_progress" || q.status === "todo" || q.status === "backlog") &&
-            ((q.agent_id && subtreeIds.has(q.agent_id)) || q.agent_id === entityId),
+            ((q.agent_id && subtreeIds.has(q.agent_id)) || q.agent_id === trustId),
         )
         .sort((a, b) => {
           const statusDelta = questStatusRank(a.status) - questStatusRank(b.status);
@@ -115,7 +114,7 @@ export default function TrustOverviewTab({ entityId }: { entityId: string }) {
           return parseTs(a.created_at) - parseTs(b.created_at);
         })
         .slice(0, 5),
-    [quests, subtreeIds, entityId],
+    [quests, subtreeIds, trustId],
   );
 
   // ── Pulse: last 24h activity stream ─────────────────────────────────
@@ -194,7 +193,7 @@ export default function TrustOverviewTab({ entityId }: { entityId: string }) {
 
   return (
     <div className="entity-overview">
-      <TrustHeroStrip entityId={entityId} />
+      <TrustHeroStrip trustId={trustId} />
 
       {/* ── Pulse band ── */}
       <div className="entity-overview-pulse">
@@ -279,7 +278,7 @@ export default function TrustOverviewTab({ entityId }: { entityId: string }) {
                         navigate(
                           sessionDeepUrlFromId(
                             entities,
-                            item.entity_id,
+                            item.trust_id,
                             item.agent_id,
                             item.session_id,
                           ),
@@ -401,7 +400,7 @@ export default function TrustOverviewTab({ entityId }: { entityId: string }) {
           <p className="entity-overview-section-sub">Is this TRUST compounding?</p>
         </header>
         <Suspense fallback={<Spinner size="sm" />}>
-          <HealthBlock entityId={entityId} />
+          <HealthBlock trustId={trustId} />
         </Suspense>
       </section>
     </div>

@@ -103,23 +103,23 @@ export default function AgentOrgChart({
   const navigate = useNavigate();
   const agents = useDaemonStore((s) => s.agents);
   const entitiesList = useDaemonStore((s) => s.entities);
-  const entityId = useMemo(() => {
+  const trustId = useMemo(() => {
     const found = agents.find((a) => a.id === parentAgentId);
-    return found?.entity_id ?? null;
+    return found?.trust_id ?? null;
   }, [agents, parentAgentId]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [positions, setPositions] = useState<Role[]>([]);
   const [edges, setEdges] = useState<RoleEdge[]>([]);
   useEffect(() => {
-    if (!entityId) {
+    if (!trustId) {
       setPositions([]);
       setEdges([]);
       return;
     }
     let cancelled = false;
     api
-      .getRoles(entityId)
+      .getRoles(trustId)
       .then((resp) => {
         if (cancelled) return;
         setPositions(resp.roles ?? []);
@@ -133,7 +133,7 @@ export default function AgentOrgChart({
     return () => {
       cancelled = true;
     };
-  }, [entityId]);
+  }, [trustId]);
 
   const org = useMemo(
     () => buildOrgFromPositions(agents, positions, edges, parentAgentId),
@@ -180,8 +180,8 @@ export default function AgentOrgChart({
 
   const handleSelect = (id: string) => {
     if (onSelect) onSelect(id);
-    else if (entityId)
-      navigate(entityPathFromId(entitiesList, entityId, "agents", encodeURIComponent(id)));
+    else if (trustId)
+      navigate(entityPathFromId(entitiesList, trustId, "agents", encodeURIComponent(id)));
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -231,11 +231,11 @@ export default function AgentOrgChart({
       <div className="org-scroll">
         <OrgNodeView node={org} onSelect={handleSelect} onAddChild={() => setPickerOpen(true)} />
       </div>
-      {entityId && (
+      {trustId && (
         <BlueprintPickerModal
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}
-          entityId={entityId}
+          trustId={trustId}
         />
       )}
     </div>

@@ -5,7 +5,7 @@ import BlockAvatar from "@/components/BlockAvatar";
 import { useEntities, useActiveEntity } from "@/queries/entities";
 import { useUIStore } from "@/store/ui";
 import { entityPath } from "@/lib/entityPath";
-import type { Entity } from "@/lib/types";
+import type { Trust } from "@/lib/types";
 
 const iconProps = {
   viewBox: "0 0 16 16",
@@ -34,7 +34,7 @@ const PlusIcon = () => (
  * - **User scope** (`/`, `/account`, `/account/<sub>`, `/launch`,
  *   `/sessions/<id>`): the trigger renders the user's avatar + name; launch
  *   and account settings live here.
- * - **Entity scope** (anything under `/trust/<trust_address>/...`): the
+ * - **Trust scope** (anything under `/trust/<trust_address>/...`): the
  *   trigger renders the active organization's avatar + name.
  *
  * The dropdown always carries three groups: the user themselves (so
@@ -52,11 +52,11 @@ export default function CompanySwitcher() {
   const activeEntity = useActiveEntity(activeEntityId);
   const [open, setOpen] = useState(false);
 
-  // Entity scope = `/trust/<addr>/...`.
+  // Trust scope = `/trust/<addr>/...`.
   const isEntityScope = pathname.startsWith("/trust/");
 
   const select = useCallback(
-    (entity: Entity) => {
+    (entity: Trust) => {
       setActiveEntity(entity.id);
       // Navigate to the canonical URL for the entity — /trust/<addr>.
       navigate(entityPath(entity));
@@ -105,7 +105,7 @@ export default function CompanySwitcher() {
   // workspace is the first row in the dropdown — one click to return
   // to it from `/me/*` or any other user-scope surface.
   const displayEntity = activeEntity ?? null;
-  const ordered: Entity[] = displayEntity
+  const ordered: Trust[] = displayEntity
     ? [displayEntity, ...entities.filter((e) => e.id !== displayEntity.id)]
     : entities;
 
