@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useVisibleIdeas } from "@/queries/ideas";
 import { ideaKeys } from "@/queries/keys";
 import { Button, Input, Textarea } from "@/components/ui";
+import { formatMediumDate } from "@/lib/i18n";
 import type { Idea } from "@/lib/types";
 
 import "@/styles/goals.css";
@@ -114,15 +115,9 @@ function GoalRow({ goal }: { goal: Idea }) {
 }
 
 function formatDeadline(iso: string): string {
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    const year = d.getFullYear();
-    const month = d.toLocaleString("en-US", { month: "short" });
-    return `${month} ${year}`;
-  } catch {
-    return iso;
-  }
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return formatMediumDate(d);
 }
 
 function NewGoalDialog({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {

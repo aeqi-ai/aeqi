@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useQuests } from "@/queries/quests";
 import { questKeys } from "@/queries/keys";
 import { Button, Input, Textarea } from "@/components/ui";
+import { formatMediumDate } from "@/lib/i18n";
 import type { Quest } from "@/lib/types";
 
 import "@/styles/projects.css";
@@ -109,15 +110,9 @@ function ProjectRow({ project }: { project: Quest }) {
 }
 
 function formatDueDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    const year = d.getFullYear();
-    const month = d.toLocaleString("en-US", { month: "short" });
-    return `${month} ${year}`;
-  } catch {
-    return iso;
-  }
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return formatMediumDate(d);
 }
 
 function NewProjectDialog({
