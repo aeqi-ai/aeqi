@@ -52,6 +52,9 @@ const REQUIRED_IDEAS_COLUMNS: &[&str] = &[
     // Tables-in-Ideas Phase 2 (v15).
     "parent_idea_id",
     "properties",
+    // Kind taxonomy + file references (v17).
+    "kind",
+    "file_id",
 ];
 
 /// Columns that were dropped by v3 — must NOT appear in the final shape.
@@ -91,6 +94,8 @@ const REQUIRED_INDEXES: &[&str] = &[
     "idx_ideas_parent_idea_id",
     // Embedding profile enforcement (v16).
     "idx_idea_embeddings_profile",
+    // Kind taxonomy + file references (v17).
+    "idx_ideas_kind",
 ];
 
 /// Every FTS5 sync trigger on `ideas`.
@@ -234,8 +239,8 @@ fn test_fresh_db_has_final_shape() {
 
     let conn = Connection::open(&db_path).expect("inspect db");
 
-    // 1. schema_version is stamped at 16 — the baseline marker
-    // (embedding profile enforcement added provider/model metadata).
+    // 1. schema_version is stamped at 17 — the baseline marker
+    // (kind taxonomy added kind/file_id metadata).
     let max_version: i64 = conn
         .query_row(
             "SELECT COALESCE(MAX(version), 0) FROM schema_version",
@@ -244,8 +249,8 @@ fn test_fresh_db_has_final_shape() {
         )
         .expect("read schema_version");
     assert_eq!(
-        max_version, 16,
-        "fresh DB should be stamped at baseline version 16, got {max_version}"
+        max_version, 17,
+        "fresh DB should be stamped at baseline version 17, got {max_version}"
     );
 
     // 2. ideas has every required column.
@@ -381,11 +386,14 @@ fn test_legacy_db_with_schema_version_9_runs_v11() {
         .collect();
     // T1.8 appended v11; T1.9 v12; T1.13 v13; T1.14 v14 (polymorphic
     // assignee); Tables-in-Ideas Phase 2 appends v15; embedding profile
-    // enforcement appends v16. Legacy DBs catch up through all rows.
+    // enforcement appends v16; kind taxonomy appends v17. Legacy DBs catch
+    // up through all rows.
     assert_eq!(
         versions,
-        (1..=9).chain([11, 12, 13, 14, 15, 16]).collect::<Vec<_>>(),
-        "legacy 1..9 rows must be preserved; v11..v16 must be stamped"
+        (1..=9)
+            .chain([11, 12, 13, 14, 15, 16, 17])
+            .collect::<Vec<_>>(),
+        "legacy 1..9 rows must be preserved; v11..v17 must be stamped"
     );
 
     let idea_count: i64 = conn

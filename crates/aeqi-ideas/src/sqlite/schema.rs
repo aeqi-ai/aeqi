@@ -262,6 +262,7 @@ fn initial_schema(conn: &Connection) -> Result<()> {
          CREATE INDEX idx_ideas_assignee ON ideas(assignee);
          CREATE INDEX idx_ideas_parent_idea_id ON ideas(parent_idea_id)
             WHERE parent_idea_id IS NOT NULL;
+         CREATE INDEX idx_ideas_kind ON ideas(kind);
          CREATE INDEX idx_idea_embeddings_profile
             ON idea_embeddings(embedding_provider, embedding_model, dimensions);
          CREATE INDEX idx_idea_tags_tag ON idea_tags(tag);
