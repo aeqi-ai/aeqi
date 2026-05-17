@@ -103,12 +103,7 @@ pub async fn handle_files_upload(
     // table. We log and proceed — Drive still works, just without Ideas-tree
     // visibility for this row until a future backfill.
     if let Some(ref idea_store) = ctx.idea_store {
-        let idea_content = format!(
-            "File: {} ({} bytes, {})",
-            name,
-            bytes.len(),
-            mime
-        );
+        let idea_content = format!("File: {} ({} bytes, {})", name, bytes.len(), mime);
         match idea_store
             .store(name, &idea_content, &["file".to_string()], Some(agent_id))
             .await

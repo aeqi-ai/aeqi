@@ -271,10 +271,7 @@ impl SqliteIdeas {
 
     /// Find an Idea by its `file_id` column. Returns the Idea's id if a
     /// matching row exists, else `None`. Single SQL lookup, no fanciness.
-    pub(super) async fn find_by_file_id_impl(
-        &self,
-        file_id: &str,
-    ) -> Result<Option<String>> {
+    pub(super) async fn find_by_file_id_impl(&self, file_id: &str) -> Result<Option<String>> {
         let fid = file_id.to_string();
         self.blocking(move |conn| {
             let result: Option<String> = match conn.query_row(
