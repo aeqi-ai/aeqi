@@ -168,6 +168,14 @@ impl Tool for IdeasStoreManyTool {
         let items = match parse_items(from_json_raw) {
             Ok(items) => items,
             Err(e) => {
+                if is_reflection_batch(&args) {
+                    warn!(error = %e, "ideas.store_many: reflection_failed");
+                    return Ok(reflection_failed_result(
+                        "malformed_json",
+                        format!("reflector output was not a JSON array: {e}"),
+                        Some(from_json_raw),
+                    ));
+                }
                 warn!(error = %e, "ideas.store_many: failed to parse from_json");
                 return Ok(ToolResult::error(format!(
                     "ideas.store_many: failed to parse from_json: {e}"
@@ -176,6 +184,14 @@ impl Tool for IdeasStoreManyTool {
         };
 
         if items.is_empty() {
+            if is_empty_string_input(from_json_raw) && is_reflection_batch(&args) {
+                warn!("ideas.store_many: reflection_failed");
+                return Ok(reflection_failed_result(
+                    "empty_output",
+                    "reflector output was empty".to_string(),
+                    Some(from_json_raw),
+                ));
+            }
             info!("ideas.store_many: no items to store");
             return Ok(
                 ToolResult::success("ideas.store_many: no items".to_string()).with_data(
@@ -456,6 +472,77 @@ fn parse_items(value: &serde_json::Value) -> Result<Vec<StoreItem>, String> {
     serde_json::from_str::<Vec<StoreItem>>(stripped).map_err(|e| format!("parse failed: {e}"))
 }
 
+fn is_empty_string_input(value: &serde_json::Value) -> bool {
+    value.as_str().map(str::trim).unwrap_or_default().is_empty()
+}
+
+fn is_reflection_batch(args: &serde_json::Value) -> bool {
+    let authored_by_reflector = args
+        .get("authored_by")
+        .and_then(|v| v.as_str())
+        .map(|s| s.starts_with("reflector:"))
+        .unwrap_or(false);
+    let reflection_tag = args
+        .get("tag_suffix")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .any(|tag| tag.eq_ignore_ascii_case("reflection"))
+        })
+        .unwrap_or(false);
+    authored_by_reflector || reflection_tag
+}
+
+fn reflection_failed_result(
+    reason: &'static str,
+    details: String,
+    raw: Option<&serde_json::Value>,
+) -> ToolResult {
+    let preview = raw
+        .map(raw_preview)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_default();
+    let output = if preview.is_empty() {
+        format!("reflection_failed: {reason}; {details}; stored=0 skipped=0")
+    } else {
+        format!("reflection_failed: {reason}; {details}; stored=0 skipped=0; preview={preview}")
+    };
+    ToolResult::success(output)
+        .with_data(serde_json::json!({
+            "stored": 0,
+            "skipped": 0,
+            "ids": [],
+            "errors": [],
+            "refused": [],
+            "failed_validation": [],
+            "reflection_failed": true,
+            "failure_reason": reason,
+            "failure_details": details,
+            "raw_preview": preview,
+        }))
+        .with_outcome_score(0.0)
+        .with_outcome_details(format!("reflection_failed:{reason}"))
+}
+
+fn raw_preview(value: &serde_json::Value) -> String {
+    let raw = value
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| value.to_string());
+    let trimmed = raw.trim();
+    const MAX: usize = 160;
+    if trimmed.len() <= MAX {
+        trimmed.to_string()
+    } else {
+        let mut end = MAX;
+        while !trimmed.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}...", &trimmed[..end])
+    }
+}
+
 /// Strip a surrounding ```json ... ``` or ``` ... ``` markdown fence if
 /// present. Leaves unfenced input untouched.
 fn strip_code_fence(input: &str) -> &str {
@@ -592,6 +679,72 @@ mod tests {
             .unwrap();
         assert!(!result.is_error);
         assert_eq!(result.data.get("stored").and_then(|v| v.as_u64()), Some(0));
+    }
+
+    #[tokio::test]
+    async fn empty_reflection_string_returns_structured_failure() {
+        let (store, _dir) = make_store();
+        let tool = IdeasStoreManyTool::new(Some(store));
+        let result = tool
+            .execute(serde_json::json!({
+                "from_json": "",
+                "authored_by": "reflector:agent-xyz",
+                "tag_suffix": ["source:session:sess-empty", "reflection"],
+            }))
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.output.contains("reflection_failed: empty_output"));
+        assert_eq!(result.data.get("stored").and_then(|v| v.as_u64()), Some(0));
+        assert_eq!(
+            result
+                .data
+                .get("reflection_failed")
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(result.outcome_score, Some(0.0));
+        assert_eq!(
+            result.outcome_details.as_deref(),
+            Some("reflection_failed:empty_output")
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_reflection_json_returns_structured_failure() {
+        let (store, _dir) = make_store();
+        let tool = IdeasStoreManyTool::new(Some(store));
+        let result = tool
+            .execute(serde_json::json!({
+                "from_json": "not json",
+                "tag_suffix": ["reflection"],
+            }))
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.output.contains("reflection_failed: malformed_json"));
+        assert_eq!(
+            result.data.get("failure_reason").and_then(|v| v.as_str()),
+            Some("malformed_json")
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_non_reflection_json_still_returns_error() {
+        let (store, _dir) = make_store();
+        let tool = IdeasStoreManyTool::new(Some(store));
+        let result = tool
+            .execute(serde_json::json!({
+                "from_json": "not json",
+                "tag_suffix": ["source:threshold:test"],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.is_error);
+        assert!(result.output.contains("failed to parse from_json"));
     }
 
     #[tokio::test]

@@ -706,6 +706,7 @@ async fn dispatch_event_tool_calls_with_trigger(
                     // arm the cooldown so the next compaction round skips
                     // the LLM entirely.
                     let effective_output = if is_compactor_spawn
+                        && compactor_cooldown.is_some()
                         && result.output.trim().len()
                             < aeqi_core::agent::compaction::FALLBACK_MIN_SUMMARY_CHARS
                     {
@@ -1789,6 +1790,92 @@ mod tests {
         assert!(
             content.contains("deterministic fallback"),
             "replace_middle must receive the fallback summary, got: {content}"
+        );
+    }
+
+    /// Reflection and consolidation events also use `session.spawn(kind=compactor)`,
+    /// but their downstream tool expects JSON, not a prose transcript fallback.
+    /// With no cooldown handle wired, an empty spawned result must pass through
+    /// unchanged so `ideas.store_many` can classify the reflection failure.
+    #[tokio::test]
+    async fn compactor_empty_output_without_cooldown_does_not_fallback() {
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let store_many_calls = Arc::new(Mutex::new(Vec::new()));
+        let registry = ToolRegistry::new(vec![
+            Arc::new(RecordingTool {
+                name: "session.spawn",
+                result: ToolResult::success(""),
+                calls: spawn_calls.clone(),
+            }),
+            Arc::new(RecordingTool {
+                name: "ideas.store_many",
+                result: ToolResult::success("reflection_failed: empty reflector output"),
+                calls: store_many_calls.clone(),
+            }),
+        ]);
+        let ctx = ExecutionContext {
+            session_id: "sess-reflect-empty".to_string(),
+            ..Default::default()
+        };
+        let dispatch = ToolDispatch {
+            registry: &registry,
+            ctx: &ctx,
+            session_store: None,
+        };
+        let event = crate::event_handler::Event {
+            id: "ev-reflect-empty".to_string(),
+            agent_id: None,
+            scope: aeqi_core::Scope::Global,
+            name: "on_reflect_after_quest".to_string(),
+            pattern: "session:quest_end".to_string(),
+            tool_calls: vec![
+                crate::event_handler::ToolCall {
+                    tool: "session.spawn".to_string(),
+                    args: serde_json::json!({
+                        "kind": "compactor",
+                        "parent_session": "{session_id}",
+                    }),
+                },
+                crate::event_handler::ToolCall {
+                    tool: "ideas.store_many".to_string(),
+                    args: serde_json::json!({
+                        "from_json": "{last_tool_result}",
+                        "tag_suffix": ["reflection"],
+                    }),
+                },
+            ],
+            enabled: true,
+            cooldown_secs: 0,
+            last_fired: None,
+            fire_count: 0,
+            total_cost_usd: 0.0,
+            system: false,
+            created_at: chrono::Utc::now(),
+        };
+        let mut parts = Vec::new();
+
+        let outcome = dispatch_event_tool_calls_with_trigger(
+            &event,
+            &dispatch,
+            &AssemblyContext::default(),
+            Some(&serde_json::json!({"transcript_preview": "User: done"})),
+            None,
+            None,
+            &mut parts,
+        )
+        .await;
+
+        assert!(!outcome.had_error);
+        assert_eq!(spawn_calls.lock().unwrap().len(), 1);
+        assert_eq!(store_many_calls.lock().unwrap().len(), 1);
+        let from_json = store_many_calls.lock().unwrap()[0]
+            .get("from_json")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<missing>")
+            .to_string();
+        assert_eq!(
+            from_json, "",
+            "non-budget compactor output must not be replaced with fallback prose"
         );
     }
 
