@@ -140,6 +140,15 @@ const GoalsIcon = () => (
   </svg>
 );
 
+// Projects — stacked horizontal bars (a roadmap micro-chart).
+const ProjectsIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2" y="3" width="9" height="2.5" rx="0.5" />
+    <rect x="4" y="7" width="10" height="2.5" rx="0.5" />
+    <rect x="3" y="11" width="7" height="2.5" rx="0.5" />
+  </svg>
+);
+
 // Admin — shield silhouette.
 const AdminIcon = () => (
   <svg {...iconProps}>
@@ -404,6 +413,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">
               <div className="sidebar-section-label">Workspace</div>
               {navItem("goals", "Goals", <GoalsIcon />)}
+              {navItem("projects", "Projects", <ProjectsIcon />)}
               {navItem("agents", "Agents", <AgentsIcon />)}
               {navItem("events", "Events", <EventsIcon />, {
                 action: rowAction("New event", <PlusIcon />, () => {

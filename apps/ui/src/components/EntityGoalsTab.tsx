@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVisibleIdeas } from "@/queries/ideas";
 import { ideaKeys } from "@/queries/keys";
+import { Button, Input, Textarea } from "@/components/ui";
 import type { Idea } from "@/lib/types";
 
 import "@/styles/goals.css";
@@ -43,21 +44,17 @@ export default function EntityGoalsTab({ entityId: _entityId }: { entityId: stri
             Quests.
           </p>
         </div>
-        <button type="button" className="goals-tab__new" onClick={() => setCreating(true)}>
+        <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
           + New goal
-        </button>
+        </Button>
       </header>
 
       {goals.length === 0 ? (
         <div className="goals-tab__empty">
           <p>No goals yet. Set a direction — what outcome are you pursuing?</p>
-          <button
-            type="button"
-            className="goals-tab__new goals-tab__new--secondary"
-            onClick={() => setCreating(true)}
-          >
+          <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
             + New goal
-          </button>
+          </Button>
         </div>
       ) : (
         <ul className="goals-tab__list">
@@ -178,74 +175,55 @@ function NewGoalDialog({ onCancel, onCreated }: { onCancel: () => void; onCreate
     <div className="goals-dialog__backdrop" onClick={onCancel}>
       <div className="goals-dialog" onClick={(e) => e.stopPropagation()}>
         <h2 className="goals-dialog__title">New goal</h2>
-        <label className="goals-dialog__field">
-          <span className="goals-dialog__label">Goal</span>
-          <input
-            className="goals-dialog__input"
-            placeholder="e.g. Hit $10K MRR by Sept"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-          />
-        </label>
-        <label className="goals-dialog__field">
-          <span className="goals-dialog__label">Why (optional)</span>
-          <textarea
-            className="goals-dialog__textarea"
-            placeholder="Direction, context, what success looks like…"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={3}
-          />
-        </label>
+        <Input
+          label="Goal"
+          placeholder="e.g. Hit $10K MRR by Sept"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+        <Textarea
+          label="Why (optional)"
+          placeholder="Direction, context, what success looks like…"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={3}
+        />
         <div className="goals-dialog__row">
-          <label className="goals-dialog__field goals-dialog__field--inline">
-            <span className="goals-dialog__label">Target (optional)</span>
-            <input
-              className="goals-dialog__input"
-              placeholder="10000"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              inputMode="decimal"
-            />
-          </label>
-          <label className="goals-dialog__field goals-dialog__field--inline">
-            <span className="goals-dialog__label">Unit</span>
-            <input
-              className="goals-dialog__input"
-              placeholder="USD, users, %…"
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-            />
-          </label>
-        </div>
-        <label className="goals-dialog__field">
-          <span className="goals-dialog__label">Deadline (optional)</span>
-          <input
-            className="goals-dialog__input"
-            type="date"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
+          <Input
+            label="Target (optional)"
+            placeholder="10000"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            inputMode="decimal"
           />
-        </label>
+          <Input
+            label="Unit"
+            placeholder="USD, users, %…"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+          />
+        </div>
+        <Input
+          label="Deadline (optional)"
+          type="date"
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+        />
         {error && <p className="goals-dialog__error">{error}</p>}
         <div className="goals-dialog__actions">
-          <button
-            type="button"
-            className="goals-dialog__cancel"
-            onClick={onCancel}
-            disabled={submitting}
-          >
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
             Cancel
-          </button>
-          <button
-            type="button"
-            className="goals-dialog__submit"
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleSubmit}
-            disabled={submitting || !name.trim()}
+            loading={submitting}
+            disabled={!name.trim()}
           >
-            {submitting ? "Creating…" : "Create goal"}
-          </button>
+            Create goal
+          </Button>
         </div>
       </div>
     </div>
