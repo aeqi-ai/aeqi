@@ -38,11 +38,11 @@ export function useDaemonSocket() {
         return;
       }
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      // The proxy's `extract_entity_id` reads `trust_id` from the
+      // The proxy's `extract_trust_id` reads `trust_id` from the
       // query string. The legacy `root` name is from the slug-era
       // and silently 400s now.
       const ws = new WebSocket(
-        `${protocol}//${window.location.host}/api/ws?token=${token}&entity_id=${encodeURIComponent(entity)}`,
+        `${protocol}//${window.location.host}/api/ws?token=${token}&trust_id=${encodeURIComponent(entity)}`,
       );
       wsRef.current = ws;
 

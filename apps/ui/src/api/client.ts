@@ -105,9 +105,9 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const entity = getScopedEntity();
-  if (entity && !path.startsWith("/auth/")) {
-    headers["X-Trust"] = entity;
+  const trustId = getScopedEntity();
+  if (trustId && !path.startsWith("/auth/")) {
+    headers["X-Trust"] = trustId;
   }
 
   const res = await fetch(url, { ...options, headers });
