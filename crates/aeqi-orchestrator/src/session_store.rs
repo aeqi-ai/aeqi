@@ -1816,6 +1816,12 @@ impl SessionStore {
     /// participants) are excluded — they're orphan rows with no routing
     /// target.
     ///
+    /// `task` sessions are also excluded. They are autonomous quest
+    /// execution transcripts; if a task needs the founder, `question.ask`
+    /// creates/stamps a separate DM session for the human inbox. Keeping
+    /// task sessions out prevents lifecycle-only rows (`event_fired` plus
+    /// empty quest payloads) from flooding `/inbox`.
+    ///
     /// Returns raw rows — joining agent name and entity id happens at the
     /// IPC layer where `AgentRegistry` is in scope. `last_agent_message`
     /// is the most recent assistant message body. `last_active` is the
@@ -1872,6 +1878,7 @@ impl SessionStore {
                         WHERE session_id = s.id AND identity_kind = 'agent'
                         LIMIT 1)
                    ) IS NOT NULL
+               AND s.session_type <> 'task'
                AND (
                     ?1 IS NULL
                     OR EXISTS (
@@ -4244,7 +4251,8 @@ mod tests {
     /// being added) are excluded; sessions where the user IS a
     /// participant (e.g. a `question.ask` decision request that goes
     /// through `find_or_create_dm_session`) come back. `None` user_id
-    /// disables the gate (runtime / operator mode).
+    /// disables the participant gate (runtime / operator mode), but task
+    /// execution sessions still stay out of the human inbox.
     #[tokio::test]
     async fn list_awaiting_for_user_filters_by_participant() {
         let store = test_store().await;
@@ -4296,6 +4304,57 @@ mod tests {
             .await
             .unwrap();
         assert!(stranger.is_empty());
+    }
+
+    /// Autonomous quest execution sessions are not inbox conversations.
+    /// They can contain only lifecycle `event_fired` rows plus an empty
+    /// quest payload; those must not leak into `/inbox`, even in runtime /
+    /// operator mode where the participant gate is disabled.
+    #[tokio::test]
+    async fn list_awaiting_excludes_task_execution_sessions() {
+        let store = test_store().await;
+        let task = store
+            .create_session("agent-x", "task", "Janus", None, Some("ja-001"))
+            .await
+            .unwrap();
+        store
+            .record_event_by_session(&task, "event_fired", "system", "", Some("web"), None)
+            .await
+            .unwrap();
+        store
+            .record_event_by_session_with_full_identity(
+                &task,
+                "message",
+                "user",
+                "",
+                Some("task"),
+                None,
+                None,
+                Some("quest"),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let dm = store
+            .create_session("agent-x", "dm", "DM — Janus", None, None)
+            .await
+            .unwrap();
+        store
+            .append_message_from(&dm, "assistant", "hello", "agent", Some("agent-x"), None)
+            .await
+            .unwrap();
+
+        let rows = store.list_awaiting_for_user(None, None).await.unwrap();
+        assert!(
+            rows.iter().any(|r| r.session_id == dm),
+            "normal DM sessions must stay visible"
+        );
+        assert!(
+            !rows.iter().any(|r| r.session_id == task),
+            "task execution sessions must not leak into inbox"
+        );
     }
 
     /// `answer_awaiting` clears the bit and enqueues a pending message in a
