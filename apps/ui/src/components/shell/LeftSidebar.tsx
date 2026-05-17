@@ -131,6 +131,15 @@ const RolesIcon = () => (
   </svg>
 );
 
+// Goals — concentric target rings, the "where are we aiming" cue.
+const GoalsIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="8" r="6" />
+    <circle cx="8" cy="8" r="3.5" />
+    <circle cx="8" cy="8" r="1" fill="currentColor" />
+  </svg>
+);
+
 // Admin — shield silhouette.
 const AdminIcon = () => (
   <svg {...iconProps}>
@@ -394,6 +403,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">
               <div className="sidebar-section-label">Workspace</div>
+              {navItem("goals", "Goals", <GoalsIcon />)}
               {navItem("agents", "Agents", <AgentsIcon />)}
               {navItem("events", "Events", <EventsIcon />, {
                 action: rowAction("New event", <PlusIcon />, () => {

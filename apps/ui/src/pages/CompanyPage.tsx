@@ -19,6 +19,7 @@ const GovernancePage = lazy(() => import("@/pages/GovernancePage"));
 // data so sibling-agent work remains visible on `/trust/<addr>/...`.
 const EntityAgentsTab = lazy(() => import("@/components/EntityAgentsTab"));
 const EntityRolesTab = lazy(() => import("@/components/EntityRolesTab"));
+const EntityGoalsTab = lazy(() => import("@/components/EntityGoalsTab"));
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
 const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
 const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
@@ -185,6 +186,13 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     return (
       <Suspense>
         <AgentIdeasTab agentId={agentId} scope="entity" />
+      </Suspense>
+    );
+  }
+  if (tab === "goals") {
+    return (
+      <Suspense>
+        <EntityGoalsTab entityId={entityId} />
       </Suspense>
     );
   }

@@ -131,6 +131,13 @@ export interface Quest {
   sibling_quest_ids?: string[];
   status: QuestStatus;
   priority: QuestPriority;
+  /**
+   * Structural identity. Canonical: 'task' (default — atomic claimable work)
+   * or 'project' (container of sub-Quests + retrospective on completion).
+   * Custom kinds may use a 'custom:<name>' prefix. See
+   * architecture/kind-taxonomy-and-the-structural-vs-categorical-rule.
+   */
+  kind?: string;
   scope?: ScopeValue;
   agent_id?: string;
   /**
@@ -182,6 +189,12 @@ export interface Idea {
   // Tables-in-Ideas Phase 2.
   parent_idea_id?: string | null;
   properties?: Record<string, unknown> | null;
+  // Kind taxonomy (Phase 1 of ae-002). Canonical: 'note' (default), 'file', 'goal'.
+  // Open enum — `custom:<name>` allowed for company-specific kinds.
+  // See architecture/kind-taxonomy-and-the-structural-vs-categorical-rule.
+  kind?: string;
+  // When kind='file', binary blob row id in the orchestrator's files table.
+  file_id?: string | null;
 }
 
 export type IdeaRelation = "mentions" | "embeds" | "adjacent";
