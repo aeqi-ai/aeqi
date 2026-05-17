@@ -4,6 +4,14 @@ All notable changes to aeqi are documented here. The project uses the
 workspace version in `Cargo.toml` and follows semantic versioning while the
 public API is stabilizing.
 
+## [Unreleased]
+
+### Added
+
+- Release preflight now checks tag, workspace package version, internal
+  workspace dependency versions, and changelog coverage before release
+  artifacts build.
+
 ## [0.15.0] - 2026-05-04
 
 ### Added
