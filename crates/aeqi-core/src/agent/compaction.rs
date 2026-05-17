@@ -149,6 +149,124 @@ pub(crate) const TOKEN_BUDGET_COMPLETION_THRESHOLD: f32 = 0.90;
 pub(crate) const SYNTHETIC_TOOL_RESULT: &str = "[Tool result unavailable — context was compacted]";
 
 // ---------------------------------------------------------------------------
+// Scaled summary budget — quest 67-180.4, deliverable 7
+// ---------------------------------------------------------------------------
+//
+// The compactor's output budget (max_tokens) is sized proportionally to the
+// transcript being compressed. Too small and the summary gets truncated mid-
+// sentence and the resumed agent runs on rubble; too large and the LLM
+// happily generates a 4k-token wall of text for a 200-char tail.
+//
+// Formula: `summary_max_tokens = clamp(input_chars / 4 / RATIO, MIN, MAX)`
+//
+// CHARS_PER_TOKEN ≈ 4 (matches `CHARS_PER_TOKEN`) so dividing input chars by 4
+// approximates the token count of the input. Dividing again by RATIO targets
+// the compression factor.
+
+/// Target compression factor — output budget = input_tokens / RATIO.
+/// `RATIO = 8` aims at ~8× compression as the default (e.g. an 8k-token
+/// transcript yields a 1k-token summary).
+pub const SUMMARY_BUDGET_RATIO: usize = 8;
+
+/// Minimum tokens the compactor is allowed for its summary. Floors out the
+/// formula so even a tiny input still gets a usable summary instead of a
+/// 50-token snippet.
+pub const SUMMARY_BUDGET_MIN: u32 = 256;
+
+/// Maximum tokens the compactor is allowed for its summary. Caps the formula
+/// so a giant input doesn't authorize a runaway LLM call.
+pub const SUMMARY_BUDGET_MAX: u32 = 4_096;
+
+/// Compute the `max_tokens` budget for a compactor session given the input
+/// character count. Pure function — testable without any LLM/runtime context.
+///
+/// Sized so:
+/// - A short input (under ~8KB) gets the [`SUMMARY_BUDGET_MIN`] floor.
+/// - A medium input scales linearly at the `SUMMARY_BUDGET_RATIO` factor.
+/// - A huge input is capped at [`SUMMARY_BUDGET_MAX`].
+pub fn compute_summary_max_tokens(input_chars: usize) -> u32 {
+    let input_tokens = input_chars / CHARS_PER_TOKEN;
+    let proposed = (input_tokens / SUMMARY_BUDGET_RATIO) as u32;
+    proposed.clamp(SUMMARY_BUDGET_MIN, SUMMARY_BUDGET_MAX)
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic fallback summary — quest 67-180.4, deliverable 10
+// ---------------------------------------------------------------------------
+//
+// When the LLM compactor returns empty/missing/garbage output (rate limit,
+// upstream error, model refused), the agent loop must not resume on rubble.
+// The fallback summary is a deterministic head+tail snip of the input
+// transcript, labelled clearly so the resumed agent knows the LLM compactor
+// failed and the structural fallback ran instead.
+
+/// Minimum useful length (in chars) for an LLM-generated summary. Output
+/// below this threshold is treated as a compactor failure and the fallback
+/// summary takes over. 64 chars is shorter than any sensible 9-section
+/// summary header — anything below this is empty / garbage / a one-line
+/// "okay" from a refusing model.
+pub const FALLBACK_MIN_SUMMARY_CHARS: usize = 64;
+
+/// Per-section cap (in chars) on the deterministic fallback. Head + tail
+/// total stays bounded — far below `MAX_TRANSCRIPT` in
+/// [`build_compaction_transcript`] — so the fallback can be safely substituted
+/// into `transcript.replace_middle` without re-bloating the context window.
+const FALLBACK_SECTION_CHARS: usize = 1_500;
+
+/// Build a deterministic head+tail snip of a transcript preview, prefixed
+/// with a header that tells the resumed agent the LLM compactor failed and
+/// this is the structural fallback. Pure function — no LLM, no I/O.
+///
+/// The header is intentionally explicit so when the operator reads a session
+/// later they can see the LLM compactor missed at this seam without grepping
+/// logs. Returns a Markdown body suitable as `replacement_content` for
+/// `transcript.replace_middle`.
+pub fn fallback_summary(transcript_preview: &str) -> String {
+    let trimmed = transcript_preview.trim();
+    if trimmed.is_empty() {
+        return concat!(
+            "# Context Summary (deterministic fallback — LLM compactor failed)\n\n",
+            "_No transcript preview was available at compaction time._\n\n",
+            "The previous turns could not be summarised by the compactor LLM and ",
+            "no transcript snippet was provided as a structural fallback. ",
+            "Treat this section as background reference only; resume from the ",
+            "latest user message that follows."
+        )
+        .to_string();
+    }
+
+    let total = trimmed.chars().count();
+    if total <= FALLBACK_SECTION_CHARS * 2 {
+        // Small enough to include verbatim — no middle to truncate.
+        return format!(
+            "# Context Summary (deterministic fallback — LLM compactor failed)\n\n\
+             _The LLM compactor returned no usable summary. The transcript tail is included verbatim below._\n\n\
+             ```\n{trimmed}\n```"
+        );
+    }
+
+    let head: String = trimmed.chars().take(FALLBACK_SECTION_CHARS).collect();
+    let tail: String = trimmed
+        .chars()
+        .rev()
+        .take(FALLBACK_SECTION_CHARS)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    let truncated = total.saturating_sub(FALLBACK_SECTION_CHARS * 2);
+
+    format!(
+        "# Context Summary (deterministic fallback — LLM compactor failed)\n\n\
+         _The LLM compactor returned no usable summary. A structural head + tail snip \
+         of the recent transcript is included below as background reference. \
+         {truncated} characters from the middle were elided._\n\n\
+         ## Head\n\n```\n{head}\n```\n\n\
+         ## Tail\n\n```\n{tail}\n```"
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Token estimation
 // ---------------------------------------------------------------------------
 
@@ -932,5 +1050,78 @@ impl Agent {
                 true
             });
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests for quest 67-180.4 helpers
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod budget_and_fallback_tests {
+    use super::*;
+
+    #[test]
+    fn compute_summary_max_tokens_floors_at_min_for_small_input() {
+        // 100 chars ≈ 25 input tokens, / 8 = 3 → clamps up to MIN.
+        assert_eq!(compute_summary_max_tokens(100), SUMMARY_BUDGET_MIN);
+        // Zero input still gives the floor — the compactor must always have
+        // budget for at least the wrapper header.
+        assert_eq!(compute_summary_max_tokens(0), SUMMARY_BUDGET_MIN);
+    }
+
+    #[test]
+    fn compute_summary_max_tokens_scales_linearly_in_band() {
+        // 32_000 chars ≈ 8000 input tokens, / 8 = 1000 → in-band, no clamp.
+        let budget = compute_summary_max_tokens(32_000);
+        assert_eq!(budget, 1_000);
+        assert!(budget > SUMMARY_BUDGET_MIN && budget < SUMMARY_BUDGET_MAX);
+    }
+
+    #[test]
+    fn compute_summary_max_tokens_caps_at_max_for_huge_input() {
+        // 1_000_000 chars ≈ 250_000 input tokens, / 8 = 31_250 → clamps to MAX.
+        assert_eq!(compute_summary_max_tokens(1_000_000), SUMMARY_BUDGET_MAX);
+    }
+
+    #[test]
+    fn fallback_summary_includes_header_marker_for_empty_input() {
+        let summary = fallback_summary("");
+        assert!(summary.contains("deterministic fallback"));
+        assert!(summary.contains("LLM compactor failed"));
+        // Operator-readable: the header is recognisable in raw transcripts.
+        assert!(summary.starts_with("# Context Summary"));
+    }
+
+    #[test]
+    fn fallback_summary_includes_short_transcript_verbatim() {
+        let preview = "User: did you finish?\nAssistant: yes, shipped v0.1.";
+        let summary = fallback_summary(preview);
+        assert!(summary.contains("deterministic fallback"));
+        assert!(summary.contains("shipped v0.1"));
+        // Short enough → no head/tail split, single fenced block.
+        assert!(!summary.contains("## Head"));
+        assert!(!summary.contains("## Tail"));
+    }
+
+    #[test]
+    fn fallback_summary_head_tail_snips_large_transcript() {
+        // Build a transcript larger than 2 * FALLBACK_SECTION_CHARS so the
+        // function takes the head/tail branch.
+        let big = "A".repeat(5_000) + &"Z".repeat(5_000);
+        let summary = fallback_summary(&big);
+        assert!(summary.contains("deterministic fallback"));
+        assert!(summary.contains("## Head"));
+        assert!(summary.contains("## Tail"));
+        // Head must contain only A's; tail must contain only Z's.
+        let head_marker = summary.find("## Head").unwrap();
+        let tail_marker = summary.find("## Tail").unwrap();
+        let head_section = &summary[head_marker..tail_marker];
+        let tail_section = &summary[tail_marker..];
+        assert!(head_section.contains("AAAAA"));
+        assert!(tail_section.contains("ZZZZZ"));
+        assert!(!head_section.contains('Z'));
+        // Truncated-middle character count is reported.
+        assert!(summary.contains("characters from the middle were elided"));
     }
 }

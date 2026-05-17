@@ -161,6 +161,22 @@ pub struct Agent {
     /// behavior: any configured provider/model may be used.
     #[serde(default)]
     pub inference_cap: Option<InferenceCapability>,
+    /// Optional override for the model used by compactor (kind="compactor")
+    /// session.spawn calls. `None` falls back to the agent's primary model.
+    ///
+    /// Pairs with `inference_cap`: the override must satisfy the capability
+    /// matrix when one is set, otherwise the compactor spawn is rejected.
+    /// Typical use: pin compactor to a cheaper/faster model
+    /// (e.g. `anthropic/claude-haiku-4.5`) while the agent runs on a primary
+    /// model like Sonnet/Opus.
+    #[serde(default)]
+    pub compactor_model: Option<String>,
+    /// Optional provider hint for compactor session.spawn calls. Recorded for
+    /// audit + future routing; the runtime currently uses the orchestrator's
+    /// default provider for ephemeral spawns. When set and the active provider
+    /// differs, a warning is logged so operators can spot misconfiguration.
+    #[serde(default)]
+    pub compactor_provider: Option<String>,
 }
 
 fn default_max_concurrent() -> u32 {
@@ -687,6 +703,16 @@ fn ensure_agent_columns(conn: &Connection) -> rusqlite::Result<()> {
     if !cols.iter().any(|c| c == "inference_cap") {
         // Nullable JSON capability matrix. NULL means no constraint.
         conn.execute_batch("ALTER TABLE agents ADD COLUMN inference_cap TEXT;")?;
+    }
+    if !cols.iter().any(|c| c == "compactor_model") {
+        // Optional per-agent override for the model used by compactor
+        // (kind="compactor") session.spawn calls. NULL = inherit primary model.
+        conn.execute_batch("ALTER TABLE agents ADD COLUMN compactor_model TEXT;")?;
+    }
+    if !cols.iter().any(|c| c == "compactor_provider") {
+        // Optional provider hint for compactor session.spawn calls. NULL =
+        // inherit the orchestrator default provider.
+        conn.execute_batch("ALTER TABLE agents ADD COLUMN compactor_provider TEXT;")?;
     }
     Ok(())
 }
@@ -1326,7 +1352,9 @@ impl AgentRegistry {
                  quest_prefix TEXT,
                  worker_timeout_secs INTEGER,
                  tool_deny TEXT NOT NULL DEFAULT '[]',
-                 inference_cap TEXT
+                 inference_cap TEXT,
+                 compactor_model TEXT,
+                 compactor_provider TEXT
              );
              CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
              CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);",
@@ -1848,6 +1876,8 @@ impl AgentRegistry {
             can_self_delegate: false,
             can_ask_director: false,
             inference_cap: None,
+            compactor_model: None,
+            compactor_provider: None,
         };
 
         db.execute(
@@ -2857,6 +2887,32 @@ impl AgentRegistry {
         let updated = db.execute(
             "UPDATE agents SET can_ask_director = ?1 WHERE id = ?2",
             params![value as i64, id],
+        )?;
+        if updated == 0 {
+            anyhow::bail!("agent '{id}' not found");
+        }
+        Ok(())
+    }
+
+    /// Set or clear the compactor model + provider overrides for an agent.
+    /// Passing `None` clears the override; the agent then falls back to its
+    /// primary model and the orchestrator default provider for compactor
+    /// (kind="compactor") session.spawn calls.
+    ///
+    /// When `inference_cap` is set on the agent, the compactor model is
+    /// enforced against the matrix at spawn time — setting an out-of-policy
+    /// model here does NOT bypass the gate, it just shifts the failure to
+    /// the next compactor spawn.
+    pub async fn set_compactor_overrides(
+        &self,
+        id: &str,
+        compactor_model: Option<&str>,
+        compactor_provider: Option<&str>,
+    ) -> Result<()> {
+        let db = self.db.lock().await;
+        let updated = db.execute(
+            "UPDATE agents SET compactor_model = ?1, compactor_provider = ?2 WHERE id = ?3",
+            params![compactor_model, compactor_provider, id],
         )?;
         if updated == 0 {
             anyhow::bail!("agent '{id}' not found");
@@ -4603,6 +4659,14 @@ fn row_to_agent(row: &rusqlite::Row) -> Agent {
             .ok()
             .flatten()
             .and_then(|s| serde_json::from_str(&s).ok()),
+        compactor_model: row
+            .get::<_, Option<String>>("compactor_model")
+            .ok()
+            .flatten(),
+        compactor_provider: row
+            .get::<_, Option<String>>("compactor_provider")
+            .ok()
+            .flatten(),
     }
 }
 
@@ -4667,6 +4731,43 @@ mod tests {
             err,
             InferenceCapabilityError::CapabilityViolation { .. }
         ));
+    }
+
+    // ── Quest 67-180.4 deliverable 9: compactor overrides round-trip ───────────
+
+    #[tokio::test]
+    async fn compactor_overrides_round_trip_on_agent() {
+        let registry = test_registry().await;
+        let agent = registry
+            .spawn("compactor-agent", None, Some("anthropic/claude-sonnet-4.6"))
+            .await
+            .unwrap();
+        assert!(agent.compactor_model.is_none());
+        assert!(agent.compactor_provider.is_none());
+
+        registry
+            .set_compactor_overrides(
+                &agent.id,
+                Some("anthropic/claude-haiku-4.5"),
+                Some("anthropic"),
+            )
+            .await
+            .unwrap();
+        let loaded = registry.get(&agent.id).await.unwrap().unwrap();
+        assert_eq!(
+            loaded.compactor_model.as_deref(),
+            Some("anthropic/claude-haiku-4.5")
+        );
+        assert_eq!(loaded.compactor_provider.as_deref(), Some("anthropic"));
+
+        // Clearing both flips back to None.
+        registry
+            .set_compactor_overrides(&agent.id, None, None)
+            .await
+            .unwrap();
+        let loaded = registry.get(&agent.id).await.unwrap().unwrap();
+        assert!(loaded.compactor_model.is_none());
+        assert!(loaded.compactor_provider.is_none());
     }
 
     #[tokio::test]

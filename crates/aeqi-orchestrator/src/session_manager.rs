@@ -44,6 +44,77 @@ fn enforce_inference_capability(
     Ok(())
 }
 
+/// Pick the model for a `session.spawn` call. When `kind == "compactor"` and
+/// the agent declared a `compactor_model` override, use it; otherwise fall
+/// back to the agent's primary model. The override applies ONLY to compactor
+/// spawns — continuation spawns inherit the primary model so the resumed
+/// agent runs on the same capability tier.
+///
+/// Quest 67-180.4, deliverable 9.
+fn resolve_spawn_model(
+    kind: &str,
+    primary_model: &str,
+    compactor_override: Option<&str>,
+) -> String {
+    match (kind, compactor_override) {
+        ("compactor", Some(m)) if !m.trim().is_empty() => m.to_string(),
+        _ => primary_model.to_string(),
+    }
+}
+
+/// Compute the `max_tokens` budget for a spawned session. Compactor spawns
+/// get the scaled summary budget so the LLM has proportional output room;
+/// other kinds keep the default budget so existing call patterns are
+/// unchanged.
+///
+/// Quest 67-180.4, deliverable 7.
+fn resolve_spawn_max_tokens(kind: &str, input_chars: usize) -> u32 {
+    if kind == "compactor" {
+        aeqi_core::agent::compaction::compute_summary_max_tokens(input_chars)
+    } else {
+        // Inherit the AgentConfig default for non-compactor spawns. The
+        // default ships at 8192; surfacing the constant here keeps the call
+        // sites honest if the default ever changes.
+        aeqi_core::AgentConfig::default().max_tokens
+    }
+}
+
+/// Log a warning when the agent declared a `compactor_provider` hint that
+/// disagrees with the provider actually serving the spawn. The runtime has
+/// no provider factory today (one `default_provider` Arc per orchestrator),
+/// so the hint is recorded for audit but does NOT route. Operators see a
+/// warning at fire time so they can spot the mismatch instead of silently
+/// running on the wrong provider.
+///
+/// Quest 67-180.4, deliverable 9 (audit half).
+fn warn_on_provider_hint_mismatch(
+    kind: &str,
+    agent_name: &str,
+    compactor_provider_hint: Option<&str>,
+    active_provider: &dyn Provider,
+) {
+    if kind != "compactor" {
+        return;
+    }
+    let Some(hint) = compactor_provider_hint else {
+        return;
+    };
+    let hint = hint.trim();
+    if hint.is_empty() {
+        return;
+    }
+    let active_name = active_provider.name();
+    if !hint.eq_ignore_ascii_case(active_name) {
+        warn!(
+            agent = %agent_name,
+            declared_provider = %hint,
+            active_provider = %active_name,
+            "compactor_provider hint differs from active provider; \
+             runtime has no provider factory — spawn proceeds on the active provider"
+        );
+    }
+}
+
 /// What kind of session to spawn.
 /// Options for spawning a session. Every field is optional context —
 /// spawn_session works with just agent_id + input + provider.
@@ -305,6 +376,11 @@ pub struct SessionManager {
     /// `cache_control` annotations on the wire. `None` preserves the
     /// pre-T1.11 behaviour (no markers emitted).
     tag_policy_cache: Option<Arc<aeqi_ideas::tag_policy::TagPolicyCache>>,
+    /// Per-session cooldown cache for compactor LLM failures (quest 67-180.4,
+    /// deliverable 10). Shared across every session spawned by this manager
+    /// so a compactor that failed in one turn keeps the cooldown across
+    /// subsequent turns of the same session.
+    compactor_cooldown: Arc<crate::idea_assembly::CompactorCooldown>,
 }
 
 impl SessionManager {
@@ -325,6 +401,7 @@ impl SessionManager {
             default_provider: None,
             mcp_registry: None,
             tag_policy_cache: None,
+            compactor_cooldown: Arc::new(crate::idea_assembly::CompactorCooldown::new()),
         }
     }
 
@@ -499,6 +576,16 @@ impl SessionManager {
             .map(|a| a.can_ask_director)
             .unwrap_or(false);
         let agent_inference_cap = agent_opt.as_ref().and_then(|a| a.inference_cap.clone());
+        // Per-agent compactor overrides (quest 67-180.4, deliverable 9). The
+        // model override flows into the SpawnFn closures below and replaces
+        // `session_model` when `req.kind == "compactor"`. The provider hint is
+        // captured for the audit log; provider-name routing is deferred until
+        // the runtime grows a provider factory, but operators see a warning
+        // when their declared hint diverges from the active provider.
+        let agent_compactor_model = agent_opt.as_ref().and_then(|a| a.compactor_model.clone());
+        let agent_compactor_provider = agent_opt
+            .as_ref()
+            .and_then(|a| a.compactor_provider.clone());
         let session_model = if let Some(ref id) = agent_uuid {
             agent_registry.resolve_model(id, &self.default_model).await
         } else {
@@ -565,17 +652,36 @@ impl SessionManager {
             let eph_idea_store = self.idea_store.clone();
             let eph_capability = agent_inference_cap.clone();
             let eph_agent_name = agent_name.clone();
+            let eph_compactor_model = agent_compactor_model.clone();
+            let eph_compactor_provider = agent_compactor_provider.clone();
 
             let spawn_fn: SpawnFn = Arc::new(move |req: SpawnRequest| {
-                let model = eph_model.clone();
+                let primary_model = eph_model.clone();
                 let provider_opt = eph_provider.clone();
                 let idea_store_opt = eph_idea_store.clone();
                 let capability = eph_capability.clone();
                 let agent_name = eph_agent_name.clone();
+                let compactor_model_override = eph_compactor_model.clone();
+                let compactor_provider_hint = eph_compactor_provider.clone();
                 Box::pin(async move {
                     let provider = provider_opt.ok_or_else(|| {
                         anyhow::anyhow!("session.spawn: no default provider configured")
                     })?;
+
+                    // Deliverable 9: compactor model override. The override
+                    // applies ONLY when `kind == "compactor"`; continuation
+                    // spawns inherit the agent's primary model.
+                    let model = resolve_spawn_model(
+                        &req.kind,
+                        &primary_model,
+                        compactor_model_override.as_deref(),
+                    );
+                    warn_on_provider_hint_mismatch(
+                        &req.kind,
+                        &agent_name,
+                        compactor_provider_hint.as_deref(),
+                        provider.as_ref(),
+                    );
                     enforce_inference_capability(
                         &agent_name,
                         capability.as_ref(),
@@ -604,9 +710,11 @@ impl SessionManager {
 
                     let seed = req.seed_content.unwrap_or_default();
                     let context_window = aeqi_providers::context_window_for_model(&model);
+                    let max_tokens = resolve_spawn_max_tokens(&req.kind, seed.len());
                     let config = aeqi_core::AgentConfig {
                         model,
                         max_iterations: 10,
+                        max_tokens,
                         name: format!(
                             "ephemeral:{}",
                             &req.parent_session_id[..8.min(req.parent_session_id.len())]
@@ -874,18 +982,36 @@ impl SessionManager {
                 let eph_idea_store_d = self.idea_store.clone();
                 let eph_capability_d = agent_inference_cap.clone();
                 let eph_agent_name_d = agent_name.clone();
+                let eph_compactor_model_d = agent_compactor_model.clone();
+                let eph_compactor_provider_d = agent_compactor_provider.clone();
                 let dispatcher_spawn_fn: SpawnFn = Arc::new(move |req: SpawnRequest| {
-                    let model = eph_model_d.clone();
+                    let primary_model = eph_model_d.clone();
                     let provider_opt = eph_provider_d.clone();
                     let idea_store_opt = eph_idea_store_d.clone();
                     let capability = eph_capability_d.clone();
                     let agent_name = eph_agent_name_d.clone();
+                    let compactor_model_override = eph_compactor_model_d.clone();
+                    let compactor_provider_hint = eph_compactor_provider_d.clone();
                     Box::pin(async move {
                         let provider = provider_opt.ok_or_else(|| {
                             anyhow::anyhow!(
                                 "session.spawn (per-session dispatcher): no provider configured"
                             )
                         })?;
+                        // Deliverable 9: compactor model override + provider
+                        // hint. Same gate flow as the spawn-time closure
+                        // above so the dispatcher path is enforced too.
+                        let model = resolve_spawn_model(
+                            &req.kind,
+                            &primary_model,
+                            compactor_model_override.as_deref(),
+                        );
+                        warn_on_provider_hint_mismatch(
+                            &req.kind,
+                            &agent_name,
+                            compactor_provider_hint.as_deref(),
+                            provider.as_ref(),
+                        );
                         enforce_inference_capability(
                             &agent_name,
                             capability.as_ref(),
@@ -906,10 +1032,12 @@ impl SessionManager {
                         };
                         let seed = req.seed_content.unwrap_or_default();
                         let context_window = aeqi_providers::context_window_for_model(&model);
+                        let max_tokens = resolve_spawn_max_tokens(&req.kind, seed.len());
                         let parent = &req.parent_session_id;
                         let config = aeqi_core::AgentConfig {
                             model,
                             max_iterations: 10,
+                            max_tokens,
                             name: format!("compactor:{}", &parent[..8.min(parent.len())]),
                             context_window,
                             ..Default::default()
@@ -935,6 +1063,7 @@ impl SessionManager {
                     agent_registry: agent_registry.clone(),
                     session_store: self.session_store.clone(),
                     idea_store: self.idea_store.clone(),
+                    compactor_cooldown: Some(self.compactor_cooldown.clone()),
                 });
                 Some(dispatcher as Arc<dyn aeqi_core::tool_registry::PatternDispatcher>)
             } else {
@@ -1798,5 +1927,69 @@ mod tests {
         .unwrap_err();
 
         assert!(err.to_string().contains("inference capability violation"));
+    }
+
+    // ── Quest 67-180.4 deliverable 9: compactor model override ──────────────────
+
+    #[test]
+    fn resolve_spawn_model_uses_compactor_override_for_compactor_kind() {
+        let model = resolve_spawn_model(
+            "compactor",
+            "anthropic/claude-sonnet-4.6",
+            Some("anthropic/claude-haiku-4.5"),
+        );
+        assert_eq!(model, "anthropic/claude-haiku-4.5");
+    }
+
+    #[test]
+    fn resolve_spawn_model_ignores_override_for_continuation_kind() {
+        let model = resolve_spawn_model(
+            "continuation",
+            "anthropic/claude-sonnet-4.6",
+            Some("anthropic/claude-haiku-4.5"),
+        );
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    #[test]
+    fn resolve_spawn_model_falls_back_to_primary_when_override_unset() {
+        let model = resolve_spawn_model("compactor", "anthropic/claude-sonnet-4.6", None);
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    #[test]
+    fn resolve_spawn_model_treats_empty_override_as_unset() {
+        // Operator clearing the field via API may leave an empty string;
+        // treat that as "use primary".
+        let model = resolve_spawn_model("compactor", "anthropic/claude-sonnet-4.6", Some("   "));
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    // ── Quest 67-180.4 deliverable 7: scaled summary budget ─────────────────────
+
+    #[test]
+    fn resolve_spawn_max_tokens_scales_for_compactor() {
+        // For compactor kind, the formula in compaction::compute_summary_max_tokens
+        // is `clamp(input_chars / 4 / 8, MIN, MAX)`. 32_000 chars → 1000.
+        let mt = resolve_spawn_max_tokens("compactor", 32_000);
+        assert_eq!(mt, 1_000);
+    }
+
+    #[test]
+    fn resolve_spawn_max_tokens_floors_for_tiny_compactor_input() {
+        let mt = resolve_spawn_max_tokens("compactor", 16);
+        assert_eq!(mt, aeqi_core::agent::compaction::SUMMARY_BUDGET_MIN);
+    }
+
+    #[test]
+    fn resolve_spawn_max_tokens_caps_for_huge_compactor_input() {
+        let mt = resolve_spawn_max_tokens("compactor", 5_000_000);
+        assert_eq!(mt, aeqi_core::agent::compaction::SUMMARY_BUDGET_MAX);
+    }
+
+    #[test]
+    fn resolve_spawn_max_tokens_uses_default_for_non_compactor() {
+        let mt = resolve_spawn_max_tokens("continuation", 32_000);
+        assert_eq!(mt, aeqi_core::AgentConfig::default().max_tokens);
     }
 }

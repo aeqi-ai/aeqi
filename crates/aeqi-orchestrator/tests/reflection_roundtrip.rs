@@ -113,6 +113,7 @@ async fn build_harness(canned_json: &'static str) -> Harness {
         agent_registry: agent_registry.clone(),
         session_store: None,
         idea_store: Some(idea_store.clone()),
+        compactor_cooldown: None,
     });
 
     Harness {

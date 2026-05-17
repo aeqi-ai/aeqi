@@ -437,5 +437,6 @@ async fn build_canned_dispatcher(
         agent_registry,
         session_store: None,
         idea_store: None,
+        compactor_cooldown: None,
     }) as Arc<dyn PatternDispatcher>
 }

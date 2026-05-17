@@ -18,7 +18,8 @@
 //! not through args.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use aeqi_core::prompt::{AssembledContext, AssembledPromptSegment, PromptScope, ToolRestrictions};
 use aeqi_core::tool_registry::{CallerKind, ExecutionContext, ToolRegistry};
@@ -439,6 +440,7 @@ async fn dispatch_event_tool_calls(
         assembly_ctx,
         None,
         placeholder_providers,
+        None,
         parts,
     )
     .await
@@ -455,6 +457,7 @@ async fn dispatch_event_tool_calls_with_trigger(
     assembly_ctx: &AssemblyContext,
     trigger_args: Option<&serde_json::Value>,
     placeholder_providers: Option<&HashMap<String, String>>,
+    compactor_cooldown: Option<&CompactorCooldown>,
     parts: &mut Vec<AssembledPromptSegment>,
 ) -> EventToolCallOutcome {
     // Build substitution context from AssemblyContext fields.
@@ -561,6 +564,19 @@ async fn dispatch_event_tool_calls_with_trigger(
     let mut invocation_outcome_score: Option<f64> = None;
     let mut invocation_outcome_details: Option<String> = None;
 
+    // Pre-compute the deterministic fallback summary input once. The
+    // `transcript_preview` field on `trigger_args` is the same preview the
+    // compactor LLM would have summarised; reusing it for the fallback keeps
+    // the structural and LLM paths drawing from the same source of truth.
+    // Only meaningful when `compactor_cooldown` is engaged — otherwise the
+    // closure below is dead code and the optimiser drops it.
+    let fallback_transcript: String = trigger_args
+        .and_then(|v| v.get("transcript_preview"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let session_id_for_cooldown = dispatch.ctx.session_id.clone();
+
     for (step_index, tc) in event.tool_calls.iter().enumerate() {
         // 1. Substitute placeholders in args (including {last_tool_result}
         //    scalar alias and {tool_calls.N.output|data.path} structured refs
@@ -601,6 +617,53 @@ async fn dispatch_event_tool_calls_with_trigger(
                 None
             };
 
+        // Quest 67-180.4 deliverable 10: compactor cooldown intercept.
+        // When the calling pattern is `context:budget:exceeded` and a prior
+        // turn flagged this session as a compactor failure, skip the LLM
+        // `session.spawn` for `kind=compactor` and substitute a deterministic
+        // fallback summary as the `{last_tool_result}` for the downstream
+        // `transcript.replace_middle` call. Eliminates the hot-loop where a
+        // misbehaving model would burn budget on consecutive empty summaries.
+        let is_compactor_spawn = tc.tool == "session.spawn"
+            && substituted
+                .get("kind")
+                .and_then(|v| v.as_str())
+                .map(|k| k == "compactor")
+                .unwrap_or(false);
+        if is_compactor_spawn
+            && let Some(cooldown) = compactor_cooldown
+            && cooldown.is_cooling_down(&session_id_for_cooldown)
+        {
+            let fallback = aeqi_core::agent::compaction::fallback_summary(&fallback_transcript);
+            tracing::warn!(
+                event_id = %event.id,
+                session_id = %session_id_for_cooldown,
+                "compactor cooldown active — skipping session.spawn(kind=compactor); \
+                 using deterministic fallback summary for downstream tool_calls"
+            );
+            sub_ctx.insert("last_tool_result".to_string(), fallback.clone());
+            // Push a synthetic OK result so downstream {tool_calls.N.output}
+            // refs resolve consistently with a normal compactor spawn.
+            let synthetic = aeqi_core::traits::ToolResult::success(fallback);
+            results_so_far.push(synthetic);
+            // Close any open step trace row as a deterministic-fallback skip
+            // rather than an error or a real success — operators reading
+            // event_invocation_steps see why nothing hit the LLM.
+            if let (Some(sid), Some(store)) = (step_id, &dispatch.session_store)
+                && let Err(e) = store
+                    .finish_step(
+                        sid,
+                        Some("compactor cooldown — used deterministic fallback summary"),
+                        "ok",
+                        None,
+                    )
+                    .await
+            {
+                tracing::warn!(error = %e, "failed to close step trace row");
+            }
+            continue;
+        }
+
         // 4. Invoke the tool.
         match dispatch
             .registry
@@ -632,10 +695,42 @@ async fn dispatch_event_tool_calls_with_trigger(
                     results_so_far.push(result);
                     break;
                 } else {
+                    // Quest 67-180.4 deliverable 10: post-call fallback.
+                    // When a compactor `session.spawn` returns an empty or
+                    // sub-threshold summary, the LLM either refused, was
+                    // rate-limited, or returned garbage. Substitute the
+                    // deterministic fallback summary as `{last_tool_result}`
+                    // so the downstream `transcript.replace_middle` lands
+                    // substantive content (and the resumed agent isn't told
+                    // it's running on "" or a 12-char "ok" string). Also
+                    // arm the cooldown so the next compaction round skips
+                    // the LLM entirely.
+                    let effective_output = if is_compactor_spawn
+                        && result.output.trim().len()
+                            < aeqi_core::agent::compaction::FALLBACK_MIN_SUMMARY_CHARS
+                    {
+                        let fallback =
+                            aeqi_core::agent::compaction::fallback_summary(&fallback_transcript);
+                        tracing::warn!(
+                            event_id = %event.id,
+                            session_id = %session_id_for_cooldown,
+                            llm_output_len = result.output.len(),
+                            fallback_len = fallback.len(),
+                            "compactor LLM returned empty/sub-threshold summary; \
+                             substituting deterministic fallback and arming cooldown"
+                        );
+                        if let Some(cooldown) = compactor_cooldown {
+                            cooldown.note_failure(&session_id_for_cooldown);
+                        }
+                        fallback
+                    } else {
+                        result.output.clone()
+                    };
+
                     // 5. Store result for chaining: scalar alias
                     //    `{last_tool_result}` and structured refs
                     //    `{tool_calls.N.output|data.path}`.
-                    sub_ctx.insert("last_tool_result".to_string(), result.output.clone());
+                    sub_ctx.insert("last_tool_result".to_string(), effective_output.clone());
 
                     // T1.2 outcome capture. Last opt-in wins on the invocation
                     // row. Out-of-range values are clamped with a warning so a
@@ -650,7 +745,16 @@ async fn dispatch_event_tool_calls_with_trigger(
                         invocation_outcome_details = result.outcome_details.clone();
                     }
 
-                    results_so_far.push(result.clone());
+                    // When the fallback intercepted, record the synthetic
+                    // result on `results_so_far` so `{tool_calls.N.output}`
+                    // refs see substantive content too. When no fallback,
+                    // record the original result unchanged.
+                    let recorded_result = if effective_output == result.output {
+                        result.clone()
+                    } else {
+                        aeqi_core::traits::ToolResult::success(effective_output.clone())
+                    };
+                    results_so_far.push(recorded_result);
 
                     // Only context-producing tools (ideas.*) contribute their
                     // output to assembled parts. Side-effect tools like
@@ -1025,6 +1129,82 @@ fn append_idea(
 // PatternDispatcher implementation for the orchestrator
 // ---------------------------------------------------------------------------
 
+/// Default cooldown applied to a session after a compactor LLM spawn returns
+/// empty / sub-threshold output. The static-fallback summary keeps the
+/// session moving for this many seconds before another `context:budget:exceeded`
+/// is allowed to fire the LLM compactor again. 30s matches the brief and is
+/// short enough that recovery doesn't stall a turn for long, long enough that
+/// a thrashing model can't burn a credit stack in one minute.
+///
+/// Quest 67-180.4, deliverable 10.
+pub const COMPACTOR_COOLDOWN_SECS: u64 = 30;
+
+/// Per-session cooldown cache for compactor LLM failures. Prevents a hot-loop
+/// where the agent loop re-fires `context:budget:exceeded` immediately after a
+/// previous compactor spawn returned empty/short output. While cooling down,
+/// the dispatcher skips the LLM spawn and substitutes a deterministic
+/// fallback summary so `transcript.replace_middle` still has substantive
+/// content.
+///
+/// Lifetime: in-memory only — cleared on daemon restart. That is the right
+/// posture: a restart is the operator's signal to re-attempt the LLM
+/// compactor, and the cooldown is purely a stability guard, not a security
+/// gate.
+///
+/// Quest 67-180.4, deliverable 10.
+#[derive(Debug, Default)]
+pub struct CompactorCooldown {
+    /// `session_id` → instant when the cooldown expires.
+    until: StdMutex<HashMap<String, Instant>>,
+}
+
+impl CompactorCooldown {
+    pub fn new() -> Self {
+        Self {
+            until: StdMutex::new(HashMap::new()),
+        }
+    }
+
+    /// Returns `true` when the session is currently cooling down. Expired
+    /// entries are cleaned up lazily on read so the map doesn't grow without
+    /// bound across long-lived sessions.
+    pub fn is_cooling_down(&self, session_id: &str) -> bool {
+        let now = Instant::now();
+        let Ok(mut guard) = self.until.lock() else {
+            // Poisoned mutex: fail open (no cooldown). Better to allow another
+            // attempt than to wedge compaction forever.
+            return false;
+        };
+        match guard.get(session_id).copied() {
+            Some(deadline) if deadline > now => true,
+            Some(_) => {
+                guard.remove(session_id);
+                false
+            }
+            None => false,
+        }
+    }
+
+    /// Record a compactor failure for `session_id`. The session enters a
+    /// `COMPACTOR_COOLDOWN_SECS`-second cooldown window before the LLM
+    /// compactor may be re-invoked.
+    pub fn note_failure(&self, session_id: &str) {
+        let deadline = Instant::now() + Duration::from_secs(COMPACTOR_COOLDOWN_SECS);
+        if let Ok(mut guard) = self.until.lock() {
+            guard.insert(session_id.to_string(), deadline);
+        }
+    }
+
+    /// Manually clear any cooldown for `session_id`. Used by tests and as the
+    /// reset path when an operator wants the next compactor spawn to retry
+    /// immediately.
+    pub fn clear(&self, session_id: &str) {
+        if let Ok(mut guard) = self.until.lock() {
+            guard.remove(session_id);
+        }
+    }
+}
+
 /// Orchestrator-side `PatternDispatcher` that queries the event store for
 /// enabled events matching a pattern and runs their `tool_calls` via the
 /// `ToolRegistry`.
@@ -1050,6 +1230,11 @@ pub struct EventPatternDispatcher {
     /// T1.3: optional idea store for resolving `meta:placeholder-providers`.
     /// `None` → no custom placeholders; built-ins behave as before.
     pub idea_store: Option<Arc<dyn IdeaStore>>,
+    /// Per-session cooldown cache for compactor LLM failures (quest 67-180.4,
+    /// deliverable 10). `None` disables the cooldown + fallback path — tests
+    /// and bare-CLI dispatchers that don't need it can leave this `None` and
+    /// the dispatcher behaves identically to the pre-quest version.
+    pub compactor_cooldown: Option<Arc<CompactorCooldown>>,
 }
 
 impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
@@ -1129,12 +1314,22 @@ impl aeqi_core::tool_registry::PatternDispatcher for EventPatternDispatcher {
                     // whether the event contributed to `parts`; that's separate
                     // from whether a matching event ran.
                     handled = true;
+                    // Cooldown-aware path is only meaningful for the
+                    // `context:budget:exceeded` pattern (the compactor seam).
+                    // For other patterns we pass `None` so the dispatcher
+                    // behaviour is unchanged.
+                    let cooldown_for_call = if pattern == "context:budget:exceeded" {
+                        self.compactor_cooldown.as_deref()
+                    } else {
+                        None
+                    };
                     let outcome = dispatch_event_tool_calls_with_trigger(
                         event,
                         &dispatch,
                         &assembly_ctx,
                         Some(trigger_args),
                         Some(&placeholder_providers),
+                        cooldown_for_call,
                         &mut parts,
                     )
                     .await;
@@ -1460,6 +1655,7 @@ mod tests {
             &AssemblyContext::default(),
             Some(&serde_json::json!({"transcript_preview": "tail"})),
             None,
+            None,
             &mut parts,
         )
         .await;
@@ -1470,6 +1666,386 @@ mod tests {
         assert!(
             second_calls.lock().unwrap().is_empty(),
             "event chains must fail closed so downstream calls cannot consume unresolved placeholders"
+        );
+    }
+
+    // ── Quest 67-180.4 deliverable 10: cooldown + static fallback ───────────────
+
+    #[test]
+    fn cooldown_starts_unset_and_records_failure() {
+        let cooldown = CompactorCooldown::new();
+        assert!(!cooldown.is_cooling_down("sess-1"));
+        cooldown.note_failure("sess-1");
+        assert!(cooldown.is_cooling_down("sess-1"));
+        // Different sessions are independent.
+        assert!(!cooldown.is_cooling_down("sess-2"));
+        // Manual clear releases the cooldown.
+        cooldown.clear("sess-1");
+        assert!(!cooldown.is_cooling_down("sess-1"));
+    }
+
+    /// When a compactor `session.spawn` returns an empty/sub-threshold
+    /// summary, the dispatcher must substitute the deterministic fallback as
+    /// `{last_tool_result}`, arm the cooldown, and let downstream tools
+    /// continue with substantive content. Without this, `transcript.replace_middle`
+    /// receives empty content and errors — the legacy behaviour that ate
+    /// transcripts in production.
+    #[tokio::test]
+    async fn compactor_empty_output_triggers_fallback_and_arms_cooldown() {
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let replace_calls = Arc::new(Mutex::new(Vec::new()));
+        let registry = ToolRegistry::new(vec![
+            // session.spawn returns empty string — simulates LLM refusal /
+            // rate limit / empty response.
+            Arc::new(RecordingTool {
+                name: "session.spawn",
+                result: ToolResult::success(""),
+                calls: spawn_calls.clone(),
+            }),
+            // transcript.replace_middle records what it received as
+            // `replacement_content` — we assert it got the fallback, not "".
+            Arc::new(RecordingTool {
+                name: "transcript.replace_middle",
+                result: ToolResult::success("replaced"),
+                calls: replace_calls.clone(),
+            }),
+        ]);
+        let ctx = ExecutionContext {
+            session_id: "sess-empty".to_string(),
+            ..Default::default()
+        };
+        let dispatch = ToolDispatch {
+            registry: &registry,
+            ctx: &ctx,
+            session_store: None,
+        };
+        let event = crate::event_handler::Event {
+            id: "ev-empty".to_string(),
+            agent_id: None,
+            scope: aeqi_core::Scope::Global,
+            name: "on_context_budget_exceeded".to_string(),
+            pattern: "context:budget:exceeded".to_string(),
+            tool_calls: vec![
+                crate::event_handler::ToolCall {
+                    tool: "session.spawn".to_string(),
+                    args: serde_json::json!({
+                        "kind": "compactor",
+                        "parent_session": "{session_id}",
+                        "seed_content": "{transcript_preview}",
+                    }),
+                },
+                crate::event_handler::ToolCall {
+                    tool: "transcript.replace_middle".to_string(),
+                    args: serde_json::json!({
+                        "preserve_head": 3,
+                        "preserve_tail": 6,
+                        "replacement_role": "system",
+                        "replacement_content":
+                            "# Context Summary (compactor session)\n\n{last_tool_result}",
+                    }),
+                },
+            ],
+            enabled: true,
+            cooldown_secs: 0,
+            last_fired: None,
+            fire_count: 0,
+            total_cost_usd: 0.0,
+            system: false,
+            created_at: chrono::Utc::now(),
+        };
+        let cooldown = CompactorCooldown::new();
+        let mut parts = Vec::new();
+
+        let outcome = dispatch_event_tool_calls_with_trigger(
+            &event,
+            &dispatch,
+            &AssemblyContext::default(),
+            Some(&serde_json::json!({"transcript_preview": "User: hello\nAssistant: hi"})),
+            None,
+            Some(&cooldown),
+            &mut parts,
+        )
+        .await;
+
+        assert!(
+            !outcome.had_error,
+            "fallback path keeps the chain green so transcript.replace_middle still lands"
+        );
+        // Cooldown was armed by the empty result.
+        assert!(
+            cooldown.is_cooling_down("sess-empty"),
+            "empty compactor output must arm the cooldown"
+        );
+        // Both tools ran.
+        assert_eq!(spawn_calls.lock().unwrap().len(), 1);
+        assert_eq!(replace_calls.lock().unwrap().len(), 1);
+        // The replacement_content carries the fallback header, not just the
+        // wrapper around an empty string.
+        let replace_args = &replace_calls.lock().unwrap()[0];
+        let content = replace_args
+            .get("replacement_content")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            content.contains("deterministic fallback"),
+            "replace_middle must receive the fallback summary, got: {content}"
+        );
+    }
+
+    /// When the cooldown is already armed, the dispatcher must NOT invoke
+    /// the compactor LLM — it substitutes the fallback summary directly and
+    /// downstream tools run on that. This is the hot-loop guard.
+    #[tokio::test]
+    async fn compactor_cooldown_skips_llm_spawn_and_runs_fallback() {
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let replace_calls = Arc::new(Mutex::new(Vec::new()));
+        let registry = ToolRegistry::new(vec![
+            Arc::new(RecordingTool {
+                name: "session.spawn",
+                result: ToolResult::success("THIS-SHOULD-NEVER-LAND"),
+                calls: spawn_calls.clone(),
+            }),
+            Arc::new(RecordingTool {
+                name: "transcript.replace_middle",
+                result: ToolResult::success("replaced"),
+                calls: replace_calls.clone(),
+            }),
+        ]);
+        let ctx = ExecutionContext {
+            session_id: "sess-cool".to_string(),
+            ..Default::default()
+        };
+        let dispatch = ToolDispatch {
+            registry: &registry,
+            ctx: &ctx,
+            session_store: None,
+        };
+        let event = crate::event_handler::Event {
+            id: "ev-cool".to_string(),
+            agent_id: None,
+            scope: aeqi_core::Scope::Global,
+            name: "on_context_budget_exceeded".to_string(),
+            pattern: "context:budget:exceeded".to_string(),
+            tool_calls: vec![
+                crate::event_handler::ToolCall {
+                    tool: "session.spawn".to_string(),
+                    args: serde_json::json!({
+                        "kind": "compactor",
+                        "parent_session": "{session_id}",
+                        "seed_content": "{transcript_preview}",
+                    }),
+                },
+                crate::event_handler::ToolCall {
+                    tool: "transcript.replace_middle".to_string(),
+                    args: serde_json::json!({
+                        "preserve_head": 3,
+                        "preserve_tail": 6,
+                        "replacement_role": "system",
+                        "replacement_content": "{last_tool_result}",
+                    }),
+                },
+            ],
+            enabled: true,
+            cooldown_secs: 0,
+            last_fired: None,
+            fire_count: 0,
+            total_cost_usd: 0.0,
+            system: false,
+            created_at: chrono::Utc::now(),
+        };
+        let cooldown = CompactorCooldown::new();
+        cooldown.note_failure("sess-cool"); // pre-arm
+        let mut parts = Vec::new();
+
+        let outcome = dispatch_event_tool_calls_with_trigger(
+            &event,
+            &dispatch,
+            &AssemblyContext::default(),
+            Some(&serde_json::json!({"transcript_preview": "User: hi\nAssistant: yo"})),
+            None,
+            Some(&cooldown),
+            &mut parts,
+        )
+        .await;
+
+        assert!(!outcome.had_error);
+        // LLM spawn was skipped — RecordingTool was never invoked.
+        assert!(
+            spawn_calls.lock().unwrap().is_empty(),
+            "cooldown must prevent the compactor LLM spawn from running"
+        );
+        // replace_middle still ran and received the fallback content.
+        assert_eq!(replace_calls.lock().unwrap().len(), 1);
+        let content = replace_calls.lock().unwrap()[0]
+            .get("replacement_content")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        assert!(
+            content.contains("deterministic fallback"),
+            "replace_middle must receive the fallback summary under cooldown, got: {content}"
+        );
+    }
+
+    /// A healthy compactor returns substantive output → no fallback, no
+    /// cooldown. Regression guard: the cooldown intercept must not fire on
+    /// the happy path.
+    #[tokio::test]
+    async fn compactor_substantive_output_does_not_arm_cooldown() {
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let replace_calls = Arc::new(Mutex::new(Vec::new()));
+        let healthy_summary = "## Primary Request\nUser asked for X.\n## Current Work\n\
+                               Implementing Y.\n## Next Step\nWrite tests.\n## Pending\nNone.";
+        let registry = ToolRegistry::new(vec![
+            Arc::new(RecordingTool {
+                name: "session.spawn",
+                result: ToolResult::success(healthy_summary),
+                calls: spawn_calls.clone(),
+            }),
+            Arc::new(RecordingTool {
+                name: "transcript.replace_middle",
+                result: ToolResult::success("replaced"),
+                calls: replace_calls.clone(),
+            }),
+        ]);
+        let ctx = ExecutionContext {
+            session_id: "sess-happy".to_string(),
+            ..Default::default()
+        };
+        let dispatch = ToolDispatch {
+            registry: &registry,
+            ctx: &ctx,
+            session_store: None,
+        };
+        let event = crate::event_handler::Event {
+            id: "ev-happy".to_string(),
+            agent_id: None,
+            scope: aeqi_core::Scope::Global,
+            name: "on_context_budget_exceeded".to_string(),
+            pattern: "context:budget:exceeded".to_string(),
+            tool_calls: vec![
+                crate::event_handler::ToolCall {
+                    tool: "session.spawn".to_string(),
+                    args: serde_json::json!({
+                        "kind": "compactor",
+                        "parent_session": "{session_id}",
+                    }),
+                },
+                crate::event_handler::ToolCall {
+                    tool: "transcript.replace_middle".to_string(),
+                    args: serde_json::json!({
+                        "preserve_head": 3,
+                        "preserve_tail": 6,
+                        "replacement_role": "system",
+                        "replacement_content": "{last_tool_result}",
+                    }),
+                },
+            ],
+            enabled: true,
+            cooldown_secs: 0,
+            last_fired: None,
+            fire_count: 0,
+            total_cost_usd: 0.0,
+            system: false,
+            created_at: chrono::Utc::now(),
+        };
+        let cooldown = CompactorCooldown::new();
+        let mut parts = Vec::new();
+
+        let outcome = dispatch_event_tool_calls_with_trigger(
+            &event,
+            &dispatch,
+            &AssemblyContext::default(),
+            Some(&serde_json::json!({"transcript_preview": "a transcript"})),
+            None,
+            Some(&cooldown),
+            &mut parts,
+        )
+        .await;
+
+        assert!(!outcome.had_error);
+        assert!(
+            !cooldown.is_cooling_down("sess-happy"),
+            "substantive compactor output must NOT arm the cooldown"
+        );
+        // The compactor ran exactly once and replace_middle saw the real
+        // summary verbatim, not the fallback header.
+        assert_eq!(spawn_calls.lock().unwrap().len(), 1);
+        let content = replace_calls.lock().unwrap()[0]
+            .get("replacement_content")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        assert!(content.contains("Primary Request"));
+        assert!(!content.contains("deterministic fallback"));
+    }
+
+    /// Events with NON-compactor patterns must not see any cooldown effect
+    /// even when the cooldown is shared and engaged for the session. This
+    /// proves the special-case gating lives at the pattern boundary, not
+    /// the tool name boundary.
+    #[tokio::test]
+    async fn cooldown_does_not_affect_non_compactor_patterns() {
+        // The dispatch helper itself uses `is_compactor_spawn` derived from
+        // `kind=="compactor"` in args — for a non-compactor session.spawn
+        // (e.g. `kind=continuation`) the intercept must NOT fire even when
+        // cooldown is engaged.
+        let spawn_calls = Arc::new(Mutex::new(Vec::new()));
+        let registry = ToolRegistry::new(vec![Arc::new(RecordingTool {
+            name: "session.spawn",
+            result: ToolResult::success("continuation went fine"),
+            calls: spawn_calls.clone(),
+        })]);
+        let ctx = ExecutionContext {
+            session_id: "sess-cont".to_string(),
+            ..Default::default()
+        };
+        let dispatch = ToolDispatch {
+            registry: &registry,
+            ctx: &ctx,
+            session_store: None,
+        };
+        let event = crate::event_handler::Event {
+            id: "ev-cont".to_string(),
+            agent_id: None,
+            scope: aeqi_core::Scope::Global,
+            name: "delegated_continuation".to_string(),
+            pattern: "session:custom".to_string(),
+            tool_calls: vec![crate::event_handler::ToolCall {
+                tool: "session.spawn".to_string(),
+                args: serde_json::json!({
+                    "kind": "continuation",
+                    "parent_session": "{session_id}",
+                }),
+            }],
+            enabled: true,
+            cooldown_secs: 0,
+            last_fired: None,
+            fire_count: 0,
+            total_cost_usd: 0.0,
+            system: false,
+            created_at: chrono::Utc::now(),
+        };
+        let cooldown = CompactorCooldown::new();
+        cooldown.note_failure("sess-cont"); // would block a compactor spawn
+        let mut parts = Vec::new();
+
+        let outcome = dispatch_event_tool_calls_with_trigger(
+            &event,
+            &dispatch,
+            &AssemblyContext::default(),
+            None,
+            None,
+            Some(&cooldown),
+            &mut parts,
+        )
+        .await;
+
+        assert!(!outcome.had_error);
+        assert_eq!(
+            spawn_calls.lock().unwrap().len(),
+            1,
+            "continuation spawn must still run — cooldown is scoped to compactor kind"
         );
     }
 

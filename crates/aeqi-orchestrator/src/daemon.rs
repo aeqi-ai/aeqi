@@ -2794,6 +2794,12 @@ pub async fn build_daemon_pattern_dispatcher(
         agent_registry,
         session_store,
         idea_store,
+        // Daemon-built dispatcher is used for scheduled/cron contexts that
+        // currently never fire `context:budget:exceeded` — leaving the
+        // cooldown `None` matches pre-quest behaviour. The per-session
+        // dispatcher in `SessionManager::spawn_session` carries the active
+        // cooldown for actual compaction events.
+        compactor_cooldown: None,
     });
     Some(dispatcher as Arc<dyn aeqi_core::tool_registry::PatternDispatcher>)
 }
