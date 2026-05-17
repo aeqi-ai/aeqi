@@ -184,6 +184,8 @@ mod tests {
             tool_deny: vec![],
             parent_idea_id: None,
             properties: None,
+            kind: "note".to_string(),
+            file_id: None,
             created_at: chrono::Utc::now(),
         };
         Quest {
@@ -192,6 +194,7 @@ mod tests {
             idea: Some(idea),
             status: QuestStatus::Todo,
             priority: Priority::Normal,
+            kind: "task".to_string(),
             agent_id: None,
             assignee: None,
             scope: aeqi_core::Scope::Global,
