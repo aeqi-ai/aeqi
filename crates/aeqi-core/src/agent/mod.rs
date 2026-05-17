@@ -28,7 +28,7 @@ use crate::traits::{
 use compaction::{
     DIMINISHING_RETURNS_COUNT, DIMINISHING_RETURNS_THRESHOLD, MAX_COMPACTIONS_PER_RUN,
     MICROCOMPACT_KEEP_RECENT, POST_COMPACT_MAX_FILES, TOKEN_BUDGET_COMPLETION_THRESHOLD,
-    is_context_length_error, microcompact, snip_compact,
+    is_context_length_error, microcompact, snip_compact, token_aware_preserve_counts,
 };
 use step_context::{ContextTracker, StepEventMeta, StepIdeaSpec};
 use streaming::StreamingToolOutcome;
@@ -114,10 +114,30 @@ pub struct AgentConfig {
     pub max_output_recovery: u32,
     /// Compact context when estimated tokens exceed this fraction of context_window.
     pub compact_threshold: f32,
-    /// Initial messages to preserve during compaction.
+    /// Initial messages to preserve during compaction. Acts as the FLOOR
+    /// when `compact_preserve_head_tokens` is also set — token budgets are
+    /// the primary control, message counts the safety floor.
     pub compact_preserve_head: usize,
-    /// Trailing messages to preserve during compaction.
+    /// Trailing messages to preserve during compaction. Same floor semantic
+    /// as `compact_preserve_head` when token budgets are set.
     pub compact_preserve_tail: usize,
+    /// Token budget for the preserved-head window (quest 67-180.3). The
+    /// agent loop walks forward from message 0 accumulating estimated
+    /// tokens; the head window stops when this budget would overflow (but
+    /// always preserves at least `compact_preserve_head` messages).
+    pub compact_preserve_head_tokens: u32,
+    /// Token budget for the preserved-tail window (quest 67-180.3). Same
+    /// semantics as `compact_preserve_head_tokens` but walks backward from
+    /// the most recent message. The tail boundary is extended backward
+    /// past any `Role::Tool` messages so tool_use ↔ tool_result pairs stay
+    /// intact across the compaction cut.
+    pub compact_preserve_tail_tokens: u32,
+    /// Token budget for the `transcript_preview` field on the
+    /// `context:budget:exceeded` event payload (quest 67-180.3). Replaces
+    /// the previous fixed last-2000-chars window so the compactor LLM
+    /// always sees a meaningful tail regardless of how big individual
+    /// tool_results were.
+    pub compact_preview_tokens: u32,
     /// Loop-level fallback model on consecutive failures. None = no fallback.
     /// Prefer using FallbackChain at the Provider layer instead. This field
     /// exists for simple setups (e.g., `aeqi run`) where the provider isn't
@@ -180,6 +200,17 @@ impl Default for AgentConfig {
             compact_threshold: 0.80,
             compact_preserve_head: 3,
             compact_preserve_tail: 6,
+            // Token-aware preserve windows (quest 67-180.3). Defaults sized
+            // for the default 200k context_window: 2k head (system + first
+            // user message comfortably fit), 16k tail (the active task's
+            // recent steps survive even when individual tool_results are
+            // large). The message-count fields above act as the floor.
+            compact_preserve_head_tokens: 2_000,
+            compact_preserve_tail_tokens: 16_000,
+            // Preview tokens sent in the compaction event payload — small
+            // enough that the LLM sees just the recent tail context, not a
+            // dump of every old tool result.
+            compact_preview_tokens: 500,
             fallback_model: None,
             persist_dir: None,
             session_file: None,
@@ -1117,11 +1148,29 @@ impl Agent {
                             self.emit(crate::chat_stream::ChatStreamEvent::Status {
                                 message: "Emergency context compaction...".into(),
                             });
-                            let freed = snip_compact(
-                                &mut messages,
-                                self.config.compact_preserve_head,
-                                self.config.compact_preserve_tail,
-                            );
+                            // Token-aware preserve windows (quest 67-180.3).
+                            // When the token budgets are zero we fall back to
+                            // the fixed message counts — preserves the
+                            // pre-67-180.3 behavior for callers that haven't
+                            // opted in.
+                            let (preserve_head, preserve_tail) =
+                                if self.config.compact_preserve_head_tokens > 0
+                                    || self.config.compact_preserve_tail_tokens > 0
+                                {
+                                    token_aware_preserve_counts(
+                                        &messages,
+                                        self.config.compact_preserve_head_tokens,
+                                        self.config.compact_preserve_tail_tokens,
+                                        self.config.compact_preserve_head,
+                                        self.config.compact_preserve_tail,
+                                    )
+                                } else {
+                                    (
+                                        self.config.compact_preserve_head,
+                                        self.config.compact_preserve_tail,
+                                    )
+                                };
+                            let freed = snip_compact(&mut messages, preserve_head, preserve_tail);
                             if freed > 0 {
                                 self.emit(crate::chat_stream::ChatStreamEvent::SnipCompacted {
                                     tokens_freed: freed,
@@ -1129,7 +1178,7 @@ impl Agent {
                             }
                             let cleared = microcompact(
                                 &mut messages,
-                                self.config.compact_preserve_tail,
+                                preserve_tail,
                                 MICROCOMPACT_KEEP_RECENT,
                             );
                             if cleared > 0 {
@@ -2491,5 +2540,109 @@ mod tests {
                 "missing required section heading: {section}"
             );
         }
+    }
+
+    // ── Token-aware preserve windows (quest 67-180.3) ──
+
+    fn text_msg(role: Role, body: &str) -> Message {
+        Message {
+            role,
+            content: MessageContent::Text(body.to_string()),
+        }
+    }
+
+    #[test]
+    fn token_aware_preserve_respects_token_budget_when_message_count_is_small() {
+        use compaction::token_aware_preserve_counts;
+        // 8 messages, each ~25 tokens (100 chars / 4 chars-per-token).
+        // Head budget 30 tokens → 1 message; tail budget 80 tokens → 3 messages.
+        let big = "x".repeat(100);
+        let msgs: Vec<Message> = (0..8).map(|_| text_msg(Role::User, &big)).collect();
+        let (head, tail) = token_aware_preserve_counts(&msgs, 30, 80, 0, 0);
+        assert_eq!(
+            head, 1,
+            "head should stop after 1 message at 30-token budget"
+        );
+        assert_eq!(
+            tail, 3,
+            "tail should preserve 3 messages at 80-token budget"
+        );
+    }
+
+    #[test]
+    fn token_aware_preserve_honours_message_count_floor() {
+        use compaction::token_aware_preserve_counts;
+        // Tiny token budget but floor of 5 forces preservation.
+        let big = "x".repeat(100);
+        let msgs: Vec<Message> = (0..10).map(|_| text_msg(Role::User, &big)).collect();
+        let (head, tail) = token_aware_preserve_counts(&msgs, 0, 0, 2, 5);
+        assert_eq!(head, 2);
+        assert_eq!(tail, 5);
+    }
+
+    #[test]
+    fn token_aware_preserve_extends_tail_backward_past_tool_messages() {
+        use compaction::token_aware_preserve_counts;
+        // Build: 4 user → 1 assistant (with tool_use) → 1 tool result.
+        // A tail budget that lands on the tool result must extend backward
+        // to include the assistant so the tool_use ↔ tool_result pair
+        // stays intact across the compaction cut.
+        let body = "x".repeat(40);
+        let mut msgs: Vec<Message> = (0..4).map(|_| text_msg(Role::User, &body)).collect();
+        msgs.push(text_msg(Role::Assistant, &body));
+        msgs.push(text_msg(Role::Tool, &body));
+        // Budget for ~1 message worth of tokens. Without boundary respect
+        // the tail would start at the Tool message; with respect it must
+        // extend backward at least one more to include the Assistant.
+        let (_, tail) = token_aware_preserve_counts(&msgs, 0, 10, 0, 0);
+        assert!(
+            tail >= 2,
+            "tail must include at least the Assistant + Tool pair, got {tail}"
+        );
+        // And the message at the boundary (the oldest in the tail) must NOT
+        // be a Tool role.
+        let tail_start = msgs.len() - tail;
+        assert_ne!(
+            msgs[tail_start].role,
+            Role::Tool,
+            "tail boundary lands on Tool — pair will be split"
+        );
+    }
+
+    #[test]
+    fn token_aware_preserve_never_overflows_message_count() {
+        use compaction::token_aware_preserve_counts;
+        // With an enormous token budget the helper still can't claim more
+        // than `len` messages total across both sides.
+        let msgs: Vec<Message> = (0..3).map(|_| text_msg(Role::User, "x")).collect();
+        let (head, tail) = token_aware_preserve_counts(&msgs, 1_000_000, 1_000_000, 0, 0);
+        assert!(head + tail <= msgs.len());
+    }
+
+    #[test]
+    fn token_budgeted_tail_returns_full_string_when_under_budget() {
+        use compaction::token_budgeted_tail;
+        let s = "short";
+        assert_eq!(token_budgeted_tail(s, 100), "short");
+    }
+
+    #[test]
+    fn token_budgeted_tail_slices_at_utf8_boundary() {
+        use compaction::token_budgeted_tail;
+        // Multibyte char near the cut point would panic with a naive byte
+        // slice. The helper walks FORWARD to the next char boundary, so
+        // the returned slice is always valid UTF-8.
+        //
+        // String: padding + 'é' (2 bytes) at a position the cut will land
+        // inside. With CHARS_PER_TOKEN_STRUCTURED = 3 and budget = 1, the
+        // helper wants the last 3 bytes. We place 'é' so the naive cut
+        // would land mid-codepoint; the helper must walk forward to the
+        // next boundary instead of panicking.
+        let s = format!("{}éXX", "a".repeat(50)); // 'é' = bytes 50-51, XX = 52-53
+        let out = token_budgeted_tail(&s, 1);
+        // The call must not panic. The slice is the trailing portion of
+        // the string and must be valid UTF-8.
+        assert!(!out.is_empty(), "non-empty result expected, got: {out:?}");
+        assert!(s.ends_with(out), "result must be a suffix of input");
     }
 }

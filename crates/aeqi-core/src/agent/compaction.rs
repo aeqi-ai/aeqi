@@ -185,6 +185,119 @@ pub(crate) fn estimate_tokens_from_messages(messages: &[Message]) -> u32 {
 }
 
 // ---------------------------------------------------------------------------
+// Token-aware preserve windows (quest 67-180.3)
+// ---------------------------------------------------------------------------
+
+/// Convert a token budget into a (head, tail) message-count pair suitable for
+/// passing to [`snip_compact`] / [`context_collapse`].
+///
+/// Walks the messages from each end accumulating estimated tokens until the
+/// budget is hit. The returned counts ARE clamped to `floor_head` / `floor_tail`
+/// (so a too-tight token budget still preserves at least N messages on each
+/// side — the agent loop relied on this in the fixed-count era and the safety
+/// floor preserves that contract).
+///
+/// **Tool-pair boundary respect:** the tail walk extends BACKWARD past any
+/// `Role::Tool` message until it lands on an `Assistant` boundary, ensuring
+/// the tail never starts mid-pair. Splitting a tool_use (assistant) from its
+/// matching tool_result (tool) at the compaction boundary forces
+/// `repair_tool_pairing` to insert synthetic results — preferable to fix at
+/// the cut, not the patch.
+///
+/// Returns `(head_count, tail_count)` such that the compactable window is
+/// `messages[head_count .. len - tail_count]`.
+pub(crate) fn token_aware_preserve_counts(
+    messages: &[Message],
+    head_token_budget: u32,
+    tail_token_budget: u32,
+    floor_head: usize,
+    floor_tail: usize,
+) -> (usize, usize) {
+    let len = messages.len();
+    if len == 0 {
+        return (0, 0);
+    }
+
+    // Head: walk forward, sum tokens, stop when next message would overflow.
+    let mut head_count = 0usize;
+    let mut head_tokens: u32 = 0;
+    while head_count < len {
+        let msg_tokens = estimate_tokens_from_messages(&messages[head_count..head_count + 1]);
+        if head_count >= floor_head && head_tokens + msg_tokens > head_token_budget {
+            break;
+        }
+        head_tokens = head_tokens.saturating_add(msg_tokens);
+        head_count += 1;
+        if head_count >= len {
+            break;
+        }
+    }
+
+    // Tail: walk backward, sum tokens, stop when next-older message overflows.
+    let mut tail_count = 0usize;
+    let mut tail_tokens: u32 = 0;
+    while tail_count < len {
+        let idx = len - 1 - tail_count;
+        let msg_tokens = estimate_tokens_from_messages(&messages[idx..idx + 1]);
+        if tail_count >= floor_tail && tail_tokens + msg_tokens > tail_token_budget {
+            break;
+        }
+        tail_tokens = tail_tokens.saturating_add(msg_tokens);
+        tail_count += 1;
+        if tail_count >= len {
+            break;
+        }
+    }
+
+    // Tool-pair boundary respect on the tail. The oldest message currently
+    // IN the tail is `messages[len - tail_count]`. If that message is a
+    // `Role::Tool` (a tool_result), its matching tool_use lives in the
+    // older `Role::Assistant` message — which the current cut leaves in
+    // the head. Extend the tail backward one message at a time until the
+    // oldest tail message is NOT a Tool — i.e., the boundary lands
+    // between API rounds, not inside one.
+    while tail_count < len && head_count + tail_count < len {
+        let tail_start = len - tail_count;
+        if tail_start == 0 {
+            break;
+        }
+        // The oldest message currently in the tail.
+        if messages[tail_start].role == Role::Tool {
+            tail_count += 1;
+        } else {
+            break;
+        }
+    }
+
+    // Floors first; then make sure head + tail don't claim the same window.
+    let head_count = head_count.max(floor_head).min(len);
+    let tail_count = tail_count
+        .max(floor_tail)
+        .min(len.saturating_sub(head_count));
+    (head_count, tail_count)
+}
+
+/// Token-budgeted slice of a transcript string. Returns the trailing
+/// `budget_tokens * CHARS_PER_TOKEN_STRUCTURED`-worth of chars (rounded down),
+/// or the full string if it's shorter. Used by the compaction-event trigger
+/// to send a meaningful preview to the compactor LLM instead of the previous
+/// fixed last-2000-chars window.
+pub(crate) fn token_budgeted_tail(transcript: &str, budget_tokens: u32) -> &str {
+    let budget_chars = (budget_tokens as usize).saturating_mul(CHARS_PER_TOKEN_STRUCTURED);
+    if transcript.len() <= budget_chars {
+        return transcript;
+    }
+    // Walk back from the end to a char boundary so UTF-8 isn't sliced
+    // mid-codepoint. Avoids the "byte index X is not a char boundary" panic
+    // on transcripts that happen to contain multibyte chars at the cut.
+    let mut cut = transcript.len() - budget_chars;
+    while cut < transcript.len() && !transcript.is_char_boundary(cut) {
+        cut += 1;
+    }
+    &transcript[cut..]
+}
+
+// ---------------------------------------------------------------------------
 // Snip compaction
 // ---------------------------------------------------------------------------
 
@@ -684,14 +797,16 @@ impl Agent {
                 message: "Compacting context...".into(),
             });
 
+            // Token-budgeted preview (quest 67-180.3). Replaces the previous
+            // fixed last-2000-chars window so the compactor LLM always sees a
+            // meaningful tail — a single large tool_result could previously
+            // consume the entire preview and leave the LLM with no recent
+            // assistant context. `token_budgeted_tail` also walks back to a
+            // UTF-8 boundary so the slice is safe on transcripts containing
+            // multibyte chars.
             let transcript_preview: String = {
                 let full = build_compaction_transcript(messages);
-                let len = full.len();
-                if len > 2000 {
-                    full[len - 2000..].to_string()
-                } else {
-                    full
-                }
+                token_budgeted_tail(&full, self.config.compact_preview_tokens).to_string()
             };
             let trigger_args = serde_json::json!({
                 "estimated_tokens": estimated_tokens,
