@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuests } from "@/queries/quests";
 import { questKeys } from "@/queries/keys";
+import { useNav } from "@/hooks/useNav";
 import { Button, Input, Textarea } from "@/components/ui";
 import { formatMediumDate } from "@/lib/i18n";
 import type { Quest } from "@/lib/types";
@@ -24,6 +26,7 @@ import "@/styles/projects.css";
 export default function EntityProjectsTab({ entityId: _entityId }: { entityId: string }) {
   const quests = useQuests();
   const queryClient = useQueryClient();
+  const { entityId } = useNav();
   const [creating, setCreating] = useState(false);
 
   const projects = useMemo(
@@ -59,7 +62,7 @@ export default function EntityProjectsTab({ entityId: _entityId }: { entityId: s
       ) : (
         <ul className="projects-tab__list">
           {projects.map((p) => (
-            <ProjectRow key={p.id} project={p} allQuests={quests} />
+            <ProjectRow key={p.id} project={p} allQuests={quests} entityId={entityId} />
           ))}
         </ul>
       )}
@@ -77,7 +80,16 @@ export default function EntityProjectsTab({ entityId: _entityId }: { entityId: s
   );
 }
 
-function ProjectRow({ project, allQuests }: { project: Quest; allQuests: Quest[] }) {
+function ProjectRow({
+  project,
+  allQuests,
+  entityId,
+}: {
+  project: Quest;
+  allQuests: Quest[];
+  entityId: string;
+}) {
+  const navigate = useNavigate();
   const status = project.status;
   const dueAt = project.due_at;
   const cost = project.cost_usd;
@@ -89,7 +101,18 @@ function ProjectRow({ project, allQuests }: { project: Quest; allQuests: Quest[]
   );
 
   return (
-    <li className={`projects-row projects-row--status-${status}`}>
+    <li
+      className={`projects-row projects-row--status-${status} projects-row--clickable`}
+      onClick={() => navigate(`/trust/${entityId}/projects/${project.id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(`/trust/${entityId}/projects/${project.id}`);
+        }
+      }}
+    >
       <div className="projects-row__main">
         <h3 className="projects-row__name">{title}</h3>
         {summary && <p className="projects-row__content">{summary}</p>}

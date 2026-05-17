@@ -20,7 +20,9 @@ const GovernancePage = lazy(() => import("@/pages/GovernancePage"));
 const EntityAgentsTab = lazy(() => import("@/components/EntityAgentsTab"));
 const EntityRolesTab = lazy(() => import("@/components/EntityRolesTab"));
 const EntityGoalsTab = lazy(() => import("@/components/EntityGoalsTab"));
+const EntityGoalDetailPage = lazy(() => import("@/components/EntityGoalDetailPage"));
 const EntityProjectsTab = lazy(() => import("@/components/EntityProjectsTab"));
+const EntityProjectDetailPage = lazy(() => import("@/components/EntityProjectDetailPage"));
 const EntityRoadmapTab = lazy(() => import("@/components/EntityRoadmapTab"));
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
 const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
@@ -192,6 +194,13 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     );
   }
   if (tab === "goals") {
+    if (itemId) {
+      return (
+        <Suspense>
+          <EntityGoalDetailPage entityId={entityId} goalId={itemId} />
+        </Suspense>
+      );
+    }
     return (
       <Suspense>
         <EntityGoalsTab entityId={entityId} />
@@ -199,6 +208,13 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     );
   }
   if (tab === "projects") {
+    if (itemId) {
+      return (
+        <Suspense>
+          <EntityProjectDetailPage entityId={entityId} projectId={itemId} />
+        </Suspense>
+      );
+    }
     return (
       <Suspense>
         <EntityProjectsTab entityId={entityId} />

@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVisibleIdeas } from "@/queries/ideas";
 import { useQuests } from "@/queries/quests";
 import { ideaKeys } from "@/queries/keys";
+import { useNav } from "@/hooks/useNav";
 import { Button, Input, Textarea } from "@/components/ui";
 import { formatMediumDate } from "@/lib/i18n";
 import type { Idea, Quest } from "@/lib/types";
@@ -67,6 +69,7 @@ export default function EntityGoalsTab({ entityId: _entityId }: { entityId: stri
   const ideasQuery = useVisibleIdeas();
   const quests = useQuests();
   const queryClient = useQueryClient();
+  const { entityId } = useNav();
   const [creating, setCreating] = useState(false);
 
   const goals = useMemo(
@@ -103,7 +106,7 @@ export default function EntityGoalsTab({ entityId: _entityId }: { entityId: stri
       ) : (
         <ul className="goals-tab__list">
           {goals.map((g) => (
-            <GoalRow key={g.id} goal={g} quests={quests} />
+            <GoalRow key={g.id} goal={g} quests={quests} entityId={entityId} />
           ))}
         </ul>
       )}
@@ -121,7 +124,8 @@ export default function EntityGoalsTab({ entityId: _entityId }: { entityId: stri
   );
 }
 
-function GoalRow({ goal, quests }: { goal: Idea; quests: Quest[] }) {
+function GoalRow({ goal, quests, entityId }: { goal: Idea; quests: Quest[]; entityId: string }) {
+  const navigate = useNavigate();
   const props = (goal.properties ?? {}) as Record<string, unknown>;
   const target = typeof props.target === "number" ? props.target : null;
   const current = typeof props.current === "number" ? props.current : null;
@@ -137,7 +141,18 @@ function GoalRow({ goal, quests }: { goal: Idea; quests: Quest[] }) {
   const rollup = computeRollup(goal.id, quests);
 
   return (
-    <li className={`goals-row goals-row--status-${status}`}>
+    <li
+      className={`goals-row goals-row--status-${status} goals-row--clickable`}
+      onClick={() => navigate(`/trust/${entityId}/goals/${goal.id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(`/trust/${entityId}/goals/${goal.id}`);
+        }
+      }}
+    >
       <div className="goals-row__main">
         <h3 className="goals-row__name">{goal.name}</h3>
         {goal.content && <p className="goals-row__content">{goal.content}</p>}
