@@ -51,11 +51,11 @@ const STATUS_VALUES = new Set<StatusFilter>(STATUS_ORDER);
  * the indented-tree shape was reverted 2026-05-07; nesting is a chart
  * concern, not a list concern.
  *
- * Chart view mirrors EntityPositionsTab's layered-DAG renderer so both
+ * Chart view mirrors TrustRolesTab's layered-DAG renderer so both
  * tabs answer the same shape from different lenses — Positions reads
  * "what slots exist", Agents-chart reads "who fills those slots".
  */
-export default function EntityAgentsTab({ entityId }: { entityId: string }) {
+export default function TrustAgentsTab({ entityId }: { entityId: string }) {
   const navigate = useNavigate();
   const entitiesList = useDaemonStore((s) => s.entities);
   const openAgent = useCallback(

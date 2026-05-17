@@ -3,7 +3,7 @@
  *
  * Four substrate-compound metrics over the trailing 7d window with a
  * one-sentence interpretation each, plus 30d sparklines below. Folded
- * into `EntityOverviewTab` (the bare `/trust/<addr>/` cockpit) so the
+ * into `TrustOverviewTab` (the bare `/trust/<addr>/` cockpit) so the
  * "what's happening now" cockpit and the "is the loop turning over"
  * health read live on one surface.
  *

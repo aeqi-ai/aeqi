@@ -8,7 +8,7 @@
  * Why client-side, not a new endpoint:
  *   - Quests, events, and the agent subtree are already in `useDaemonStore`
  *     for the same shell render. The Overview tab does the same aggregation
- *     today (cf. `EntityOverviewTab.tsx`).
+ *     today (cf. `TrustOverviewTab.tsx`).
  *   - Ideas need a single `listIdeas` call scoped to the entity's default
  *     agent. The default scope returns the entity-visible ideas, mirroring
  *     `AgentIdeasTab(scope="entity")`.
@@ -409,7 +409,7 @@ export function useTrustHealthMetrics(
 
   // Subtree agents = root + descendants (every agent whose entity_id is
   // this entity, plus the entity-as-agent itself when present). Mirrors
-  // EntityOverviewTab's subtree derivation so the metric scope agrees
+  // TrustOverviewTab's subtree derivation so the metric scope agrees
   // with the cockpit numbers.
   const subtreeAgents = useMemo(() => {
     if (!entityId) return [];

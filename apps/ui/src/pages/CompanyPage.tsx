@@ -3,17 +3,17 @@ import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import AgentPage from "@/components/AgentPage";
 import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 
-// EntityOverviewTab is the canonical bare-`/c/<id>/` landing — renders
-// EntityHeroStrip + roles / quests / activity. Lazy-loaded to keep this
+// TrustOverviewTab is the canonical bare-`/c/<id>/` landing — renders
+// TrustHeroStrip + roles / quests / activity. Lazy-loaded to keep this
 // dispatch shell light. Mirrors the lazy pattern used in AgentPage.
-const EntityOverviewTab = lazy(() => import("@/components/EntityOverviewTab"));
+const TrustOverviewTab = lazy(() => import("@/components/TrustOverviewTab"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
-// Entity-scope primitive tabs. `EntityAgentsTab` is entity-typed (takes
+// Entity-scope primitive tabs. `TrustAgentsTab` is entity-typed (takes
 // entityId, filters the directory). Events still render against the default
 // agent, while Quests and Ideas ask their shared components for entity-wide
 // data so sibling-agent work remains visible on `/trust/<addr>/...`.
-const EntityAgentsTab = lazy(() => import("@/components/EntityAgentsTab"));
-const EntityRolesTab = lazy(() => import("@/components/EntityRolesTab"));
+const TrustAgentsTab = lazy(() => import("@/components/TrustAgentsTab"));
+const TrustRolesTab = lazy(() => import("@/components/TrustRolesTab"));
 const AssetsPage = lazy(() => import("@/pages/AssetsPage"));
 const EquityPage = lazy(() => import("@/pages/EquityPage"));
 const QuorumPage = lazy(() => import("@/pages/QuorumPage"));
@@ -36,17 +36,17 @@ interface CompanyPageProps {
  * dispatches the right component per tab.
  *
  * Routes:
- *   /c/:entityId               → EntityOverviewTab (cockpit — Health folded in)
+ *   /c/:entityId               → TrustOverviewTab (cockpit — Health folded in)
  *   /c/:entityId/inbox         → MeInboxPage
  *   /c/:entityId/health        → 308 redirect to bare cockpit (legacy URL)
- *   /c/:entityId/roles         → EntityRolesTab (org chart)
- *   /c/:entityId/agents        → EntityAgentsTab (LIST)
+ *   /c/:entityId/roles         → TrustRolesTab (org chart)
+ *   /c/:entityId/agents        → TrustAgentsTab (LIST)
  *   /c/:entityId/events        → AgentEventsTab(defaultAgent)
  *   /c/:entityId/quests        → AgentQuestsTab(entity scope)
  *   /c/:entityId/ideas         → AgentIdeasTab(entity scope)
  *
  * The former `/c/:entityId/settings` tab was retired — workspace label,
- * tagline, public toggle, and plan link now live in the EntityHeroStrip
+ * tagline, public toggle, and plan link now live in the TrustHeroStrip
  * on Overview. Workspace billing remains at `/account/billing`.
  */
 export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyPageProps) {
@@ -95,7 +95,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
       </Suspense>
     );
   }
-  // /health was retired 2026-05-17 — folded into EntityOverviewTab on
+  // /health was retired 2026-05-17 — folded into TrustOverviewTab on
   // the bare TRUST URL. Redirect existing deep links to the cockpit so
   // they land on the same content without breaking bookmarks.
   if (tab === "health") {
@@ -103,19 +103,19 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     return <Navigate to={target} replace />;
   }
 
-  // Bare `/c/<id>/` Overview renders EntityOverviewTab directly — the
-  // canonical entity cockpit (EntityHeroStrip + roles / quests / activity).
+  // Bare `/c/<id>/` Overview renders TrustOverviewTab directly — the
+  // canonical entity cockpit (TrustHeroStrip + roles / quests / activity).
   // Routing through AgentPage's `isDrilledAgent` branch was wrong for
   // root agents whose `entity_id` is populated and differs from
   // `agent.id` (the post-2026-04-29 schema): the branch flagged the
   // root agent as "drilled" and rendered AgentOverviewTab instead, so
-  // EntityHeroStrip never mounted. CompanyPage already knows it's the
+  // TrustHeroStrip never mounted. CompanyPage already knows it's the
   // bare entity URL (drilled URLs bypass CompanyPage entirely in
   // AppLayout) — render the entity surface explicitly.
   if (tab === "overview") {
     return (
       <Suspense>
-        <EntityOverviewTab entityId={entityId} />
+        <TrustOverviewTab entityId={entityId} />
       </Suspense>
     );
   }
@@ -128,7 +128,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "agents") {
     return (
       <Suspense>
-        <EntityAgentsTab entityId={entityId} />
+        <TrustAgentsTab entityId={entityId} />
       </Suspense>
     );
   }
@@ -136,7 +136,7 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "identity") {
     return (
       <Suspense>
-        <EntityRolesTab entityId={entityId} />
+        <TrustRolesTab entityId={entityId} />
       </Suspense>
     );
   }

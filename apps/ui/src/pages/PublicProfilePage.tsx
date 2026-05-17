@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import EntityHeroStrip from "@/components/EntityHeroStrip";
+import TrustHeroStrip from "@/components/TrustHeroStrip";
 import { Button, EmptyState, Spinner } from "@/components/ui";
 
 /**
@@ -11,7 +11,7 @@ import { Button, EmptyState, Spinner } from "@/components/ui";
  * the public-read endpoint deliberately doesn't distinguish, so private
  * workspaces stay invisible to probers).
  *
- * Uses `<EntityHeroStrip public />` in read-only mode for the hero so
+ * Uses `<TrustHeroStrip public />` in read-only mode for the hero so
  * the surface stays consistent with the in-shell Overview rail.
  *
  * No follow / DM / messaging affordances on this surface — Phase 3+.
@@ -159,7 +159,7 @@ export default function PublicProfilePage() {
         minHeight: "100vh",
       }}
     >
-      <EntityHeroStrip
+      <TrustHeroStrip
         entityId={profile.entity_id}
         public
         publicEntity={{

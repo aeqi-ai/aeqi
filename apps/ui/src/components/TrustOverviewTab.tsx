@@ -8,7 +8,7 @@ import { formatShortDate } from "@/lib/i18n";
 import type { Quest } from "@/lib/types";
 import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
 import { entityBasePath } from "@/lib/entityPath";
-import EntityHeroStrip from "./EntityHeroStrip";
+import TrustHeroStrip from "./TrustHeroStrip";
 import BlockAvatar from "./BlockAvatar";
 import { Spinner, Tooltip } from "@/components/ui";
 import "@/styles/overview.css";
@@ -43,7 +43,7 @@ const HealthBlock = lazy(() => import("@/pages/HealthPage"));
  * Pulse cards and routed stat tiles click through to their full surface.
  * Empty states render gracefully and surface the next action inline.
  */
-export default function EntityOverviewTab({ entityId }: { entityId: string }) {
+export default function TrustOverviewTab({ entityId }: { entityId: string }) {
   const navigate = useNavigate();
   const entities = useDaemonStore((s) => s.entities);
   const agents = useDaemonStore((s) => s.agents);
@@ -194,7 +194,7 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
 
   return (
     <div className="entity-overview">
-      <EntityHeroStrip entityId={entityId} />
+      <TrustHeroStrip entityId={entityId} />
 
       {/* ── Pulse band ── */}
       <div className="entity-overview-pulse">

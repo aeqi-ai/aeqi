@@ -36,7 +36,7 @@ const OCCUPANT_RANK: Record<string, number> = { agent: 0, human: 1, vacant: 2 };
  * appends additional slots (vacant or occupied) inside the entity's
  * DAG.
  */
-export default function EntityRolesTab({ entityId }: { entityId: string }) {
+export default function TrustRolesTab({ entityId }: { entityId: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const view = parseView(searchParams.get("view"));

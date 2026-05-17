@@ -7,7 +7,7 @@ import BlockAvatar from "./BlockAvatar";
 import { Textarea } from "./ui";
 
 /**
- * `EntityHeroStrip` — top of every Company Overview surface.
+ * `TrustHeroStrip` — top of every Company Overview surface.
  *
  * Click-to-edit name + tagline persist via `api.updateEntity`. Public
  * toggle flips `entities.public` (Phase 2 ships the public profile page
@@ -30,7 +30,7 @@ interface PublicEntityShape {
   tagline: string | null;
 }
 
-interface EntityHeroStripProps {
+interface TrustHeroStripProps {
   entityId: string;
   /**
    * When true, render the strip read-only — hides edit affordances, plan
@@ -45,11 +45,11 @@ interface EntityHeroStripProps {
   publicEntity?: PublicEntityShape;
 }
 
-export default function EntityHeroStrip({
+export default function TrustHeroStrip({
   entityId,
   public: isPublicMode = false,
   publicEntity,
-}: EntityHeroStripProps) {
+}: TrustHeroStripProps) {
   const entities = useDaemonStore((s) => s.entities);
   const fetchEntities = useDaemonStore((s) => s.fetchEntities);
   const entity = entities.find((e) => e.id === entityId);
