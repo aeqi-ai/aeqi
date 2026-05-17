@@ -1243,7 +1243,7 @@ describe("aeqi_unifutures", () => {
     expect(threw).to.eq(true);
   });
 
-  it("create_exit stores a pro-rata redemption Exit PDA", async () => {
+  it("create_exit stores a pro-rata redemption Exit PDA pinned to its asset mint", async () => {
     const exitId = new Uint8Array(32);
     exitId[0] = 0xe1;
     exitId[1] = 0xee;
@@ -1257,6 +1257,49 @@ describe("aeqi_unifutures", () => {
     const SUPPLY_SNAPSHOT = 50_000;
     const DURATION = 60 * 60 * 24 * 30; // 30 days
 
+    // Mint the canonical asset and bring its supply up to SUPPLY_SNAPSHOT so
+    // create_exit's supply-snapshot equality check passes.
+    const exitAssetMint = await createMint(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      provider.wallet.publicKey,
+      null,
+      0,
+      Keypair.generate(),
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const creatorAssetTa = getAssociatedTokenAddressSync(
+      exitAssetMint,
+      provider.wallet.publicKey,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          provider.wallet.publicKey,
+          creatorAssetTa,
+          provider.wallet.publicKey,
+          exitAssetMint,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      ),
+    );
+    await mintTo(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      exitAssetMint,
+      creatorAssetTa,
+      provider.wallet.publicKey,
+      SUPPLY_SNAPSHOT,
+      [],
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+
     await program.methods
       .createExit(
         Array.from(exitId),
@@ -1268,6 +1311,7 @@ describe("aeqi_unifutures", () => {
         trust: fakeTrust,
         moduleState: modulePda,
         exit: exitPda,
+        assetMint: exitAssetMint,
         creator: provider.wallet.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -1280,6 +1324,83 @@ describe("aeqi_unifutures", () => {
     expect(e.proceedsCollected.toString()).to.eq("0");
     expect(e.status).to.eq(0); // Active
     expect(e.creator.toBase58()).to.eq(provider.wallet.publicKey.toBase58());
+    expect(e.assetMint.toBase58()).to.eq(exitAssetMint.toBase58());
+  });
+
+  it("create_exit rejects a supply snapshot that does not match the mint", async () => {
+    const exitId = new Uint8Array(32);
+    exitId[0] = 0xe2;
+    exitId[1] = 0xbd;
+
+    const [exitPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("exit"), fakeTrust.toBuffer(), Buffer.from(exitId)],
+      program.programId,
+    );
+
+    const assetMint = await createMint(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      provider.wallet.publicKey,
+      null,
+      0,
+      Keypair.generate(),
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const creatorAssetTa = getAssociatedTokenAddressSync(
+      assetMint,
+      provider.wallet.publicKey,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          provider.wallet.publicKey,
+          creatorAssetTa,
+          provider.wallet.publicKey,
+          assetMint,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      ),
+    );
+    await mintTo(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      assetMint,
+      creatorAssetTa,
+      provider.wallet.publicKey,
+      1_000,
+      [],
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+
+    let threw = false;
+    try {
+      await program.methods
+        .createExit(
+          Array.from(exitId),
+          new anchor.BN(10_000),
+          new anchor.BN(500), // wrong — mint supply is 1_000
+          new anchor.BN(60 * 60 * 24),
+        )
+        .accountsPartial({
+          trust: fakeTrust,
+          moduleState: modulePda,
+          exit: exitPda,
+          assetMint,
+          creator: provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (err) {
+      threw = true;
+      expect(err.toString()).to.match(/SupplySnapshotMismatch/);
+    }
+    expect(threw).to.eq(true);
   });
 
   it("commit_to_sale transfers quote in + records commitment per buyer", async () => {
@@ -1463,7 +1584,7 @@ describe("aeqi_unifutures", () => {
     expect(buyerAcct.amount.toString()).to.eq("1000");
   });
 
-  it("settle_exit + claim_pro_rata — creator settles, holder burns for share", async () => {
+  it("settle_exit + claim_pro_rata — creator settles, holder burns for share; foreign-mint claim is rejected", async () => {
     // Exit: 10_000 quote pool, 1000 supply snapshot, 30d duration.
     // Holder burns 100 asset → share = 100 * 10000 / 1000 = 1000 quote.
     const exitId = new Uint8Array(32);
@@ -1486,23 +1607,8 @@ describe("aeqi_unifutures", () => {
     const EXIT_QUOTE = 10_000;
     const SUPPLY_SNAPSHOT = 1_000;
 
-    await program.methods
-      .createExit(
-        Array.from(exitId),
-        new anchor.BN(EXIT_QUOTE),
-        new anchor.BN(SUPPLY_SNAPSHOT),
-        new anchor.BN(60 * 60 * 24 * 30),
-      )
-      .accountsPartial({
-        trust: fakeTrust,
-        moduleState: modulePda,
-        exit: exitPda,
-        creator: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    // Mints
+    // Mints — create + mint asset supply BEFORE create_exit so the
+    // snapshot equality check has a real supply to read.
     const assetMint = await createMint(
       provider.connection,
       (provider.wallet as anchor.Wallet).payer,
@@ -1524,6 +1630,16 @@ describe("aeqi_unifutures", () => {
       TOKEN_2022_PROGRAM_ID,
     );
 
+    const creator = provider.wallet.publicKey;
+    const holder = creator; // single test wallet acts as both
+    const holderAssetTa = getAssociatedTokenAddressSync(
+      assetMint,
+      holder,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+
     // Vault for the exit_quote_vault — owned by exit_authority PDA
     const exitQuoteVault = getAssociatedTokenAddressSync(
       quoteMint,
@@ -1532,19 +1648,9 @@ describe("aeqi_unifutures", () => {
       TOKEN_2022_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID,
     );
-
-    const creator = provider.wallet.publicKey;
     const creatorQuoteTa = getAssociatedTokenAddressSync(
       quoteMint,
       creator,
-      false,
-      TOKEN_2022_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-    );
-    const holder = creator; // single test wallet acts as both
-    const holderAssetTa = getAssociatedTokenAddressSync(
-      assetMint,
-      holder,
       false,
       TOKEN_2022_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1608,6 +1714,24 @@ describe("aeqi_unifutures", () => {
       TOKEN_2022_PROGRAM_ID,
     );
 
+    // Now create_exit — pins assetMint and verifies supply == 1000.
+    await program.methods
+      .createExit(
+        Array.from(exitId),
+        new anchor.BN(EXIT_QUOTE),
+        new anchor.BN(SUPPLY_SNAPSHOT),
+        new anchor.BN(60 * 60 * 24 * 30),
+      )
+      .accountsPartial({
+        trust: fakeTrust,
+        moduleState: modulePda,
+        exit: exitPda,
+        assetMint,
+        creator,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
     // Settle: creator deposits 10_000 into vault
     await program.methods
       .settleExit()
@@ -1624,6 +1748,7 @@ describe("aeqi_unifutures", () => {
 
     let e = await program.account.exit.fetch(exitPda);
     expect(e.proceedsCollected.toString()).to.eq(String(EXIT_QUOTE));
+    expect(e.assetMint.toBase58()).to.eq(assetMint.toBase58());
 
     let vault = await getAccount(
       provider.connection,
@@ -1633,7 +1758,85 @@ describe("aeqi_unifutures", () => {
     );
     expect(vault.amount.toString()).to.eq(String(EXIT_QUOTE));
 
-    // Now claim_pro_rata: burn 100, expect share = 1000
+    // Regression — Explorer A 67-162.4:
+    // An attacker spins up a worthless SPL mint and tries to claim against
+    // it, hoping to burn meaningless tokens and drain the quote vault.
+    // The exit's pinned asset_mint must reject this.
+    const foreignMint = await createMint(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      provider.wallet.publicKey,
+      null,
+      0,
+      Keypair.generate(),
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const attackerForeignTa = getAssociatedTokenAddressSync(
+      foreignMint,
+      holder,
+      false,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+    );
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          creator,
+          attackerForeignTa,
+          holder,
+          foreignMint,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      ),
+    );
+    await mintTo(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      foreignMint,
+      attackerForeignTa,
+      provider.wallet.publicKey,
+      1_000_000, // attacker mints themselves a fat bag
+      [],
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+
+    let drainThrew = false;
+    try {
+      await program.methods
+        .claimProRata(new anchor.BN(100))
+        .accountsPartial({
+          exit: exitPda,
+          exitAuthority: exitAuthorityPda,
+          assetMint: foreignMint, // wrong mint — should be rejected
+          quoteMint,
+          exitQuoteVault,
+          holderAssetTa: attackerForeignTa,
+          holderQuoteTa: creatorQuoteTa,
+          holder,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .rpc();
+    } catch (err) {
+      drainThrew = true;
+      expect(err.toString()).to.match(/AssetMintMismatch|ConstraintAddress/);
+    }
+    expect(drainThrew, "drain via foreign asset_mint must be rejected").to.eq(
+      true,
+    );
+
+    // Vault must be untouched after the rejected drain attempt.
+    vault = await getAccount(
+      provider.connection,
+      exitQuoteVault,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    expect(vault.amount.toString()).to.eq(String(EXIT_QUOTE));
+
+    // Now claim_pro_rata with the canonical mint: burn 100, expect share = 1000
     await program.methods
       .claimProRata(new anchor.BN(100))
       .accountsPartial({

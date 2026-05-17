@@ -602,6 +602,16 @@ pub mod aeqi_unifutures {
         require!(e.proceeds_collected > 0, UnifuturesError::NotSettled);
         require!(e.status == SaleStatus::Active as u8, UnifuturesError::SaleNotActive);
 
+        // Defense-in-depth: the ClaimProRata accounts struct already gates
+        // `asset_mint` to `exit.asset_mint` via an Anchor constraint, but
+        // re-check here so the burn CPI can never run against a forged
+        // mint even if the constraint surface is refactored later.
+        require_keys_eq!(
+            ctx.accounts.asset_mint.key(),
+            e.asset_mint,
+            UnifuturesError::AssetMintMismatch
+        );
+
         let share_u128 = (burn_amount as u128)
             .checked_mul(e.exit_quote as u128)
             .ok_or_else(|| error!(UnifuturesError::MathOverflow))?
@@ -656,6 +666,11 @@ pub mod aeqi_unifutures {
     /// commits `exit_quote` upfront; existing token holders burn their
     /// cap-table tokens to claim their pro-rata share of the proceeds pool.
     /// Settle/claim ixes follow.
+    ///
+    /// The canonical `asset_mint` is pinned on the Exit account at create
+    /// time, and `total_supply_snapshot` is verified to equal the mint's
+    /// current `supply`. claim_pro_rata then enforces that the same mint
+    /// is burned, closing the worthless-token drain vector.
     pub fn create_exit(
         ctx: Context<CreateExit>,
         exit_id: [u8; 32],
@@ -667,11 +682,23 @@ pub mod aeqi_unifutures {
         require!(total_supply_snapshot > 0, UnifuturesError::ZeroAmount);
         require!(duration_secs > 0, UnifuturesError::InvalidDuration);
 
+        // Pin total_supply_snapshot to the asset mint's actual supply.
+        // Disallow shrinking the denominator (over-pays early claimers)
+        // or inflating it (under-pays). Strict equality keeps the math
+        // honest by construction.
+        let asset_mint_supply = ctx.accounts.asset_mint.supply;
+        require!(
+            total_supply_snapshot == asset_mint_supply,
+            UnifuturesError::SupplySnapshotMismatch
+        );
+
         let now = Clock::get()?.unix_timestamp;
+        let asset_mint_key = ctx.accounts.asset_mint.key();
         let e = &mut ctx.accounts.exit;
         e.trust = ctx.accounts.trust.key();
         e.exit_id = exit_id;
         e.creator = ctx.accounts.creator.key();
+        e.asset_mint = asset_mint_key;
         e.exit_quote = exit_quote;
         e.total_supply_snapshot = total_supply_snapshot;
         e.proceeds_collected = 0;
@@ -688,6 +715,7 @@ pub mod aeqi_unifutures {
             trust: e.trust,
             exit_id,
             creator: e.creator,
+            asset_mint: asset_mint_key,
             exit_quote,
             total_supply_snapshot,
             end_time: e.end_time,
@@ -1073,7 +1101,16 @@ pub struct Exit {
     pub trust: Pubkey,
     pub exit_id: [u8; 32],
     pub creator: Pubkey,
+    /// Canonical asset mint pinned at exit creation. claim_pro_rata MUST
+    /// burn this mint — passing a different mint is rejected so an
+    /// attacker cannot mint a worthless SPL token and drain the quote
+    /// vault by claiming against it.
+    pub asset_mint: Pubkey,
     pub exit_quote: u64,
+    /// Total asset supply captured at exit creation. Verified to equal
+    /// `asset_mint.supply` at create time so the per-token payout
+    /// denominator cannot be undersized by the creator to over-pay early
+    /// claimers.
     pub total_supply_snapshot: u64,
     pub proceeds_collected: u64,
     pub remaining_proceeds: u64,
@@ -1312,7 +1349,12 @@ pub struct ClaimProRata<'info> {
     /// CHECK: PDA signer for vault out-transfer
     #[account(seeds = [b"exit_authority", exit.trust.as_ref(), exit.exit_id.as_ref()], bump)]
     pub exit_authority: UncheckedAccount<'info>,
-    #[account(mut)]
+    /// Must equal the exit's canonical asset mint pinned at create time —
+    /// closes the worthless-token drain vector (Explorer A 67-162.4).
+    #[account(
+        mut,
+        address = exit.asset_mint @ UnifuturesError::AssetMintMismatch,
+    )]
     pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut, token::mint = quote_mint, token::authority = exit_authority)]
@@ -1344,6 +1386,10 @@ pub struct CreateExit<'info> {
         bump,
     )]
     pub exit: Account<'info, Exit>,
+    /// Canonical asset mint for this exit. Pinned onto `exit.asset_mint`
+    /// and used to snapshot total supply at creation time. claim_pro_rata
+    /// later refuses any other mint.
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut)]
     pub creator: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -1601,6 +1647,7 @@ pub struct ExitCreated {
     pub trust: Pubkey,
     pub exit_id: [u8; 32],
     pub creator: Pubkey,
+    pub asset_mint: Pubkey,
     pub exit_quote: u64,
     pub total_supply_snapshot: u64,
     pub end_time: i64,
@@ -1707,4 +1754,8 @@ pub enum UnifuturesError {
     AlreadyClaimed,
     #[msg("trust must be in creation mode to initialize the unifutures module")]
     TrustNotInCreationMode,
+    #[msg("asset_mint does not match the exit's canonical asset mint")]
+    AssetMintMismatch,
+    #[msg("total_supply_snapshot must equal asset_mint.supply at create time")]
+    SupplySnapshotMismatch,
 }

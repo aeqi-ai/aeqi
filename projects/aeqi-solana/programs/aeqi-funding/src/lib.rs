@@ -229,6 +229,7 @@ pub mod aeqi_funding {
             trust: ctx.accounts.trust.to_account_info(),
             module_state: ctx.accounts.unifutures_module_state.to_account_info(),
             exit: ctx.accounts.exit.to_account_info(),
+            asset_mint: ctx.accounts.asset_mint.to_account_info(),
             creator: ctx.accounts.creator.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
         };
@@ -447,6 +448,9 @@ pub struct ActivateExit<'info> {
     /// CHECK: aeqi_unifutures inits the Exit PDA
     #[account(mut)]
     pub exit: UncheckedAccount<'info>,
+    /// CHECK: passed through to aeqi_unifutures::create_exit, which
+    /// deserializes it as a Mint and pins it onto the Exit account.
+    pub asset_mint: UncheckedAccount<'info>,
     #[account(mut)]
     pub creator: Signer<'info>,
     pub aeqi_unifutures_program: Program<'info, AeqiUnifutures>,

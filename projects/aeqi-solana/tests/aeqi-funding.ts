@@ -4,6 +4,14 @@ import { AeqiBudget } from "../target/types/aeqi_budget";
 import { AeqiFunding } from "../target/types/aeqi_funding";
 import { AeqiUnifutures } from "../target/types/aeqi_unifutures";
 import { PublicKey, Keypair } from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createMint,
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountInstruction,
+  mintTo,
+} from "@solana/spl-token";
 import { expect } from "chai";
 import { expectTxFail } from "./support";
 
@@ -73,6 +81,55 @@ describe("aeqi_funding", () => {
       })
       .rpc();
     return budgetPda;
+  }
+
+  // Create an SPL Token-2022 mint with `supply` units already minted to the
+  // provider wallet. Used to satisfy aeqi_unifutures::create_exit's
+  // total_supply_snapshot equality check during activate_exit CPIs.
+  async function createMintWithSupply(supply: number): Promise<PublicKey> {
+    const mint = await createMint(
+      provider.connection,
+      (provider.wallet as anchor.Wallet).payer,
+      provider.wallet.publicKey,
+      null,
+      0,
+      Keypair.generate(),
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    if (supply > 0) {
+      const ta = getAssociatedTokenAddressSync(
+        mint,
+        provider.wallet.publicKey,
+        false,
+        TOKEN_2022_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      );
+      await provider.sendAndConfirm(
+        new anchor.web3.Transaction().add(
+          createAssociatedTokenAccountInstruction(
+            provider.wallet.publicKey,
+            ta,
+            provider.wallet.publicKey,
+            mint,
+            TOKEN_2022_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+          ),
+        ),
+      );
+      await mintTo(
+        provider.connection,
+        (provider.wallet as anchor.Wallet).payer,
+        mint,
+        ta,
+        provider.wallet.publicKey,
+        supply,
+        [],
+        undefined,
+        TOKEN_2022_PROGRAM_ID,
+      );
+    }
+    return mint;
   }
 
   it("init creates the funding module state", async () => {
@@ -461,6 +518,8 @@ describe("aeqi_funding", () => {
       unifutures.programId,
     );
 
+    const exitAssetMint = await createMintWithSupply(500_000);
+
     await program.methods
       .activateExit(
         Array.from(exitId),
@@ -474,6 +533,7 @@ describe("aeqi_funding", () => {
         trust: fakeTrust,
         unifuturesModuleState: unifModulePda,
         exit: exitPda,
+        assetMint: exitAssetMint,
         creator: provider.wallet.publicKey,
         aeqiUnifuturesProgram: unifutures.programId,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -489,6 +549,7 @@ describe("aeqi_funding", () => {
     const e = await unifutures.account.exit.fetch(exitPda);
     expect(e.exitQuote.toString()).to.eq("100000");
     expect(e.totalSupplySnapshot.toString()).to.eq("500000");
+    expect(e.assetMint.toBase58()).to.eq(exitAssetMint.toBase58());
     expect(e.status).to.eq(0); // Active
   });
 
@@ -543,6 +604,10 @@ describe("aeqi_funding", () => {
       unifutures.programId,
     );
 
+    // Budget gate fires before the CPI, but the account list still needs a
+    // mint pubkey for the asset_mint slot.
+    const placeholderMint = await createMintWithSupply(0);
+
     await expectTxFail(
       async () =>
         program.methods
@@ -558,6 +623,7 @@ describe("aeqi_funding", () => {
             trust: fakeTrust,
             unifuturesModuleState: unifModulePda,
             exit: exitPda,
+            assetMint: placeholderMint,
             creator: provider.wallet.publicKey,
             aeqiUnifuturesProgram: unifutures.programId,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -696,6 +762,8 @@ describe("aeqi_funding", () => {
       unifutures.programId,
     );
 
+    const finalizeAssetMint = await createMintWithSupply(200_000);
+
     await program.methods
       .activateExit(
         Array.from(exitId),
@@ -709,6 +777,7 @@ describe("aeqi_funding", () => {
         trust: fakeTrust,
         unifuturesModuleState: unifModulePda,
         exit: exitPda,
+        assetMint: finalizeAssetMint,
         creator: provider.wallet.publicKey,
         aeqiUnifuturesProgram: unifutures.programId,
         systemProgram: anchor.web3.SystemProgram.programId,
