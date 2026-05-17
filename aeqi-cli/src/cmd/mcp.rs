@@ -648,24 +648,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
             Err(_) => continue,
         };
 
-        if current_exe_has_been_replaced() {
-            let response = McpResponse {
-                jsonrpc: "2.0".to_string(),
-                id: request.id.unwrap_or(serde_json::Value::Null),
-                result: None,
-                error: Some(serde_json::json!({
-                    "code": -32090,
-                    "message": "aeqi mcp executable was replaced; restarting stdio server"
-                })),
-            };
-            let resp_json = serde_json::to_string(&response)?;
-            writeln!(stdout, "{resp_json}")?;
-            stdout.flush()?;
-            eprintln!(
-                "[aeqi-mcp] executable has been replaced on disk; exiting so the client can reconnect"
-            );
-            break;
-        }
+        let retire_after_response = current_exe_has_been_replaced();
 
         let response = match request.method.as_str() {
             "initialize" => McpResponse {
@@ -863,21 +846,7 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
                                 call_ipc(&ipc)
                             }
                             "close" => {
-                                let _project = args
-                                    .get("project")
-                                    .and_then(|v| v.as_str())
-                                    .or_else(|| {
-                                        args.get("quest_id")
-                                            .and_then(|v| v.as_str())
-                                            .and_then(|id| id.split('-').next())
-                                    })
-                                    .unwrap_or("");
-                                let _quest_id =
-                                    args.get("quest_id").and_then(|v| v.as_str()).unwrap_or("");
-                                let mut ipc = args.clone();
-                                ipc["cmd"] = serde_json::json!("close_quest");
-
-                                // Enrich: check if review was posted for this quest
+                                let ipc = quests_close_ipc_request(&args);
                                 call_ipc(&ipc)
                             }
                             "cancel" => {
@@ -1438,6 +1407,13 @@ pub fn cmd_mcp(config_path: &Option<PathBuf>) -> Result<()> {
         let resp_json = serde_json::to_string(&response)?;
         writeln!(stdout, "{resp_json}")?;
         stdout.flush()?;
+
+        if retire_after_response {
+            eprintln!(
+                "[aeqi-mcp] executable has been replaced on disk; exiting after completed request"
+            );
+            break;
+        }
     }
 
     Ok(())
@@ -1516,6 +1492,17 @@ fn quests_update_ipc_request(args: &serde_json::Value, default_project: &str) ->
         if let Some(value) = args.get(field) {
             ipc[field] = value.clone();
         }
+    }
+    ipc
+}
+
+fn quests_close_ipc_request(args: &serde_json::Value) -> serde_json::Value {
+    let mut ipc = args.clone();
+    ipc["cmd"] = serde_json::json!("close_quest");
+    if ipc.get("reason").and_then(|v| v.as_str()).is_none()
+        && let Some(result) = args.get("result").and_then(|v| v.as_str())
+    {
+        ipc["reason"] = serde_json::json!(result);
     }
     ipc
 }
@@ -1799,6 +1786,31 @@ mod tests {
         assert_eq!(req["agent_id"], "a6107b6a-1959-45f9-901c-77fa1f333cbe");
         assert_eq!(req["scope"], "global");
         assert!(req["due_at"].is_null());
+    }
+
+    #[test]
+    fn quests_close_request_maps_result_to_reason() {
+        let req = quests_close_ipc_request(&serde_json::json!({
+            "action": "close",
+            "quest_id": "ae-015",
+            "result": "Preserved close outcome text",
+        }));
+
+        assert_eq!(req["cmd"], "close_quest");
+        assert_eq!(req["quest_id"], "ae-015");
+        assert_eq!(req["reason"], "Preserved close outcome text");
+    }
+
+    #[test]
+    fn quests_close_request_preserves_explicit_reason() {
+        let req = quests_close_ipc_request(&serde_json::json!({
+            "action": "close",
+            "quest_id": "ae-015",
+            "result": "Tool result text",
+            "reason": "Explicit audit reason",
+        }));
+
+        assert_eq!(req["reason"], "Explicit audit reason");
     }
 
     #[test]

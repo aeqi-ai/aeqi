@@ -126,7 +126,10 @@ impl IdeasTool {
                 )));
             }
         }
-        let file_id = args.get("file_id").and_then(|v| v.as_str()).map(|s| s.trim());
+        let file_id = args
+            .get("file_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim());
 
         match self
             .idea_store

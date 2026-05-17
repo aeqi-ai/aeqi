@@ -1088,6 +1088,7 @@ mod tests {
             idea: None,
             status: aeqi_quests::QuestStatus::Done,
             priority: Default::default(),
+            kind: "task".to_string(),
             agent_id: agent_id.map(str::to_string),
             assignee: None,
             scope: aeqi_core::Scope::SelfScope,

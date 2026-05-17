@@ -285,6 +285,8 @@ mod tests {
                 tool_deny: Vec::new(),
                 parent_idea_id: None,
                 properties: None,
+                kind: "note".to_string(),
+                file_id: None,
             });
             Self {
                 providers_idea,

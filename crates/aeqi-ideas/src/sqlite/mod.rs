@@ -188,12 +188,7 @@ impl IdeaStore for SqliteIdeas {
         self.update_impl(id, name, content, tags).await
     }
 
-    async fn set_kind(
-        &self,
-        id: &str,
-        kind: &str,
-        file_id: Option<&str>,
-    ) -> Result<()> {
+    async fn set_kind(&self, id: &str, kind: &str, file_id: Option<&str>) -> Result<()> {
         self.set_kind_impl(id, kind, file_id).await
     }
 

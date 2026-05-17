@@ -187,6 +187,8 @@ mod tests {
             tool_deny: vec![],
             parent_idea_id: None,
             properties: None,
+            kind: "note".to_string(),
+            file_id: None,
         }
     }
 

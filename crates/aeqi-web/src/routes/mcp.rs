@@ -470,8 +470,7 @@ async fn call_quests(
             ipc(state, ctx, req).await
         }
         "close" => {
-            let mut req = args.clone();
-            req["cmd"] = serde_json::json!("close_quest");
+            let req = quests_close_ipc_request(&args);
             ipc(state, ctx, req).await
         }
         "cancel" => {
@@ -982,6 +981,17 @@ fn quests_update_ipc_request(args: &serde_json::Value, default_project: &str) ->
     req
 }
 
+fn quests_close_ipc_request(args: &serde_json::Value) -> serde_json::Value {
+    let mut req = args.clone();
+    req["cmd"] = serde_json::json!("close_quest");
+    if req.get("reason").and_then(|v| v.as_str()).is_none()
+        && let Some(result) = args.get("result").and_then(|v| v.as_str())
+    {
+        req["reason"] = serde_json::json!(result);
+    }
+    req
+}
+
 fn default_mcp_project(state: &AppState) -> &str {
     state
         .mcp_projects
@@ -1373,6 +1383,31 @@ mod tests {
         assert_eq!(req["agent_id"], "a6107b6a-1959-45f9-901c-77fa1f333cbe");
         assert_eq!(req["scope"], "global");
         assert!(req["due_at"].is_null());
+    }
+
+    #[test]
+    fn http_mcp_quest_close_maps_result_to_reason() {
+        let req = quests_close_ipc_request(&serde_json::json!({
+            "action": "close",
+            "quest_id": "ae-015",
+            "result": "Preserved close outcome text",
+        }));
+
+        assert_eq!(req["cmd"], "close_quest");
+        assert_eq!(req["quest_id"], "ae-015");
+        assert_eq!(req["reason"], "Preserved close outcome text");
+    }
+
+    #[test]
+    fn http_mcp_quest_close_preserves_explicit_reason() {
+        let req = quests_close_ipc_request(&serde_json::json!({
+            "action": "close",
+            "quest_id": "ae-015",
+            "result": "Tool result text",
+            "reason": "Explicit audit reason",
+        }));
+
+        assert_eq!(req["reason"], "Explicit audit reason");
     }
 
     #[test]

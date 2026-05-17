@@ -460,12 +460,7 @@ pub trait IdeaStore: Send + Sync {
     /// default `bail!` — tool callers will see a clean failure and can
     /// degrade. Backends that DO persist it (SqliteIdeas as of v17)
     /// override with the real UPDATE.
-    async fn set_kind(
-        &self,
-        id: &str,
-        kind: &str,
-        file_id: Option<&str>,
-    ) -> anyhow::Result<()> {
+    async fn set_kind(&self, id: &str, kind: &str, file_id: Option<&str>) -> anyhow::Result<()> {
         let _ = (id, kind, file_id);
         anyhow::bail!("set_kind not supported by this store")
     }
