@@ -16,6 +16,12 @@ import {
   expectTxFail,
   fundKeypair,
 } from "./support";
+import {
+  buildMerkleTree,
+  merkleProof,
+  tokenVoteLeaf,
+  verifyMerkleProof,
+} from "./helpers/merkle";
 
 describe("aeqi_governance", () => {
   const provider = anchor.AnchorProvider.env();
@@ -109,6 +115,20 @@ describe("aeqi_governance", () => {
     return trustPda;
   }
 
+  // Wait until the cluster has advanced past `proposal.snapshotSlot`
+  // (the on-chain commit gate requires current_slot > snapshot_slot).
+  // Localnet runs at ~2.5 slots/s, so this typically returns inside a
+  // single poll.
+  async function waitPastSnapshotSlot(proposalPda: PublicKey) {
+    const p = await program.account.proposal.fetch(proposalPda);
+    const target = BigInt(p.snapshotSlot.toString());
+    while (
+      BigInt(await provider.connection.getSlot("processed")) <= target
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+
   async function setupTokenVotingProposal(args: {
     seed0: number;
     seed1?: number;
@@ -119,6 +139,17 @@ describe("aeqi_governance", () => {
     castVote?: boolean;
     allowEarlyEnact?: boolean;
     executionDelay?: number;
+    /**
+     * Override the Merkle tree contributors. When omitted, the tree
+     * contains just the primary voter at `voteAmount` (the simplest
+     * happy-path snapshot). Negative tests can pass a tree that
+     * doesn't include the voter to assert InvalidMerkleProof, or
+     * include them with a different balance to assert the same.
+     */
+    snapshotEntries?: { holder: PublicKey; balance: bigint }[];
+    /** Skip the commit_snapshot_root call entirely — for tests that
+     * want to assert SnapshotNotCommitted. */
+    skipSnapshotCommit?: boolean;
   }) {
     const trustPda = await createTrust(args.seed0, args.seed1 ?? 0);
 
@@ -302,14 +333,44 @@ describe("aeqi_governance", () => {
       program.programId,
     );
 
-    if (args.castVote ?? true) {
+    // Build the Merkle snapshot. Default tree = just the voter at
+    // voteAmount; callers can pass `snapshotEntries` to model multi-
+    // holder snapshots or forged-balance scenarios.
+    const snapshotEntries = args.snapshotEntries ?? [
+      { holder: voter, balance: BigInt(args.voteAmount) },
+    ];
+    const tree = buildMerkleTree(snapshotEntries);
+    const totalSupply = snapshotEntries.reduce(
+      (acc, e) => acc + e.balance,
+      0n,
+    );
+
+    if (!(args.skipSnapshotCommit ?? false)) {
+      // commit_snapshot_root requires current_slot > proposal.snapshot_slot.
+      await waitPastSnapshotSlot(proposalPda);
       await program.methods
-        .castVoteToken(1)
+        .commitSnapshotRoot(
+          Array.from(tree.root),
+          new anchor.BN(totalSupply.toString()),
+        )
+        .accountsPartial({
+          proposal: proposalPda,
+          committer: provider.wallet.publicKey,
+        })
+        .rpc();
+    }
+
+    if (args.castVote ?? true) {
+      const proof = merkleProof(tree, voter);
+      await program.methods
+        .castVoteToken(
+          1,
+          new anchor.BN(args.voteAmount),
+          proof.map((p) => Array.from(p)),
+        )
         .accountsPartial({
           proposal: proposalPda,
           vote: votePda,
-          voterTokenAccount: voterAta,
-          mint: mintPda,
           voter,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -324,6 +385,8 @@ describe("aeqi_governance", () => {
       voterAta,
       mintPda,
       voter,
+      tree,
+      totalSupply,
     };
   }
 
@@ -570,15 +633,18 @@ describe("aeqi_governance", () => {
       voteAmount: 1000,
     });
 
+    const replayProof = merkleProof(fixture.tree, fixture.voter);
     let threw = false;
     try {
       await program.methods
-        .castVoteToken(0)
+        .castVoteToken(
+          0,
+          new anchor.BN(1000),
+          replayProof.map((p) => Array.from(p)),
+        )
         .accountsPartial({
           proposal: fixture.proposalPda,
           vote: fixture.votePda,
-          voterTokenAccount: fixture.voterAta,
-          mint: fixture.mintPda,
           voter: fixture.voter,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -688,30 +754,33 @@ describe("aeqi_governance", () => {
     expect(threw).to.eq(true);
   });
 
-  it("cast_vote_token rejects zero-balance voters", async () => {
+  it("cast_vote_token rejects zero-balance voters (claimed_balance=0)", async () => {
     const cfgId = new Uint8Array(32);
     cfgId[0] = 0xd1;
     const proposalId = new Uint8Array(32);
     proposalId[0] = 0xd1;
     proposalId[1] = 0x01;
 
+    // Snapshot a positive holder so commit_snapshot_root succeeds (the
+    // zero-root path is its own error). voteAmount is irrelevant in the
+    // skipped-cast branch.
     const fixture = await setupTokenVotingProposal({
       seed0: 0xd1,
       cfgId,
       proposalId,
-      voteAmount: 0,
+      voteAmount: 1,
       castVote: false,
     });
 
     let threw = false;
     try {
+      // Even a valid-looking proof (one not used by setup) with
+      // claimed_balance=0 must bounce before the proof step.
       await program.methods
-        .castVoteToken(1)
+        .castVoteToken(1, new anchor.BN(0), [])
         .accountsPartial({
           proposal: fixture.proposalPda,
           vote: fixture.votePda,
-          voterTokenAccount: fixture.voterAta,
-          mint: fixture.mintPda,
           voter: fixture.voter,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -1077,11 +1146,15 @@ describe("aeqi_governance", () => {
     expect(v.weight.toString()).to.eq("1");
   });
 
-  it("cast_vote_token reads weight from real Token-2022 balance (canonical mint)", async () => {
-    // Full token-mode flow: aeqi_token.create_mint gives the canonical mint
-    // at PDA [b"mint", trust]; aeqi_token.mint_tokens issues 1500 to voter;
-    // governance.cast_vote_token reads voter's balance + validates the mint
-    // is the canonical PDA via seeds::program = AEQI_TOKEN_ID.
+  it("cast_vote_token uses Merkle-proven snapshot balance from real Token-2022 mint", async () => {
+    // ae-008: full token-mode flow that exercises the new
+    // snapshot-root commitment path against a real Token-2022 mint.
+    // aeqi_token.create_mint gives the canonical mint at PDA
+    // [b"mint", trust]; aeqi_token.mint_tokens issues 1500 to voter;
+    // we snapshot that balance into a Merkle tree, commit the root,
+    // then cast_vote_token attests claimed_balance=1500 via inclusion
+    // proof — same semantics as before the bug fix but no longer
+    // vulnerable to transfer-and-revote.
     const aeqiToken = anchor.workspace.aeqiToken as anchor.Program<AeqiToken>;
     const trustId = new Uint8Array(32);
     trustId[0] = 0xf0;
@@ -1242,13 +1315,35 @@ describe("aeqi_governance", () => {
       program.programId,
     );
 
+    // Build the snapshot tree from the real on-chain holder set: just
+    // the voter at 1500. Wait past snapshot_slot, commit the root,
+    // then cast the vote with the inclusion proof.
+    const tree = buildMerkleTree([{ holder: voter, balance: 1500n }]);
+    await waitPastSnapshotSlot(proposalPda);
     await program.methods
-      .castVoteToken(1) // For
+      .commitSnapshotRoot(Array.from(tree.root), new anchor.BN(1500))
+      .accountsPartial({
+        proposal: proposalPda,
+        committer: provider.wallet.publicKey,
+      })
+      .rpc();
+
+    const proof = merkleProof(tree, voter);
+    // Sanity-check the proof off-chain before submitting — cheaper to
+    // debug here than on-chain.
+    expect(
+      verifyMerkleProof(tokenVoteLeaf(voter, 1500n), proof, tree.root),
+    ).to.eq(true);
+
+    await program.methods
+      .castVoteToken(
+        1, // For
+        new anchor.BN(1500),
+        proof.map((p) => Array.from(p)),
+      )
       .accountsPartial({
         proposal: proposalPda,
         vote: votePda,
-        voterTokenAccount: voterAta,
-        mint: mintPda,
         voter,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -1256,10 +1351,271 @@ describe("aeqi_governance", () => {
 
     const p = await program.account.proposal.fetch(proposalPda);
     expect(p.forVotes.toString()).to.eq("1500");
+    // Snapshot root + total supply are now persisted on the Proposal.
+    expect(Buffer.from(p.snapshotRoot).toString("hex")).to.eq(
+      Buffer.from(tree.root).toString("hex"),
+    );
+    expect(p.snapshotTotalSupply.toString()).to.eq("1500");
 
     const v = await program.account.voteRecord.fetch(votePda);
     expect(v.weight.toString()).to.eq("1500");
     expect(v.choice).to.eq(1);
+  });
+
+  it("cast_vote_token rejects forged claimed_balance (Merkle proof mismatch)", async () => {
+    // ae-008: the attack the snapshot pattern closes. The voter's
+    // real snapshotted balance is 100; they try to claim 1000 with
+    // the proof they DO have. Leaf encoding (sha256(voter || balance))
+    // means the forged claim hashes to a different leaf and the proof
+    // can't reach the root.
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xf1;
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xf1;
+    proposalId[1] = 0x01;
+
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xf1,
+      cfgId,
+      proposalId,
+      voteAmount: 100,
+      castVote: false,
+    });
+
+    const proof = merkleProof(fixture.tree, fixture.voter);
+    let threw = false;
+    try {
+      await program.methods
+        .castVoteToken(
+          1,
+          new anchor.BN(1000), // forged — real balance was 100
+          proof.map((p) => Array.from(p)),
+        )
+        .accountsPartial({
+          proposal: fixture.proposalPda,
+          vote: fixture.votePda,
+          voter: fixture.voter,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/InvalidMerkleProof/);
+    }
+    expect(threw, "forged balance must be rejected").to.eq(true);
+
+    // No VoteRecord, no for_votes tally bump.
+    const p = await program.account.proposal.fetch(fixture.proposalPda);
+    expect(p.forVotes.toString()).to.eq("0");
+    const voteInfo = await provider.connection.getAccountInfo(fixture.votePda);
+    expect(voteInfo).to.eq(null);
+  });
+
+  it("cast_vote_token rejects a proof from a tree the voter isn't in", async () => {
+    // The snapshot commits a root over a tree that includes some
+    // other holder. The voter is also a holder on-chain, but they
+    // were NOT snapshotted — any proof they construct must fail.
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xf2;
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xf2;
+    proposalId[1] = 0x01;
+
+    const otherHolder = Keypair.generate().publicKey;
+    // Snapshot only `otherHolder`; the voter is absent.
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xf2,
+      cfgId,
+      proposalId,
+      voteAmount: 250,
+      castVote: false,
+      snapshotEntries: [{ holder: otherHolder, balance: 500n }],
+    });
+
+    // Voter constructs a proof against a DIFFERENT tree (the one
+    // where they're at 250) and submits it against the committed
+    // root, which is a different root.
+    const localTree = buildMerkleTree([
+      { holder: fixture.voter, balance: 250n },
+    ]);
+    const forgedProof = merkleProof(localTree, fixture.voter);
+
+    let threw = false;
+    try {
+      await program.methods
+        .castVoteToken(
+          1,
+          new anchor.BN(250),
+          forgedProof.map((p) => Array.from(p)),
+        )
+        .accountsPartial({
+          proposal: fixture.proposalPda,
+          vote: fixture.votePda,
+          voter: fixture.voter,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/InvalidMerkleProof/);
+    }
+    expect(threw, "voter not in snapshot must be rejected").to.eq(true);
+  });
+
+  it("cast_vote_token rejects voting before snapshot_root is committed", async () => {
+    // Skip commit_snapshot_root entirely; cast_vote_token must
+    // refuse to score votes against the zero root.
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xf3;
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xf3;
+    proposalId[1] = 0x01;
+
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xf3,
+      cfgId,
+      proposalId,
+      voteAmount: 500,
+      castVote: false,
+      skipSnapshotCommit: true,
+    });
+
+    const proof = merkleProof(fixture.tree, fixture.voter);
+    let threw = false;
+    try {
+      await program.methods
+        .castVoteToken(
+          1,
+          new anchor.BN(500),
+          proof.map((p) => Array.from(p)),
+        )
+        .accountsPartial({
+          proposal: fixture.proposalPda,
+          vote: fixture.votePda,
+          voter: fixture.voter,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/SnapshotNotCommitted/);
+    }
+    expect(threw, "pre-commit votes must be rejected").to.eq(true);
+  });
+
+  it("commit_snapshot_root is one-shot (second commit rejected)", async () => {
+    // Idempotency-by-rejection: once the root is set, no caller can
+    // overwrite it. Protects against late snapshotters racing with
+    // each other on the same proposal.
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xf4;
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xf4;
+    proposalId[1] = 0x01;
+
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xf4,
+      cfgId,
+      proposalId,
+      voteAmount: 100,
+      castVote: false,
+      // setupTokenVotingProposal already commits once.
+    });
+
+    // Different root attempt: still rejected.
+    const otherTree = buildMerkleTree([
+      { holder: Keypair.generate().publicKey, balance: 100n },
+    ]);
+
+    let threw = false;
+    try {
+      await program.methods
+        .commitSnapshotRoot(Array.from(otherTree.root), new anchor.BN(100))
+        .accountsPartial({
+          proposal: fixture.proposalPda,
+          committer: provider.wallet.publicKey,
+        })
+        .rpc();
+    } catch (e: any) {
+      threw = true;
+      expect(e.toString()).to.match(/CommitRootMismatch/);
+    }
+    expect(threw, "second commit must be rejected").to.eq(true);
+  });
+
+  it("cast_vote_token tallies two voters independently from one Merkle tree", async () => {
+    // Multi-voter happy path: two holders share a snapshot root.
+    // Each constructs their own proof and casts independently. Both
+    // votes land with the expected weights.
+    const cfgId = new Uint8Array(32);
+    cfgId[0] = 0xf5;
+    const proposalId = new Uint8Array(32);
+    proposalId[0] = 0xf5;
+    proposalId[1] = 0x01;
+
+    const voter1 = provider.wallet.publicKey;
+    const voter2Kp = await fundKeypair(provider);
+    const voter2 = voter2Kp.publicKey;
+
+    // Snapshot a 2-voter tree (voter1: 300, voter2: 700, total 1000).
+    const fixture = await setupTokenVotingProposal({
+      seed0: 0xf5,
+      cfgId,
+      proposalId,
+      voteAmount: 300,
+      castVote: false,
+      snapshotEntries: [
+        { holder: voter1, balance: 300n },
+        { holder: voter2, balance: 700n },
+      ],
+    });
+
+    // Voter 1 votes FOR with weight 300.
+    const proof1 = merkleProof(fixture.tree, voter1);
+    await program.methods
+      .castVoteToken(
+        1,
+        new anchor.BN(300),
+        proof1.map((p) => Array.from(p)),
+      )
+      .accountsPartial({
+        proposal: fixture.proposalPda,
+        vote: fixture.votePda,
+        voter: voter1,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    // Voter 2 votes AGAINST with weight 700.
+    const [vote2Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vote"),
+        fixture.trustPda.toBuffer(),
+        Buffer.from(proposalId),
+        voter2.toBuffer(),
+      ],
+      program.programId,
+    );
+    const proof2 = merkleProof(fixture.tree, voter2);
+    await program.methods
+      .castVoteToken(
+        0,
+        new anchor.BN(700),
+        proof2.map((p) => Array.from(p)),
+      )
+      .accountsPartial({
+        proposal: fixture.proposalPda,
+        vote: vote2Pda,
+        voter: voter2,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([voter2Kp])
+      .rpc();
+
+    const p = await program.account.proposal.fetch(fixture.proposalPda);
+    expect(p.forVotes.toString()).to.eq("300");
+    expect(p.againstVotes.toString()).to.eq("700");
+    expect(p.snapshotTotalSupply.toString()).to.eq("1000");
   });
 
   it("cast_vote_role rejects checkpoints created after proposal.snapshot_slot", async () => {

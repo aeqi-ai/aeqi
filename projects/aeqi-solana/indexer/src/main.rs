@@ -13,17 +13,35 @@ mod events;
 mod manifest;
 mod registry;
 mod sink;
+mod snapshot;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use futures::StreamExt;
 use manifest::{Manifest, DEFAULT_CLUSTER};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
+use solana_client::nonblocking::rpc_client::RpcClient as NonblockingRpcClient;
 use solana_client::rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signer::Signer;
+use std::collections::HashSet;
 use std::str::FromStr;
-use tracing::{info, warn};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tracing::{debug, info, warn};
+
+/// Hardcoded aeqi_token program ID — used to derive the canonical
+/// cap-table mint PDA `[b"mint", trust]` for each ProposalCreated
+/// event so the snapshot job knows which mint to query.
+const AEQI_TOKEN_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh");
+
+/// Marker for token-mode proposals — `governance_config_id == [0; 32]`
+/// (matches `aeqi_governance::TOKEN_VOTING_CONFIG_ID`). Role-mode
+/// proposals do NOT need a snapshot job (Phase 1 handles them via the
+/// checkpoint slot guard, ae-003).
+const TOKEN_VOTING_CONFIG_ID: [u8; 32] = [0u8; 32];
 
 #[derive(Parser, Debug)]
 #[command(name = "aeqi-indexer", about = "Solana log indexer for the AEQI protocol")]
@@ -120,6 +138,33 @@ async fn main() -> Result<()> {
     let sink = std::sync::Arc::new(sink::Sink::open(&args.db)?);
     info!(prior_events = sink.event_count()?, "sink opened");
 
+    // Shared RPC client + signer + active-job tracker for the token
+    // snapshot pipeline (ae-008). Built lazily so the indexer still
+    // boots when AEQI_INDEXER_SIGNER is misconfigured — failing the
+    // snapshot job is recoverable per proposal; failing the whole
+    // indexer is not.
+    let rpc_for_snapshots = Arc::new(NonblockingRpcClient::new_with_commitment(
+        args.rpc_url.clone(),
+        CommitmentConfig::confirmed(),
+    ));
+    let snapshot_signer = match snapshot::load_signer() {
+        Ok(kp) => {
+            info!(
+                signer = %kp.pubkey(),
+                "snapshot signer loaded — token-vote snapshots enabled"
+            );
+            Some(kp)
+        }
+        Err(e) => {
+            warn!(
+                ?e,
+                "snapshot signer not available — token-vote proposals will not get a snapshot job (votes will fail with SnapshotNotCommitted until resolved)"
+            );
+            None
+        }
+    };
+    let active_snapshot_jobs: Arc<Mutex<HashSet<Pubkey>>> = Arc::new(Mutex::new(HashSet::new()));
+
     // Historical backfill — replay any events that happened before the
     // indexer started (or while it was offline). Idempotent via the sink's
     // UNIQUE(signature, program, event_type) constraint.
@@ -164,6 +209,9 @@ async fn main() -> Result<()> {
         let (mut sub, _unsub) = client.logs_subscribe(filter, cfg).await?;
 
         let sink_for_task = sink.clone();
+        let rpc_for_task = rpc_for_snapshots.clone();
+        let signer_for_task = snapshot_signer.clone();
+        let active_jobs_for_task = active_snapshot_jobs.clone();
         let handle = tokio::spawn(async move {
             while let Some(resp) = sub.next().await {
                 let slot = resp.context.slot;
@@ -222,6 +270,19 @@ async fn main() -> Result<()> {
                                                 ) {
                                                     warn!(?e, "sink.record_typed failed");
                                                 }
+                                                // ae-008: kick off a token-vote
+                                                // snapshot job for newly-created
+                                                // token-mode proposals. Role-mode
+                                                // proposals are gated by the slot
+                                                // checkpoint (ae-003) and need no
+                                                // snapshotter.
+                                                dispatch_snapshot_if_token_proposal(
+                                                    &typed,
+                                                    slot,
+                                                    &rpc_for_task,
+                                                    signer_for_task.as_ref(),
+                                                    &active_jobs_for_task,
+                                                );
                                             }
                                             Ok(None) => {
                                                 tracing::debug!(
@@ -276,4 +337,93 @@ fn hex(bytes: &[u8]) -> String {
         let _ = write!(s, "{:02x}", b);
     }
     s
+}
+
+/// Spawn a token-vote snapshot job for a freshly-created proposal IF:
+///   - the event is `GovernanceEvent::ProposalCreated`
+///   - the proposal uses token voting (`governance_config_id == [0; 32]`)
+///   - the signer is configured (otherwise we'd just no-op every tx)
+///   - no other snapshot job is already running for the same proposal
+///
+/// The job runs as a detached tokio task — failure is logged and
+/// localized, so a single bad proposal can't take down the indexer.
+fn dispatch_snapshot_if_token_proposal(
+    typed: &events::TypedEvent,
+    decoded_slot: u64,
+    rpc: &Arc<NonblockingRpcClient>,
+    signer: Option<&Arc<solana_sdk::signature::Keypair>>,
+    active_jobs: &Arc<Mutex<HashSet<Pubkey>>>,
+) {
+    let events::TypedEvent::Governance(events::GovernanceEvent::ProposalCreated(p)) = typed else {
+        return;
+    };
+    if p.governance_config_id != TOKEN_VOTING_CONFIG_ID {
+        // Role-mode proposal; ae-003 handles it via the slot
+        // checkpoint guard. No snapshot job needed.
+        return;
+    }
+    let Some(signer) = signer else {
+        warn!(
+            trust = %snapshot::pubkey_b58(&p.trust),
+            proposal_id = %snapshot::pubkey_b58(&p.proposal_id),
+            "token-mode proposal observed but snapshot signer unavailable — skipping"
+        );
+        return;
+    };
+
+    let trust = Pubkey::new_from_array(p.trust);
+    let proposal = derive_proposal_pda(&trust, &p.proposal_id);
+    let mint = derive_canonical_mint_pda(&trust);
+
+    let rpc = rpc.clone();
+    let signer = signer.clone();
+    let active_jobs = active_jobs.clone();
+
+    tokio::spawn(async move {
+        // Dedup: if a job for this proposal is already in flight,
+        // skip. Bounded by the live tail (one event => at most one
+        // dispatch), so contention is minimal.
+        {
+            let mut jobs = active_jobs.lock().await;
+            if !jobs.insert(proposal) {
+                info!(
+                    %proposal,
+                    "snapshot job already in flight — skipping duplicate dispatch"
+                );
+                return;
+            }
+        }
+
+        let job = snapshot::SnapshotJob {
+            proposal,
+            // The snapshot_slot the proposal locked in is at-or-before
+            // the slot at which we decoded the event. Use decoded_slot
+            // as a safe lower bound for "wait past finalization".
+            // commit_snapshot_root will still validate that the actual
+            // proposal.snapshot_slot is in the past on-chain, so an
+            // optimistic over-estimate here is fine.
+            snapshot_slot: decoded_slot,
+            mint,
+            signer,
+            rpc,
+        };
+        match job.run().await {
+            Ok(Some(sig)) => info!(%proposal, %sig, "snapshot job completed"),
+            Ok(None) => debug!(%proposal, "snapshot job no-op (already committed)"),
+            Err(e) => warn!(?e, %proposal, "snapshot job failed"),
+        }
+        active_jobs.lock().await.remove(&proposal);
+    });
+}
+
+fn derive_proposal_pda(trust: &Pubkey, proposal_id: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(
+        &[b"proposal", trust.as_ref(), proposal_id.as_ref()],
+        &Pubkey::from_str("5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq").unwrap(),
+    )
+    .0
+}
+
+fn derive_canonical_mint_pda(trust: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"mint", trust.as_ref()], &AEQI_TOKEN_PROGRAM_ID).0
 }

@@ -19,10 +19,10 @@
 
 use aeqi_trust::state::Trust;
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::hash::hashv;
 use anchor_spl::token_interface::spl_token_2022::{
     extension::StateWithExtensions, state::Mint as SplMint,
 };
-use anchor_spl::token_interface::{Mint, TokenAccount};
 
 declare_id!("5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq");
 
@@ -273,14 +273,35 @@ pub mod aeqi_governance {
         Ok(())
     }
 
-    /// Cast a token-weighted vote. Vote power = `voter_token_account.amount`,
-    /// validated to be owned by the voter. The caller MUST pass the trust's
-    /// canonical Token-2022 cap-table account; mint validation against the
-    /// `[b"mint", trust]` PDA keeps the voting source canonical.
-    pub fn cast_vote_token(ctx: Context<CastVoteToken>, choice: u8) -> Result<()> {
-        let weight = ctx.accounts.voter_token_account.amount as u128;
-        require!(weight > 0, GovernanceError::ZeroWeight);
+    /// Cast a token-weighted vote against the proposal's Merkle snapshot
+    /// (Phase 2 — see idea design/aeqi-governance-proposal-start-snapshots).
+    /// `claimed_balance` is the voter's Token-2022 balance at
+    /// `proposal.snapshot_slot`, attested by a Merkle inclusion proof
+    /// against `proposal.snapshot_root`. The `vote_record` PDA's
+    /// `init` constraint blocks double-voting per (proposal, voter).
+    ///
+    /// Snapshot must already be committed (`commit_snapshot_root`); voting
+    /// with the pre-commitment zero root is rejected to keep the proposal
+    /// from being decided against live balances.
+    pub fn cast_vote_token(
+        ctx: Context<CastVoteToken>,
+        choice: u8,
+        claimed_balance: u64,
+        merkle_proof: Vec<[u8; 32]>,
+    ) -> Result<()> {
+        require!(
+            ctx.accounts.proposal.snapshot_root != [0u8; 32],
+            GovernanceError::SnapshotNotCommitted
+        );
+        require!(claimed_balance > 0, GovernanceError::ZeroWeight);
 
+        let leaf = token_vote_leaf(&ctx.accounts.voter.key(), claimed_balance);
+        require!(
+            verify_merkle_proof(leaf, &merkle_proof, ctx.accounts.proposal.snapshot_root),
+            GovernanceError::InvalidMerkleProof
+        );
+
+        let weight = claimed_balance as u128;
         let p = &mut ctx.accounts.proposal;
         let now = Clock::get()?.unix_timestamp;
         require_vote_open(p, now)?;
@@ -288,6 +309,43 @@ pub mod aeqi_governance {
         apply_vote_tally(p, choice, weight)?;
         let v = &mut ctx.accounts.vote;
         record_vote(v, p, ctx.accounts.voter.key(), choice, weight, ctx.bumps.vote);
+        Ok(())
+    }
+
+    /// Commit a Merkle root over (holder, balance) leaves snapshotted at
+    /// `proposal.snapshot_slot`. Permissionless — anyone (typically the
+    /// off-chain indexer's snapshot job) can call it once per proposal.
+    ///
+    /// Guards:
+    ///   - existing root must be zero (one-shot commit)
+    ///   - current slot must be STRICTLY greater than `snapshot_slot` so
+    ///     the snapshotter has only ever seen finalized balances at the
+    ///     target slot (prevents racing mints/burns at the same slot)
+    ///
+    /// `total_supply_snapshot` is recorded as protocol metadata; per-vote
+    /// correctness is enforced by Merkle proof verification in
+    /// `cast_vote_token`, not by trusting the caller's totals.
+    pub fn commit_snapshot_root(
+        ctx: Context<CommitSnapshotRoot>,
+        root: [u8; 32],
+        total_supply_snapshot: u64,
+    ) -> Result<()> {
+        require!(root != [0u8; 32], GovernanceError::InvalidMerkleProof);
+        let current_slot = Clock::get()?.slot;
+        let p = &mut ctx.accounts.proposal;
+        require!(p.snapshot_root == [0u8; 32], GovernanceError::CommitRootMismatch);
+        require!(current_slot > p.snapshot_slot, GovernanceError::SnapshotSlotNotYetReached);
+
+        p.snapshot_root = root;
+        p.snapshot_total_supply = total_supply_snapshot;
+
+        emit!(SnapshotRootCommitted {
+            trust: p.trust,
+            proposal_id: p.proposal_id,
+            snapshot_slot: p.snapshot_slot,
+            snapshot_root: root,
+            total_supply_snapshot,
+        });
         Ok(())
     }
 
@@ -330,6 +388,8 @@ pub mod aeqi_governance {
         // accumulates while voting is live. Phase 2 (token Merkle snapshot,
         // ae-008) layers token weight onto the same slot.
         p.snapshot_slot = clock.slot;
+        p.snapshot_root = [0u8; 32];
+        p.snapshot_total_supply = 0;
         p.vote_duration = cfg.voting_period;
         p.execution_delay = cfg.execution_delay;
         p.for_votes = 0;
@@ -479,6 +539,33 @@ fn apply_vote_tally(proposal: &mut Account<Proposal>, choice: u8, weight: u128) 
     Ok(())
 }
 
+/// Canonical token-vote leaf shape: `sha256(voter_pubkey || u64_le(balance))`.
+/// Same encoding the indexer's snapshot job uses; mismatched encodings on
+/// either side surface as `InvalidMerkleProof` at vote time.
+pub fn token_vote_leaf(voter: &Pubkey, balance: u64) -> [u8; 32] {
+    let mut buf = [0u8; 40];
+    buf[..32].copy_from_slice(&voter.to_bytes());
+    buf[32..].copy_from_slice(&balance.to_le_bytes());
+    hashv(&[&buf]).to_bytes()
+}
+
+/// Sorted-pair Merkle proof verification — at each step we hash
+/// `min(current, sibling) || max(current, sibling)` so the snapshotter
+/// doesn't need to publish per-step LEFT/RIGHT bits alongside the proof.
+/// This matches Hop/Optimism's standard pattern (OpenZeppelin's
+/// `MerkleProof.verify`).
+pub fn verify_merkle_proof(leaf: [u8; 32], proof: &[[u8; 32]], root: [u8; 32]) -> bool {
+    let mut current = leaf;
+    for sibling in proof {
+        current = if current <= *sibling {
+            hashv(&[&current, sibling]).to_bytes()
+        } else {
+            hashv(&[sibling, &current]).to_bytes()
+        };
+    }
+    current == root
+}
+
 fn bump_config_count(module_state: &mut Account<GovernanceModuleState>) -> Result<()> {
     module_state.config_count =
         module_state.config_count.checked_add(1).ok_or(error!(GovernanceError::MathOverflow))?;
@@ -577,6 +664,17 @@ pub struct Proposal {
     /// of design/aeqi-governance-proposal-start-snapshots; Phase 2 (ae-008)
     /// reuses the same slot for token Merkle snapshots.
     pub snapshot_slot: u64,
+    /// Merkle root over (holder_pubkey, balance) leaves at
+    /// `snapshot_slot`, committed once by `commit_snapshot_root` (Phase 2,
+    /// ae-008). Initialized to `[0; 32]` at `propose()`; `cast_vote_token`
+    /// rejects votes until the indexer's snapshot job commits the real
+    /// root.
+    pub snapshot_root: [u8; 32],
+    /// Sum of all holder balances at `snapshot_slot`, published alongside
+    /// `snapshot_root` for downstream quorum/supply reporting. Not used
+    /// in per-vote enforcement (Merkle proofs are the gate); kept as
+    /// protocol metadata.
+    pub snapshot_total_supply: u64,
     pub for_votes: u128,
     pub against_votes: u128,
     pub abstain_votes: u128,
@@ -725,6 +823,9 @@ pub struct CastVoteToken<'info> {
         bump = proposal.bump,
     )]
     pub proposal: Account<'info, Proposal>,
+    /// Single-vote-per-voter gate. `init` rejects a second cast with
+    /// "already in use", which is the desired error from a UX standpoint
+    /// and saves us a separate `DoubleVote` error variant.
     #[account(
         init,
         payer = voter,
@@ -733,23 +834,22 @@ pub struct CastVoteToken<'info> {
         bump,
     )]
     pub vote: Account<'info, VoteRecord>,
-    /// The voter's cap-table token account. `token::authority` constraint
-    /// enforces voter owns it; `token::mint = mint` binds it to the
-    /// canonical mint PDA below.
-    #[account(token::authority = voter, token::mint = mint)]
-    pub voter_token_account: InterfaceAccount<'info, TokenAccount>,
-    /// The canonical cap-table mint — must be the PDA `[b"mint", trust]`
-    /// under aeqi_token. Validated by `seeds::program = AEQI_TOKEN_ID`
-    /// so callers can't substitute an unrelated mint.
-    #[account(
-        seeds = [b"mint", proposal.trust.as_ref()],
-        bump,
-        seeds::program = AEQI_TOKEN_ID,
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
     #[account(mut)]
     pub voter: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CommitSnapshotRoot<'info> {
+    #[account(
+        mut,
+        seeds = [b"proposal", proposal.trust.as_ref(), proposal.proposal_id.as_ref()],
+        bump = proposal.bump,
+    )]
+    pub proposal: Account<'info, Proposal>,
+    /// Permissionless caller — the snapshot job pays rent for the tx and
+    /// the program enforces one-shot via `proposal.snapshot_root == [0; 32]`.
+    pub committer: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -814,6 +914,15 @@ pub struct VoteCast {
     pub weight: u128,
 }
 
+#[event]
+pub struct SnapshotRootCommitted {
+    pub trust: Pubkey,
+    pub proposal_id: [u8; 32],
+    pub snapshot_slot: u64,
+    pub snapshot_root: [u8; 32],
+    pub total_supply_snapshot: u64,
+}
+
 #[error_code]
 pub enum GovernanceError {
     #[msg("bps value must be between 1 and 10000 (0.01%–100.00%)")]
@@ -866,6 +975,14 @@ pub enum GovernanceError {
     Unauthorized,
     #[msg("trust must be in creation mode to initialize the governance module")]
     TrustNotInCreationMode,
+    #[msg("snapshot_root already committed for this proposal (one-shot)")]
+    CommitRootMismatch,
+    #[msg("snapshot_root not yet committed — wait for the snapshotter to run")]
+    SnapshotNotCommitted,
+    #[msg("merkle proof does not verify against proposal.snapshot_root")]
+    InvalidMerkleProof,
+    #[msg("snapshot_slot not yet finalized — wait for current_slot > snapshot_slot")]
+    SnapshotSlotNotYetReached,
 }
 
 #[cfg(test)]
@@ -898,6 +1015,118 @@ mod tests {
             Ok(_) => panic!("expected ConfigMismatch"),
             Err(err) => assert!(err.to_string().contains("ConfigMismatch"), "{err}"),
         }
+    }
+
+    /// Build a sorted-pair Merkle tree over `leaves` and return
+    /// `(root, proofs_in_input_order)`. Mirrors the indexer's snapshot
+    /// builder so on-chain `verify_merkle_proof` and the off-chain
+    /// snapshotter stay in lockstep — drift here is the most subtle way
+    /// to break token voting (proofs look fine, just never validate).
+    fn build_merkle_tree(leaves: &[[u8; 32]]) -> ([u8; 32], Vec<Vec<[u8; 32]>>) {
+        assert!(!leaves.is_empty());
+        // Layer 0 = leaves as given. Each subsequent layer pairs them up
+        // (sorted hashing); odd elements promote unchanged.
+        let mut layers: Vec<Vec<[u8; 32]>> = vec![leaves.to_vec()];
+        while layers.last().unwrap().len() > 1 {
+            let prev = layers.last().unwrap();
+            let mut next = Vec::with_capacity(prev.len().div_ceil(2));
+            for chunk in prev.chunks(2) {
+                if chunk.len() == 2 {
+                    let (a, b) = (chunk[0], chunk[1]);
+                    let parent = if a <= b {
+                        hashv(&[&a, &b]).to_bytes()
+                    } else {
+                        hashv(&[&b, &a]).to_bytes()
+                    };
+                    next.push(parent);
+                } else {
+                    next.push(chunk[0]);
+                }
+            }
+            layers.push(next);
+        }
+        let root = layers.last().unwrap()[0];
+
+        // Build proofs by walking each leaf up the tree.
+        let mut proofs = Vec::with_capacity(leaves.len());
+        for (leaf_idx, _) in leaves.iter().enumerate() {
+            let mut proof = Vec::new();
+            let mut idx = leaf_idx;
+            for layer in &layers[..layers.len() - 1] {
+                let sibling_idx = idx ^ 1;
+                if sibling_idx < layer.len() {
+                    proof.push(layer[sibling_idx]);
+                }
+                idx /= 2;
+            }
+            proofs.push(proof);
+        }
+        (root, proofs)
+    }
+
+    #[test]
+    fn token_vote_leaf_is_deterministic_and_separates_by_balance() {
+        let voter = Pubkey::new_unique();
+        let leaf_100 = token_vote_leaf(&voter, 100);
+        let leaf_100_again = token_vote_leaf(&voter, 100);
+        let leaf_1000 = token_vote_leaf(&voter, 1000);
+
+        assert_eq!(leaf_100, leaf_100_again, "leaf encoding must be stable");
+        assert_ne!(leaf_100, leaf_1000, "different balances must hash to different leaves");
+        // Adversarial: a different voter at same balance also gets a
+        // different leaf.
+        let other_voter = Pubkey::new_unique();
+        assert_ne!(token_vote_leaf(&other_voter, 100), leaf_100);
+    }
+
+    #[test]
+    fn verify_merkle_proof_accepts_valid_inclusion() {
+        let voters: Vec<Pubkey> = (0..4).map(|_| Pubkey::new_unique()).collect();
+        let leaves: Vec<[u8; 32]> = voters
+            .iter()
+            .enumerate()
+            .map(|(i, v)| token_vote_leaf(v, ((i + 1) * 100) as u64))
+            .collect();
+        let (root, proofs) = build_merkle_tree(&leaves);
+        for (i, leaf) in leaves.iter().enumerate() {
+            assert!(verify_merkle_proof(*leaf, &proofs[i], root), "leaf {i} should verify");
+        }
+    }
+
+    #[test]
+    fn verify_merkle_proof_rejects_wrong_balance() {
+        let voters: Vec<Pubkey> = (0..3).map(|_| Pubkey::new_unique()).collect();
+        let leaves: Vec<[u8; 32]> = voters.iter().map(|v| token_vote_leaf(v, 100)).collect();
+        let (root, proofs) = build_merkle_tree(&leaves);
+
+        // Adversary: claim 1000 with voter[0]'s real proof (and pubkey).
+        let forged_leaf = token_vote_leaf(&voters[0], 1000);
+        assert!(!verify_merkle_proof(forged_leaf, &proofs[0], root));
+    }
+
+    #[test]
+    fn verify_merkle_proof_rejects_wrong_proof_path() {
+        let voters: Vec<Pubkey> = (0..4).map(|_| Pubkey::new_unique()).collect();
+        let leaves: Vec<[u8; 32]> = voters.iter().map(|v| token_vote_leaf(v, 100)).collect();
+        let (root, proofs) = build_merkle_tree(&leaves);
+
+        // Adversary: voter[0]'s leaf with voter[1]'s proof — same tree
+        // but wrong sibling chain.
+        assert!(!verify_merkle_proof(leaves[0], &proofs[1], root));
+    }
+
+    #[test]
+    fn verify_merkle_proof_single_leaf_tree_uses_empty_proof() {
+        // 1-voter tree: root == leaf, proof is empty.
+        let voter = Pubkey::new_unique();
+        let leaf = token_vote_leaf(&voter, 42);
+        let (root, proofs) = build_merkle_tree(&[leaf]);
+        assert_eq!(root, leaf);
+        assert!(proofs[0].is_empty());
+        assert!(verify_merkle_proof(leaf, &proofs[0], root));
+        // Wrong leaf with empty proof must fail.
+        let other = token_vote_leaf(&voter, 43);
+        assert!(!verify_merkle_proof(other, &[], root));
     }
 
     #[test]

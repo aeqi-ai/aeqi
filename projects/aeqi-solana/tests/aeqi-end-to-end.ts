@@ -20,6 +20,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { expect } from "chai";
+import { buildMerkleTree, merkleProof } from "./helpers/merkle";
 
 describe("AEQI end-to-end spawn", () => {
   const provider = anchor.AnchorProvider.env();
@@ -375,7 +376,9 @@ describe("AEQI end-to-end spawn", () => {
       })
       .rpc();
 
-    // Vote (For, weight from the voter's Token-2022 balance)
+    // Vote (For, weight from the voter's snapshot balance proved
+    // via Merkle inclusion — ae-008). Snapshot just the voter at
+    // 1000 (their real on-chain balance), commit, then cast.
     const [votePda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("vote"),
@@ -385,13 +388,34 @@ describe("AEQI end-to-end spawn", () => {
       ],
       governance.programId,
     );
+    const tree = buildMerkleTree([{ holder: voter, balance: 1000n }]);
+    // Wait until the cluster advances past proposal.snapshot_slot.
+    const proposalForSlot = await governance.account.proposal.fetch(
+      proposalPda,
+    );
+    const targetSlot = BigInt(proposalForSlot.snapshotSlot.toString());
+    while (
+      BigInt(await provider.connection.getSlot("processed")) <= targetSlot
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
     await governance.methods
-      .castVoteToken(1)
+      .commitSnapshotRoot(Array.from(tree.root), new anchor.BN(1000))
+      .accountsPartial({
+        proposal: proposalPda,
+        committer: provider.wallet.publicKey,
+      })
+      .rpc();
+    const proof = merkleProof(tree, voter);
+    await governance.methods
+      .castVoteToken(
+        1,
+        new anchor.BN(1000),
+        proof.map((p) => Array.from(p)),
+      )
       .accountsPartial({
         proposal: proposalPda,
         vote: votePda,
-        voterTokenAccount: voterAta,
-        mint: mintPda,
         voter,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
