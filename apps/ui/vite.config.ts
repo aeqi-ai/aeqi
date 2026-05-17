@@ -6,6 +6,7 @@ import pkg from "./package.json" with { type: "json" };
 
 const webSharedSrc = fileURLToPath(new URL("../../packages/web-shared/src", import.meta.url));
 const appNodeModules = fileURLToPath(new URL("./node_modules", import.meta.url));
+const emojiMartStub = fileURLToPath(new URL("./src/lib/stubs/emoji-mart.ts", import.meta.url));
 
 // `npm run build:analyze` (ANALYZE=1) writes an interactive treemap to
 // `dist/stats.html` showing every chunk's bytes + which modules contributed.
@@ -38,6 +39,12 @@ export default defineConfig({
       react: `${appNodeModules}/react`,
       "react-dom": `${appNodeModules}/react-dom`,
       "react-router-dom": `${appNodeModules}/react-router-dom`,
+      // @blocknote/react's FloatingThreadController (Comments) dynamic-imports
+      // emoji-mart + @emoji-mart/data (~700 KB of emoji JSON). We don't wire
+      // comments/threadStore in BlockEditor, so the controller never mounts —
+      // stubbing the modules drops the dead chunks from dist. See ae-021.
+      "emoji-mart": emojiMartStub,
+      "@emoji-mart/data": emojiMartStub,
     },
     dedupe: ["react", "react-dom", "react-router-dom"],
   },
