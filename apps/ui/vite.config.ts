@@ -7,6 +7,29 @@ import pkg from "./package.json" with { type: "json" };
 const webSharedSrc = fileURLToPath(new URL("../../packages/web-shared/src", import.meta.url));
 const appNodeModules = fileURLToPath(new URL("./node_modules", import.meta.url));
 const emojiMartStub = fileURLToPath(new URL("./src/lib/stubs/emoji-mart.ts", import.meta.url));
+const rainbowKitDistSegment = "/node_modules/@rainbow-me/rainbowkit/dist/";
+const rainbowKitNonEnglishLocale =
+  /^\.\/(?:ar_AR|de_DE|es_419|fr_FR|hi_IN|id_ID|ja_JP|ko_KR|ms_MY|pt_BR|ru_RU|th_TH|tr_TR|uk_UA|vi_VN|zh_CN|zh_HK|zh_TW)-[A-Z0-9]+\.js$/;
+const emptyRainbowKitLocaleId = "\0aeqi-rainbowkit-empty-locale";
+
+function rainbowKitEnglishLocaleOnly(): PluginOption {
+  return {
+    name: "aeqi-rainbowkit-english-locale-only",
+    enforce: "pre",
+    resolveId(source, importer) {
+      if (importer?.includes(rainbowKitDistSegment) && rainbowKitNonEnglishLocale.test(source)) {
+        return emptyRainbowKitLocaleId;
+      }
+      return null;
+    },
+    load(id) {
+      if (id === emptyRainbowKitLocaleId) {
+        return 'export default "{}";';
+      }
+      return null;
+    },
+  };
+}
 
 // `npm run build:analyze` (ANALYZE=1) writes an interactive treemap to
 // `dist/stats.html` showing every chunk's bytes + which modules contributed.
@@ -27,7 +50,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
-  plugins: [react(), ...analyzePlugins],
+  plugins: [rainbowKitEnglishLocaleOnly(), react(), ...analyzePlugins],
   resolve: {
     alias: {
       "@": "/src",
