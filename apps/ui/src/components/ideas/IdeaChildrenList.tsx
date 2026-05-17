@@ -70,32 +70,7 @@ export default function IdeaChildrenList({ ideaId, agentId, scope }: IdeaChildre
     await queryClient.invalidateQueries({ queryKey: ideaKeys.all });
   }
 
-  // Hide the section entirely when there's nothing to show and the user
-  // hasn't opened the add-child modal. Keeps the canvas clean for ideas
-  // that aren't parents.
-  const hideEmpty = !loading && children.length === 0 && !showAdd;
-
-  if (hideEmpty) {
-    return (
-      <div className="idea-children idea-children--empty">
-        <button type="button" className="idea-property-add" onClick={() => setShowAdd(true)}>
-          + Add child
-        </button>
-        {showAdd && (
-          <AddChildModal
-            parentIdeaId={ideaId}
-            agentId={agentId}
-            scope={scope}
-            onClose={() => setShowAdd(false)}
-            onCreated={async () => {
-              setShowAdd(false);
-              await refresh();
-            }}
-          />
-        )}
-      </div>
-    );
-  }
+  const hasChildren = children.length > 0;
 
   return (
     <div className="idea-children" aria-label="Child ideas">
@@ -105,9 +80,10 @@ export default function IdeaChildrenList({ ideaId, agentId, scope }: IdeaChildre
           className="idea-children-toggle"
           aria-expanded={expanded}
           onClick={() => setExpanded((next) => !next)}
+          disabled={!hasChildren}
         >
           <svg
-            className={expanded ? "is-open" : ""}
+            className={expanded && hasChildren ? "is-open" : ""}
             width="10"
             height="10"
             viewBox="0 0 12 12"
@@ -130,7 +106,7 @@ export default function IdeaChildrenList({ ideaId, agentId, scope }: IdeaChildre
       {error && <span className="idea-children-error">{error}</span>}
       {loading ? (
         <span className="idea-children-loading">Loading…</span>
-      ) : expanded ? (
+      ) : expanded && hasChildren ? (
         <ul className="idea-children-list">
           {children.map((child) => {
             const status = statusOf(child);

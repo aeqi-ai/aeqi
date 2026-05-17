@@ -1,15 +1,17 @@
 import { type ReactElement, useState } from "react";
 import { Popover } from "../ui/Popover";
 
-// Tables-in-Ideas Phase 2 — `table` and `kanban` join the existing
-// `list` / `graph` view modes. Hierarchy now lives inside List rows via
-// parent_idea_id disclosure, so there is no separate Tree view.
-export type IdeasView = "list" | "table" | "kanban" | "graph";
+// Tables-in-Ideas Phase 2 — `table` joins the existing `list` / `graph`
+// view modes. Hierarchy lives inside List rows via parent_idea_id
+// disclosure, so there is no separate Tree view. Kanban was retired
+// 2026-05-17: ideas are HOW (frozen knowledge) and don't transition
+// through workflow states — kanban earns its weight on Quests, not
+// Ideas. URL `?view=kanban` falls back to `list`.
+export type IdeasView = "list" | "table" | "graph";
 
 const VIEW_LABEL: Record<IdeasView, string> = {
   list: "List",
   table: "Table",
-  kanban: "Kanban",
   graph: "Graph",
 };
 
@@ -23,13 +25,6 @@ const VIEW_GLYPH: Record<IdeasView, ReactElement> = {
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
       <rect x="2" y="3" width="9" height="7" strokeWidth="1.1" />
       <path d="M2 6.5h9M5 3v7" strokeWidth="1.1" />
-    </svg>
-  ),
-  kanban: (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" aria-hidden>
-      <rect x="2" y="3" width="2.5" height="7" strokeWidth="1.1" />
-      <rect x="5.25" y="3" width="2.5" height="5" strokeWidth="1.1" />
-      <rect x="8.5" y="3" width="2.5" height="6" strokeWidth="1.1" />
     </svg>
   ),
   graph: (
@@ -49,7 +44,6 @@ const VIEW_GLYPH: Record<IdeasView, ReactElement> = {
 const VIEW_KBD: Record<IdeasView, string> = {
   list: "L",
   table: "T",
-  kanban: "K",
   graph: "G",
 };
 
@@ -82,7 +76,7 @@ export default function IdeasViewPopover({ view, onChange }: IdeasViewPopoverPro
           <span className="ideas-filter-popover-label">view as</span>
         </header>
         <div className="ideas-filter-popover-list" role="radiogroup" aria-label="View">
-          {(["list", "table", "kanban", "graph"] as IdeasView[]).map((v) => {
+          {(["list", "table", "graph"] as IdeasView[]).map((v) => {
             const isActive = view === v;
             return (
               <button

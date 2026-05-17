@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { setIdeaProperties } from "@/api/ideas";
 import { ideaKeys } from "@/queries/keys";
-import { Button, Modal, Input, Select } from "../ui";
+import { Select } from "../ui";
 
 /**
  * Tables-in-Ideas Phase 2.1 — Property chips on Idea detail header.
@@ -11,7 +11,14 @@ import { Button, Modal, Input, Select } from "../ui";
  * sitting above the BlockEditor body. Click a chip to edit its value
  * inline (text input that saves on blur or Enter). Known enum keys
  * (status: todo/in_progress/done) get a dropdown; everything else is
- * free-text. "+ Add property" opens a small modal for key+value entry.
+ * free-text. The X glyph on a chip removes that key.
+ *
+ * Property CREATION lives in the Table view (where columns map to
+ * properties) — the detail page is read/edit-only for existing keys,
+ * so most ideas see no property UI at all. Hides the whole row when
+ * the idea has zero properties. Retired the prominent "+ Add property"
+ * button 2026-05-17 — it surfaced power-user metadata on a knowledge
+ * surface where it didn't belong.
  *
  * Writes deep-merge into `properties` via PUT /ideas/:id/properties.
  * Explicit `null` removes a key (used by the X button on each chip).
@@ -41,7 +48,6 @@ export default function IdeaPropertyChips({ ideaId, properties }: IdeaPropertyCh
   const [draftValue, setDraftValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -85,6 +91,11 @@ export default function IdeaPropertyChips({ ideaId, properties }: IdeaPropertyCh
     setDraftValue(chipValue(props[key]));
     setEditingKey(key);
   }
+
+  // Hide the chip row entirely when the idea has no properties. Property
+  // creation lives in Table view; surfacing an empty chip row on detail
+  // adds noise to a knowledge surface.
+  if (entries.length === 0) return null;
 
   return (
     <div className="idea-properties" role="group" aria-label="Idea properties">
@@ -185,88 +196,7 @@ export default function IdeaPropertyChips({ ideaId, properties }: IdeaPropertyCh
           </button>
         );
       })}
-      <button
-        type="button"
-        className="idea-property-add"
-        onClick={() => setShowAdd(true)}
-        disabled={saving}
-      >
-        + Add property
-      </button>
       {error && <span className="idea-properties-error">{error}</span>}
-      {showAdd && (
-        <AddPropertyModal
-          existingKeys={Object.keys(props)}
-          onClose={() => setShowAdd(false)}
-          onSave={async (key, value) => {
-            await persist({ [key]: value });
-            setShowAdd(false);
-          }}
-        />
-      )}
     </div>
-  );
-}
-
-interface AddPropertyModalProps {
-  existingKeys: string[];
-  onClose: () => void;
-  onSave: (key: string, value: string) => Promise<void>;
-}
-
-function AddPropertyModal({ existingKeys, onClose, onSave }: AddPropertyModalProps) {
-  const [key, setKey] = useState("");
-  const [value, setValue] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const k = key.trim();
-    if (!k) {
-      setError("Key required");
-      return;
-    }
-    if (existingKeys.includes(k)) {
-      setError(`Property "${k}" already exists`);
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await onSave(k, value.trim());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title="Add property">
-      <form onSubmit={handleSubmit} className="idea-property-add-form">
-        <Input
-          label="Key"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="e.g. priority"
-          autoFocus
-          required
-        />
-        <Input
-          label="Value"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="e.g. high"
-        />
-        {error && <span className="idea-property-add-error">{error}</span>}
-        <div className="idea-property-add-actions">
-          <Button type="button" variant="secondary" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" size="sm" loading={submitting}>
-            Add
-          </Button>
-        </div>
-      </form>
-    </Modal>
   );
 }

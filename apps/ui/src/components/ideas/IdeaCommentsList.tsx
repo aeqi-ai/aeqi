@@ -109,13 +109,10 @@ interface IdeaCommentsListProps {
 }
 
 export default function IdeaCommentsList({ rows, entityId }: IdeaCommentsListProps) {
-  if (rows.length === 0) {
-    return (
-      <div className="idea-convo-empty">
-        <span className="idea-convo-empty-text">No comments yet — be the first.</span>
-      </div>
-    );
-  }
+  // Empty state intentionally renders nothing — the composer below this
+  // list IS the invitation. Generic "No comments yet, be the first" copy
+  // was retired 2026-05-17.
+  if (rows.length === 0) return null;
 
   // Newest-last so the composer at the bottom is the natural reading end.
   const sorted = [...rows].sort(

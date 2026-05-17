@@ -6861,17 +6861,34 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   min-height: 32px;
 }
 
-.idea-convo-title,
-.idea-convo-peek-head {
+/* Comments is the primary interaction surface — full type weight, neutral
+   ink color, slightly larger letter-spacing reserved for the section's
+   own label scale. Activity peek-head sits a tier below: smaller, more
+   muted, no shouty letter-spacing — it's a peek at background context,
+   not an invitation. Split from the previous shared rule 2026-05-17. */
+.idea-convo-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.idea-convo-peek-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-text-muted);
+  opacity: 0.85;
 }
 
 .idea-convo-panel {
@@ -6883,10 +6900,11 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 .idea-convo-activity-peek {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   max-height: 180px;
   overflow: hidden;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -7468,118 +7486,4 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   flex-wrap: wrap;
   gap: 4px;
   justify-content: flex-end;
-}
-
-/* Ideas — Kanban view (Phase 2). Lanes flow horizontally so the surface
-   reads as a board, not a stacked list. Each lane is a fixed-width column
-   that scrolls vertically inside its body; the row-level container scrolls
-   horizontally when the lane count exceeds the viewport. */
-.ideas-kanban {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: var(--space-md);
-  overflow-x: auto;
-  padding: var(--space-sm) 0;
-}
-.ideas-kanban-col {
-  flex: 0 0 auto;
-  min-width: 280px;
-  max-width: 320px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  background: var(--color-card-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm);
-}
-.ideas-kanban-col-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-xs);
-  padding: 0 var(--space-2) var(--space-2);
-}
-.ideas-kanban-col-label {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.ideas-kanban-col-count {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
-.ideas-kanban-cards {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.ideas-kanban-empty {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--color-text-muted);
-  padding: var(--space-2);
-  text-align: center;
-}
-.ideas-kanban-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-sm);
-  background: var(--color-card);
-  border-radius: var(--radius-sm);
-  transition: box-shadow 0.12s ease;
-}
-.ideas-kanban-card:hover {
-  box-shadow: var(--shadow-sm);
-}
-.ideas-kanban-card.is-pending {
-  opacity: 0.6;
-}
-.ideas-kanban-card[draggable="true"] {
-  cursor: grab;
-}
-.ideas-kanban-card.is-dragging {
-  opacity: 0.5;
-  cursor: grabbing;
-}
-.ideas-kanban-col.is-drag-over {
-  background: var(--color-card-elevated);
-}
-.ideas-kanban-card-name {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--color-text-primary);
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-}
-.ideas-kanban-card-name:hover {
-  color: var(--color-accent);
-}
-.ideas-kanban-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-.ideas-kanban-status-pill {
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  color: var(--color-text-secondary);
-  padding: 1px 8px;
-  background: var(--color-card-elevated);
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.ideas-kanban-status-pill:disabled {
-  cursor: default;
-  opacity: 0.6;
 }

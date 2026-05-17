@@ -24,7 +24,6 @@ const NO_IDEAS: Idea[] = [];
 const IdeasGraphView = lazy(() => import("./ideas/IdeasGraphView"));
 const IdeasCanvasView = lazy(() => import("./ideas/IdeasCanvasView"));
 const IdeasTableView = lazy(() => import("./ideas/IdeasTableView"));
-const IdeasKanbanView = lazy(() => import("./ideas/IdeasKanbanView"));
 
 const viewFallback = (
   <div className="ideas-list-body">
@@ -56,7 +55,8 @@ export default function AgentIdeasTab({
   const [searchParams, setSearchParams] = useSearchParams();
   const view: IdeasView = ((): IdeasView => {
     const raw = searchParams.get("view");
-    if (raw === "graph" || raw === "table" || raw === "kanban") return raw;
+    if (raw === "graph" || raw === "table") return raw;
+    // `?view=kanban` is a retired view (2026-05-17) — fall back to list.
     return "list";
   })();
   const composing = searchParams.get("compose") === "1";
@@ -345,25 +345,6 @@ export default function AgentIdeasTab({
     return (
       <Suspense fallback={viewFallback}>
         <IdeasTableView
-          agentId={agentId}
-          ideas={filtered}
-          filter={filter}
-          scopeCounts={scopeCounts}
-          needsReviewCount={needsReviewCount}
-          onFilter={setFilter}
-          view={view}
-          onViewChange={setView}
-          onNew={() => fireNewIdea()}
-          onOpen={(id) => goEntity(entityId, "ideas", id)}
-        />
-      </Suspense>
-    );
-  }
-
-  if (view === "kanban") {
-    return (
-      <Suspense fallback={viewFallback}>
-        <IdeasKanbanView
           agentId={agentId}
           ideas={filtered}
           filter={filter}
