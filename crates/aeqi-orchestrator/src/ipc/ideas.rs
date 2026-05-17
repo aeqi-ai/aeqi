@@ -302,8 +302,7 @@ pub async fn handle_store_idea(
             .get("id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-    {
-        if let Err(error_response) = apply_store_metadata(
+        && let Err(error_response) = apply_store_metadata(
             idea_store,
             &target_id,
             &input,
@@ -313,9 +312,8 @@ pub async fn handle_store_idea(
                 .unwrap_or("store"),
         )
         .await
-        {
-            return error_response;
-        }
+    {
+        return error_response;
     }
 
     response

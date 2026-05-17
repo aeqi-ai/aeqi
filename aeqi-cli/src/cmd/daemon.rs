@@ -91,7 +91,7 @@ pub(crate) async fn cmd_daemon(config_path: &Option<PathBuf>, action: DaemonActi
                         if embedder.is_none() {
                             warn!(
                                 "no embedder configured; search falls back to BM25-only — \
-                                 set [providers.openrouter].embedding_model + api_key_env to enable"
+                                 configure a public OPENROUTER_API_KEY to enable vector embeddings"
                             );
                         }
                         (

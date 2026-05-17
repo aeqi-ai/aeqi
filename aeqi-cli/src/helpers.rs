@@ -159,6 +159,29 @@ pub(crate) fn get_api_key(config: &AEQIConfig) -> Result<String> {
     anyhow::bail!("OPENROUTER_API_KEY not set. Use `aeqi secrets set OPENROUTER_API_KEY <key>`");
 }
 
+fn is_proxy_api_key(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("proxy")
+}
+
+fn openrouter_embedding_api_key(config: &AEQIConfig) -> Result<Option<String>> {
+    let Some(or_config) = config.providers.openrouter.as_ref() else {
+        return Ok(None);
+    };
+
+    let configured = resolve_env_value(&or_config.api_key);
+    if !configured.is_empty() && !is_proxy_api_key(&configured) {
+        return Ok(Some(configured));
+    }
+
+    let substrate_key = read_global_legacy_blob_sync(&config.data_dir(), "OPENROUTER_API_KEY")
+        .context("read OPENROUTER_API_KEY from credentials substrate")?;
+    if let Some(value) = substrate_key.filter(|v| !v.is_empty() && !is_proxy_api_key(v)) {
+        return Ok(Some(value));
+    }
+
+    Ok(None)
+}
+
 pub(crate) fn provider_secret_store_path(config: &AEQIConfig) -> PathBuf {
     config
         .security
@@ -379,7 +402,7 @@ pub(crate) fn open_ideas_with_embedder(
     let halflife = config.ideas.temporal_decay_halflife_days;
     let mem = SqliteIdeas::open(&db_path, halflife)?;
 
-    let api_key = get_api_key(config).ok();
+    let api_key = openrouter_embedding_api_key(config)?;
     let embedding_model = config
         .providers
         .openrouter
@@ -409,8 +432,23 @@ pub(crate) fn open_ideas_with_embedder(
         )?;
         Ok((mem, Some(embedder)))
     } else {
-        tracing::info!("idea vector search disabled (no API key); using keyword search only");
+        tracing::info!(
+            "idea vector search disabled (no public OpenRouter embedding API key); using keyword search only"
+        );
         Ok((mem, None))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_proxy_api_key;
+
+    #[test]
+    fn proxy_api_key_detection_is_case_and_space_insensitive() {
+        assert!(is_proxy_api_key("proxy"));
+        assert!(is_proxy_api_key(" Proxy "));
+        assert!(!is_proxy_api_key("sk-or-real"));
+        assert!(!is_proxy_api_key(""));
     }
 }
 
