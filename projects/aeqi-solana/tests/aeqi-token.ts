@@ -12,7 +12,11 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
-import { expectTxFail, fundKeypair } from "./support";
+import {
+  createTrust as createTestTrust,
+  expectTxFail,
+  fundKeypair,
+} from "./support";
 
 describe("aeqi_token", () => {
   const provider = anchor.AnchorProvider.env();
@@ -29,24 +33,11 @@ describe("aeqi_token", () => {
   }
 
   async function createTrust(seed0: number, seed1 = 0) {
-    const trustId = new Uint8Array(32);
-    trustId[0] = seed0;
-    trustId[1] = seed1;
-    const [trustPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("trust"), Buffer.from(trustId)],
-      trustProgram.programId,
+    return createTestTrust(
+      provider,
+      trustProgram,
+      `aeqi-token-${seed0}-${seed1}`,
     );
-
-    await trustProgram.methods
-      .initialize(Array.from(trustId))
-      .accountsPartial({
-        trust: trustPda,
-        authority: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    return trustPda;
   }
 
   async function finalizeTokenModule(
