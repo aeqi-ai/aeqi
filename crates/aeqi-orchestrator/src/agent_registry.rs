@@ -31,6 +31,65 @@ use tracing::{debug, info};
 
 use crate::channel_session::{ChannelSessionKey, ChannelSessionRecord};
 
+/// Optional per-agent LLM boundary.
+///
+/// `None` fields mean "any"; `Some(vec![])` means "none". The matrix is
+/// intentionally small and checked at inference seams, not at tool-dispatch
+/// seams, so it layers cleanly with `tool_deny`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InferenceCapability {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_providers: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_models: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_cost_per_call_usd: Option<f64>,
+}
+
+impl InferenceCapability {
+    pub fn allows_request(
+        &self,
+        provider: &str,
+        model: &str,
+    ) -> Result<(), InferenceCapabilityError> {
+        if let Some(allowed) = &self.allowed_providers
+            && !allowed.iter().any(|p| p == provider)
+        {
+            return Err(InferenceCapabilityError::CapabilityViolation {
+                provider: provider.to_string(),
+                model: model.to_string(),
+                allowed: self.allowed_summary(),
+            });
+        }
+        if let Some(allowed) = &self.allowed_models
+            && !allowed.iter().any(|m| m == model)
+        {
+            return Err(InferenceCapabilityError::CapabilityViolation {
+                provider: provider.to_string(),
+                model: model.to_string(),
+                allowed: self.allowed_summary(),
+            });
+        }
+        Ok(())
+    }
+
+    fn allowed_summary(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| "<unserializable capability>".to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum InferenceCapabilityError {
+    #[error(
+        "inference capability violation: provider '{provider}' model '{model}' not allowed by {allowed}"
+    )]
+    CapabilityViolation {
+        provider: String,
+        model: String,
+        allowed: String,
+    },
+}
+
 /// A persistent agent identity — one record = one node in the agent tree.
 ///
 /// Identity, personality, and capabilities are expressed through ideas
@@ -98,6 +157,10 @@ pub struct Agent {
     /// `can_self_delegate`: dangerous-by-default tool, off until trusted.
     #[serde(default)]
     pub can_ask_director: bool,
+    /// Optional provider/model capability matrix. `None` preserves legacy
+    /// behavior: any configured provider/model may be used.
+    #[serde(default)]
+    pub inference_cap: Option<InferenceCapability>,
 }
 
 fn default_max_concurrent() -> u32 {
@@ -620,6 +683,10 @@ fn ensure_agent_columns(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch(
             "ALTER TABLE agents ADD COLUMN lifetime_cost_usd REAL NOT NULL DEFAULT 0;",
         )?;
+    }
+    if !cols.iter().any(|c| c == "inference_cap") {
+        // Nullable JSON capability matrix. NULL means no constraint.
+        conn.execute_batch("ALTER TABLE agents ADD COLUMN inference_cap TEXT;")?;
     }
     Ok(())
 }
@@ -1258,7 +1325,8 @@ impl AgentRegistry {
                  execution_mode TEXT,
                  quest_prefix TEXT,
                  worker_timeout_secs INTEGER,
-                 tool_deny TEXT NOT NULL DEFAULT '[]'
+                 tool_deny TEXT NOT NULL DEFAULT '[]',
+                 inference_cap TEXT
              );
              CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
              CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);",
@@ -1779,6 +1847,7 @@ impl AgentRegistry {
             tool_deny: Vec::new(),
             can_self_delegate: false,
             can_ask_director: false,
+            inference_cap: None,
         };
 
         db.execute(
@@ -2788,6 +2857,27 @@ impl AgentRegistry {
         let updated = db.execute(
             "UPDATE agents SET can_ask_director = ?1 WHERE id = ?2",
             params![value as i64, id],
+        )?;
+        if updated == 0 {
+            anyhow::bail!("agent '{id}' not found");
+        }
+        Ok(())
+    }
+
+    /// Set or clear the per-agent inference capability matrix.
+    pub async fn set_inference_capability(
+        &self,
+        id: &str,
+        capability: Option<&InferenceCapability>,
+    ) -> Result<()> {
+        let json = capability
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| anyhow::anyhow!("invalid inference capability: {e}"))?;
+        let db = self.db.lock().await;
+        let updated = db.execute(
+            "UPDATE agents SET inference_cap = ?1 WHERE id = ?2",
+            params![json, id],
         )?;
         if updated == 0 {
             anyhow::bail!("agent '{id}' not found");
@@ -4508,6 +4598,11 @@ fn row_to_agent(row: &rusqlite::Row) -> Agent {
             .unwrap_or_default(),
         can_self_delegate: row.get::<_, i64>("can_self_delegate").unwrap_or(0) != 0,
         can_ask_director: row.get::<_, i64>("can_ask_director").unwrap_or(0) != 0,
+        inference_cap: row
+            .get::<_, Option<String>>("inference_cap")
+            .ok()
+            .flatten()
+            .and_then(|s| serde_json::from_str(&s).ok()),
     }
 }
 
@@ -4522,6 +4617,87 @@ mod tests {
     async fn test_registry() -> AgentRegistry {
         let dir = tempfile::tempdir().unwrap();
         AgentRegistry::open(dir.path()).unwrap()
+    }
+
+    #[test]
+    fn inference_capability_allows_matching_provider_and_model() {
+        let cap = InferenceCapability {
+            allowed_providers: Some(vec!["openrouter".to_string()]),
+            allowed_models: Some(vec!["anthropic/claude-sonnet-4.6".to_string()]),
+            max_cost_per_call_usd: Some(0.25),
+        };
+
+        assert!(
+            cap.allows_request("openrouter", "anthropic/claude-sonnet-4.6")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn inference_capability_rejects_disallowed_provider() {
+        let cap = InferenceCapability {
+            allowed_providers: Some(vec!["anthropic".to_string()]),
+            allowed_models: None,
+            max_cost_per_call_usd: None,
+        };
+
+        let err = cap
+            .allows_request("openrouter", "anthropic/claude-sonnet-4.6")
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            InferenceCapabilityError::CapabilityViolation { .. }
+        ));
+    }
+
+    #[test]
+    fn inference_capability_rejects_disallowed_model() {
+        let cap = InferenceCapability {
+            allowed_providers: None,
+            allowed_models: Some(vec!["openai/gpt-5.2".to_string()]),
+            max_cost_per_call_usd: None,
+        };
+
+        let err = cap
+            .allows_request("openrouter", "anthropic/claude-sonnet-4.6")
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            InferenceCapabilityError::CapabilityViolation { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn inference_capability_round_trips_on_agent() {
+        let registry = test_registry().await;
+        let agent = registry
+            .spawn("cap-agent", None, Some("anthropic/claude-sonnet-4.6"))
+            .await
+            .unwrap();
+
+        assert!(agent.inference_cap.is_none());
+
+        let cap = InferenceCapability {
+            allowed_providers: Some(vec!["openrouter".to_string()]),
+            allowed_models: Some(vec!["anthropic/claude-sonnet-4.6".to_string()]),
+            max_cost_per_call_usd: None,
+        };
+        registry
+            .set_inference_capability(&agent.id, Some(&cap))
+            .await
+            .unwrap();
+
+        let loaded = registry.get(&agent.id).await.unwrap().unwrap();
+        assert_eq!(loaded.inference_cap, Some(cap));
+
+        registry
+            .set_inference_capability(&agent.id, None)
+            .await
+            .unwrap();
+        let loaded = registry.get(&agent.id).await.unwrap().unwrap();
+        assert!(loaded.inference_cap.is_none());
     }
 
     /// Minimal-schema fixture for `backfill_quest_idea_ids`. We don't reuse

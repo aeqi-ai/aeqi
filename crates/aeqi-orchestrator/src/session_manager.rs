@@ -21,7 +21,7 @@ use aeqi_core::traits::{IdeaStore, Provider};
 
 use crate::activity::ActivityStream;
 use crate::activity_log::ActivityLog;
-use crate::agent_registry::AgentRegistry;
+use crate::agent_registry::{AgentRegistry, InferenceCapability};
 use crate::event_handler::EventHandlerStore;
 use crate::idea_assembly::ToolDispatch;
 use crate::runtime_tools::{SpawnFn, SpawnRequest, build_runtime_registry_with_spawn_and_caps};
@@ -29,6 +29,20 @@ use crate::sandbox::{QuestSandbox, SandboxConfig};
 use crate::scope_visibility;
 use crate::session_store::SessionStore;
 use crate::skill_loader::SkillLoader;
+
+fn enforce_inference_capability(
+    agent_name: &str,
+    capability: Option<&InferenceCapability>,
+    provider: &dyn Provider,
+    model: &str,
+) -> anyhow::Result<()> {
+    if let Some(capability) = capability {
+        capability
+            .allows_request(provider.name(), model)
+            .map_err(|e| anyhow::anyhow!("agent '{agent_name}' {e}"))?;
+    }
+    Ok(())
+}
 
 /// What kind of session to spawn.
 /// Options for spawning a session. Every field is optional context —
@@ -484,6 +498,18 @@ impl SessionManager {
             .as_ref()
             .map(|a| a.can_ask_director)
             .unwrap_or(false);
+        let agent_inference_cap = agent_opt.as_ref().and_then(|a| a.inference_cap.clone());
+        let session_model = if let Some(ref id) = agent_uuid {
+            agent_registry.resolve_model(id, &self.default_model).await
+        } else {
+            self.default_model.clone()
+        };
+        enforce_inference_capability(
+            &agent_name,
+            agent_inference_cap.as_ref(),
+            provider.as_ref(),
+            &session_model,
+        )?;
 
         // Pre-generate the session_id so it can be:
         //   (a) used as the key for the per-session execution lock
@@ -534,18 +560,28 @@ impl SessionManager {
             // Build a SpawnFn closure that captures the minimal state needed to
             // run an ephemeral session. We capture cloned fields directly to
             // avoid needing Arc<Self> at this call site.
-            let eph_model = self.default_model.clone();
+            let eph_model = session_model.clone();
             let eph_provider = self.default_provider.clone();
             let eph_idea_store = self.idea_store.clone();
+            let eph_capability = agent_inference_cap.clone();
+            let eph_agent_name = agent_name.clone();
 
             let spawn_fn: SpawnFn = Arc::new(move |req: SpawnRequest| {
                 let model = eph_model.clone();
                 let provider_opt = eph_provider.clone();
                 let idea_store_opt = eph_idea_store.clone();
+                let capability = eph_capability.clone();
+                let agent_name = eph_agent_name.clone();
                 Box::pin(async move {
                     let provider = provider_opt.ok_or_else(|| {
                         anyhow::anyhow!("session.spawn: no default provider configured")
                     })?;
+                    enforce_inference_capability(
+                        &agent_name,
+                        capability.as_ref(),
+                        provider.as_ref(),
+                        &model,
+                    )?;
 
                     let system_prompt = if let Some(ref idea_name) = req.instructions_idea {
                         // Try to load the instructions idea from the idea store.
@@ -833,19 +869,29 @@ impl SessionManager {
         // the runtime registry for no win.
         let pattern_dispatcher: Option<Arc<dyn aeqi_core::tool_registry::PatternDispatcher>> =
             if let Some(ref ehs) = self.event_store {
-                let eph_model_d = self.default_model.clone();
+                let eph_model_d = session_model.clone();
                 let eph_provider_d = self.default_provider.clone();
                 let eph_idea_store_d = self.idea_store.clone();
+                let eph_capability_d = agent_inference_cap.clone();
+                let eph_agent_name_d = agent_name.clone();
                 let dispatcher_spawn_fn: SpawnFn = Arc::new(move |req: SpawnRequest| {
                     let model = eph_model_d.clone();
                     let provider_opt = eph_provider_d.clone();
                     let idea_store_opt = eph_idea_store_d.clone();
+                    let capability = eph_capability_d.clone();
+                    let agent_name = eph_agent_name_d.clone();
                     Box::pin(async move {
                         let provider = provider_opt.ok_or_else(|| {
                             anyhow::anyhow!(
                                 "session.spawn (per-session dispatcher): no provider configured"
                             )
                         })?;
+                        enforce_inference_capability(
+                            &agent_name,
+                            capability.as_ref(),
+                            provider.as_ref(),
+                            &model,
+                        )?;
                         let system_prompt = if let Some(ref idea_name) = req.instructions_idea {
                             if let Some(ref is) = idea_store_opt
                                 && let Ok(Some(idea)) = is.get_by_name(idea_name, None).await
@@ -1280,7 +1326,7 @@ impl SessionManager {
         }
 
         // 6. Build AgentConfig.
-        let model = self.default_model.clone();
+        let model = session_model.clone();
         let context_window = aeqi_providers::context_window_for_model(&model);
         let max_iterations = if is_interactive { 200 } else { 50 };
 
@@ -1338,7 +1384,7 @@ impl SessionManager {
             // Signal to ContextCompressionMiddleware that the agent loop
             // handles compaction directly — middleware defers.
             worker_ctx.agent_compaction_active = true;
-            worker_ctx.model = self.default_model.clone();
+            worker_ctx.model = session_model.clone();
             worker_ctx.session_id = pregenerated_session_id.clone();
             worker_ctx.registry = Some(Arc::new(crate::runtime_tools::build_runtime_registry(
                 self.idea_store.clone(),
@@ -1700,5 +1746,57 @@ impl SessionManager {
 impl Default for SessionManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aeqi_core::traits::{ChatRequest, ChatResponse};
+    use async_trait::async_trait;
+
+    struct NamedProvider(&'static str);
+
+    #[async_trait]
+    impl Provider for NamedProvider {
+        async fn chat(&self, _request: &ChatRequest) -> anyhow::Result<ChatResponse> {
+            unreachable!("capability checks do not call provider.chat")
+        }
+
+        fn name(&self) -> &str {
+            self.0
+        }
+
+        async fn health_check(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn no_inference_capability_allows_any_provider_model() {
+        let provider = NamedProvider("openrouter");
+
+        enforce_inference_capability("agent", None, &provider, "anthropic/claude-sonnet-4.6")
+            .unwrap();
+    }
+
+    #[test]
+    fn inference_capability_blocks_session_spawn_request() {
+        let provider = NamedProvider("openrouter");
+        let cap = InferenceCapability {
+            allowed_providers: Some(vec!["anthropic".to_string()]),
+            allowed_models: Some(vec!["anthropic/claude-sonnet-4.6".to_string()]),
+            max_cost_per_call_usd: None,
+        };
+
+        let err = enforce_inference_capability(
+            "agent",
+            Some(&cap),
+            &provider,
+            "anthropic/claude-sonnet-4.6",
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("inference capability violation"));
     }
 }
