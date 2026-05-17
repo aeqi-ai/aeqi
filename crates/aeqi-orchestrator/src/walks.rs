@@ -23,6 +23,7 @@ use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Datelike, Timelike, Utc, Weekday};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -41,6 +42,39 @@ const FORCE_FAIL_ENV: &str = "AEQI_WALK_FORCE_FAIL";
 /// Env var that overrides the platform URL the walks job targets. Useful
 /// in tests that point the job at a local mock.
 const PLATFORM_URL_ENV: &str = "AEQI_WALK_PLATFORM_URL";
+
+/// Env var carrying the shared secret from which the walks-launch header
+/// is derived. The orchestrator host unit already inherits this from
+/// systemd Environment=; the platform reads it from /etc/aeqi/secrets.env.
+/// See `routes::walks` in aeqi-platform for the trust-boundary argument.
+const WEB_SECRET_ENV: &str = "AEQI_WEB_SECRET";
+
+/// Fixed purpose string mixed into the derivation. Must match the
+/// platform's `routes::walks::DERIVATION_PURPOSE` byte-for-byte. Bump
+/// the version suffix if the auth contract ever changes.
+const WALKS_LAUNCH_DERIVATION_PURPOSE: &str = "aeqi-walks-launch-v1";
+
+/// Header name carrying the derived secret. Must match the platform's
+/// `routes::walks::AUTH_HEADER`.
+const WALKS_LAUNCH_AUTH_HEADER: &str = "X-Aeqi-Internal-Auth";
+
+/// Derive the launch-bypass header value from `AEQI_WEB_SECRET`. Returns
+/// `None` if the env var is missing — the walks runner treats that as a
+/// hard failure rather than silently falling back to the gated endpoint.
+///
+/// SHA-256 of `<secret>:<purpose>`, hex-encoded. Plain SHA-256 (not
+/// HMAC) is safe here because the digest is never exposed to an
+/// attacker — the secret stays inside processes that share
+/// `AEQI_WEB_SECRET`. Length-extension attacks require the attacker to
+/// observe a valid digest, which they cannot here.
+fn walks_launch_header_value() -> Option<String> {
+    let secret = std::env::var(WEB_SECRET_ENV).ok()?;
+    let mut h = Sha256::new();
+    h.update(secret.as_bytes());
+    h.update(b":");
+    h.update(WALKS_LAUNCH_DERIVATION_PURPOSE.as_bytes());
+    Some(hex::encode(h.finalize()))
+}
 
 /// Polling timeouts.
 const LAUNCH_POLL_MAX: Duration = Duration::from_secs(60);
@@ -285,16 +319,28 @@ async fn run_one_walk_inner(platform_url: &str, force_fail: bool) -> Result<Walk
         return Err(anyhow!("step 2 (verify session) failed: HTTP {status}"));
     }
 
-    // Step 3: launch from default blueprint.
+    // Step 3: launch from default blueprint. The walks bot hits the
+    // internal-only `/api/walks/launch` endpoint instead of
+    // `/api/start/launch` — it bypasses the subscription + workspace-cap
+    // gates (ae-018) after validating an HMAC-derived header. Both
+    // processes share `AEQI_WEB_SECRET`, so the header value is
+    // computable here without any extra env wiring.
     if force_fail {
         return Err(anyhow!(
             "step 3 (launch) injected failure via {FORCE_FAIL_ENV}"
         ));
     }
+    let internal_auth = walks_launch_header_value().ok_or_else(|| {
+        anyhow!(
+            "step 3 (launch) cannot build {WALKS_LAUNCH_AUTH_HEADER}: \
+             {WEB_SECRET_ENV} unset in walks-runner environment"
+        )
+    })?;
     let display_name = format!("Walk Bot {}", Utc::now().format("%Y%m%d-%H%M%S"));
     let launch = client
-        .post(format!("{platform_url}/api/start/launch"))
+        .post(format!("{platform_url}/api/walks/launch"))
         .bearer_auth(&token)
+        .header(WALKS_LAUNCH_AUTH_HEADER, &internal_auth)
         .json(&serde_json::json!({
             "display_name": display_name,
             "plan": "growth",
@@ -556,6 +602,32 @@ mod tests {
         assert_eq!(extract_event_count(&v), 0);
         let v = serde_json::json!({"events": [1, 2, 3]});
         assert_eq!(extract_event_count(&v), 3);
+    }
+
+    #[test]
+    fn walks_launch_header_matches_known_vector() {
+        // Pinned cross-impl test vector matching the platform's
+        // routes::walks::expected_header_value test. If this breaks,
+        // step 3 of the walks job will 401 against the platform — fix
+        // BOTH sides in lockstep.
+        //
+        // Reproduction:
+        //   echo -n "test-secret-for-known-vector:aeqi-walks-launch-v1" \
+        //     | sha256sum
+        const EXPECTED: &str = "8642144c8dffa6b1ef1fe738831c6f0d229c77320b450265baf70bf54f445019";
+
+        let prev = std::env::var(WEB_SECRET_ENV).ok();
+        unsafe {
+            std::env::set_var(WEB_SECRET_ENV, "test-secret-for-known-vector");
+        }
+        let value = walks_launch_header_value().expect("env set above");
+        assert_eq!(value, EXPECTED);
+        unsafe {
+            match prev {
+                Some(v) => std::env::set_var(WEB_SECRET_ENV, v),
+                None => std::env::remove_var(WEB_SECRET_ENV),
+            }
+        }
     }
 
     #[tokio::test]
