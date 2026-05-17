@@ -82,13 +82,6 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
               action: () => go(`${scope}/ideas`),
             },
             {
-              id: "nav-drive",
-              label: "Drive",
-              hint: "Workspace files",
-              section: "Navigate",
-              action: () => go(`${scope}/drive`),
-            },
-            {
               id: "nav-tools",
               label: "Tools",
               hint: "Capabilities",

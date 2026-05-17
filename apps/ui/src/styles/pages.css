@@ -3720,66 +3720,6 @@
   margin-top: var(--space-2);
 }
 
-/* ── Drive page ──────────────────────────────────── */
-.drive-page-head {
-  margin-bottom: 20px;
-}
-.drive-page-eyebrow {
-  display: block;
-  margin-bottom: 4px;
-  font-family: var(--font-sans);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.drive-page-title {
-  margin: 0;
-  font-family: var(--font-display, var(--font-body));
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
-}
-.drive-page-subtitle {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-.drive-dropzone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  background: transparent;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-}
-.drive-dropzone:hover {
-  border-color: var(--border-hover);
-  color: var(--color-text-primary);
-}
-.drive-dropzone--hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-text-primary);
-  background: var(--state-hover);
-}
-.drive-dropzone-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.drive-dropzone-primary {
-  font-weight: 450;
-}
-
 /* ── inbox + stub pages ─────────────────────────────── */
 
 .me-inbox,

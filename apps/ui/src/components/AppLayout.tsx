@@ -22,7 +22,6 @@ const AgentPage = lazy(() => import("./AgentPage"));
 const SessionsRail = lazy(() => import("./shell/SessionsRail"));
 const ComposerRow = lazy(() => import("./shell/ComposerRow"));
 const ShortcutsOverlay = lazy(() => import("./ShortcutsOverlay"));
-const DrivePage = lazy(() => import("@/pages/DrivePage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
@@ -127,7 +126,7 @@ export default function AppLayout() {
   const setActiveEntity = useUIStore((s) => s.setActiveEntity);
   const activeEntity = useUIStore((s) => s.activeEntity);
 
-  const surface = useShellSurface(path, tab);
+  const surface = useShellSurface(path);
 
   // Resolve entity from the canonical trust route and return a stable id.
   const { entity, entityId: resolvedEntityId } = useCurrentCompany();
@@ -211,7 +210,6 @@ export default function AppLayout() {
     isAccount,
     isBlueprints,
     isLaunch,
-    isDrive,
     isNotFound,
     isAdmin,
     isRolesNew,
@@ -359,7 +357,6 @@ export default function AppLayout() {
       return <CompanySetupPage />;
     }
     if (isAdmin) return <AdminPage />;
-    if (isDrive) return <DrivePage />;
     if (isAccount) return <ProfilePage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /
@@ -371,6 +368,9 @@ export default function AppLayout() {
       const second = segments[1];
       const isDetail = !!second && !BLUEPRINT_KINDS.has(second);
       return isDetail ? <BlueprintDetailPage /> : <BlueprintsPage />;
+    }
+    if (isEntityRoute && !drilledAgent && tab && !COMPANY_PAGE_TABS.has(tab)) {
+      return <NotFoundPage />;
     }
     if (isEntityRoute && !drilledAgent && COMPANY_PAGE_TABS.has(effectiveTab)) {
       return (
@@ -409,13 +409,7 @@ export default function AppLayout() {
   const isAgentChatDefault =
     !!drilledAgent && !agentSettingsSegment && (tab === undefined || tab === "inbox");
   const sessionsMounted =
-    !isNotFound &&
-    !isDrive &&
-    !isAccount &&
-    !isAdmin &&
-    !isLaunch &&
-    !isBlueprints &&
-    isAgentChatDefault;
+    !isNotFound && !isAccount && !isAdmin && !isLaunch && !isBlueprints && isAgentChatDefault;
   const showComposer = sessionsMounted;
   const showSessionsRail = sessionsMounted && !!isEntityRoute;
 

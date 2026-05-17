@@ -67,15 +67,6 @@ const IdeasIcon = () => (
   </svg>
 );
 
-const DriveIcon = () => (
-  <svg {...iconProps}>
-    <path d="M3 3.5h10v9H3z" />
-    <path d="M5 6h6" />
-    <path d="M5 8.5h4" />
-    <path d="M4.5 3.5l1-1h5l1 1" />
-  </svg>
-);
-
 // Stack of layered cards — Blueprints is the catalog of recipes, the
 // supply layer of the system. Three rounded rectangles, slightly offset.
 const BlueprintsIcon = () => (
@@ -415,7 +406,6 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               </div>
               {navItem("health", "Health", <HealthIcon />)}
               {navItem("inbox", "Inbox", <InboxIcon />)}
-              {navItem("drive", "Drive", <DriveIcon />)}
             </nav>
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">

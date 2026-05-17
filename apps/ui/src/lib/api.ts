@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiError, apiRequest as request, RateLimitedError } from "@/api/client";
+import { ApiError, apiRequest as request, RateLimitedError } from "@/api/client";
 import type { AppMode } from "@/lib/appMode";
 import type { LaunchPlanId } from "@/lib/pricing";
 import type {
@@ -856,55 +856,6 @@ export const api = {
     }),
 
   revokeKey: (id: string) => request<{ ok: boolean }>(`/keys/${id}`, { method: "DELETE" }),
-
-  // Drive — per-agent file storage. Access follows the agent's visibility:
-  // if you can see the agent, you can see its files.
-  listDriveFiles: (agentId: string) =>
-    request<{
-      ok: boolean;
-      files: Array<{
-        id: string;
-        agent_id: string;
-        name: string;
-        mime: string;
-        size_bytes: number;
-        uploaded_by: string | null;
-        uploaded_at: string;
-      }>;
-    }>(`/agents/${encodeURIComponent(agentId)}/drive`),
-
-  /** Upload a single file to an agent's drive. Reads the File as a
-   * base64 string client-side and POSTs JSON — the server decodes and
-   * stores. Limit: 25 MiB per file (enforced server-side). */
-  uploadDriveFile: async (agentId: string, file: File) => {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    // Chunked base64 encode — avoids the "argument list too long" stack error
-    // btoa() throws on for single-shot large TypedArrays.
-    let binary = "";
-    const CHUNK = 32_768;
-    for (let i = 0; i < bytes.length; i += CHUNK) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-    }
-    const content_b64 = btoa(binary);
-    return request<{ ok: boolean; file?: unknown; error?: string }>(
-      `/agents/${encodeURIComponent(agentId)}/drive`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          name: file.name,
-          mime: file.type || "application/octet-stream",
-          content_b64,
-        }),
-      },
-    );
-  },
-
-  driveDownloadUrl: (fid: string) => `${API_BASE_URL}/drive/${encodeURIComponent(fid)}`,
-
-  deleteDriveFile: (fid: string) =>
-    request<{ ok: boolean; deleted?: boolean }>(`/drive/${encodeURIComponent(fid)}`, {
-      method: "DELETE",
-    }),
 
   // Stripe billing. Launch and resubscribe flows stamp Standard/Pro `plan`
   // metadata for provisioning and billing display.

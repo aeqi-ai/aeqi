@@ -1,12 +1,9 @@
 import { useMemo } from "react";
 
 /**
- * Pure derivation: turn the current URL state into a set of named
- * surface flags the AppLayout shell can switch on. Lifted out of
- * AppLayout because the regex-and-flag soup obscured the actual
- * rendering logic — and because every flag is a function of two cheap
- * inputs (path, tab), so a single `useMemo` is cheaper than the inline
- * derivations it replaces.
+ * Pure derivation: turn the current URL path into a set of named surface
+ * flags the AppLayout shell can switch on. Lifted out of AppLayout
+ * because the regex-and-flag soup obscured the actual rendering logic.
  *
  * The shell now treats the launch surface and the company surfaces as
  * first-class routes. The user-scope MVP entrypoint is `/launch`.
@@ -17,7 +14,6 @@ export interface ShellSurface {
   isBlueprints: boolean;
   /** `/launch` — company formation surface. Left composer + right canvas. */
   isLaunch: boolean;
-  isDrive: boolean;
   /** True when the path doesn't match any known shell surface — drives the
    *  in-shell 404 dispatch. Stays false for `/me/...`, `/launch/...`,
    *  `/blueprints/...`, and other non-organization routes. */
@@ -32,14 +28,13 @@ export interface ShellSurface {
   isRoleInvite: boolean;
 }
 
-export function useShellSurface(path: string, tab: string | undefined): ShellSurface {
+export function useShellSurface(path: string): ShellSurface {
   return useMemo(() => {
     const isAdmin = path === "/admin" || path.startsWith("/admin/");
     // All /account/* paths are handled by ProfilePage.
     const isAccount = path === "/account" || path.startsWith("/account/");
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
-    const isDrive = tab === "drive" || /^\/trust\/[^/]+\/drive(?:\/|$)/.test(path);
 
     // In-shell role sub-pages on the canonical trust route.
     const rolePathMatch = path.match(/^\/trust\/[^/]+\/roles\/(.+)$/);
@@ -62,7 +57,6 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
       isAccount,
       isBlueprints,
       isLaunch,
-      isDrive,
       isNotFound,
       isAdmin,
       isRolesNew,
@@ -70,5 +64,5 @@ export function useShellSurface(path: string, tab: string | undefined): ShellSur
       isRoleEdit,
       isRoleInvite,
     };
-  }, [path, tab]);
+  }, [path]);
 }
