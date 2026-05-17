@@ -1127,7 +1127,7 @@
 }
 
 /* ── Role chip button (clickable Badge wrapper) ─────────────────────────────
-   Used on GovernancePage to make role-chip Badges navigable without the 1px
+   Used by role-chip Badges to make navigable rows work without the 1px
    secondary-button border. The button reset removes all chrome; the Badge
    primitive provides the visual. Hover lifts the chip via background tint
    shift on the inner Badge — no border, no shadow.

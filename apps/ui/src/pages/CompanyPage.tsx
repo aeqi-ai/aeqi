@@ -1,7 +1,6 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import AgentPage from "@/components/AgentPage";
-import WalletBoundary from "@/components/WalletBoundary";
 import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 
 // EntityOverviewTab is the canonical bare-`/c/<id>/` landing — renders
@@ -9,9 +8,6 @@ import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 // dispatch shell light. Mirrors the lazy pattern used in AgentPage.
 const EntityOverviewTab = lazy(() => import("@/components/EntityOverviewTab"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
-const OwnershipPage = lazy(() => import("@/pages/OwnershipPage"));
-const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
-const GovernancePage = lazy(() => import("@/pages/GovernancePage"));
 // Entity-scope primitive tabs. `EntityAgentsTab` is entity-typed (takes
 // entityId, filters the directory). Events still render against the default
 // agent, while Quests and Ideas ask their shared components for entity-wide
@@ -41,9 +37,6 @@ interface CompanyPageProps {
  *   /c/:entityId/inbox         → MeInboxPage
  *   /c/:entityId/health        → 308 redirect to bare cockpit (legacy URL)
  *   /c/:entityId/roles         → EntityRolesTab (org chart)
- *   /c/:entityId/ownership     → OwnershipPage
- *   /c/:entityId/treasury      → TreasuryPage
- *   /c/:entityId/governance    → GovernancePage
  *   /c/:entityId/agents        → EntityAgentsTab (LIST)
  *   /c/:entityId/events        → AgentEventsTab(defaultAgent)
  *   /c/:entityId/quests        → AgentQuestsTab(entity scope)
@@ -105,29 +98,6 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
   if (tab === "health") {
     const target = location.pathname.replace(/\/health\/?$/, "/") + location.search;
     return <Navigate to={target} replace />;
-  }
-  if (tab === "ownership") {
-    return (
-      <Suspense>
-        <OwnershipPage entityId={entityId} />
-      </Suspense>
-    );
-  }
-  if (tab === "treasury") {
-    return (
-      <Suspense>
-        <WalletBoundary>
-          <TreasuryPage entityId={entityId} />
-        </WalletBoundary>
-      </Suspense>
-    );
-  }
-  if (tab === "governance") {
-    return (
-      <Suspense>
-        <GovernancePage entityId={entityId} />
-      </Suspense>
-    );
   }
 
   // Bare `/c/<id>/` Overview renders EntityOverviewTab directly — the

@@ -25,8 +25,8 @@ const HealthBlock = lazy(() => import("@/pages/HealthPage"));
  *
  * Founder-locked direction (2026-05-08): Overview answers
  * "what's happening now," not "what does the P&L look like."
- * Treasury already owns the financial home; this surface is a pulse,
- * not a balance sheet.
+ * Financial/on-chain indicators stay a pulse here, not a dedicated
+ * balance-sheet page.
  *
  * Four blocks:
  *   1. Hero strip — name, tagline, public toggle (kept; already shipped)
@@ -35,12 +35,12 @@ const HealthBlock = lazy(() => import("@/pages/HealthPage"));
  *        b) Awaiting decisions — entity-scoped inbox (kind=decision_request)
  *        c) Last 24h activity — compact agent activity stream
  *   3. Slim numbers row — 4 stat tiles:
- *        Treasury · 7d activity · TRUST signers · Active agents
+ *        Assets · 7d activity · TRUST signers · Active agents
  *   4. Health block — substrate compounding (folded in 2026-05-17 from
  *      the retired /trust/<addr>/health surface): 4 trend metrics with
  *      one-line interpretations + 30d sparklines.
  *
- * Each Pulse card and stat tile clicks through to its full surface.
+ * Pulse cards and routed stat tiles click through to their full surface.
  * Empty states render gracefully and surface the next action inline.
  */
 export default function EntityOverviewTab({ entityId }: { entityId: string }) {
@@ -127,12 +127,12 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
       .slice(0, 6);
   }, [events, subtreeNames]);
 
-  // ── Numbers row: treasury balance + 7d net delta ────────────────────
+  // ── Numbers row: indexed assets + 7d transfer activity ──────────────
   const { balances, transfers } = useTreasury(trustId);
 
-  // Treasury display: indexed asset count. Native balance lives on the
-  // Treasury page so the default company Overview does not pull wallet SDKs.
-  const treasuryDisplay = useMemo(() => {
+  // Indexed asset count. The dedicated page surface was retired; keep the
+  // lightweight indexer signal in the cockpit without linking to a dead route.
+  const assetDisplay = useMemo(() => {
     if (balances === null) return "—";
     const total = balances.length;
     if (total === 0) return "0 assets";
@@ -347,16 +347,16 @@ export default function EntityOverviewTab({ entityId }: { entityId: string }) {
 
       {/* ── Slim numbers row ── */}
       <div className="entity-overview-numbers">
-        <Link to={`${basePath}/treasury`} className="entity-overview-stat">
-          <span className="entity-overview-stat-label">Treasury</span>
-          <span className="entity-overview-stat-value">{treasuryDisplay}</span>
-        </Link>
+        <div className="entity-overview-stat">
+          <span className="entity-overview-stat-label">Assets</span>
+          <span className="entity-overview-stat-value">{assetDisplay}</span>
+        </div>
 
-        <Link to={`${basePath}/treasury`} className="entity-overview-stat">
+        <div className="entity-overview-stat">
           <span className="entity-overview-stat-label">Activity</span>
           <span className="entity-overview-stat-value">{netDeltaValue(netDelta)}</span>
           <span className={netDeltaClassName(netDelta)}>{netDeltaLabel(netDelta)}</span>
-        </Link>
+        </div>
 
         <Link to={trustPath} className="entity-overview-stat">
           <span className="entity-overview-stat-label">TRUST signers</span>

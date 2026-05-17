@@ -234,7 +234,7 @@
   --event-tone-telegram: #4fa0b8;
 
   /* ── Space aliases (v3 bridge) ────────────────────────
-     GovernancePage / TreasuryPage use --space-{xs,sm,md,lg,xl} shorthand.
+     Legacy page modules used --space-{xs,sm,md,lg,xl} shorthand.
      Bridge to the canonical --space-N numeric scale once here so these
      tokens resolve correctly everywhere they're used. */
   --space-xs: var(--space-2); /* 8px */

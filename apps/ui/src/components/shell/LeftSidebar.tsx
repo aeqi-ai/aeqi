@@ -85,33 +85,6 @@ const LaunchIcon = () => (
   </svg>
 );
 
-// Treasury — coin/safe geometry. Concentric circle reads as value/store.
-const TreasuryIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="5.5" />
-    <circle cx="8" cy="8" r="2.5" />
-    <path d="M2.5 8h2M11.5 8h2" />
-  </svg>
-);
-
-// Ownership — pie/share allocation.
-const OwnershipIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="5.5" />
-    <path d="M8 8 L8 2.5 A5.5 5.5 0 0 1 13.5 8 Z" />
-  </svg>
-);
-
-// Governance — gavel/decision; balanced scale.
-const GovernanceIcon = () => (
-  <svg {...iconProps}>
-    <path d="M8 2v12" />
-    <path d="M3 5h10" />
-    <path d="M5 5l-2 4h4z" />
-    <path d="M11 5l-2 4h4z" />
-  </svg>
-);
-
 // Roles — org chart; one node atop two children.
 const RolesIcon = () => (
   <svg {...iconProps}>
@@ -375,14 +348,8 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               </div>
             </nav>
 
-            {/* TRUST organisation rows — Roles + Ownership + Treasury +
-                Governance sit directly under the cockpit with no section
-                label. Small gap from the TRUST row above. */}
-            <nav className="sidebar-surface-nav sidebar-zone" aria-label="TRUST organisation">
+            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Roles">
               {navItem("roles", "Roles", <RolesIcon />)}
-              {navItem("ownership", "Ownership", <OwnershipIcon />)}
-              {navItem("treasury", "Treasury", <TreasuryIcon />)}
-              {navItem("governance", "Governance", <GovernanceIcon />)}
             </nav>
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">

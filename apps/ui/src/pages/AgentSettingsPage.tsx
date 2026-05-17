@@ -10,7 +10,6 @@ import ModelPicker from "@/components/ModelPicker";
 import { ALL_TOOLS, TOOL_BY_ID } from "@/lib/tools";
 import AgentSurfaceHeader from "@/components/AgentSurfaceHeader";
 import { AGENT_RAIL_TABS } from "@/components/agentRailTabs";
-import WalletBoundary from "@/components/WalletBoundary";
 
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
 const AgentChannelsTab = lazy(() => import("@/components/AgentChannelsTab"));
@@ -18,7 +17,6 @@ const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
 const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
 const AgentOverviewTab = lazy(() => import("@/components/AgentOverviewTab"));
 const AgentIntegrationsTab = lazy(() => import("@/pages/Agent/Integrations"));
-const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
 
 /**
  * `/c/<entity>/agents/<agent>/settings[/<sub>[/<itemId>]]` — the
@@ -26,7 +24,7 @@ const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
  *
  * Header: breadcrumb [← <Agent>] / <Agent> / Settings
  * Body: PageRail (Overview · Quests · Events · Ideas · Channels ·
- *       Treasury · Tools · Integrations) + the active
+ *       Tools · Integrations) + the active
  *       sub-tab's content. Default sub-tab = Overview. Settings is
  *       NOT a tab inside the rail — it's the rail's container; the
  *       sub-tabs are the canonical "settings for this agent" pages.
@@ -87,14 +85,6 @@ export default function AgentSettingsPage({ agentId }: { agentId: string }) {
         {activeTab === "events" && <AgentEventsTab agentId={resolvedAgentId} />}
         {activeTab === "ideas" && <AgentIdeasTab agentId={resolvedAgentId} />}
         {activeTab === "channels" && <AgentChannelsTab agentId={resolvedAgentId} />}
-        {activeTab === "treasury" && (
-          <WalletBoundary>
-            <TreasuryPage
-              entityId={resolvedEntityId}
-              agentId={isDrilledAgent ? resolvedAgentId : undefined}
-            />
-          </WalletBoundary>
-        )}
         {activeTab === "tools" && (
           <ToolsDetail
             agent={agent}
