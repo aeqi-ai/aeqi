@@ -1,0 +1,49 @@
+{
+  "cluster": "localnet",
+  "programs": [
+    {
+      "name": "aeqi_trust",
+      "pubkey": "CCbs4TCqE6FXmRdyLexx2rSSHAShymWrrR9QWeJUJbXV"
+    },
+    {
+      "name": "aeqi_factory",
+      "pubkey": "3qRT5qTuv4wkqbLfZQUVcf94QRyG3JdCAbFZsiBNpgEv"
+    },
+    {
+      "name": "aeqi_role",
+      "pubkey": "4GSrvANBi1yrn3w4VgoxvVz7pH9BdR8MeyUpH4ZcGXpB"
+    },
+    {
+      "name": "aeqi_governance",
+      "pubkey": "5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq"
+    },
+    {
+      "name": "aeqi_token",
+      "pubkey": "AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh"
+    },
+    {
+      "name": "aeqi_treasury",
+      "pubkey": "2KBH4dhAM8fvix5sB44f55Hy6mE4HgeMMbm3htZTJNm7"
+    },
+    {
+      "name": "aeqi_vesting",
+      "pubkey": "DCZKRmxjUyAZ3nptbkCBnAGqTe4E7xTvXfLbnf95uj7y"
+    },
+    {
+      "name": "aeqi_budget",
+      "pubkey": "5PbDxvaYD9shSGxE2pQyUTqCqe6FXUMDciXSEGevFE5G"
+    },
+    {
+      "name": "aeqi_fund",
+      "pubkey": "DaFpZcqMaL4rmAemJ2WBeUth42PMmHxNg9t6j9h9p7YP"
+    },
+    {
+      "name": "aeqi_funding",
+      "pubkey": "8dCM5qRnfMAZGdsC8pYYQzomVdQpihL9jgwAXoPaie3U"
+    },
+    {
+      "name": "aeqi_unifutures",
+      "pubkey": "CAz7bt2gLYTe3VUZ4xEyF8AA8syth4NkUKb5c1NRq8JF"
+    }
+  ]
+}

@@ -9,32 +9,20 @@
 //! indexer service ourselves but don't run a validator/RPC node.
 
 mod backfill;
+mod manifest;
 mod registry;
 mod sink;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures::StreamExt;
+use manifest::{Manifest, DEFAULT_CLUSTER};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use tracing::{info, warn};
-
-const PROGRAMS: &[(&str, &str)] = &[
-    ("aeqi_trust", "CCbs4TCqE6FXmRdyLexx2rSSHAShymWrrR9QWeJUJbXV"),
-    ("aeqi_factory", "3qRT5qTuv4wkqbLfZQUVcf94QRyG3JdCAbFZsiBNpgEv"),
-    ("aeqi_role", "4GSrvANBi1yrn3w4VgoxvVz7pH9BdR8MeyUpH4ZcGXpB"),
-    ("aeqi_governance", "5WHpPFf2mPYNFjr5p3ujeRcZNPoqWMBMkYnsWb2YtyNq"),
-    ("aeqi_token", "AxyYnv99gnKJ3VMYbyVjz4BxP8LA34CUnhHGVifrc3Kh"),
-    ("aeqi_treasury", "2KBH4dhAM8fvix5sB44f55Hy6mE4HgeMMbm3htZTJNm7"),
-    ("aeqi_vesting", "DCZKRmxjUyAZ3nptbkCBnAGqTe4E7xTvXfLbnf95uj7y"),
-    ("aeqi_budget", "5PbDxvaYD9shSGxE2pQyUTqCqe6FXUMDciXSEGevFE5G"),
-    ("aeqi_fund", "DaFpZcqMaL4rmAemJ2WBeUth42PMmHxNg9t6j9h9p7YP"),
-    ("aeqi_funding", "8dCM5qRnfMAZGdsC8pYYQzomVdQpihL9jgwAXoPaie3U"),
-    ("aeqi_unifutures", "CAz7bt2gLYTe3VUZ4xEyF8AA8syth4NkUKb5c1NRq8JF"),
-];
 
 #[derive(Parser, Debug)]
 #[command(name = "aeqi-indexer", about = "Solana log indexer for the AEQI protocol")]
@@ -58,6 +46,12 @@ struct Args {
     /// Skip the historical backfill on startup (live tail only)
     #[arg(long, env = "AEQI_INDEXER_SKIP_BACKFILL", default_value_t = false)]
     skip_backfill: bool,
+
+    /// Solana cluster name used to resolve the deployment manifest
+    /// (`deployments/<cluster>.json`) and to look up Anchor.toml's
+    /// `[programs.<cluster>]` table for the consistency check.
+    #[arg(long, env = "AEQI_SOLANA_CLUSTER", default_value = DEFAULT_CLUSTER)]
+    cluster: String,
 }
 
 #[tokio::main]
@@ -69,7 +63,52 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+
+    // Load the canonical program manifest before anything else. Fail
+    // fast on missing/malformed file or drift against Anchor.toml —
+    // the indexer subscribing to the wrong program IDs is the worst
+    // kind of silent failure.
+    let manifest_path = Manifest::resolve_path(&args.cluster);
+    let manifest = Manifest::load(&manifest_path)
+        .with_context(|| format!("loading deployment manifest at {}", manifest_path.display()))?;
+    if manifest.cluster != args.cluster {
+        anyhow::bail!(
+            "manifest cluster {:?} at {} does not match --cluster {:?}",
+            manifest.cluster,
+            manifest_path.display(),
+            args.cluster
+        );
+    }
+    match manifest.assert_matches_anchor_toml(&manifest_path, None) {
+        Ok(toml_path) => info!(
+            manifest = %manifest_path.display(),
+            anchor_toml = %toml_path.display(),
+            programs = manifest.programs.len(),
+            "manifest validated against Anchor.toml"
+        ),
+        Err(e) => {
+            // Anchor.toml is the secondary source of truth; treat
+            // missing-file as a soft-fail (e.g. installs that ship
+            // only the binary + manifest), but actual content drift
+            // is fatal.
+            let chain = format!("{e:#}");
+            let missing = chain.contains("failed to read");
+            if missing {
+                warn!(
+                    manifest = %manifest_path.display(),
+                    error = %chain,
+                    "Anchor.toml unreadable — skipping consistency check"
+                );
+            } else {
+                return Err(e);
+            }
+        }
+    }
+
     info!(
+        cluster = %args.cluster,
+        manifest = %manifest_path.display(),
+        programs = manifest.programs.len(),
         ws_url = %args.ws_url,
         commitment = %args.commitment,
         db = %args.db,
@@ -85,11 +124,15 @@ async fn main() -> Result<()> {
     // UNIQUE(signature, program, event_type) constraint.
     if !args.skip_backfill {
         let rpc = solana_client::nonblocking::rpc_client::RpcClient::new(args.rpc_url.clone());
-        for (name, pid_str) in PROGRAMS {
-            let pid = Pubkey::from_str(pid_str)?;
-            match backfill::backfill_program(&rpc, &pid, name, sink.clone()).await {
-                Ok(n) => info!(program = %name, inserted = n, "backfill complete"),
-                Err(e) => warn!(?e, program = %name, "backfill failed — continuing to live tail"),
+        for program in &manifest.programs {
+            let pid = Pubkey::from_str(&program.pubkey).with_context(|| {
+                format!("manifest pubkey for {} is not valid base58", program.name)
+            })?;
+            match backfill::backfill_program(&rpc, &pid, &program.name, sink.clone()).await {
+                Ok(n) => info!(program = %program.name, inserted = n, "backfill complete"),
+                Err(e) => {
+                    warn!(?e, program = %program.name, "backfill failed — continuing to live tail")
+                }
             }
         }
     } else {
@@ -108,9 +151,11 @@ async fn main() -> Result<()> {
     let client: &'static PubsubClient = Box::leak(Box::new(PubsubClient::new(&args.ws_url).await?));
     let mut handles = Vec::new();
 
-    for (name, pid_str) in PROGRAMS {
-        let pid = Pubkey::from_str(pid_str)?;
-        let name = (*name).to_string();
+    for program in &manifest.programs {
+        let pid = Pubkey::from_str(&program.pubkey).with_context(|| {
+            format!("manifest pubkey for {} is not valid base58", program.name)
+        })?;
+        let name = program.name.clone();
         let resume_slot = sink.cursor(&name)?;
         info!(program = %name, program_id = %pid, ?resume_slot, "subscribing");
 
