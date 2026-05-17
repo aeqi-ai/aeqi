@@ -273,9 +273,9 @@ async fn run_one_walk_inner(platform_url: &str, force_fail: bool) -> Result<Walk
         .ok_or_else(|| anyhow!("step 1 (demo signup) response missing token"))?
         .to_string();
 
-    // Step 2: verify session — `/api/users/me` returns 200 with a JWT.
+    // Step 2: verify session — `/api/auth/me` returns 200 with a JWT.
     let me = client
-        .get(format!("{platform_url}/api/users/me"))
+        .get(format!("{platform_url}/api/auth/me"))
         .bearer_auth(&token)
         .send()
         .await
