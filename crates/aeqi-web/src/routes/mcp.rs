@@ -597,11 +597,7 @@ async fn call_events(
                 "name": args.get("name").and_then(|v| v.as_str()).unwrap_or(""),
                 "pattern": event_pattern(&args, "session:start"),
             });
-            copy_fields(
-                &args,
-                &mut req,
-                &["agent_id", "cooldown_secs", "idea_ids", "tool_calls"],
-            );
+            copy_fields(&args, &mut req, &["agent_id", "cooldown_secs", "tool_calls"]);
             ipc(state, ctx, req).await
         }
         "list" => {
@@ -1186,14 +1182,13 @@ fn tool_defs() -> serde_json::Value {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["create", "list", "enable", "disable", "delete", "trigger", "trace"], "description": "create/list/enable/disable/delete manage handlers; create accepts optional tool_calls; trigger fires a lifecycle event; trace inspects invocations."},
+                    "action": {"type": "string", "enum": ["create", "list", "enable", "disable", "delete", "trigger", "trace"], "description": "create/list/enable/disable/delete manage handlers; create accepts tool_calls; trigger fires a lifecycle event; trace inspects invocations."},
                     "agent": {"type": "string", "description": "Optional agent name or ID for agent-scoped event context."},
                     "agent_id": {"type": "string", "description": "Explicit agent ID. Required for schedule:* events unless `agent` resolves to an active agent."},
                     "name": {"type": "string", "description": "Event handler name for create."},
                     "pattern": {"type": "string", "description": "Full event pattern, for example session:start, session:quest_end, or schedule:0 9 * * *."},
                     "schedule": {"type": "string", "description": "Cron expression shorthand for schedule:<expr>."},
                     "event_pattern": {"type": "string", "description": "Session event shorthand, for example start, quest_start, quest_end, or quest_result."},
-                    "idea_ids": {"type": "array", "items": {"type": "string"}, "description": "Idea IDs referenced by a handler."},
                     "tool_calls": {"type": "array", "items": {"type": "object"}, "description": "Event tool calls to execute when the handler fires, e.g. session.spawn or ideas.search."},
                     "event_id": {"type": "string", "description": "Event handler ID for enable, disable, or delete."},
                     "session_id": {"type": "string", "description": "Session ID for trace list."},

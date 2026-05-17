@@ -37,38 +37,48 @@
       "name": "weekly_editorial",
       "pattern": "schedule:0 10 * * 1",
       "cooldown_secs": 3600,
-      "query_template": "weekly editorial review and calendar",
-      "query_top_k": 5,
-      "query_tag_filter": [
-        "editorial",
-        "cadence"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "weekly editorial review and calendar",
+            "top_k": 5,
+            "tags": ["editorial", "cadence"]
+          }
+        }
+      ]
     },
     {
       "owner": "Editor",
       "name": "draft_quest_start",
       "pattern": "session:quest_start",
       "cooldown_secs": 0,
-      "query_template": "voice guide style notes",
-      "query_top_k": 4,
-      "query_tag_filter": [
-        "voice"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "voice guide style notes",
+            "top_k": 4,
+            "tags": ["voice"]
+          }
+        }
+      ]
     },
     {
       "owner": "Distribution",
       "name": "publish_cadence",
       "pattern": "schedule:0 15 * * 3",
       "cooldown_secs": 3600,
-      "query_template": "distribution checklist and channel mix",
-      "query_top_k": 4,
-      "query_tag_filter": [
-        "distribution",
-        "cadence"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "distribution checklist and channel mix",
+            "top_k": 4,
+            "tags": ["distribution", "cadence"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [
@@ -114,7 +124,7 @@
     {
       "owner": "root",
       "name": "How to create an event",
-      "content": "Events = WHEN. They fire on a pattern (schedule:0 10 * * 1 for cron, session:start, session:quest_end, or a custom pattern emitted by middleware) and either pull ideas into the next session or fire tool_calls. Use an event when a studio rhythm should run without anyone asking — Monday editorial review, Wednesday publish sweep. To add one: pick a pattern, name it, optionally set a cooldown, and either list query_tag_filter ideas to inject or tool_calls to fire.",
+      "content": "Events = WHEN. They fire on a pattern (schedule:0 10 * * 1 for cron, session:start, session:quest_end, or a custom pattern emitted by middleware) and run tool_calls such as ideas.search, ideas.assemble, or session.spawn. Use an event when a studio rhythm should run without anyone asking — Monday editorial review, Wednesday publish sweep. To add one: pick a pattern, name it, optionally set a cooldown, and define the tool_calls to fire.",
       "tags": [
         "skill",
         "system",

@@ -20,43 +20,48 @@
       "name": "session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "operator priorities preferences and standing rules",
-      "query_top_k": 8,
-      "query_tag_filter": [
-        "identity",
-        "preferences",
-        "priorities",
-        "rules"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "operator priorities preferences and standing rules",
+            "top_k": 8,
+            "tags": ["identity", "preferences", "priorities", "rules"]
+          }
+        }
+      ]
     },
     {
       "owner": "root",
       "name": "morning_brief",
       "pattern": "schedule:30 7 * * *",
       "cooldown_secs": 3600,
-      "query_template": "morning brief calendar inbox priorities",
-      "query_top_k": 6,
-      "query_tag_filter": [
-        "daily-brief",
-        "priorities",
-        "rules"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "morning brief calendar inbox priorities",
+            "top_k": 6,
+            "tags": ["daily-brief", "priorities", "rules"]
+          }
+        }
+      ]
     },
     {
       "owner": "root",
       "name": "weekly_review",
       "pattern": "schedule:0 17 * * 0",
       "cooldown_secs": 3600,
-      "query_template": "weekly review reflection and next week shape",
-      "query_top_k": 6,
-      "query_tag_filter": [
-        "review",
-        "cadence",
-        "preferences"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "weekly review reflection and next week shape",
+            "top_k": 6,
+            "tags": ["review", "cadence", "preferences"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [

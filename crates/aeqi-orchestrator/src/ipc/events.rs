@@ -254,7 +254,7 @@ pub async fn handle_trigger_event(
     };
 
     // Allow the caller (e.g. session hook, debug tool) to pass through context
-    // values that the event's query_template may reference.
+    // values that the event's tool_call args may reference.
     let assembly_ctx = crate::idea_assembly::AssemblyContext {
         user_prompt: request_field(request, "user_prompt").map(str::to_string),
         tool_output: request_field(request, "tool_output").map(str::to_string),

@@ -53,40 +53,48 @@
       "name": "session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "tech lead identity priorities and current sprint",
-      "query_top_k": 6,
-      "query_tag_filter": [
-        "identity",
-        "architecture",
-        "priorities"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "tech lead identity priorities and current sprint",
+            "top_k": 6,
+            "tags": ["identity", "architecture", "priorities"]
+          }
+        }
+      ]
     },
     {
       "owner": "root",
       "name": "weekly_release_cadence",
       "pattern": "schedule:0 9 * * 1",
       "cooldown_secs": 3600,
-      "query_template": "weekly release plan and outstanding quests",
-      "query_top_k": 5,
-      "query_tag_filter": [
-        "cadence",
-        "release-log"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "weekly release plan and outstanding quests",
+            "top_k": 5,
+            "tags": ["cadence", "release-log"]
+          }
+        }
+      ]
     },
     {
       "owner": "Operator",
       "name": "release_smoke_check",
       "pattern": "schedule:30 16 * * 1-5",
       "cooldown_secs": 3600,
-      "query_template": "production smoke checklist",
-      "query_top_k": 3,
-      "query_tag_filter": [
-        "release-log",
-        "infra"
-      ],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "production smoke checklist",
+            "top_k": 3,
+            "tags": ["release-log", "infra"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [

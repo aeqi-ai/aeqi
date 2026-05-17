@@ -33,20 +33,32 @@
       "name": "session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "founder priorities, recent decisions, on-chain state",
-      "query_top_k": 6,
-      "query_tag_filter": ["identity", "priorities", "evergreen"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "founder priorities, recent decisions, on-chain state",
+            "top_k": 6,
+            "tags": ["identity", "priorities", "evergreen"]
+          }
+        }
+      ]
     },
     {
       "owner": "root",
       "name": "weekly_review",
       "pattern": "schedule:0 9 * * 1",
       "cooldown_secs": 3600,
-      "query_template": "weekly review: what shipped, what stalled, what to drop, what to capture",
-      "query_top_k": 6,
-      "query_tag_filter": ["review", "cadence"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "weekly review: what shipped, what stalled, what to drop, what to capture",
+            "top_k": 6,
+            "tags": ["review", "cadence"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [

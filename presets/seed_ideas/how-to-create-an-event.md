@@ -6,7 +6,7 @@ description: How to configure pattern-triggered automation — the "when" primit
 
 # Skill: create an event
 
-Events are aeqi's automation layer. An event has a pattern (when) and, when fired, either surfaces attached ideas or runs pre-configured tool calls. Patterns cover the session lifecycle, cron schedules, middleware signals, and custom webhooks.
+Events are aeqi's automation layer. An event has a pattern (when) and, when fired, runs pre-configured tool calls. Patterns cover the session lifecycle, cron schedules, middleware signals, and custom webhooks.
 
 ## Tool
 
@@ -14,7 +14,10 @@ Events are aeqi's automation layer. An event has a pattern (when) and, when fire
 events(action='create',
        name='<descriptive name>',
        pattern='session:start',          // or use 'schedule'/'event_pattern' shorthands
-       idea_ids=['<id>', ...],           // attach ideas surfaced when pattern fires
+       tool_calls=[{
+         "tool": "ideas.search",
+         "args": {"query": "identity and standing rules", "top_k": 5}
+       }],
        cooldown_secs=0)
 ```
 
@@ -34,13 +37,13 @@ Other: `schedule:<cron>`, `webhook:<token>`, middleware signals (`loop:detected`
 
 ## Tip
 
-Attach `idea_ids` to have ideas assemble into the session context when the pattern fires. That's how you wire a recurring ritual (e.g. a weekly-review checklist on `schedule:0 9 * * 1`).
+Use `ideas.search` or `ideas.assemble` tool calls to add context when the pattern fires. That's how you wire a recurring ritual (e.g. a weekly-review checklist on `schedule:0 9 * * 1`).
 
 ## Example
 
 User: "Every time a quest ends, run the reflector and save the facts it extracts."
 
-This is a pattern-triggered automation — `session:quest_end` plus a `session.spawn` tool_call that runs the reflector persona. One row, no `idea_ids` (the persona is passed as `instructions_idea`, not assembled into the parent session):
+This is a pattern-triggered automation — `session:quest_end` plus a `session.spawn` tool_call that runs the reflector persona. One row; the persona is passed as `instructions_idea`, not assembled into the parent session:
 
 ```
 events(action='create',

@@ -37,40 +37,64 @@
       "name": "ceo_session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "aeqi strategy, current priorities, and cofounder context",
-      "query_top_k": 6,
-      "query_tag_filter": ["strategy", "identity", "priorities"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "aeqi strategy, current priorities, and cofounder context",
+            "top_k": 6,
+            "tags": ["strategy", "identity", "priorities"]
+          }
+        }
+      ]
     },
     {
       "owner": "CTO Assistant",
       "name": "cto_session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "aeqi architecture canon and current engineering priorities",
-      "query_top_k": 6,
-      "query_tag_filter": ["architecture", "engineering", "priorities"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "aeqi architecture canon and current engineering priorities",
+            "top_k": 6,
+            "tags": ["architecture", "engineering", "priorities"]
+          }
+        }
+      ]
     },
     {
       "owner": "COO Assistant",
       "name": "coo_session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "aeqi operations, integrations, and process runbooks",
-      "query_top_k": 5,
-      "query_tag_filter": ["operations", "integrations", "process"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "aeqi operations, integrations, and process runbooks",
+            "top_k": 5,
+            "tags": ["operations", "integrations", "process"]
+          }
+        }
+      ]
     },
     {
       "owner": "root",
       "name": "weekly_strategy_review",
       "pattern": "schedule:0 9 * * 1",
       "cooldown_secs": 3600,
-      "query_template": "weekly strategy review: OKRs, blockers, next actions",
-      "query_top_k": 5,
-      "query_tag_filter": ["strategy", "priorities", "okr"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "weekly strategy review: OKRs, blockers, next actions",
+            "top_k": 5,
+            "tags": ["strategy", "priorities", "okr"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [

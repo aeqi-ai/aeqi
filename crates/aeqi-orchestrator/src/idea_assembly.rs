@@ -35,8 +35,7 @@ use crate::session_store::SessionStore;
 /// Combined tool registry + execution context for event-fired tool dispatch.
 ///
 /// Passed into `assemble_ideas_for_patterns` when the caller wants tool_calls
-/// on events to execute. When `None`, events with tool_calls fall back to the
-/// Phase-1 behavior (log + skip).
+/// on events to execute. When `None`, events with tool_calls log + skip.
 pub struct ToolDispatch<'a> {
     pub registry: &'a ToolRegistry,
     pub ctx: &'a ExecutionContext,
@@ -73,7 +72,7 @@ pub struct AssemblyContext {
 ///
 /// `tool_dispatch`: when `Some`, events with non-empty `tool_calls` are executed
 /// via the registry. When `None`, events with tool_calls log a warning and are
-/// skipped (Phase-1 fallback — callers that have not yet been wired to Phase 2).
+/// skipped.
 pub async fn assemble_ideas(
     registry: &AgentRegistry,
     idea_store: Option<&Arc<dyn IdeaStore>>,
@@ -175,13 +174,13 @@ pub async fn assemble_execution_context_with_cache(
 
 /// Assemble the context for a quest-start moment. Covers both session:start
 /// (session-scoped context) and session:quest_start (quest-scoped context),
-/// with `quest_description` threaded into any query_template that references
+/// with `quest_description` threaded into any tool_call args that reference
 /// it — this is how the closed learning loop surfaces promoted skills
 /// relevant to the quest.
 ///
 /// `tool_dispatch`: when `Some`, events with non-empty `tool_calls` are executed
 /// via the registry. When `None`, events with tool_calls log a warning and are
-/// skipped (Phase-1 fallback).
+/// skipped.
 pub async fn assemble_ideas_for_quest_start(
     registry: &AgentRegistry,
     idea_store: Option<&Arc<dyn IdeaStore>>,
@@ -210,12 +209,12 @@ pub async fn assemble_ideas_for_quest_start(
 }
 
 /// Like `assemble_ideas` but for an arbitrary event pattern and with an
-/// explicit runtime context used to expand any `query_template` fields on
+/// explicit runtime context used to expand any tool_call args on
 /// matching events.
 ///
 /// `tool_dispatch`: when `Some`, events with non-empty `tool_calls` are executed
 /// via the registry. When `None`, events with tool_calls log a warning and are
-/// skipped (Phase-1 fallback).
+/// skipped.
 pub async fn assemble_ideas_for_pattern(
     registry: &AgentRegistry,
     idea_store: Option<&Arc<dyn IdeaStore>>,
@@ -247,8 +246,8 @@ pub async fn assemble_ideas_for_pattern(
 ///
 /// `tool_dispatch`: when `Some`, events with non-empty `tool_calls` are
 /// dispatched through the registry and their outputs appended to the assembled
-/// context. When `None`, events with tool_calls fall back to the Phase-1
-/// behavior (warn + skip) so existing callers without a registry remain safe.
+/// context. When `None`, events with tool_calls warn + skip so existing callers
+/// without a registry remain safe.
 pub async fn assemble_ideas_for_patterns(
     registry: &AgentRegistry,
     idea_store: Option<&Arc<dyn IdeaStore>>,
@@ -1474,9 +1473,9 @@ mod tests {
         );
     }
 
-    /// Phase-1: events with non-empty `tool_calls` must NOT contribute ideas
-    /// through the legacy `idea_ids` path — the stub path is taken instead,
-    /// and assembled.system must be empty (no ideas from that event).
+    /// Events with non-empty `tool_calls` must not contribute context unless
+    /// a `ToolDispatch` is present — dry-run callers should warn + skip rather
+    /// than reintroduce the retired `idea_ids` fallback path.
     /// Hygiene guard for the observability-as-a-feature invariant:
     /// every production use of `assembled.fired_event_ids` (or the
     /// tuple-returning `assemble_step_ideas_for_worker`) must either

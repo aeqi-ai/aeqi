@@ -23,7 +23,7 @@ ideas(action='update', id='<idea-id>', content='<updated markdown>')
 
 ## 2. Add supporting ideas
 
-Don't let identity become a wall of text. Break knowledge into separate tagged ideas; wire a `session:start` event with `idea_ids=[<identity-id>, <skill-ids>...]` to surface them together.
+Don't let identity become a wall of text. Break knowledge into separate tagged ideas; wire a `session:start` event with an `ideas.assemble` tool call to surface them together.
 
 ## 3. Fork
 
@@ -52,6 +52,6 @@ ideas(action='update',
       content='<existing body>\n\n## Acknowledgement style\n\nNo apologies, no hedging preamble. If the user flags a mistake, fix it silently and move on. One line if confirmation is needed; none if the fix speaks for itself.')
 ```
 
-The id is preserved, so every event with `idea_ids=['idea-abc123']` still resolves. The rule is active on the next session.
+The id is preserved, so event tool calls that reference the idea by name still resolve. The rule is active on the next session.
 
 If you catch yourself amending the same identity idea for a *different* specialisation (e.g. adding Rust-specific review criteria), that's the signal to fork — store a new `identity`-tagged idea for the specialist and hire a new agent against it. Identity drift is how generic-you slowly eats specialists' lunches.

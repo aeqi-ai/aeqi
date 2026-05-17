@@ -29,20 +29,32 @@
       "name": "weekly_review",
       "pattern": "schedule:0 9 * * 1",
       "cooldown_secs": 3600,
-      "query_template": "weekly review checklist {user_prompt}",
-      "query_top_k": 5,
-      "query_tag_filter": ["review", "cadence"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "weekly review checklist {user_prompt}",
+            "top_k": 5,
+            "tags": ["review", "cadence"]
+          }
+        }
+      ]
     },
     {
       "owner": "root",
       "name": "session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "founder identity and priorities",
-      "query_top_k": 6,
-      "query_tag_filter": ["identity", "priorities"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "founder identity and priorities",
+            "top_k": 6,
+            "tags": ["identity", "priorities"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [
@@ -73,7 +85,7 @@
     {
       "owner": "root",
       "name": "How to create an event",
-      "content": "Events = WHEN. They fire on a pattern (schedule:0 9 * * 1 for cron, session:start, session:quest_end, a custom pattern emitted by middleware) and either pull ideas into the next session or fire tool_calls. Use an event when a rule should run without a human asking. To add one: pick a pattern, give it a name, optionally set a cooldown, and either list query_tag_filter ideas to inject or tool_calls to fire. Prefer tag-filter injection for rituals; reach for tool_calls only when the event must act, not remind.",
+      "content": "Events = WHEN. They fire on a pattern (schedule:0 9 * * 1 for cron, session:start, session:quest_end, a custom pattern emitted by middleware) and run tool_calls such as ideas.search, ideas.assemble, or session.spawn. Use an event when a rule should run without a human asking. To add one: pick a pattern, give it a name, optionally set a cooldown, and define the tool_calls to fire. Prefer ideas.search for rituals that need context; reach for side-effecting tool_calls only when the event must act, not remind.",
       "tags": ["skill", "system", "meta", "evergreen"]
     },
     {

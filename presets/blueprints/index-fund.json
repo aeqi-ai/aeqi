@@ -19,10 +19,16 @@
       "name": "session_bootstrap",
       "pattern": "session:start",
       "cooldown_secs": 0,
-      "query_template": "fund methodology and current index weights",
-      "query_top_k": 6,
-      "query_tag_filter": ["methodology", "weights", "evergreen"],
-      "tool_calls": []
+      "tool_calls": [
+        {
+          "tool": "ideas.search",
+          "args": {
+            "query": "fund methodology and current index weights",
+            "top_k": 6,
+            "tags": ["methodology", "weights", "evergreen"]
+          }
+        }
+      ]
     }
   ],
   "seed_ideas": [

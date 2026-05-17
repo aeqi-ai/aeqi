@@ -96,4 +96,53 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn blueprint_events_use_tool_calls_only() {
+        let blueprint_json = [
+            AEQI_DEFAULT_JSON,
+            include_str!("../../../../presets/blueprints/aeqi-company.json"),
+            include_str!("../../../../presets/blueprints/index-fund.json"),
+            include_str!("../../../../presets/blueprints/personal-os.json"),
+            include_str!("../../../../presets/blueprints/solo-founder.json"),
+            include_str!("../../../../presets/blueprints/studio.json"),
+            include_str!("../../../../presets/blueprints/tech-studio.json"),
+        ];
+        for raw in blueprint_json {
+            let value: serde_json::Value =
+                serde_json::from_str(raw).expect("blueprint JSON must parse");
+            let slug = value
+                .get("slug")
+                .and_then(|v| v.as_str())
+                .unwrap_or("<missing-slug>");
+            let events = value
+                .get("seed_events")
+                .and_then(|v| v.as_array())
+                .expect("blueprint must carry seed_events");
+            for event in events {
+                let name = event
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("<missing-name>");
+                for legacy_field in [
+                    "idea_ids",
+                    "query_template",
+                    "query_top_k",
+                    "query_tag_filter",
+                ] {
+                    assert!(
+                        event.get(legacy_field).is_none(),
+                        "blueprint {slug} event {name} still uses legacy field {legacy_field}"
+                    );
+                }
+                assert!(
+                    event
+                        .get("tool_calls")
+                        .and_then(|v| v.as_array())
+                        .is_some_and(|calls| !calls.is_empty()),
+                    "blueprint {slug} event {name} must declare canonical tool_calls"
+                );
+            }
+        }
+    }
 }
