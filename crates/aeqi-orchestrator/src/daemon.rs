@@ -701,6 +701,7 @@ impl Daemon {
         self.spawn_activity_buffer();
         self.spawn_event_matcher();
         self.spawn_schedule_timer();
+        self.spawn_weekly_walk_job();
         self.spawn_ipc_listener();
         // ── Round 3 retrieval-side additions (Agent R) ──────────────────
         self.spawn_co_retrieval_decay_patrol();
@@ -929,6 +930,33 @@ impl Daemon {
         let shutdown = self.shutdown_notify.clone();
         tokio::spawn(async move {
             timer.run(shutdown).await;
+        });
+    }
+
+    /// Spawn the weekly walk-N job — runs the demo signup → launch → genesis
+    /// flow against the local platform every Sunday at 06:00 UTC, persisting
+    /// results to the `walks` table on aeqi.db. Opt-in: only fires when the
+    /// `AEQI_WALKS_ENABLED` env var is set, so dev/CLI runtimes don't spawn
+    /// background HTTP calls against a platform they don't have.
+    fn spawn_weekly_walk_job(&self) {
+        let enabled = std::env::var("AEQI_WALKS_ENABLED")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE"))
+            .unwrap_or(false);
+        if !enabled {
+            return;
+        }
+        let db = self.agent_registry.db();
+        let shutdown = self.shutdown_notify.clone();
+        tokio::spawn(async move {
+            let store = match crate::walks::WalksStore::open(db).await {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    warn!(error = %e, "failed to open walks store; weekly walk job disabled");
+                    return;
+                }
+            };
+            let job = crate::walks::WeeklyWalkJob::new(store);
+            job.run(shutdown).await;
         });
     }
 

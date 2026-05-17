@@ -64,6 +64,7 @@ pub mod stream_registry;
 pub mod template;
 pub mod tools;
 pub mod vfs;
+pub mod walks;
 pub mod wallet_ctx;
 
 pub use activity::{Activity, ActivityStream};
