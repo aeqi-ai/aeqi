@@ -254,6 +254,7 @@ dependencies = [
  "chrono",
  "dirs 6.0.0",
  "futures",
+ "hex",
  "rand 0.9.4",
  "reqwest",
  "rusqlite",
