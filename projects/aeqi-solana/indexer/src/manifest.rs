@@ -72,7 +72,10 @@ impl Manifest {
         // Default: `<indexer-crate>/../deployments/<cluster>.json`,
         // i.e. `projects/aeqi-solana/deployments/<cluster>.json`.
         let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        crate_dir.parent().map(Path::to_path_buf).unwrap_or(crate_dir)
+        crate_dir
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or(crate_dir)
             .join("deployments")
             .join(format!("{}.json", cluster))
     }
@@ -141,10 +144,8 @@ impl Manifest {
             .get("programs")
             .and_then(toml::Value::as_table)
             .ok_or_else(|| anyhow!("{} has no [programs] table", toml_path.display()))?;
-        let cluster_tbl = programs
-            .get(&self.cluster)
-            .and_then(toml::Value::as_table)
-            .ok_or_else(|| {
+        let cluster_tbl =
+            programs.get(&self.cluster).and_then(toml::Value::as_table).ok_or_else(|| {
                 anyhow!(
                     "{} has no [programs.{}] entry; manifest expected one",
                     toml_path.display(),
@@ -155,11 +156,8 @@ impl Manifest {
         // Build canonical sets from both sides for symmetric-diff
         // reporting — keeps the failure message useful instead of
         // dying on the first mismatch.
-        let manifest_set: BTreeMap<&str, &str> = self
-            .programs
-            .iter()
-            .map(|p| (p.name.as_str(), p.pubkey.as_str()))
-            .collect();
+        let manifest_set: BTreeMap<&str, &str> =
+            self.programs.iter().map(|p| (p.name.as_str(), p.pubkey.as_str())).collect();
         let mut anchor_set: BTreeMap<String, String> = BTreeMap::new();
         for (name, val) in cluster_tbl {
             let pubkey = val.as_str().ok_or_else(|| {

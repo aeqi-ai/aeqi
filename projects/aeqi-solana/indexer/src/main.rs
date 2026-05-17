@@ -9,6 +9,7 @@
 //! indexer service ourselves but don't run a validator/RPC node.
 
 mod backfill;
+mod events;
 mod manifest;
 mod registry;
 mod sink;
@@ -152,9 +153,8 @@ async fn main() -> Result<()> {
     let mut handles = Vec::new();
 
     for program in &manifest.programs {
-        let pid = Pubkey::from_str(&program.pubkey).with_context(|| {
-            format!("manifest pubkey for {} is not valid base58", program.name)
-        })?;
+        let pid = Pubkey::from_str(&program.pubkey)
+            .with_context(|| format!("manifest pubkey for {} is not valid base58", program.name))?;
         let name = program.name.clone();
         let resume_slot = sink.cursor(&name)?;
         info!(program = %name, program_id = %pid, ?resume_slot, "subscribing");
@@ -202,6 +202,40 @@ async fn main() -> Result<()> {
                                                 // dedup hit — replay or reorg
                                             }
                                             Err(e) => warn!(?e, "sink.record_event failed"),
+                                        }
+                                        // Typed projection — best-effort,
+                                        // additive. Decoder returns Ok(None)
+                                        // when the event is registered but
+                                        // not yet mirrored locally; that's
+                                        // expected (we mirror one rep per
+                                        // family in the first cut). A
+                                        // Borsh error means the on-chain
+                                        // struct drifted from our mirror —
+                                        // surface but don't crash.
+                                        match events::decode(meta.program, meta.event, payload) {
+                                            Ok(Some(typed)) => {
+                                                if let Err(e) = sink_for_task.record_typed(
+                                                    &typed,
+                                                    slot,
+                                                    &resp.value.signature,
+                                                    log_index as u32,
+                                                ) {
+                                                    warn!(?e, "sink.record_typed failed");
+                                                }
+                                            }
+                                            Ok(None) => {
+                                                tracing::debug!(
+                                                    program = %meta.program,
+                                                    event = %meta.event,
+                                                    "no typed mirror — raw-only"
+                                                );
+                                            }
+                                            Err(e) => warn!(
+                                                ?e,
+                                                program = %meta.program,
+                                                event = %meta.event,
+                                                "typed decode failed — schema drift?"
+                                            ),
                                         }
                                     }
                                     None => {

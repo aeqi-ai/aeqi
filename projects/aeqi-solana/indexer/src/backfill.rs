@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{info, warn};
 
+use crate::events;
 use crate::registry;
 use crate::sink::Sink;
 
@@ -99,6 +100,30 @@ pub async fn backfill_program(
                                     Ok(true) => total_inserted += 1,
                                     Ok(false) => {} // dedup
                                     Err(e) => warn!(?e, "sink.record_event failed during backfill"),
+                                }
+                                // Typed projection — mirrors live tail.
+                                // Best-effort + additive (see main.rs for
+                                // rationale).
+                                match events::decode(meta.program, meta.event, &bytes[8..]) {
+                                    Ok(Some(typed)) => {
+                                        if let Err(e) = sink.record_typed(
+                                            &typed,
+                                            sig_info.slot,
+                                            &sig_info.signature,
+                                            log_index as u32,
+                                        ) {
+                                            warn!(?e, "sink.record_typed failed during backfill");
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        // no typed mirror yet — raw-only
+                                    }
+                                    Err(e) => warn!(
+                                        ?e,
+                                        program = %meta.program,
+                                        event = %meta.event,
+                                        "backfill typed decode failed — schema drift?"
+                                    ),
                                 }
                             }
                         }
