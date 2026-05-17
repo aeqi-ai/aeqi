@@ -21,11 +21,12 @@ export interface ShellSurface {
   /** `/admin` — operator dashboard. Backend gates on is_admin; the page
    *  itself returns null + bounces non-admins. */
   isAdmin: boolean;
-  /** In-shell role pages — rendered inside AppLayout. */
-  isRolesNew: boolean;
-  isRoleDetail: boolean;
-  isRoleEdit: boolean;
-  isRoleInvite: boolean;
+  /** In-shell identity (formerly "roles") sub-pages — rendered inside
+   *  AppLayout. The AEQI grammar renamed Roles → Identity 2026-05-17. */
+  isIdentityNew: boolean;
+  isIdentityDetail: boolean;
+  isIdentityEdit: boolean;
+  isIdentityInvite: boolean;
 }
 
 export function useShellSurface(path: string): ShellSurface {
@@ -36,14 +37,22 @@ export function useShellSurface(path: string): ShellSurface {
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
 
-    // In-shell role sub-pages on the canonical trust route.
-    const rolePathMatch = path.match(/^\/trust\/[^/]+\/roles\/(.+)$/);
-    const roleSuffix = rolePathMatch ? rolePathMatch[1] : null;
-    const isRolesNew = roleSuffix === "new";
-    const isRoleInvite = !isRolesNew && !!roleSuffix && roleSuffix.endsWith("/invite");
-    const isRoleEdit = !isRolesNew && !!roleSuffix && roleSuffix.endsWith("/edit");
-    const isRoleDetail =
-      !isRolesNew && !isRoleInvite && !isRoleEdit && !!roleSuffix && !roleSuffix.includes("/");
+    // In-shell identity sub-pages on the canonical trust route. URL slug
+    // is `/identity/...` per the AEQI grammar (the underlying primitive
+    // is still Role-typed; the page components keep their RoleNewPage /
+    // RoleDetailPage names because the data model didn't change).
+    const identityPathMatch = path.match(/^\/trust\/[^/]+\/identity\/(.+)$/);
+    const identitySuffix = identityPathMatch ? identityPathMatch[1] : null;
+    const isIdentityNew = identitySuffix === "new";
+    const isIdentityInvite =
+      !isIdentityNew && !!identitySuffix && identitySuffix.endsWith("/invite");
+    const isIdentityEdit = !isIdentityNew && !!identitySuffix && identitySuffix.endsWith("/edit");
+    const isIdentityDetail =
+      !isIdentityNew &&
+      !isIdentityInvite &&
+      !isIdentityEdit &&
+      !!identitySuffix &&
+      !identitySuffix.includes("/");
 
     // A path is "known" when it matches one of the registered shell
     // surfaces. Anything else is a 404 — including bogus top-level
@@ -59,10 +68,10 @@ export function useShellSurface(path: string): ShellSurface {
       isLaunch,
       isNotFound,
       isAdmin,
-      isRolesNew,
-      isRoleDetail,
-      isRoleEdit,
-      isRoleInvite,
+      isIdentityNew,
+      isIdentityDetail,
+      isIdentityEdit,
+      isIdentityInvite,
     };
   }, [path]);
 }

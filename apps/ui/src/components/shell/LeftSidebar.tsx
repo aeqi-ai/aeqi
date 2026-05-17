@@ -85,8 +85,35 @@ const LaunchIcon = () => (
   </svg>
 );
 
-// Roles — org chart; one node atop two children.
-const RolesIcon = () => (
+// Assets (a) — coin / safe geometry. Concentric circles read as value/store.
+const AssetsIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="8" r="5.5" />
+    <circle cx="8" cy="8" r="2.5" />
+    <path d="M2.5 8h2M11.5 8h2" />
+  </svg>
+);
+
+// Equity (e) — pie / share allocation.
+const EquityIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 8 L8 2.5 A5.5 5.5 0 0 1 13.5 8 Z" />
+  </svg>
+);
+
+// Quorum (q) — balanced scale; gavel/decision read.
+const QuorumIcon = () => (
+  <svg {...iconProps}>
+    <path d="M8 2v12" />
+    <path d="M3 5h10" />
+    <path d="M5 5l-2 4h4z" />
+    <path d="M11 5l-2 4h4z" />
+  </svg>
+);
+
+// Identity (i) — org chart; one node atop two children.
+const IdentityIcon = () => (
   <svg {...iconProps}>
     <circle cx="8" cy="3.5" r="1.5" />
     <circle cx="4" cy="11.5" r="1.5" />
@@ -348,12 +375,19 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
               </div>
             </nav>
 
-            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Roles">
-              {navItem("roles", "Roles", <RolesIcon />)}
+            {/* AEQI ownership grammar — assets · equity · quorum · identity.
+                The four rows spell the wordmark in order. Section label
+                reinforces "this is who owns / runs the TRUST". */}
+            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Ownership">
+              <div className="sidebar-section-label">Ownership</div>
+              {navItem("assets", "Assets", <AssetsIcon />)}
+              {navItem("equity", "Equity", <EquityIcon />)}
+              {navItem("quorum", "Quorum", <QuorumIcon />)}
+              {navItem("identity", "Identity", <IdentityIcon />)}
             </nav>
 
-            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Workspace">
-              <div className="sidebar-section-label">Workspace</div>
+            <nav className="sidebar-surface-nav sidebar-zone" aria-label="Execution">
+              <div className="sidebar-section-label">Execution</div>
               {navItem("agents", "Agents", <AgentsIcon />)}
               {navItem("events", "Events", <EventsIcon />, {
                 action: rowAction("New event", <PlusIcon />, () => {

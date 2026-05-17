@@ -14,6 +14,9 @@ const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 // data so sibling-agent work remains visible on `/trust/<addr>/...`.
 const EntityAgentsTab = lazy(() => import("@/components/EntityAgentsTab"));
 const EntityRolesTab = lazy(() => import("@/components/EntityRolesTab"));
+const AssetsPage = lazy(() => import("@/pages/AssetsPage"));
+const EquityPage = lazy(() => import("@/pages/EquityPage"));
+const QuorumPage = lazy(() => import("@/pages/QuorumPage"));
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
 const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
 const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
@@ -129,10 +132,32 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
       </Suspense>
     );
   }
-  if (tab === "roles") {
+  // AEQI grammar: Identity is the role-chart surface (renamed 2026-05-17).
+  if (tab === "identity") {
     return (
       <Suspense>
         <EntityRolesTab entityId={entityId} />
+      </Suspense>
+    );
+  }
+  if (tab === "assets") {
+    return (
+      <Suspense>
+        <AssetsPage />
+      </Suspense>
+    );
+  }
+  if (tab === "equity") {
+    return (
+      <Suspense>
+        <EquityPage />
+      </Suspense>
+    );
+  }
+  if (tab === "quorum") {
+    return (
+      <Suspense>
+        <QuorumPage />
       </Suspense>
     );
   }
