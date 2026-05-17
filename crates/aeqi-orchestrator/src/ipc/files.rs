@@ -27,8 +27,93 @@ pub async fn handle_files_list(
     }
 }
 
-/// `files_upload { agent_id, name, mime, content_b64, uploaded_by? }`
-/// → `{ ok: true, file: {...} }`
+/// Best-effort bridge for pre-Phase-2.6 Drive rows that have a `files` entry
+/// but no companion `Idea[kind=file]`.
+pub async fn backfill_file_ideas_for_agent(ctx: &super::CommandContext, agent_id: &str) -> usize {
+    let Some(ref idea_store) = ctx.idea_store else {
+        return 0;
+    };
+    let files = match ctx.agent_registry.list_files_for_agent(agent_id).await {
+        Ok(files) => files,
+        Err(e) => {
+            tracing::warn!(
+                agent_id,
+                error = %e,
+                "files_backfill: failed to list files for companion Idea backfill"
+            );
+            return 0;
+        }
+    };
+
+    let mut created = 0;
+    for file in files {
+        let id = file.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if id.is_empty() {
+            continue;
+        }
+        match idea_store.find_by_file_id(id).await {
+            Ok(Some(_)) => continue,
+            Err(e) => {
+                tracing::warn!(
+                    file_id = %id,
+                    error = %e,
+                    "files_backfill: failed to check companion Idea"
+                );
+                continue;
+            }
+            Ok(None) => {}
+        }
+
+        let name = file
+            .get("name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("file");
+        let mime = file
+            .get("mime")
+            .and_then(|v| v.as_str())
+            .unwrap_or("application/octet-stream");
+        let size = file.get("size_bytes").and_then(|v| v.as_i64()).unwrap_or(0);
+        let content = format!("File: {name} ({size} bytes, {mime})");
+
+        match idea_store
+            .store_with_scope(
+                name,
+                &content,
+                &["file".to_string()],
+                Some(agent_id),
+                aeqi_core::Scope::SelfScope,
+            )
+            .await
+        {
+            Ok(idea_id) => {
+                if let Err(e) = idea_store.set_kind(&idea_id, "file", Some(id)).await {
+                    tracing::warn!(
+                        file_id = %id,
+                        idea_id = %idea_id,
+                        error = %e,
+                        "files_backfill: companion Idea created but set_kind failed"
+                    );
+                    continue;
+                }
+                created += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    file_id = %id,
+                    agent_id,
+                    error = %e,
+                    "files_backfill: failed to create companion Idea"
+                );
+            }
+        }
+    }
+
+    created
+}
+
+/// `files_upload { agent_id, name, mime, content_b64, uploaded_by?, parent_idea_id?, scope? }`
+/// → `{ ok: true, file: {...}, idea_id?: "..." }`
 ///
 /// Expects base64-encoded bytes so the IPC channel stays line-delimited JSON.
 /// For very large files the web layer will stream directly to disk and call a
@@ -47,6 +132,10 @@ pub async fn handle_files_upload(
     };
     let mime = request_field(request, "mime").unwrap_or("application/octet-stream");
     let uploaded_by = request_field(request, "uploaded_by");
+    let parent_idea_id = request_field(request, "parent_idea_id").map(str::to_string);
+    let idea_scope = request_field(request, "scope")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(aeqi_core::Scope::SelfScope);
     let Some(content_b64) = request_field(request, "content_b64") else {
         return serde_json::json!({"ok": false, "error": "content_b64 required"});
     };
@@ -102,13 +191,32 @@ pub async fn handle_files_upload(
     // Failure is non-fatal: the file is already on disk and in the files
     // table. We log and proceed — Drive still works, just without Ideas-tree
     // visibility for this row until a future backfill.
+    let mut companion_idea_id: Option<String> = None;
     if let Some(ref idea_store) = ctx.idea_store {
         let idea_content = format!("File: {} ({} bytes, {})", name, bytes.len(), mime);
         match idea_store
-            .store(name, &idea_content, &["file".to_string()], Some(agent_id))
+            .store_with_scope(
+                name,
+                &idea_content,
+                &["file".to_string()],
+                Some(agent_id),
+                idea_scope,
+            )
             .await
         {
             Ok(idea_id) => {
+                companion_idea_id = Some(idea_id.clone());
+                if let Some(parent_id) = parent_idea_id.as_deref()
+                    && let Err(e) = idea_store.set_parent(&idea_id, Some(parent_id)).await
+                {
+                    tracing::warn!(
+                        file_id = %id,
+                        idea_id = %idea_id,
+                        parent_idea_id = %parent_id,
+                        error = %e,
+                        "files_upload: companion Idea created but parent assignment failed"
+                    );
+                }
                 if let Err(e) = idea_store.set_kind(&idea_id, "file", Some(&id)).await {
                     tracing::warn!(
                         file_id = %id,
@@ -128,7 +236,13 @@ pub async fn handle_files_upload(
     }
 
     match ctx.agent_registry.get_file(&id).await {
-        Ok(Some(meta)) => serde_json::json!({"ok": true, "file": meta}),
+        Ok(Some(meta)) => {
+            let mut response = serde_json::json!({"ok": true, "file": meta});
+            if let Some(idea_id) = companion_idea_id {
+                response["idea_id"] = serde_json::Value::String(idea_id);
+            }
+            response
+        }
         Ok(None) => serde_json::json!({"ok": false, "error": "file vanished after insert"}),
         Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
     }

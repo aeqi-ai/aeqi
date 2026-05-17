@@ -266,6 +266,7 @@ WantedBy=multi-user.target
             r#"# Managed by AEQI hosting — do not edit manually
 server {{
     server_name {domain};
+    client_max_body_size 50m;
 
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
     add_header X-Content-Type-Options "nosniff" always;

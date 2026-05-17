@@ -18,6 +18,8 @@ interface ImportMenuProps {
   blueprintTitle: string;
   /** Markdown file picker accept attribute (default `.md,.markdown`). */
   accept?: string;
+  /** Label for the local file picker row. */
+  fileLabel?: string;
   /** Called once the user has picked one or more markdown files. The
    *  caller is responsible for parsing + uploading; the menu only
    *  hands the files over and dismisses. */
@@ -42,6 +44,7 @@ export function ImportMenu({
   parts,
   blueprintTitle,
   accept = ".md,.markdown",
+  fileLabel = "From markdown",
   onMarkdownPicked,
   onBlueprintSpawned,
 }: ImportMenuProps) {
@@ -74,7 +77,7 @@ export function ImportMenu({
         items={[
           {
             key: "markdown",
-            label: "From markdown",
+            label: fileLabel,
             onSelect: () => fileInputRef.current?.click(),
           },
           {

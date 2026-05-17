@@ -110,6 +110,7 @@ aeqi.example.com {
 server {
     listen 443 ssl http2;
     server_name aeqi.example.com;
+    client_max_body_size 50m;
 
     ssl_certificate     /etc/ssl/certs/aeqi.pem;
     ssl_certificate_key /etc/ssl/private/aeqi.key;

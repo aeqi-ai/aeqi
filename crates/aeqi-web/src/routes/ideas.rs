@@ -1,9 +1,11 @@
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
-    response::Response,
+    extract::{Multipart, Path, Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
 use super::helpers::{ipc_proxy, merge_path_id, query_to_params};
@@ -13,6 +15,7 @@ use crate::server::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/ideas", get(list_ideas).post(store_idea))
+        .route("/ideas/files", post(upload_root_idea_file))
         .route("/ideas/search", get(search_ideas))
         .route("/ideas/prefix", get(ideas_by_prefix))
         .route("/ideas/by-ids", post(ideas_by_ids))
@@ -23,6 +26,7 @@ pub fn routes() -> Router<AppState> {
             "/ideas/{id}",
             axum::routing::put(update_idea).delete(delete_idea),
         )
+        .route("/ideas/{id}/files", post(upload_child_idea_file))
         .route(
             "/ideas/{id}/edges",
             get(get_idea_edges)
@@ -59,6 +63,101 @@ async fn store_idea(
     Json(body): Json<serde_json::Value>,
 ) -> Response {
     ipc_proxy(state, scope.as_ref(), "store_idea", body).await
+}
+
+async fn upload_root_idea_file(
+    State(state): State<AppState>,
+    scope: Scope,
+    multipart: Multipart,
+) -> Response {
+    upload_idea_file(state, scope, None, multipart).await
+}
+
+async fn upload_child_idea_file(
+    State(state): State<AppState>,
+    scope: Scope,
+    Path(parent_id): Path<String>,
+    multipart: Multipart,
+) -> Response {
+    upload_idea_file(state, scope, Some(parent_id), multipart).await
+}
+
+async fn upload_idea_file(
+    state: AppState,
+    scope: Scope,
+    parent_idea_id: Option<String>,
+    mut multipart: Multipart,
+) -> Response {
+    let mut agent_id: Option<String> = None;
+    let mut idea_scope: Option<String> = None;
+    let mut file_name: Option<String> = None;
+    let mut mime: Option<String> = None;
+    let mut bytes: Option<Vec<u8>> = None;
+
+    while let Some(field) = match multipart.next_field().await {
+        Ok(field) => field,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"ok": false, "error": format!("invalid multipart body: {e}")})),
+            )
+                .into_response();
+        }
+    } {
+        let field_name = field.name().unwrap_or("").to_string();
+        if field_name == "agent_id" {
+            agent_id = field.text().await.ok().map(|s| s.trim().to_string());
+            continue;
+        }
+        if field_name == "scope" {
+            idea_scope = field.text().await.ok().map(|s| s.trim().to_string());
+            continue;
+        }
+        if field_name == "file" && bytes.is_none() {
+            file_name = field.file_name().map(str::to_string);
+            mime = field.content_type().map(str::to_string);
+            bytes = match field.bytes().await {
+                Ok(b) => Some(b.to_vec()),
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({"ok": false, "error": format!("failed to read file: {e}")})),
+                    )
+                    .into_response();
+                }
+            };
+        }
+    }
+
+    let Some(agent_id) = agent_id.filter(|s| !s.is_empty()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"ok": false, "error": "agent_id required"})),
+        )
+            .into_response();
+    };
+    let Some(bytes) = bytes else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"ok": false, "error": "file field required"})),
+        )
+            .into_response();
+    };
+
+    let mut params = serde_json::json!({
+        "agent_id": agent_id,
+        "name": file_name.unwrap_or_else(|| "file".to_string()),
+        "mime": mime.unwrap_or_else(|| "application/octet-stream".to_string()),
+        "content_b64": base64::engine::general_purpose::STANDARD.encode(&bytes),
+    });
+    if let Some(parent_id) = parent_idea_id {
+        params["parent_idea_id"] = serde_json::Value::String(parent_id);
+    }
+    if let Some(scope) = idea_scope.filter(|s| !s.is_empty()) {
+        params["scope"] = serde_json::Value::String(scope);
+    }
+
+    ipc_proxy(state, scope.as_ref(), "files_upload", params).await
 }
 
 async fn update_idea(

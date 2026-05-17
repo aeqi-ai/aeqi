@@ -17,6 +17,23 @@ export interface StoreIdeaRequest {
   properties?: Record<string, unknown> | null;
 }
 
+export interface UploadedIdeaFile {
+  id: string;
+  agent_id: string;
+  name: string;
+  mime: string;
+  size_bytes: number;
+  uploaded_by?: string | null;
+  uploaded_at: string;
+}
+
+export interface UploadIdeaFileResponse {
+  ok: boolean;
+  file: UploadedIdeaFile;
+  idea_id?: string;
+  error?: string;
+}
+
 export function listIdeas(params?: {
   root?: string;
   query?: string;
@@ -36,6 +53,25 @@ export function storeIdea(data: StoreIdeaRequest): Promise<{ ok: boolean; id: st
   return apiRequest<{ ok: boolean; id: string }>("/ideas", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+}
+
+export function uploadFileToIdea(options: {
+  agentId: string;
+  file: File;
+  parentIdeaId?: string | null;
+  scope?: ScopeValue;
+}): Promise<UploadIdeaFileResponse> {
+  const form = new FormData();
+  form.append("agent_id", options.agentId);
+  if (options.scope) form.append("scope", options.scope);
+  form.append("file", options.file, options.file.name || "file");
+  const path = options.parentIdeaId
+    ? `/ideas/${encodeURIComponent(options.parentIdeaId)}/files`
+    : "/ideas/files";
+  return apiRequest<UploadIdeaFileResponse>(path, {
+    method: "POST",
+    body: form,
   });
 }
 

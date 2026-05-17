@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ReactNode } from "react";
+import type { DragEvent, ReactNode } from "react";
 import { logError } from "@/lib/logging";
 import * as ideasApi from "@/api/ideas";
 import { useNav } from "@/hooks/useNav";
@@ -26,6 +26,10 @@ import IdeaChildrenList from "./ideas/IdeaChildrenList";
 import IdeaCanvasToolbar from "./ideas/IdeaCanvasToolbar";
 import IdeaCanvasDecisionPanel from "./ideas/IdeaCanvasDecisionPanel";
 import { ImportMenu } from "./blueprints/ImportMenu";
+
+function isMarkdownFile(file: File): boolean {
+  return /\.(md|markdown)$/i.test(file.name) || file.type === "text/markdown";
+}
 
 /**
  * Imperative handle for callers that supply their own toolbar (the
@@ -525,29 +529,39 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
     revert();
   };
 
-  const handleMarkdownImport = useCallback(
+  const handleFileImport = useCallback(
     async (files: FileList) => {
       if (!idea) return;
       const failures: string[] = [];
       for (const file of Array.from(files)) {
         try {
-          const raw = await file.text();
-          const { body, data } = parseFrontmatter(raw);
-          const importedName =
-            (typeof data.title === "string" && data.title) ||
-            file.name.replace(/\.(md|markdown)$/i, "") ||
-            "Untitled";
-          const summary = typeof data.summary === "string" ? data.summary.trim() : "";
-          const importedContent =
-            summary && !body.startsWith(summary) ? `${summary}\n\n${body.trim()}` : body.trim();
-          await ideasApi.storeIdea({
-            name: importedName,
-            content: importedContent,
-            tags: asStringArray(data.tags),
-            agent_id: agentId,
-            scope: idea.scope ?? headerScope,
-            parent_idea_id: idea.id,
-          });
+          if (isMarkdownFile(file)) {
+            const raw = await file.text();
+            const { body, data } = parseFrontmatter(raw);
+            const importedName =
+              (typeof data.title === "string" && data.title) ||
+              file.name.replace(/\.(md|markdown)$/i, "") ||
+              "Untitled";
+            const summary = typeof data.summary === "string" ? data.summary.trim() : "";
+            const importedContent =
+              summary && !body.startsWith(summary) ? `${summary}\n\n${body.trim()}` : body.trim();
+            await ideasApi.storeIdea({
+              name: importedName,
+              content: importedContent,
+              tags: asStringArray(data.tags),
+              agent_id: agentId,
+              scope: idea.scope ?? headerScope,
+              parent_idea_id: idea.id,
+            });
+          } else {
+            const upload = await ideasApi.uploadFileToIdea({
+              agentId,
+              file,
+              scope: idea.scope ?? headerScope,
+              parentIdeaId: idea.id,
+            });
+            if (!upload.ok) throw new Error(upload.error || "upload failed");
+          }
         } catch (e) {
           failures.push(`${file.name}: ${e instanceof Error ? e.message : "import failed"}`);
         }
@@ -558,9 +572,21 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
     },
     [agentId, headerScope, idea, invalidateIdeas],
   );
+  const handleDropFiles = (event: DragEvent) => {
+    if (!idea || event.dataTransfer.files.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void handleFileImport(event.dataTransfer.files);
+  };
 
   return (
-    <div className={embedded ? "ideas-canvas ideas-canvas--embedded" : "asv-main ideas-canvas"}>
+    <div
+      className={embedded ? "ideas-canvas ideas-canvas--embedded" : "asv-main ideas-canvas"}
+      onDragOver={(event) => {
+        if (idea && event.dataTransfer.types.includes("Files")) event.preventDefault();
+      }}
+      onDrop={handleDropFiles}
+    >
       {headerSlot && !embedded && (
         <div className="ideas-list-head ideas-canvas-head">{headerSlot}</div>
       )}
@@ -593,7 +619,9 @@ const IdeaCanvas = forwardRef<IdeaCanvasHandle, IdeaCanvasProps>(function IdeaCa
                 entityId={entityId}
                 parts={["ideas"]}
                 blueprintTitle="Import child ideas from a Blueprint"
-                onMarkdownPicked={(files) => void handleMarkdownImport(files)}
+                accept="*/*"
+                fileLabel="From files"
+                onMarkdownPicked={(files) => void handleFileImport(files)}
                 onBlueprintSpawned={() => void invalidateIdeas()}
               />
             }

@@ -69,6 +69,10 @@ pub async fn handle_list_ideas(
     // position DAG and include globals (agent_id IS NULL) + self +
     // descendants. The trait IdeaStore doesn't know about position edges.
     if let Some(aid) = request_field(request, "agent_id") {
+        let backfilled = super::files::backfill_file_ideas_for_agent(ctx, aid).await;
+        if backfilled > 0 {
+            ctx.recall_cache.invalidate();
+        }
         match ctx.agent_registry.list_ideas_visible_to(aid).await {
             Ok(ideas) => {
                 let items: Vec<serde_json::Value> = ideas.iter().map(idea_to_json).collect();

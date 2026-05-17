@@ -89,8 +89,7 @@ pub async fn request_size_limit_middleware(req: Request, next: Next) -> Response
         && let Ok(length_str) = content_length.to_str()
         && let Ok(length) = length_str.parse::<usize>()
     {
-        // Limit request body to 10MB
-        const MAX_BODY_SIZE: usize = 10 * 1024 * 1024; // 10MB
+        const MAX_BODY_SIZE: usize = 50 * 1024 * 1024;
 
         if length > MAX_BODY_SIZE {
             warn!(
@@ -332,9 +331,10 @@ pub async fn validate_content_type_middleware(req: Request, next: Next) -> Respo
     if matches!(req.method().as_str(), "POST" | "PUT" | "PATCH") {
         if let Some(content_type) = req.headers().get("content-type") {
             if let Ok(content_type_str) = content_type.to_str() {
-                // Allow application/json and application/x-www-form-urlencoded
+                // Allow JSON, forms, and multipart file uploads.
                 if !content_type_str.starts_with("application/json")
                     && !content_type_str.starts_with("application/x-www-form-urlencoded")
+                    && !content_type_str.starts_with("multipart/form-data")
                 {
                     warn!(
                         content_type = content_type_str,
@@ -345,7 +345,7 @@ pub async fn validate_content_type_middleware(req: Request, next: Next) -> Respo
                         StatusCode::UNSUPPORTED_MEDIA_TYPE,
                         Json(serde_json::json!({
                             "ok": false,
-                            "error": "Invalid content-type. Expected application/json or application/x-www-form-urlencoded"
+                            "error": "Invalid content-type. Expected application/json, application/x-www-form-urlencoded, or multipart/form-data"
                         })),
                     ).into_response();
                 }
@@ -375,6 +375,7 @@ mod tests {
         Router,
         body::Body,
         http::{Request, StatusCode},
+        middleware,
         routing::post,
     };
     use serde_json::json;
@@ -397,6 +398,10 @@ mod tests {
             Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
             Err(err) => err.into_response(),
         }
+    }
+
+    async fn ok_handler() -> Response {
+        (StatusCode::OK, Json(json!({"ok": true}))).into_response()
     }
 
     #[tokio::test]
@@ -445,6 +450,63 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_content_type_middleware_allows_multipart_uploads() {
+        let app = Router::new()
+            .route("/upload", post(ok_handler))
+            .layer(middleware::from_fn(validate_content_type_middleware));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/upload")
+                    .header("content-type", "multipart/form-data; boundary=aeqi")
+                    .body(Body::from("--aeqi--"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_request_size_limit_allows_drive_sized_uploads() {
+        let app = Router::new()
+            .route("/upload", post(ok_handler))
+            .layer(middleware::from_fn(request_size_limit_middleware));
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/upload")
+                    .header("content-length", (25 * 1024 * 1024).to_string())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/upload")
+                    .header("content-length", (50 * 1024 * 1024 + 1).to_string())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     #[test]

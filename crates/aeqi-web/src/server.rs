@@ -3,7 +3,7 @@ use anyhow::Result;
 use axum::{
     Router,
     body::Body,
-    extract::{Request, State},
+    extract::{DefaultBodyLimit, Request, State},
     http::{Method, StatusCode},
     middleware,
     response::{IntoResponse, Response},
@@ -274,6 +274,7 @@ pub async fn start(config: &AEQIConfig) -> Result<()> {
         .merge(loose)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
         // Add request size limiting middleware
         .layer(axum::middleware::from_fn(request_size_limit_middleware))
         // Add content-type validation middleware

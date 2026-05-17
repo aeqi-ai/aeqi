@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { useNav } from "@/hooks/useNav";
 import { Button, Icon, IconButton } from "../ui";
 import type { Idea, ScopeValue } from "@/lib/types";
-import { storeIdea } from "@/api/ideas";
+import { storeIdea, uploadFileToIdea } from "@/api/ideas";
 import { asStringArray, parseFrontmatter } from "@/lib/frontmatter";
 import { formatDateTime } from "@/lib/i18n";
 import { useAgentIdeasCache } from "@/queries/ideas";
@@ -23,6 +23,10 @@ import {
 } from "./types";
 
 const TAG_CHIP_LIMIT = 8;
+
+function isMarkdownFile(file: File): boolean {
+  return /\.(md|markdown)$/i.test(file.name) || file.type === "text/markdown";
+}
 
 function ScopeChip({ scope }: { scope: ScopeValue }) {
   if (scope === "self") return null;
@@ -161,31 +165,41 @@ export default function IdeasListView({
   const { invalidateIdeas } = useAgentIdeasCache(agentId);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const handleMarkdownImport = async (files: FileList) => {
+  const handleFileImport = async (files: FileList | File[], parentIdeaId?: string | null) => {
     setImportError(null);
     const failures: string[] = [];
     for (const file of Array.from(files)) {
       try {
-        const raw = await file.text();
-        const { body, data } = parseFrontmatter(raw);
-        // Strip `.md` / `.markdown` from the filename — kept case-sensitive
-        // since OS filesystems are; the user can rename if it matters.
-        const name =
-          (typeof data.title === "string" && data.title) ||
-          file.name.replace(/\.(md|markdown)$/i, "") ||
-          "Untitled";
-        const tags = asStringArray(data.tags);
-        const summary = typeof data.summary === "string" ? data.summary.trim() : "";
-        // Stash summary as a leading paragraph if present and not already
-        // duplicated in the body — the Idea schema has no `summary` field.
-        const content =
-          summary && !body.startsWith(summary) ? `${summary}\n\n${body.trim()}` : body.trim();
-        await storeIdea({
-          name,
-          content,
-          tags,
-          agent_id: agentId,
-        });
+        if (isMarkdownFile(file)) {
+          const raw = await file.text();
+          const { body, data } = parseFrontmatter(raw);
+          // Strip `.md` / `.markdown` from the filename — kept case-sensitive
+          // since OS filesystems are; the user can rename if it matters.
+          const name =
+            (typeof data.title === "string" && data.title) ||
+            file.name.replace(/\.(md|markdown)$/i, "") ||
+            "Untitled";
+          const tags = asStringArray(data.tags);
+          const summary = typeof data.summary === "string" ? data.summary.trim() : "";
+          // Stash summary as a leading paragraph if present and not already
+          // duplicated in the body — the Idea schema has no `summary` field.
+          const content =
+            summary && !body.startsWith(summary) ? `${summary}\n\n${body.trim()}` : body.trim();
+          await storeIdea({
+            name,
+            content,
+            tags,
+            agent_id: agentId,
+            parent_idea_id: parentIdeaId ?? undefined,
+          });
+        } else {
+          const upload = await uploadFileToIdea({
+            agentId,
+            file,
+            parentIdeaId,
+          });
+          if (!upload.ok) throw new Error(upload.error || "upload failed");
+        }
       } catch (e) {
         failures.push(`${file.name}: ${e instanceof Error ? e.message : "import failed"}`);
       }
@@ -194,6 +208,12 @@ export default function IdeasListView({
     if (failures.length > 0) {
       setImportError(failures.join("; "));
     }
+  };
+  const handleDropFiles = (event: DragEvent, parentIdeaId?: string | null) => {
+    if (event.dataTransfer.files.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void handleFileImport(event.dataTransfer.files, parentIdeaId);
   };
   const toggleTag = (tag: string) => {
     const next = filter.tags.includes(tag)
@@ -319,7 +339,9 @@ export default function IdeasListView({
             entityId={entityId}
             parts={["ideas"]}
             blueprintTitle="Import ideas from a Blueprint"
-            onMarkdownPicked={(files) => void handleMarkdownImport(files)}
+            accept="*/*"
+            fileLabel="From files"
+            onMarkdownPicked={(files) => void handleFileImport(files)}
             onBlueprintSpawned={() => void invalidateIdeas()}
           />
         }
@@ -344,7 +366,13 @@ export default function IdeasListView({
         />
       )}
 
-      <div className="ideas-list-body">
+      <div
+        className="ideas-list-body"
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+        }}
+        onDrop={(event) => handleDropFiles(event)}
+      >
         {filtered.length === 0 ? (
           ideas.length === 0 ? (
             <div className="empty-state-hero">
@@ -464,6 +492,10 @@ export default function IdeasListView({
                       key={idea.id}
                       className={`ideas-list-row-wrap ${depthClass}`}
                       data-has-children={hasChildren ? "true" : "false"}
+                      onDragOver={(event) => {
+                        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+                      }}
+                      onDrop={(event) => handleDropFiles(event, idea.id)}
                     >
                       {hasChildren ? (
                         <IconButton
