@@ -279,6 +279,8 @@ export default function SessionDetail({
               {activityLabel && (
                 <span
                   className={`session-detail-header-activity${isStreaming ? " is-streaming" : ""}`}
+                  role="status"
+                  aria-live="polite"
                 >
                   {activityLabel}
                 </span>
@@ -294,7 +296,16 @@ export default function SessionDetail({
 
       {preThreadSlot}
 
-      <div className="session-detail-thread" ref={scrollRef} onScroll={handleThreadScroll}>
+      <div
+        className="session-detail-thread"
+        ref={scrollRef}
+        onScroll={handleThreadScroll}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-atomic="false"
+        aria-label="Conversation"
+      >
         {messages.length === 0 && !threadTrailingSlot ? (
           <div className="session-detail-empty">
             {emptyTitle && <div className="session-detail-empty-title">{emptyTitle}</div>}
