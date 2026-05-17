@@ -155,6 +155,11 @@ pub async fn handle_store_idea(
             };
 
             if similarity > NEAR_DUPLICATE_THRESHOLD {
+                if let Err(response) =
+                    apply_store_metadata(idea_store, &existing_id, &input, "skip").await
+                {
+                    return response;
+                }
                 return serde_json::json!({
                     "ok": true,
                     "id": existing_id,
@@ -178,6 +183,10 @@ pub async fn handle_store_idea(
             );
         }
 
+        if let Err(response) = apply_store_metadata(idea_store, &existing_id, &input, "skip").await
+        {
+            return response;
+        }
         return serde_json::json!({
             "ok": true,
             "id": existing_id,
@@ -294,29 +303,51 @@ pub async fn handle_store_idea(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
     {
-        if input.parent_idea_id.is_some() {
-            let _ = idea_store
-                .set_parent(&target_id, input.parent_idea_id.as_deref())
-                .await;
-        }
-        if let Some(props) = input.properties.clone() {
-            let _ = idea_store.set_properties(&target_id, Some(props)).await;
-        }
-        if let Some(kind) = input.kind.as_deref()
-            && let Err(e) = idea_store
-                .set_kind(&target_id, kind, input.file_id.as_deref())
-                .await
+        if let Err(error_response) = apply_store_metadata(
+            idea_store,
+            &target_id,
+            &input,
+            response
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap_or("store"),
+        )
+        .await
         {
-            return serde_json::json!({
-                "ok": false,
-                "id": target_id,
-                "action": response.get("action").cloned().unwrap_or(serde_json::Value::Null),
-                "error": format!("stored idea but failed to set kind={kind:?}: {e}"),
-            });
+            return error_response;
         }
     }
 
     response
+}
+
+async fn apply_store_metadata(
+    idea_store: &Arc<dyn IdeaStore>,
+    target_id: &str,
+    input: &StoreRequest,
+    action: &str,
+) -> std::result::Result<(), serde_json::Value> {
+    if input.parent_idea_id.is_some() {
+        let _ = idea_store
+            .set_parent(target_id, input.parent_idea_id.as_deref())
+            .await;
+    }
+    if let Some(props) = input.properties.clone() {
+        let _ = idea_store.set_properties(target_id, Some(props)).await;
+    }
+    if let Some(kind) = input.kind.as_deref()
+        && let Err(e) = idea_store
+            .set_kind(target_id, kind, input.file_id.as_deref())
+            .await
+    {
+        return Err(serde_json::json!({
+            "ok": false,
+            "id": target_id,
+            "action": action,
+            "error": format!("stored idea but failed to set kind={kind:?}: {e}"),
+        }));
+    }
+    Ok(())
 }
 
 fn top_similar(similar: &[SimilarIdea]) -> Option<&SimilarIdea> {
@@ -3560,6 +3591,57 @@ mod wave2_tests {
 
         let hydrated = idea_store
             .get_by_name("goal-kind-test", None)
+            .await
+            .unwrap()
+            .expect("stored idea must hydrate");
+        assert_eq!(hydrated.kind, "goal");
+    }
+
+    #[tokio::test]
+    async fn handle_store_idea_updates_kind_on_same_name_skip() {
+        let (ctx, _ss, idea_store, dir) = wave2_ctx().await;
+
+        let first = handle_store_idea(
+            &ctx,
+            &serde_json::json!({
+                "name": "goal-kind-skip-test",
+                "content": "same content should dedup",
+                "tags": ["goal", "regression"],
+            }),
+            &None,
+        )
+        .await;
+        assert_eq!(first["ok"], true, "first store: {first}");
+        assert_eq!(first["action"], "create");
+        let idea_id = first["id"].as_str().unwrap().to_string();
+
+        let second = handle_store_idea(
+            &ctx,
+            &serde_json::json!({
+                "name": "goal-kind-skip-test",
+                "content": "same content should dedup",
+                "tags": ["goal", "regression"],
+                "kind": "goal",
+            }),
+            &None,
+        )
+        .await;
+        assert_eq!(second["ok"], true, "second store: {second}");
+        assert_eq!(second["action"], "skip");
+        assert_eq!(second["id"], idea_id);
+
+        let conn = rusqlite::Connection::open(dir.path().join("aeqi.db")).unwrap();
+        let stored_kind: String = conn
+            .query_row(
+                "SELECT kind FROM ideas WHERE id = ?1",
+                rusqlite::params![idea_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored_kind, "goal");
+
+        let hydrated = idea_store
+            .get_by_name("goal-kind-skip-test", None)
             .await
             .unwrap()
             .expect("stored idea must hydrate");
