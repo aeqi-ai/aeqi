@@ -138,6 +138,13 @@ const AdminIcon = () => (
   </svg>
 );
 
+// Health — pulse line. Operator's "is this thing compounding?" surface.
+const HealthIcon = () => (
+  <svg {...iconProps}>
+    <path d="M2 8h3l1.5-3 3 6 1.5-3H14" />
+  </svg>
+);
+
 const SearchIcon = () => (
   <svg {...iconProps}>
     <circle cx="7" cy="7" r="4.5" />
@@ -380,6 +387,7 @@ export default function LeftSidebar({ entityId, path }: LeftSidebarProps) {
                   <span className="sidebar-nav-label">Organization</span>
                 </a>
               </div>
+              {navItem("health", "Health", <HealthIcon />)}
               {navItem("inbox", "Inbox", <InboxIcon />)}
               {navItem("drive", "Drive", <DriveIcon />)}
             </nav>

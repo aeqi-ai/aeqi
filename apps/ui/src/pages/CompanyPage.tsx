@@ -8,6 +8,7 @@ import { useCurrentCompany } from "@/hooks/useCurrentCompany";
 // EntityHeroStrip + roles / quests / activity. Lazy-loaded to keep this
 // dispatch shell light. Mirrors the lazy pattern used in AgentPage.
 const EntityOverviewTab = lazy(() => import("@/components/EntityOverviewTab"));
+const HealthPage = lazy(() => import("@/pages/HealthPage"));
 const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const OwnershipPage = lazy(() => import("@/pages/OwnershipPage"));
 const TreasuryPage = lazy(() => import("@/pages/TreasuryPage"));
@@ -39,6 +40,7 @@ interface CompanyPageProps {
  * Routes:
  *   /c/:entityId               → EntityOverviewTab (cockpit)
  *   /c/:entityId/inbox         → MeInboxPage
+ *   /c/:entityId/health        → HealthPage (day-30 substrate health)
  *   /c/:entityId/roles         → EntityRolesTab (org chart)
  *   /c/:entityId/ownership     → OwnershipPage
  *   /c/:entityId/treasury      → TreasuryPage
@@ -95,6 +97,13 @@ export default function CompanyPage({ agentId, entityId, tab, itemId }: CompanyP
     return (
       <Suspense>
         <MeInboxPage />
+      </Suspense>
+    );
+  }
+  if (tab === "health") {
+    return (
+      <Suspense>
+        <HealthPage entityId={entityId} />
       </Suspense>
     );
   }

@@ -1,0 +1,113 @@
+/*
+ * /trust/<addr>/health — operator-facing day-30 substrate health.
+ *
+ * Layout is "metric grid above, sparkline grid below": two parallel
+ * 4-column grids so a metric and its sparkline live in the same
+ * visual column. On narrow viewports both collapse to a single column.
+ *
+ * Every value, font, color, radius, and spacing token comes from the
+ * design system — no hex, no rgb, no inline styles. Sparklines are
+ * inline <svg> with currentColor so the line picks up the surrounding
+ * ink/muted color from the token system.
+ */
+
+.metricInterpretation {
+  margin: var(--space-1) 0 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.metricInterpretation[data-direction="down"] {
+  color: var(--color-text-primary);
+}
+
+.trendLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.trendLabel[data-direction="up"] {
+  color: var(--color-success);
+}
+
+.trendLabel[data-direction="down"] {
+  color: var(--color-text-primary);
+}
+
+.trendLabel[data-direction="flat"],
+.trendLabel[data-direction="fresh"] {
+  color: var(--color-text-muted);
+}
+
+.sparkGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sparkGrid[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sparkGrid[data-columns="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sparkCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-card);
+  border-radius: var(--radius-md);
+}
+
+.sparkLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sparkSvg {
+  display: block;
+  width: 100%;
+  height: 40px;
+  color: var(--color-text-secondary);
+}
+
+.sparkSvgEmpty {
+  color: var(--color-text-disabled);
+}
+
+.sparkRange {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.metricValueNumeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.errorBanner {
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 720px) {
+  .sparkGrid,
+  .sparkGrid[data-columns="2"],
+  .sparkGrid[data-columns="4"] {
+    grid-template-columns: 1fr;
+  }
+}

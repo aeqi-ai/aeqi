@@ -70,6 +70,7 @@ const BLUEPRINT_KINDS = new Set(["companies", "agents", "events", "quests", "ide
 const COMPANY_PAGE_TABS = new Set([
   "overview",
   "inbox",
+  "health",
   "roles",
   "ownership",
   "treasury",
