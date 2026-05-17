@@ -5390,6 +5390,8 @@
   flex-shrink: 0;
 }
 .ideas-canvas-content {
+  --ideas-canvas-editor-gutter: 54px;
+  --ideas-canvas-editor-gutter-end: 12px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -5538,7 +5540,8 @@
    when kerned flat. */
 .ideas-canvas-title {
   width: 100%;
-  padding: 0;
+  box-sizing: border-box;
+  padding: 0 var(--ideas-canvas-editor-gutter-end) 0 var(--ideas-canvas-editor-gutter);
   margin-bottom: 14px;
   font-family: var(--font-display, inherit);
   font-size: clamp(28px, 2.8vw, 36px);
@@ -5557,6 +5560,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .ideas-canvas-content {
+    --ideas-canvas-editor-gutter: 42px;
+    --ideas-canvas-editor-gutter-end: 4px;
+    padding: 20px 18px 28px;
+  }
 }
 
 /* Top-right ⋯ kebab — destructive actions hide here (Notion-style) */

@@ -10,12 +10,14 @@
  */
 
 .block-editor-root {
+  --block-editor-inline-start: var(--ideas-canvas-editor-gutter, 54px);
+  --block-editor-inline-end: var(--ideas-canvas-editor-gutter-end, 12px);
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  /* The editor's own padding lives below; this container is just the
-     bridge between the canvas's flex column and BlockNote's view. */
+  /* The editor reserves an inline-start action gutter below so
+     BlockNote's block controls never hang outside the content surface. */
 }
 
 .block-editor-root .bn-container {
@@ -50,7 +52,8 @@
 /* Editor surface — paper, no ring, body type, line-height that matches
    the prior textarea so existing visual rhythm survives. */
 .block-editor-root .bn-editor {
-  padding: 0;
+  box-sizing: border-box;
+  padding: 0 var(--block-editor-inline-end) 0 var(--block-editor-inline-start);
   background: transparent;
   color: var(--color-text-primary);
   font-size: 15px;
@@ -174,7 +177,8 @@
   flex: 1 1 auto;
   width: 100%;
   min-height: 280px;
-  padding: 0;
+  box-sizing: border-box;
+  padding: 0 var(--block-editor-inline-end) 0 var(--block-editor-inline-start);
   font-family: inherit;
   font-size: 15px;
   line-height: 1.72;
