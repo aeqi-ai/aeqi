@@ -274,6 +274,36 @@
   border-radius: var(--radius-lg);
 }
 
+/* Kind + cost chips on Quest rows (Phase 1.6 of ae-002) */
+.quest-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-card-elevated);
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+.quest-kind-chip--project {
+  background: var(--color-card-elevated);
+  color: var(--color-accent);
+}
+
+.quest-cost-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .quest-id {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);

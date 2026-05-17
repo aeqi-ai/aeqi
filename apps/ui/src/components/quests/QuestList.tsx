@@ -172,8 +172,24 @@ export default function QuestList({
                       <div className="ideas-list-row-head">
                         <StatusDot status={status} />
                         <span className="ideas-list-row-name">{q.idea?.name ?? q.id}</span>
+                        {q.kind === "project" && (
+                          <span
+                            className="quest-kind-chip quest-kind-chip--project"
+                            title="Project — container of sub-Quests"
+                          >
+                            project
+                          </span>
+                        )}
                         {q.scope && q.scope !== "self" && <QuestScopeChip scope={q.scope} />}
                         <PriorityIcon priority={q.priority} />
+                        {q.cost_usd > 0 && (
+                          <span
+                            className="quest-cost-chip"
+                            title={`Inference cost across all sessions on this ${q.kind === "project" ? "project" : "quest"}`}
+                          >
+                            ${q.cost_usd.toFixed(2)}
+                          </span>
+                        )}
                         {status !== "in_progress" &&
                           status !== "done" &&
                           status !== "cancelled" && (
