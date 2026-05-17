@@ -677,9 +677,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
             <span>that can work</span>
             <span>without you.</span>
           </h2>
-          <p className="signup-lead">
-            Build companies where humans set direction and agents coordinate execution.
-          </p>
+          <p className="signup-lead">Humans set direction. Agents execute. Memory compounds.</p>
         </div>
       </aside>
     </main>

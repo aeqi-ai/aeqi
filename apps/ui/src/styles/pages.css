@@ -391,67 +391,76 @@
   isolation: isolate;
 }
 
-/* Layered scrim — radial vignette pushing focus to centre, plus a
-   bottom-up gradient for legibility under the trust-line. Sits between
-   the bg image and the content via z-index. */
+/* Layered scrim — biased toward the lower-left where the text block now
+   lives (eyebrow → heading → lead, bottom-anchored like a movie-poster
+   credits block). The illustration's road + city silhouette already sit
+   in the lower half; the scrim deepens that zone for legibility without
+   dimming the portal in the upper third. Sits between the bg image and
+   the content via z-index. */
 .signup-pitch-scrim {
   position: absolute;
   inset: 0;
   z-index: 0;
   background:
     radial-gradient(
-      ellipse at 50% 45%,
-      rgba(10, 10, 11, 0.1) 0%,
-      rgba(10, 10, 11, 0.24) 48%,
-      rgba(10, 10, 11, 0.68) 100%
+      ellipse 95% 70% at 22% 102%,
+      rgba(10, 10, 11, 0.62) 0%,
+      rgba(10, 10, 11, 0.34) 48%,
+      rgba(10, 10, 11, 0.14) 100%
     ),
-    linear-gradient(to bottom, rgba(10, 10, 11, 0.28) 0%, rgba(10, 10, 11, 0.4) 100%);
+    linear-gradient(to top, rgba(10, 10, 11, 0.5) 0%, rgba(10, 10, 11, 0) 72%);
   pointer-events: none;
 }
 
+/* Text block — bottom-anchored, left-aligned. The eye enters from the
+   road at the lower-third of the image and lands on the eyebrow + heading
+   without ever crossing the portal. Hierarchy reads top-down: tier marker,
+   headline as invitation, three-clause cadence as the operating logic. */
 .signup-pitch-content {
   position: absolute;
-  top: 45%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  left: var(--space-10);
+  right: var(--space-10);
+  bottom: var(--space-12);
   z-index: 1;
-  width: min(520px, calc(100% - var(--space-16)));
   max-width: 520px;
-  text-align: center;
+  text-align: left;
 }
 
 .signup-pitch-eyebrow {
   font-family: var(--font-sans);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  letter-spacing: 0.13em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.64);
-  margin: 0 0 var(--space-6);
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0 0 var(--space-5);
 }
 
 .signup-pitch-heading {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   font-family: var(--font-display);
   font-size: var(--font-size-5xl);
   font-weight: 500;
   color: #ffffff;
-  letter-spacing: 0;
-  line-height: 1.04;
+  letter-spacing: -0.005em;
+  line-height: 1.02;
   max-width: 480px;
   margin: 0 0 var(--space-6);
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.34);
 }
 
+/* Three-clause cadence mirrors the landing hero's "Mission · Memory ·
+   Authority" rhythm: short, declarative, and complete on its own — no
+   mechanism prose, no marketing connective tissue. */
 .signup-lead {
   font-family: var(--font-sans);
-  font-size: var(--font-size-lg);
-  color: rgba(255, 255, 255, 0.84);
+  font-size: var(--font-size-base);
+  color: rgba(255, 255, 255, 0.78);
   line-height: 1.55;
-  max-width: 440px;
-  margin: 0 auto;
+  max-width: 380px;
+  margin: 0;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.36);
 }
 
@@ -460,14 +469,29 @@
     flex-direction: column;
   }
   .signup-pitch-side {
-    min-height: 360px;
+    min-height: 320px;
     padding: var(--space-8) var(--space-6);
   }
+  /* Mobile re-centres the block — the image stacks above the form as
+     a short banner where vertical centring reads more naturally than
+     a bottom-aligned credits block. */
   .signup-pitch-content {
-    width: min(520px, calc(100% - var(--space-8)));
+    position: absolute;
+    inset: auto var(--space-6) auto var(--space-6);
+    top: 50%;
+    transform: translateY(-50%);
+    max-width: 520px;
+    width: calc(100% - 2 * var(--space-6));
+    text-align: center;
   }
   .signup-pitch-heading {
+    align-items: center;
     font-size: var(--font-size-4xl);
+    margin: 0 0 var(--space-5);
+  }
+  .signup-lead {
+    margin: 0 auto;
+    max-width: 420px;
   }
   .auth-page {
     padding-top: max(var(--space-8), env(safe-area-inset-top));
