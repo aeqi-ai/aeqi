@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useVisibleIdeas } from "@/queries/ideas";
 import { useQuests } from "@/queries/quests";
 import { useNav } from "@/hooks/useNav";
-import { formatMediumDate } from "@/lib/i18n";
+import { formatDate, formatMediumDate } from "@/lib/i18n";
 import type { Idea, Quest } from "@/lib/types";
 
 import "@/styles/roadmap.css";
@@ -245,7 +245,7 @@ function monthGrid(windowStart: Date, windowEnd: Date): MonthMarker[] {
     out.push({
       iso: cur.toISOString(),
       label:
-        cur.toLocaleString("en-US", { month: "short" }) +
+        formatDate(cur, { month: "short" }) +
         (cur.getMonth() === 0 ? ` '${String(cur.getFullYear()).slice(2)}` : ""),
       pct: pctInWindow(cur, windowStart, windowEnd),
     });

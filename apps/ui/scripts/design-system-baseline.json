@@ -3,45 +3,45 @@
   "rules": {
     "rawButton": {
       "label": "raw <button>",
-      "count": 172,
+      "count": 173,
       "topFiles": [
-        {
-          "file": "apps/ui/src/pages/BlueprintsPage.tsx",
-          "count": 11
-        },
-        {
-          "file": "apps/ui/src/components/AgentQuestsTab.tsx",
-          "count": 9
-        },
         {
           "file": "apps/ui/src/components/events/EventCanvasEditor.tsx",
           "count": 9
-        },
-        {
-          "file": "apps/ui/src/components/ideas/IdeasListView.tsx",
-          "count": 7
         },
         {
           "file": "apps/ui/src/components/inbox/InboxFilterPopover.tsx",
           "count": 6
         },
         {
-          "file": "apps/ui/src/components/EntityAgentsTab.tsx",
+          "file": "apps/ui/src/components/events/EventsFilterPopover.tsx",
           "count": 5
         },
         {
-          "file": "apps/ui/src/components/events/EventsFilterPopover.tsx",
+          "file": "apps/ui/src/components/ideas/IdeasListFilterChips.tsx",
+          "count": 5
+        },
+        {
+          "file": "apps/ui/src/pages/blueprints/BlueprintsFilterPopover.tsx",
           "count": 5
         },
         {
           "file": "apps/ui/src/pages/MeInboxPage.tsx",
           "count": 5
+        },
+        {
+          "file": "apps/ui/src/components/AgentOverviewTab.tsx",
+          "count": 4
+        },
+        {
+          "file": "apps/ui/src/components/ideas/IdeasFilterPopover.tsx",
+          "count": 4
         }
       ]
     },
     "rawInput": {
       "label": "raw <input>",
-      "count": 57,
+      "count": 55,
       "topFiles": [
         {
           "file": "apps/ui/src/components/AgentEventsTab.tsx",
@@ -99,7 +99,7 @@
     },
     "inlineStyle": {
       "label": "inline style object",
-      "count": 425,
+      "count": 427,
       "topFiles": [
         {
           "file": "apps/ui/src/pages/OwnershipPage.tsx",
@@ -137,39 +137,11 @@
     },
     "windowLocation": {
       "label": "window.location navigation",
-      "count": 13,
+      "count": 4,
       "topFiles": [
         {
-          "file": "apps/ui/src/pages/Agent/PlanTab.tsx",
-          "count": 2
-        },
-        {
-          "file": "apps/ui/src/pages/CompanySetupPage.tsx",
-          "count": 2
-        },
-        {
-          "file": "apps/ui/src/pages/Settings/BillingPanel.tsx",
-          "count": 2
-        },
-        {
-          "file": "apps/ui/src/pages/Settings/SecurityPanel.tsx",
-          "count": 2
-        },
-        {
-          "file": "apps/ui/src/pages/WelcomePage.tsx",
-          "count": 2
-        },
-        {
-          "file": "apps/ui/src/api/client.ts",
-          "count": 1
-        },
-        {
-          "file": "apps/ui/src/pages/Settings/DevicesPanel.tsx",
-          "count": 1
-        },
-        {
-          "file": "apps/ui/src/pages/TreasuryPage.tsx",
-          "count": 1
+          "file": "apps/ui/src/lib/navigation.ts",
+          "count": 4
         }
       ]
     },
@@ -213,7 +185,7 @@
     },
     "literalRgb": {
       "label": "literal rgb/rgba color",
-      "count": 114,
+      "count": 113,
       "topFiles": [
         {
           "file": "apps/ui/src/styles/layout.css",
@@ -221,7 +193,7 @@
         },
         {
           "file": "apps/ui/src/styles/chat.css",
-          "count": 26
+          "count": 23
         },
         {
           "file": "apps/ui/src/styles/pages.css",
@@ -251,7 +223,7 @@
     },
     "borderLeft": {
       "label": "border-left styling",
-      "count": 28,
+      "count": 27,
       "topFiles": [
         {
           "file": "apps/ui/src/styles/layout.css",
@@ -263,7 +235,7 @@
         },
         {
           "file": "apps/ui/src/styles/pages.css",
-          "count": 4
+          "count": 3
         },
         {
           "file": "apps/ui/src/components/editor/blockEditor.theme.css",
