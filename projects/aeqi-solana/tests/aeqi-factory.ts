@@ -422,9 +422,13 @@ describe("aeqi_factory", () => {
       .remainingAccounts(instantiateRemaining.remainingAccounts)
       .rpc();
 
-    // Verify trust is finalized + 2 modules registered with right program IDs
+    // Verify trust is STILL in creation mode (caller is responsible for
+    // finalizing after module inits) + 2 modules registered with right
+    // program IDs. The previous shape finalized inside this CPI, which
+    // locked out every subsequent module init — same bug class as the
+    // prior create_with_modules shape (fixed b7173c8c).
     const t = await trust.account.trust.fetch(instantiateAccounts.trust);
-    expect(t.creationMode).to.eq(false);
+    expect(t.creationMode).to.eq(true);
     expect(t.moduleCount).to.eq(2);
 
     const mR = await trust.account.module.fetch(modR);
@@ -1069,8 +1073,10 @@ describe("aeqi_factory", () => {
       .remainingAccounts(basicRemaining.remainingAccounts)
       .rpc();
 
+    // instantiate_template leaves the trust in creation mode now —
+    // caller drives the per-module inits + finalize sequence after.
     const tBasic = await trust.account.trust.fetch(basicAccounts.trust);
-    expect(tBasic.creationMode).to.eq(false);
+    expect(tBasic.creationMode).to.eq(true);
     expect(tBasic.moduleCount).to.eq(3);
     // Sanity: each module record points at the right program.
     expect(
@@ -1139,7 +1145,7 @@ describe("aeqi_factory", () => {
       .rpc();
 
     const tVent = await trust.account.trust.fetch(ventureAccounts.trust);
-    expect(tVent.creationMode).to.eq(false);
+    expect(tVent.creationMode).to.eq(true);
     expect(tVent.moduleCount).to.eq(5);
     expect(
       (
@@ -1151,5 +1157,75 @@ describe("aeqi_factory", () => {
         await trust.account.module.fetch(ventureRemaining.modulePdas[4])
       ).programId.toBase58(),
     ).to.eq(vesting.programId.toBase58());
+  });
+
+  // ─── Lifecycle invariant — pins the "factory finalizes too early" bug class extinct
+  //
+  // Every factory entry point that calls register_module against a fresh
+  // trust MUST leave the trust in creation mode unless it ALSO runs every
+  // registered module's per-module `init` CPI (the all-or-nothing
+  // create_company_full shape). Otherwise the trust is in irrecoverable
+  // limbo: modules registered but their state PDAs uninitialized, with
+  // no path forward because their inits require creation_mode=true.
+  //
+  // Bug class history:
+  //   - create_with_modules finalized too early (2026-05-17 b7173c8c — fixed)
+  //   - instantiate_template finalized too early (this ship — fixed)
+  //
+  // This test sweeps both register-and-finalize-omitting factory entry
+  // points and asserts the invariant. Adding a new factory entry point
+  // that registers modules without running their inits? It MUST land
+  // here too, or the bug class can re-fire.
+  describe("lifecycle invariant — register-without-init must NOT finalize", () => {
+    it("create_with_modules leaves creation_mode=true", async () => {
+      const trustId = new Uint8Array(32);
+      trustId[0] = 0xee;
+      const [trustPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("trust"), Buffer.from(trustId)],
+        trust.programId,
+      );
+      const moduleId = new Uint8Array(32);
+      moduleId[0] = 0xaa;
+      const [modulePda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("module"), trustPda.toBuffer(), Buffer.from(moduleId)],
+        trust.programId,
+      );
+      const dummyProg = anchor.web3.Keypair.generate().publicKey;
+
+      await factory.methods
+        .createWithModules(Array.from(trustId), [
+          {
+            moduleId: Array.from(moduleId),
+            programId: dummyProg,
+            provider: provider.wallet.publicKey,
+            implementationVersion: new anchor.BN(1),
+            implementationMetadataHash: Array.from(new Uint8Array(32)),
+            trustAcl: new anchor.BN(0xff),
+          },
+        ])
+        .accountsPartial({
+          trust: trustPda,
+          authority: provider.wallet.publicKey,
+          aeqiTrustProgram: trust.programId,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .remainingAccounts([
+          { pubkey: modulePda, isWritable: true, isSigner: false },
+        ])
+        .rpc();
+
+      const t = await trust.account.trust.fetch(trustPda);
+      expect(
+        t.creationMode,
+        "create_with_modules must NOT finalize — see fix b7173c8c",
+      ).to.eq(true);
+      expect(t.moduleCount).to.eq(1);
+    });
+
+    // instantiate_template's invariant is exercised by the existing
+    // "instantiate_template replays a registered template" test above —
+    // it now asserts creationMode === true after the call. Both factory
+    // entry points share this contract: register modules, leave the
+    // trust open for caller-driven inits + finalize.
   });
 });

@@ -353,8 +353,10 @@ pub mod aeqi_factory {
         Ok(())
     }
 
-    /// Full template-driven create flow: reads a registered Template PDA and
-    /// replays its module set against a fresh TRUST.
+    /// Template-driven partial create flow: reads a registered Template PDA
+    /// and replays its module set against a fresh TRUST. **Leaves the trust
+    /// in creation mode** so the caller can run each module's `init` CPI
+    /// before finalizing.
     ///
     /// `remaining_accounts` layout:
     ///
@@ -362,16 +364,21 @@ pub mod aeqi_factory {
     ///   2. one ModuleImplementation PDA per module in template order
     ///   3. one ModuleAclEdge PDA per ACL edge in template order
     ///
-    /// Steps run atomically:
+    /// Steps:
     ///   1. CPI aeqi_trust::initialize (creates trust, enters creation mode)
     ///   2. Validate each ModuleSpec against its provider-published
     ///      ModuleImplementation PDA
     ///   3. For each ModuleSpec in template.modules: CPI register_module
     ///   4. For each AclEdgeSpec in template.acl_edges: CPI set_module_acl
-    ///   5. CPI aeqi_trust::finalize (exits creation mode)
     ///
-    /// Module init/finalize CPIs (loading per-module config) land separately
-    /// once each module's surface stabilizes.
+    /// **Does NOT finalize.** Earlier versions called `aeqi_trust::finalize`
+    /// at step 5, which locked out every subsequent module init — modules
+    /// require the trust be in creation mode for their per-module `init`
+    /// CPI to succeed. Callers that need register + per-module init +
+    /// finalize MUST issue the finalize CPI themselves once all the inits
+    /// have landed. Same bug class as the prior `create_with_modules`
+    /// shape (fix shipped 2026-05-17 b7173c8c); applying it here closes
+    /// the lookalike before templates go live in the field.
     pub fn instantiate_template<'info>(
         ctx: Context<'_, '_, 'info, 'info, InstantiateTemplate<'info>>,
         trust_id: [u8; 32],
@@ -446,14 +453,7 @@ pub mod aeqi_factory {
             aeqi_trust::cpi::set_module_acl(acl_ctx, edge.target_module_id, edge.flags)?;
         }
 
-        // 4. finalize trust
-        let fin_accounts = TrustFinalize {
-            trust: ctx.accounts.trust.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-        };
-        let fin_ctx =
-            CpiContext::new(ctx.accounts.aeqi_trust_program.to_account_info(), fin_accounts);
-        aeqi_trust::cpi::finalize(fin_ctx)?;
+        // 5. (intentionally NOT finalizing — see docstring above)
 
         emit!(TemplateInstantiated {
             trust: ctx.accounts.trust.key(),
