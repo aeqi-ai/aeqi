@@ -80,6 +80,9 @@ case "$mode" in
         "$REPO_ROOT/scripts/runtime-startup-smoke.sh"
     fi
     AEQI_WEBHOOK_DEPLOY=1 "$FULL_DEPLOY"
+    sleep "${AEQI_WEBHOOK_ROLLOUT_DELAY_SECS:-8}"
+    echo "[webhook-deploy] rolling sandbox runtimes to staged binary"
+    "$REPO_ROOT/scripts/rollout-sandbox-runtimes.sh"
     ;;
   none)
     echo "[webhook-deploy] no deploy-impacting changes; skipping deploy"
