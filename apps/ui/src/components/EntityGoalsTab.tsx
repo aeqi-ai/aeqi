@@ -1,12 +1,54 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVisibleIdeas } from "@/queries/ideas";
+import { useQuests } from "@/queries/quests";
 import { ideaKeys } from "@/queries/keys";
 import { Button, Input, Textarea } from "@/components/ui";
 import { formatMediumDate } from "@/lib/i18n";
-import type { Idea } from "@/lib/types";
+import type { Idea, Quest } from "@/lib/types";
 
 import "@/styles/goals.css";
+
+/**
+ * Compute % completion for a Goal/Project from descendant Quest
+ * closures (Phase 2.5 of ae-002). `target` is the parent (Goal as
+ * Idea, Project as Quest); `quests` is the full visible Quest pool.
+ *
+ * Counting rule: descendants are Quests with `quest.idea_id === target.id`
+ * (project serves the goal) PLUS Quests whose parent Project (via
+ * `quest.parent`) serves the goal. Recursive walk truncated at depth 8
+ * to avoid pathological cycles in the data.
+ *
+ * Returns null when the Goal/Project has zero descendants (suppresses
+ * the chip rather than showing a misleading "0%").
+ */
+export function computeRollup(
+  targetId: string,
+  quests: Quest[],
+): { done: number; total: number; pct: number } | null {
+  const descendantIds = new Set<string>();
+  const queue: string[] = [targetId];
+  let depth = 0;
+  while (queue.length > 0 && depth < 8) {
+    const next: string[] = [];
+    for (const parentId of queue) {
+      for (const q of quests) {
+        if (descendantIds.has(q.id)) continue;
+        const linked = q.idea_id === parentId || (q.metadata?.parent_id ?? null) === parentId;
+        if (linked) {
+          descendantIds.add(q.id);
+          next.push(q.id);
+        }
+      }
+    }
+    queue.length = 0;
+    queue.push(...next);
+    depth++;
+  }
+  if (descendantIds.size === 0) return null;
+  const done = quests.filter((q) => descendantIds.has(q.id) && q.status === "done").length;
+  return { done, total: descendantIds.size, pct: Math.round((done / descendantIds.size) * 100) };
+}
 
 /**
  * Goals tab — entity-scope view of Ideas with `kind=goal`.
@@ -23,6 +65,7 @@ import "@/styles/goals.css";
  */
 export default function EntityGoalsTab({ entityId: _entityId }: { entityId: string }) {
   const ideasQuery = useVisibleIdeas();
+  const quests = useQuests();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
@@ -60,7 +103,7 @@ export default function EntityGoalsTab({ entityId: _entityId }: { entityId: stri
       ) : (
         <ul className="goals-tab__list">
           {goals.map((g) => (
-            <GoalRow key={g.id} goal={g} />
+            <GoalRow key={g.id} goal={g} quests={quests} />
           ))}
         </ul>
       )}
@@ -78,7 +121,7 @@ export default function EntityGoalsTab({ entityId: _entityId }: { entityId: stri
   );
 }
 
-function GoalRow({ goal }: { goal: Idea }) {
+function GoalRow({ goal, quests }: { goal: Idea; quests: Quest[] }) {
   const props = (goal.properties ?? {}) as Record<string, unknown>;
   const target = typeof props.target === "number" ? props.target : null;
   const current = typeof props.current === "number" ? props.current : null;
@@ -91,13 +134,28 @@ function GoalRow({ goal }: { goal: Idea }) {
       ? `${current !== null ? current : 0}${unit ?? ""} / ${target}${unit ?? ""}`
       : null;
 
+  const rollup = computeRollup(goal.id, quests);
+
   return (
     <li className={`goals-row goals-row--status-${status}`}>
       <div className="goals-row__main">
         <h3 className="goals-row__name">{goal.name}</h3>
         {goal.content && <p className="goals-row__content">{goal.content}</p>}
+        {rollup && (
+          <div
+            className="goals-row__progress"
+            title={`${rollup.done} of ${rollup.total} descendant Quests done`}
+          >
+            <div className="goals-row__progress-bar" style={{ width: `${rollup.pct}%` }} />
+          </div>
+        )}
       </div>
       <div className="goals-row__chips">
+        {rollup && (
+          <span className="goals-row__chip goals-row__chip--rollup">
+            {rollup.pct}% · {rollup.done}/{rollup.total}
+          </span>
+        )}
         {metric && <span className="goals-row__chip goals-row__chip--metric">{metric}</span>}
         {deadline && (
           <span className="goals-row__chip goals-row__chip--deadline">

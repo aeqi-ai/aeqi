@@ -271,3 +271,25 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* % completion rollup (Phase 2.5 of ae-002) */
+.goals-row__progress {
+  margin-top: var(--space-2);
+  height: 4px;
+  background: var(--color-slab);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.goals-row__progress-bar {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
+.goals-row__chip--rollup {
+  background: var(--color-card-elevated);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}

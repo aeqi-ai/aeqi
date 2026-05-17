@@ -59,7 +59,7 @@ export default function EntityProjectsTab({ entityId: _entityId }: { entityId: s
       ) : (
         <ul className="projects-tab__list">
           {projects.map((p) => (
-            <ProjectRow key={p.id} project={p} />
+            <ProjectRow key={p.id} project={p} allQuests={quests} />
           ))}
         </ul>
       )}
@@ -77,20 +77,37 @@ export default function EntityProjectsTab({ entityId: _entityId }: { entityId: s
   );
 }
 
-function ProjectRow({ project }: { project: Quest }) {
+function ProjectRow({ project, allQuests }: { project: Quest; allQuests: Quest[] }) {
   const status = project.status;
   const dueAt = project.due_at;
   const cost = project.cost_usd;
   const title = project.idea?.name ?? project.id;
   const summary = project.idea?.content?.slice(0, 200) ?? "";
+  const rollup = useMemo(
+    () => computeProjectRollup(project.id, allQuests),
+    [project.id, allQuests],
+  );
 
   return (
     <li className={`projects-row projects-row--status-${status}`}>
       <div className="projects-row__main">
         <h3 className="projects-row__name">{title}</h3>
         {summary && <p className="projects-row__content">{summary}</p>}
+        {rollup && (
+          <div
+            className="projects-row__progress"
+            title={`${rollup.done} of ${rollup.total} sub-Quests done`}
+          >
+            <div className="projects-row__progress-bar" style={{ width: `${rollup.pct}%` }} />
+          </div>
+        )}
       </div>
       <div className="projects-row__chips">
+        {rollup && (
+          <span className="projects-row__chip projects-row__chip--rollup">
+            {rollup.pct}% · {rollup.done}/{rollup.total}
+          </span>
+        )}
         <span
           className={`projects-row__chip projects-row__chip--status projects-row__chip--status-${status}`}
         >
@@ -107,6 +124,22 @@ function ProjectRow({ project }: { project: Quest }) {
       </div>
     </li>
   );
+}
+
+/**
+ * Sub-quest rollup for a Project. Counts direct child Quests via
+ * `quest.parent === project.id` (the field the Phase 1.1 schema added).
+ * Mirrors `computeRollup` in EntityGoalsTab but scoped to Quest.parent
+ * rather than Goal.idea_id. Returns null when no sub-quests exist.
+ */
+function computeProjectRollup(
+  projectId: string,
+  allQuests: Quest[],
+): { done: number; total: number; pct: number } | null {
+  const direct = allQuests.filter((q) => (q.metadata?.parent_id ?? null) === projectId);
+  if (direct.length === 0) return null;
+  const done = direct.filter((q) => q.status === "done").length;
+  return { done, total: direct.length, pct: Math.round((done / direct.length) * 100) };
 }
 
 function formatDueDate(iso: string): string {
