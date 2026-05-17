@@ -49,9 +49,10 @@ use rusqlite::Connection;
 
 /// The version stamped on a fresh DB after `initial_schema` runs. Legacy
 /// DBs that ran the old v1..v9 chain carry rows 1..9 and are not re-stamped;
-/// they catch up via the `migrations` table below. The current head is v16
-/// (embedding provider/model profile metadata).
-const BASELINE_VERSION: i64 = 16;
+/// they catch up via the `migrations` table below. The current head is v17
+/// (kind taxonomy + file_id, per
+/// idea `architecture/kind-taxonomy-and-the-structural-vs-categorical-rule`).
+const BASELINE_VERSION: i64 = 17;
 
 impl SqliteIdeas {
     pub fn prepare_schema(conn: &Connection) -> Result<()> {
@@ -105,6 +106,7 @@ fn run_migrations(conn: &Connection) -> Result<()> {
         (14, migration_v14_assignee),
         (15, migration_v15_parent_and_properties),
         (16, migration_v16_embedding_profile),
+        (17, migration_v17_kind_and_file_id),
     ];
     for (version, f) in migrations {
         if *version > current {
@@ -165,7 +167,9 @@ fn initial_schema(conn: &Connection) -> Result<()> {
             wrong_feedback_count INTEGER NOT NULL DEFAULT 0,
             assignee TEXT,
             parent_idea_id TEXT REFERENCES ideas(id) ON DELETE SET NULL,
-            properties TEXT
+            properties TEXT,
+            kind TEXT NOT NULL DEFAULT 'note',
+            file_id TEXT
         );",
     )?;
 
@@ -803,6 +807,42 @@ fn migration_v15_parent_and_properties(conn: &Connection) -> Result<()> {
 /// live in incompatible vector spaces. New writes populate provider/model;
 /// legacy NULL rows intentionally fail closed until a re-embed writes the
 /// active profile.
+/// v17 — kind taxonomy + file_id (Goals/Projects ship via discriminator).
+///
+/// Adds two columns to `ideas`:
+/// * `kind TEXT NOT NULL DEFAULT 'note'` — structural identity. Values used
+///   by the system: `note` (default), `file`, `goal`. Open at the column
+///   layer; closed by convention via agent tools (`goal.create`, etc.).
+/// * `file_id TEXT` — when `kind='file'`, references the binary blob row
+///   in the orchestrator's `files` table. Logical reference, not a SQL FK
+///   (cross-crate).
+///
+/// See idea `architecture/kind-taxonomy-and-the-structural-vs-categorical-rule`
+/// for the rule that justifies `kind` as a separate column vs. tags.
+fn migration_v17_kind_and_file_id(conn: &Connection) -> Result<()> {
+    let cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(ideas)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !cols.iter().any(|n| n == "kind") {
+        conn.execute(
+            "ALTER TABLE ideas ADD COLUMN kind TEXT NOT NULL DEFAULT 'note'",
+            [],
+        )?;
+    }
+    if !cols.iter().any(|n| n == "file_id") {
+        conn.execute("ALTER TABLE ideas ADD COLUMN file_id TEXT", [])?;
+    }
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ideas_kind ON ideas(kind)",
+        [],
+    )?;
+    Ok(())
+}
+
 fn migration_v16_embedding_profile(conn: &Connection) -> Result<()> {
     let cols: Vec<String> = conn
         .prepare("PRAGMA table_info(idea_embeddings)")?

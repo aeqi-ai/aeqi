@@ -188,6 +188,14 @@ pub struct Quest {
     pub status: QuestStatus,
     #[serde(default)]
     pub priority: Priority,
+    /// Structural identity. Default `task` for atomic claimable work units.
+    /// Canonical values consumed by the system: `task`, `project`. `project`
+    /// adds container-of-sub-Quests semantics + retrospective-required
+    /// closeout. Open at the column layer; closed by convention via agent
+    /// tools (`project.create`, `project.complete`, etc.). See idea
+    /// `architecture/kind-taxonomy-and-the-structural-vs-categorical-rule`.
+    #[serde(default = "default_quest_kind")]
+    pub kind: String,
     /// Anchor agent for visibility. `None` only valid when `scope = Global`.
     #[serde(default)]
     pub agent_id: Option<String>,
@@ -241,6 +249,10 @@ pub struct Quest {
     pub creator_session_id: Option<String>,
 }
 
+fn default_quest_kind() -> String {
+    "task".to_string()
+}
+
 impl Quest {
     /// Create a new quest with minimal fields. `idea_id` is the FK to the
     /// idea that owns the quest's editorial body; it's required at
@@ -264,6 +276,7 @@ impl Quest {
             idea: None,
             status: QuestStatus::Todo,
             priority: Priority::Normal,
+            kind: default_quest_kind(),
             agent_id: agent_id.map(|s| s.to_string()),
             assignee: None,
             scope,

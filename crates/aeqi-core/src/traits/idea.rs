@@ -48,10 +48,27 @@ pub struct Idea {
     /// properties set"; an empty object is a distinct, explicit state.
     #[serde(default)]
     pub properties: Option<serde_json::Value>,
+    /// Structural identity. Default `note` for free-form knowledge artifacts.
+    /// Canonical values consumed by the system: `note`, `file`, `goal`.
+    /// Open at the column layer; closed by convention via agent tools
+    /// (`goal.create`, etc.). See idea
+    /// `architecture/kind-taxonomy-and-the-structural-vs-categorical-rule`
+    /// for the rule that justifies `kind` as a separate column vs. tags.
+    #[serde(default = "default_kind")]
+    pub kind: String,
+    /// When `kind="file"`, references the blob row in the orchestrator's
+    /// `files` table. Logical reference, not a SQL FK (cross-crate). `None`
+    /// for any non-file kind.
+    #[serde(default)]
+    pub file_id: Option<String>,
 }
 
 fn default_inheritance() -> String {
     "self".to_string()
+}
+
+fn default_kind() -> String {
+    "note".to_string()
 }
 
 impl Idea {
@@ -107,6 +124,8 @@ impl Idea {
             tool_deny: Vec::new(),
             parent_idea_id: None,
             properties: None,
+            kind: default_kind(),
+            file_id: None,
         }
     }
 }

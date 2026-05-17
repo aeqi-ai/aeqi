@@ -127,6 +127,8 @@ impl IdeaBuilder {
             tool_allow: self.tool_allow,
             tool_deny: self.tool_deny,
             parent_idea_id: None,
+            kind: "note".to_string(),
+            file_id: None,
             properties: None,
         }
     }

@@ -483,7 +483,8 @@ fn cleanup_legacy_quest_columns(conn: &Connection) -> rusqlite::Result<()> {
              updated_at TEXT,
              closed_at TEXT,
              closed_reason TEXT,
-             creator_session_id TEXT
+             creator_session_id TEXT,
+             kind TEXT NOT NULL DEFAULT 'task'
          );
          INSERT INTO quests_new (
              id, idea_id, status, priority, agent_id, scope, retry_count,
@@ -1581,12 +1582,28 @@ impl AgentRegistry {
                  closed_reason TEXT,
                  creator_session_id TEXT,
                  assignee TEXT,
-                 due_at INTEGER
+                 due_at INTEGER,
+                 kind TEXT NOT NULL DEFAULT 'task'
              );
              CREATE INDEX IF NOT EXISTS idx_quests_status ON quests(status);
              CREATE INDEX IF NOT EXISTS idx_quests_agent ON quests(agent_id);
-             CREATE INDEX IF NOT EXISTS idx_quests_created ON quests(created_at);",
+             CREATE INDEX IF NOT EXISTS idx_quests_created ON quests(created_at);
+             CREATE INDEX IF NOT EXISTS idx_quests_kind ON quests(kind);",
         )?;
+        // Backfill `kind` for existing DBs that pre-date the kind taxonomy
+        // (idea `architecture/kind-taxonomy-and-the-structural-vs-categorical-rule`).
+        // SQLite has no ALTER TABLE ADD COLUMN IF NOT EXISTS, so check first.
+        let has_kind: bool = sconn
+            .prepare("PRAGMA table_info(quests)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .any(|c| c == "kind");
+        if !has_kind {
+            sconn.execute_batch(
+                "ALTER TABLE quests ADD COLUMN kind TEXT NOT NULL DEFAULT 'task';
+                 CREATE INDEX IF NOT EXISTS idx_quests_kind ON quests(kind);",
+            )?;
+        }
         // The `idx_quests_idea` index lives in `ensure_quest_idea_id_column`
         // because legacy DBs reach this point with the table already in
         // place but the `idea_id` column not yet added — a CREATE INDEX
@@ -2445,6 +2462,8 @@ impl AgentRegistry {
                 tool_deny: Vec::new(),
                 parent_idea_id,
                 properties,
+                kind: "note".to_string(),
+                file_id: None,
             });
         }
         Ok(out)
@@ -3761,6 +3780,8 @@ impl AgentRegistry {
                         parent_idea_id: None,
                         properties: None,
                         created_at,
+                        kind: "note".to_string(),
+                        file_id: None,
                     })
                 },
             )
@@ -4566,6 +4587,7 @@ fn row_to_task(row: &rusqlite::Row) -> aeqi_quests::Quest {
         idea: None,
         status,
         priority,
+        kind: "task".to_string(),
         agent_id: row.get("agent_id").ok(),
         assignee: row.get::<_, Option<String>>("assignee").unwrap_or(None),
         scope: quest_scope,
