@@ -233,8 +233,16 @@ For route-level UI visual QA:
 npm run visual:route -- --url /admin --expect-text "Admin"
 ```
 
+For local worktree/deploy triage:
+
+```bash
+npm run dev:triage
+```
+
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the contributor workflow and
-[`SECURITY.md`](SECURITY.md) for private vulnerability disclosure.
+[`docs/development-workflow.md`](docs/development-workflow.md) for deploy
+routing notes. See [`SECURITY.md`](SECURITY.md) for private vulnerability
+disclosure.
 
 ## Public Repo Hygiene
 
