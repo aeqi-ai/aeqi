@@ -1587,12 +1587,20 @@ impl AgentRegistry {
              );
              CREATE INDEX IF NOT EXISTS idx_quests_status ON quests(status);
              CREATE INDEX IF NOT EXISTS idx_quests_agent ON quests(agent_id);
-             CREATE INDEX IF NOT EXISTS idx_quests_created ON quests(created_at);
-             CREATE INDEX IF NOT EXISTS idx_quests_kind ON quests(kind);",
+             CREATE INDEX IF NOT EXISTS idx_quests_created ON quests(created_at);",
         )?;
         // Backfill `kind` for existing DBs that pre-date the kind taxonomy
         // (idea `architecture/kind-taxonomy-and-the-structural-vs-categorical-rule`).
-        // SQLite has no ALTER TABLE ADD COLUMN IF NOT EXISTS, so check first.
+        //
+        // ORDER MATTERS: `CREATE TABLE IF NOT EXISTS` above is a no-op
+        // against existing DBs, so the `kind` column from the schema
+        // literal is NOT applied to live tables — we must ALTER first
+        // and create the index AFTER. The original Phase 1.1 commit
+        // (8827ef24) placed `idx_quests_kind` inside the CREATE TABLE
+        // batch, which crash-looped every existing-DB host on startup
+        // with `no such column: kind in CREATE INDEX...`. SQLite has no
+        // `ALTER TABLE ADD COLUMN IF NOT EXISTS`, so the existence check
+        // happens via PRAGMA table_info.
         let has_kind: bool = sconn
             .prepare("PRAGMA table_info(quests)")?
             .query_map([], |row| row.get::<_, String>(1))?
@@ -1600,10 +1608,12 @@ impl AgentRegistry {
             .any(|c| c == "kind");
         if !has_kind {
             sconn.execute_batch(
-                "ALTER TABLE quests ADD COLUMN kind TEXT NOT NULL DEFAULT 'task';
-                 CREATE INDEX IF NOT EXISTS idx_quests_kind ON quests(kind);",
+                "ALTER TABLE quests ADD COLUMN kind TEXT NOT NULL DEFAULT 'task';",
             )?;
         }
+        // Idempotent — works whether the column was just added (existing
+        // DB) or already existed from the CREATE TABLE literal (fresh DB).
+        sconn.execute_batch("CREATE INDEX IF NOT EXISTS idx_quests_kind ON quests(kind);")?;
         // The `idx_quests_idea` index lives in `ensure_quest_idea_id_column`
         // because legacy DBs reach this point with the table already in
         // place but the `idea_id` column not yet added — a CREATE INDEX
