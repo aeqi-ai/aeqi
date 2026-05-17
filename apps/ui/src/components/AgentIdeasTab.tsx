@@ -1,8 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { getIdeaGraph } from "@/api/ideas";
+import { useQueryClient } from "@tanstack/react-query";
+import { getIdeaGraph, updateIdea } from "@/api/ideas";
 import { useNav } from "@/hooks/useNav";
 import { useAgentIdeas, useVisibleIdeas } from "@/queries/ideas";
+import { ideaKeys } from "@/queries/keys";
 import type { Idea } from "@/lib/types";
 import type { GraphNode, GraphEdge } from "./IdeaGraph";
 import IdeasListView from "./ideas/IdeasListView";
@@ -134,6 +136,7 @@ export default function AgentIdeasTab({
   const agentIdeas = useAgentIdeas(agentId, scope === "agent");
   const visibleIdeas = useVisibleIdeas(scope === "entity");
   const ideasQuery = scope === "entity" ? visibleIdeas : agentIdeas;
+  const queryClient = useQueryClient();
   const { data: ideas = NO_IDEAS, isLoading: ideasLoading } = ideasQuery;
 
   // Apply scope + search + tag to the agent's ideas. The graph view
@@ -404,6 +407,20 @@ export default function AgentIdeasTab({
             ideas={filtered}
             selectedId={selectedId}
             onSelect={(id) => goEntity(entityId, "ideas", id)}
+            onReparent={async (childId, newParentId) => {
+              try {
+                await updateIdea(childId, { parent_idea_id: newParentId });
+                void queryClient.invalidateQueries({ queryKey: ideaKeys.visible });
+                if (agentId) {
+                  void queryClient.invalidateQueries({ queryKey: ideaKeys.byAgent(agentId) });
+                }
+              } catch (e) {
+                // Silent fallback — the tree re-fetches and the UI snaps
+                // back to the server state. A toast surface lives in
+                // Phase 2.4.1 once the toast infra is reachable from here.
+                console.error("reparent failed", e);
+              }
+            }}
           />
         </div>
       </Suspense>
