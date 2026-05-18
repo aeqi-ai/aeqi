@@ -1,4 +1,16 @@
 import { Link, useNavigate } from "react-router-dom";
+import {
+  Inbox,
+  Landmark,
+  Coins,
+  PieChart,
+  Vote,
+  Workflow,
+  Bot,
+  Webhook,
+  Target,
+  Lightbulb,
+} from "lucide-react";
 import CompanySwitcher from "@/components/shell/CompanySwitcher";
 import AccountDropdown from "@/components/shell/AccountDropdown";
 import HelpMenu from "@/components/shell/HelpMenu";
@@ -24,48 +36,15 @@ const iconProps = {
   strokeLinejoin: "round",
 } as const;
 
-const InboxIcon = () => (
-  <svg {...iconProps}>
-    <rect x="2" y="3.5" width="12" height="9" rx="0.5" />
-    <path d="M2 8h3.5l1 1.5h3l1-1.5H14" />
-  </svg>
-);
-
-const CompanyIcon = () => (
-  <svg {...iconProps}>
-    <rect x="3" y="2" width="10" height="12" rx="0.5" />
-    <path d="M5.75 5h1M9.25 5h1" />
-    <path d="M5.75 8h1M9.25 8h1" />
-    <path d="M7 14v-3h2v3" />
-  </svg>
-);
-
-const AgentsIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="5.5" r="2.5" />
-    <path d="M3 13.5c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
-  </svg>
-);
-
-const EventsIcon = () => (
-  <svg {...iconProps}>
-    <path d="M9 2 4 9h4l-1 5 5-7H8z" />
-  </svg>
-);
-
-const QuestsIcon = () => (
-  <svg {...iconProps}>
-    <path d="M4 2v12" />
-    <path d="M4 3h7l-2 2.5L11 8H4z" />
-  </svg>
-);
-
-const IdeasIcon = () => (
-  <svg {...iconProps}>
-    <path d="M5 7a3 3 0 0 1 6 0c0 1.5-1 2.5-1 3.5h-4c0-1-1-2-1-3.5z" />
-    <path d="M6.5 12h3M7 14h2" />
-  </svg>
-);
+// Sidebar nav icons — Lucide, sized via CSS (.sidebar-nav-item > svg).
+// Stroke width is overridden to 1.65 by layout.css for the 16px optical sweet
+// spot; the icon prop here just controls glyph identity.
+const InboxIcon = () => <Inbox />;
+const TrustIcon = () => <Landmark />;
+const AgentsIcon = () => <Bot />;
+const EventsIcon = () => <Webhook />;
+const QuestsIcon = () => <Target />;
+const IdeasIcon = () => <Lightbulb />;
 
 // Stack of layered cards — Blueprints is the catalog of recipes, the
 // supply layer of the system. Three rounded rectangles, slightly offset.
@@ -85,42 +64,15 @@ const LaunchIcon = () => (
   </svg>
 );
 
-// Assets (a) — coin / safe geometry. Concentric circles read as value/store.
-const AssetsIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="5.5" />
-    <circle cx="8" cy="8" r="2.5" />
-    <path d="M2.5 8h2M11.5 8h2" />
-  </svg>
-);
-
-// Equity (e) — pie / share allocation.
-const EquityIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="8" r="5.5" />
-    <path d="M8 8 L8 2.5 A5.5 5.5 0 0 1 13.5 8 Z" />
-  </svg>
-);
-
-// Quorum (q) — balanced scale; gavel/decision read.
-const QuorumIcon = () => (
-  <svg {...iconProps}>
-    <path d="M8 2v12" />
-    <path d="M3 5h10" />
-    <path d="M5 5l-2 4h4z" />
-    <path d="M11 5l-2 4h4z" />
-  </svg>
-);
-
-// Identity (i) — org chart; one node atop two children.
-const IdentityIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="3.5" r="1.5" />
-    <circle cx="4" cy="11.5" r="1.5" />
-    <circle cx="12" cy="11.5" r="1.5" />
-    <path d="M8 5v3M8 8H4v2M8 8h4v2" />
-  </svg>
-);
+// AEQI primitives — Lucide picks anchored to each row's semantic.
+// Assets (a) → Coins: stacked-coin = stored value.
+// Equity (e) → PieChart: cap-table slice.
+// Quorum (q) → Vote: ballot-into-box = decision/governance.
+// Identity (i) → Workflow: parent + child boxes = org chart.
+const AssetsIcon = () => <Coins />;
+const EquityIcon = () => <PieChart />;
+const QuorumIcon = () => <Vote />;
+const IdentityIcon = () => <Workflow />;
 
 // Admin — shield silhouette.
 const AdminIcon = () => (
@@ -369,7 +321,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
                     navigate(base);
                   }}
                 >
-                  <CompanyIcon />
+                  <TrustIcon />
                   <span className="sidebar-nav-label">TRUST</span>
                 </a>
               </div>
