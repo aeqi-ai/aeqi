@@ -21,6 +21,10 @@ export interface ShellSurface {
   /** `/economy/*` — top-level marketplace / inference / billing destination
    *  introduced as part of the "Global" sidebar group on 2026-05-18. */
   isEconomy: boolean;
+  /** `/inbox` — top-level cross-trust inbox, lifted out of
+   *  /trust/<addr>/inbox 2026-05-18 so the user's notifications live at
+   *  one URL regardless of which (or no) trust is in scope. */
+  isInbox: boolean;
   /** `/acting-as` — the operating-context picker (Actor × Role × Trust)
    *  reached from the sidebar's main accent block. */
   isActingAs: boolean;
@@ -52,6 +56,7 @@ export function useShellSurface(path: string): ShellSurface {
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
     const isEconomy = path === "/economy" || path.startsWith("/economy/");
     const isActingAs = path === "/acting-as" || path.startsWith("/acting-as/");
+    const isInbox = path === "/inbox" || path.startsWith("/inbox/");
 
     // In-shell Roles sub-pages on the canonical trust route. URL slug is
     // `/roles/...`; underlying pages are RoleNewPage / RoleDetailPage /
@@ -77,6 +82,7 @@ export function useShellSurface(path: string): ShellSurface {
       isLaunch ||
       isEconomy ||
       isActingAs ||
+      isInbox ||
       isAdmin;
     const isNotFound = !isKnownShellRoute;
 
@@ -87,6 +93,7 @@ export function useShellSurface(path: string): ShellSurface {
       isLaunch,
       isEconomy,
       isActingAs,
+      isInbox,
       isNotFound,
       isAdmin,
       isRolesNew,

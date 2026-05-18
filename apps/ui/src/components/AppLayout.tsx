@@ -28,6 +28,7 @@ const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
 const HomePage = lazy(() => import("@/pages/HomePage"));
+const MeInboxPage = lazy(() => import("@/pages/MeInboxPage"));
 const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
@@ -215,6 +216,7 @@ export default function AppLayout() {
     isLaunch,
     isEconomy,
     isActingAs,
+    isInbox,
     isNotFound,
     isAdmin,
     isRolesNew,
@@ -368,6 +370,7 @@ export default function AppLayout() {
     if (isAdmin) return <AdminPage />;
     if (isAccount) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
+    if (isInbox) return <MeInboxPage />;
     // `/acting-as` is preserved as an alias to `/` while any old link
     // out there is still live. Both render HomePage; AppLayout's URL is
     // unchanged so a deep link still works.
@@ -431,6 +434,7 @@ export default function AppLayout() {
     !isBlueprints &&
     !isEconomy &&
     !isActingAs &&
+    !isInbox &&
     isAgentChatDefault;
   const showComposer = sessionsMounted;
   const showSessionsRail = sessionsMounted && !!isEntityRoute;

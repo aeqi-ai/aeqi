@@ -125,6 +125,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
 
   // Top-level public rows.
   const isEconomy = path === "/economy" || path.startsWith("/economy/");
+  const isInbox = path === "/inbox" || path.startsWith("/inbox/");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
 
@@ -251,18 +252,15 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
       </div>
 
       <div className="left-sidebar-body">
-        {/* ── Global group — surfaces that live above the trust scope.
-            Inbox is entity-scoped (the daily-action surface for the
-            active trust) so it only renders once a trust is selected;
-            Economy is a top-level user-scoped destination so it always
-            renders. The group header always shows so the layout is
-            stable across the no-trust → trust-selected transition. ── */}
+        {/* ── Global group — top-level destinations that live above the
+            trust scope. Both Inbox and Economy are cross-trust surfaces
+            (Inbox aggregates notifications across every trust the user
+            is in), so they're always visible — no hasCompany gate. ── */}
         <nav className="sidebar-surface-nav sidebar-zone" aria-label="Global">
           <div className="sidebar-section-label">Global</div>
-          {hasCompany &&
-            navItem("inbox", "Inbox", <InboxIcon />, {
-              action: rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`),
-            })}
+          {topLevelItem("/inbox", "Inbox", <InboxIcon />, isInbox, {
+            action: rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`),
+          })}
           {topLevelItem("/economy", "Economy", <EconomyIcon />, isEconomy)}
         </nav>
 
