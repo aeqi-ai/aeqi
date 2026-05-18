@@ -7520,14 +7520,6 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
     0 0 0 2px var(--color-card),
     0 0 0 3px var(--color-accent);
 }
-.acting-as-eyebrow {
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.6;
-  line-height: 1.2;
-}
 .acting-as-actor {
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -7553,7 +7545,6 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   justify-content: center;
   gap: 0;
 }
-.left-sidebar.collapsed .acting-as-eyebrow,
 .left-sidebar.collapsed .acting-as-context {
   display: none;
 }
@@ -7561,86 +7552,104 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   font-size: var(--font-size-sm);
 }
 
-/* ── Acting-as page — full surface at /acting-as for picking the operating
-   context tuple (actor, role, trust). ── */
-.acting-as-page {
+/* ── Home picker — the root `/` surface. Node-grid of (actor × role ×
+   trust) contexts, intentionally low-density / ethereal in feel:
+   generous whitespace, quiet typography, soft hover. No gradients, no
+   decorative motion (per .impeccable.md). ── */
+.home-picker {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 32px;
+  padding: 64px 48px 48px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  max-width: 720px;
-  margin: 0 auto;
+  align-items: center;
+  gap: 48px;
   width: 100%;
 }
-.acting-as-header h1 {
-  margin: 0 0 4px;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
-}
-.acting-as-header p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-.acting-as-section-title {
-  margin: 0 0 8px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
-}
-.acting-as-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.acting-as-row {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  width: 100%;
-  padding: 12px 14px;
-  background: var(--color-card);
-  border: 0;
-  border-radius: var(--radius-md);
-  font-family: inherit;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s ease;
-}
-.acting-as-row:hover {
-  background: var(--bg-row);
-}
-.acting-as-row-actor {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-.acting-as-row-context {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-.acting-as-empty {
-  margin: 0;
-  padding: 12px 14px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-.acting-as-actions {
+.home-picker-header {
+  text-align: center;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 16px;
+}
+.home-picker-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+.home-picker-header p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.home-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 880px;
+}
+.home-picker-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 20px;
+  background: var(--color-card);
+  border: 0;
+  border-radius: var(--radius-lg, 12px);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    background 0.12s ease,
+    transform 0.12s ease;
+}
+.home-picker-node:hover {
+  background: var(--bg-row);
+  transform: translateY(-1px);
+}
+.home-picker-node:focus-visible {
+  outline: none;
+  background: var(--bg-row);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+.home-picker-node-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-picker-node-actor {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.home-picker-node-context {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.home-picker-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  max-width: 480px;
+}
+.home-picker-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+}
+.home-picker-actions > button {
+  width: 100%;
 }
 
 /* ── Bottom row: Admin (if applicable) left, HelpMenu always right. The

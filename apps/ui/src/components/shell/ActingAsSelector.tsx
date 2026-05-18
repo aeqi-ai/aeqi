@@ -4,15 +4,16 @@ import { useUIStore } from "@/store/ui";
 import { useActiveEntity } from "@/queries/entities";
 
 /**
- * Acting-as selector — the main accent block in the sidebar. Replaces the
- * CompanySwitcher trigger. Three-line content stack:
+ * Acting-as selector — the main accent block in the sidebar. Two-line
+ * content stack (the explicit "Acting as" eyebrow was dropped 2026-05-18
+ * along with the URL rename; the page itself describes what's being
+ * picked, so the rail block stays quiet):
  *
- *   Acting as          (eyebrow)
  *   <Actor name>       (the entity/user the request runs as)
  *   <Role> · <Trust>   (the role within the trust)
  *
- * Click opens the dedicated `/acting-as` page (not a popover dropdown) —
- * a full surface where the user picks actor + role + trust together.
+ * Click navigates to `/` — the home picker page (HomePage) where the user
+ * steps into a different (actor × role × trust) context.
  *
  * MVP wiring: actor = the logged-in user, trust = the active entity, role
  * is a stub label until the runtime exposes "current acting role" on a
@@ -36,10 +37,9 @@ export default function ActingAsSelector() {
     <button
       type="button"
       className="acting-as-trigger"
-      onClick={() => navigate("/acting-as")}
-      aria-label="Switch acting context"
+      onClick={() => navigate("/")}
+      aria-label="Switch operating context"
     >
-      <span className="acting-as-eyebrow">Acting as</span>
       <span className="acting-as-actor">{actorName}</span>
       <span className="acting-as-context">{contextLine}</span>
     </button>

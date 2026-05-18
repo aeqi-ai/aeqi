@@ -27,7 +27,7 @@ const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
-const ActingAsPage = lazy(() => import("@/pages/ActingAsPage"));
+const HomePage = lazy(() => import("@/pages/HomePage"));
 const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
@@ -209,6 +209,7 @@ export default function AppLayout() {
   const appMode = useAuthStore((s) => s.appMode);
 
   const {
+    isHome,
     isAccount,
     isBlueprints,
     isLaunch,
@@ -367,7 +368,10 @@ export default function AppLayout() {
     if (isAdmin) return <AdminPage />;
     if (isAccount) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
-    if (isActingAs) return <ActingAsPage />;
+    // `/acting-as` is preserved as an alias to `/` while any old link
+    // out there is still live. Both render HomePage; AppLayout's URL is
+    // unchanged so a deep link still works.
+    if (isHome || isActingAs) return <HomePage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /
       // events / quests / ideas) → catalog tab. Otherwise <seg> is a blueprint
@@ -420,6 +424,7 @@ export default function AppLayout() {
     !!drilledAgent && !agentSettingsSegment && (tab === undefined || tab === "inbox");
   const sessionsMounted =
     !isNotFound &&
+    !isHome &&
     !isAccount &&
     !isAdmin &&
     !isLaunch &&

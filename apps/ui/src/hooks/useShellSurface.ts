@@ -9,6 +9,10 @@ import { useMemo } from "react";
  * first-class routes. The user-scope MVP entrypoint is `/launch`.
  */
 export interface ShellSurface {
+  /** Bare `/` — the home picker (Step into a context). The root surface
+   *  every authed user lands on, in place of the prior auto-redirect to
+   *  /launch or the primary entity's inbox. */
+  isHome: boolean;
   /** True for all `/account/*` paths — ProfilePage dispatches further. */
   isAccount: boolean;
   isBlueprints: boolean;
@@ -40,6 +44,7 @@ export interface ShellSurface {
 
 export function useShellSurface(path: string): ShellSurface {
   return useMemo(() => {
+    const isHome = path === "/";
     const isAdmin = path === "/admin" || path.startsWith("/admin/");
     // All /account/* paths are handled by ProfilePage.
     const isAccount = path === "/account" || path.startsWith("/account/");
@@ -65,10 +70,18 @@ export function useShellSurface(path: string): ShellSurface {
     // active-entity render.
     const isCompanyRoute = /^\/trust\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute =
-      isCompanyRoute || isAccount || isBlueprints || isLaunch || isEconomy || isActingAs || isAdmin;
+      isHome ||
+      isCompanyRoute ||
+      isAccount ||
+      isBlueprints ||
+      isLaunch ||
+      isEconomy ||
+      isActingAs ||
+      isAdmin;
     const isNotFound = !isKnownShellRoute;
 
     return {
+      isHome,
       isAccount,
       isBlueprints,
       isLaunch,

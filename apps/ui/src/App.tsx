@@ -2,12 +2,10 @@ import { lazy, Suspense, useEffect } from "react";
 import type { ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
-import { useDaemonStore } from "@/store/daemon";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Loading } from "@/components/ui";
 import AppLayout from "@/components/AppLayout";
 import SessionRedirect from "@/components/SessionRedirect";
-import { entityPath } from "@/lib/entityPath";
 
 // Primary auth page -- loaded eagerly since it gates entry.
 //
@@ -149,40 +147,11 @@ function GatedAppShell() {
  * through the auth gate.
  */
 function RootRouteSwitch() {
-  const authMode = useAuthStore((s) => s.authMode);
-  const token = useAuthStore((s) => s.token);
-  const fetchAuthMode = useAuthStore((s) => s.fetchAuthMode);
-  const entities = useDaemonStore((s) => s.entities);
-  const initialLoaded = useDaemonStore((s) => s.initialLoaded);
-  const fetchEntities = useDaemonStore((s) => s.fetchEntities);
-
-  useEffect(() => {
-    fetchAuthMode();
-  }, [fetchAuthMode]);
-
-  // The daemon store is normally hydrated by AppLayout's `fetchAll`
-  // — but this branch fires BEFORE AppLayout mounts. Kick the
-  // entities fetch ourselves so we can resolve a primary inbox URL
-  // for habitual users without falling through to the launch surface first.
-  // No-op when entities are already cached.
-  useEffect(() => {
-    if (authMode && authMode !== "none" && token && !initialLoaded) {
-      void fetchEntities();
-    }
-  }, [authMode, token, initialLoaded, fetchEntities]);
-
-  if (!authMode) return <LoadingFallback />;
-  if (authMode !== "none" && token) {
-    if (!initialLoaded) return <LoadingFallback />;
-    const host = entities.find((e) => e.placement_type === "host");
-    const primary = host ?? entities[0] ?? null;
-    if (primary) {
-      return <Navigate to={entityPath(primary, "inbox")} replace />;
-    }
-    // No entity yet — MVP path is launch.
-    return <Navigate to="/launch" replace />;
-  }
-  return <Navigate to="/launch" replace />;
+  // The root `/` surface is the home picker (node-grid of actor × role ×
+  // trust contexts). GatedAppShell handles the auth gate; AppLayout mounts
+  // and dispatches `path === "/"` → HomePage. No redirects to /launch or
+  // /trust/<addr> anymore — the picker IS the daily-landing.
+  return <GatedAppShell />;
 }
 
 // `/` is only the user-scope landing before an organization exists. Once an
