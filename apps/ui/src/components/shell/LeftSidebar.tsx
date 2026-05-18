@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Inbox,
   LayoutDashboard,
@@ -18,11 +18,11 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeftOpen,
+  Store,
 } from "lucide-react";
 import CompanySwitcher from "@/components/shell/CompanySwitcher";
 import AccountDropdown from "@/components/shell/AccountDropdown";
 import HelpMenu from "@/components/shell/HelpMenu";
-import Wordmark from "@/components/Wordmark";
 import { IconButton, Tooltip } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 import { useAuthStore } from "@/store/auth";
@@ -66,6 +66,8 @@ const IncorporationIcon = () => <ScrollText />;
 // org-chart authority graph (RoleNewPage / RoleDetailPage et al). Workflow
 // reads parent + child boxes = hierarchy.
 const RolesIcon = () => <Workflow />;
+// Economy — Store reads marketplace/commerce; the row navigates to /economy.
+const EconomyIcon = () => <Store />;
 
 // Admin — Lucide's Shield is the same silhouette as the prior hand-rolled.
 const AdminIcon = () => <Shield />;
@@ -131,6 +133,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
   // Top-level public rows.
   const isLaunch = path === "/launch" || path.startsWith("/launch/");
   const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
+  const isEconomy = path === "/economy" || path.startsWith("/economy/");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
 
@@ -209,13 +212,13 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
       className={`left-sidebar${sidebarCollapsed ? " collapsed" : ""}`}
       style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}
     >
-      {/* ── Brand header ── */}
+      {/* ── Header — account dropdown lives top-left, replacing the
+          previous Wordmark slot. The collapse toggle still hangs on the
+          right edge of the row. ── */}
       <div className="sidebar-header">
         {!sidebarCollapsed ? (
           <>
-            <Link to="/" className="sidebar-brand" aria-label="aeqi — home">
-              <Wordmark size={20} />
-            </Link>
+            <AccountDropdown />
             <Tooltip content={`Collapse sidebar (${isMac ? "⌘" : "Ctrl"}B)`}>
               <IconButton
                 className="sidebar-collapse-btn"
@@ -257,17 +260,20 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
       </div>
 
       <div className="left-sidebar-body">
-        {/* ── Top zone — Inbox is the daily-action surface; Search caps
-            the row so command discovery stays structural. Only renders
-            once the user has a company (Inbox is entity-scoped). Without
-            a company, the bottom-group Launch row is the entry point. ── */}
-        {hasCompany && (
-          <nav className="sidebar-surface-nav sidebar-zone" aria-label="Inbox">
-            {navItem("inbox", "Inbox", <InboxIcon />, {
+        {/* ── Global group — surfaces that live above the trust scope.
+            Inbox is entity-scoped (the daily-action surface for the
+            active trust) so it only renders once a trust is selected;
+            Economy is a top-level user-scoped destination so it always
+            renders. The group header always shows so the layout is
+            stable across the no-trust → trust-selected transition. ── */}
+        <nav className="sidebar-surface-nav sidebar-zone" aria-label="Global">
+          <div className="sidebar-section-label">Global</div>
+          {hasCompany &&
+            navItem("inbox", "Inbox", <InboxIcon />, {
               action: rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`),
             })}
-          </nav>
-        )}
+          {topLevelItem("/economy", "Economy", <EconomyIcon />, isEconomy)}
+        </nav>
 
         {/* ── Workspace switcher — pivots between launch/user scope and
             the active company below. ── */}
@@ -348,19 +354,17 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
           </>
         )}
 
-        {/* ── Bottom group — Blueprints + (admin) + AccountDropdown.
-            Account isn't a nav row anymore: the AccountDropdown trigger
-            below opens a menu that routes to /account on click, and a
-            duplicate row is redundant. Blueprints = the catalog
-            (top-level, public). ── */}
+        {/* ── Bottom group — platform-level destinations + HelpMenu.
+            AccountDropdown moved to the top-left of the sidebar header
+            on 2026-05-18 (replacing the Wordmark slot), so it no longer
+            appears here. ── */}
         <div className="sidebar-bottom-group">
           <nav className="sidebar-surface-nav" aria-label="Platform">
             {topLevelItem("/launch", "Launch", <LaunchIcon />, isLaunch)}
             {topLevelItem("/blueprints", "Blueprints", <BlueprintsIcon />, isBlueprints)}
             {isAdminUser && topLevelItem("/admin", "Admin", <AdminIcon />, isAdmin)}
           </nav>
-          <div className="sidebar-action-row sidebar-action-row--account">
-            <AccountDropdown />
+          <div className="sidebar-action-row sidebar-action-row--help">
             <HelpMenu />
           </div>
         </div>

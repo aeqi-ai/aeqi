@@ -92,7 +92,13 @@ export default function AccountDropdown() {
 
   return (
     <div className="account-dropdown-row">
-      <Popover trigger={rowTrigger} open={open} onOpenChange={setOpen} placement="top-start" portal>
+      <Popover
+        trigger={rowTrigger}
+        open={open}
+        onOpenChange={setOpen}
+        placement="bottom-start"
+        portal
+      >
         <div className="account-dropdown-menu" role="menu">
           <SelectOption
             selected={isAccount}

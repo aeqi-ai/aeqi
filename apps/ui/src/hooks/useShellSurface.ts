@@ -14,6 +14,9 @@ export interface ShellSurface {
   isBlueprints: boolean;
   /** `/launch` — company formation surface. Left composer + right canvas. */
   isLaunch: boolean;
+  /** `/economy/*` — top-level marketplace / inference / billing destination
+   *  introduced as part of the "Global" sidebar group on 2026-05-18. */
+  isEconomy: boolean;
   /** True when the path doesn't match any known shell surface — drives the
    *  in-shell 404 dispatch. Stays false for `/me/...`, `/launch/...`,
    *  `/blueprints/...`, and other non-organization routes. */
@@ -39,6 +42,7 @@ export function useShellSurface(path: string): ShellSurface {
     const isAccount = path === "/account" || path.startsWith("/account/");
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
+    const isEconomy = path === "/economy" || path.startsWith("/economy/");
 
     // In-shell Roles sub-pages on the canonical trust route. URL slug is
     // `/roles/...`; underlying pages are RoleNewPage / RoleDetailPage /
@@ -56,13 +60,15 @@ export function useShellSurface(path: string): ShellSurface {
     // segments (`/foo`) that would otherwise fall through to a stale
     // active-entity render.
     const isCompanyRoute = /^\/trust\/[^/]+(\/|$)/.test(path);
-    const isKnownShellRoute = isCompanyRoute || isAccount || isBlueprints || isLaunch || isAdmin;
+    const isKnownShellRoute =
+      isCompanyRoute || isAccount || isBlueprints || isLaunch || isEconomy || isAdmin;
     const isNotFound = !isKnownShellRoute;
 
     return {
       isAccount,
       isBlueprints,
       isLaunch,
+      isEconomy,
       isNotFound,
       isAdmin,
       isRolesNew,
