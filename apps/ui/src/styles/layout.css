@@ -7552,36 +7552,46 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   font-size: var(--font-size-sm);
 }
 
-/* ── Home picker — the root `/` surface. Node-grid of (actor × role ×
-   trust) contexts, intentionally low-density / ethereal in feel:
-   generous whitespace, quiet typography, soft hover. No gradients, no
-   decorative motion (per .impeccable.md). ── */
+/* ── Home picker — the root `/` surface. Anchored on the user (avatar +
+   personalised greeting in display type), then a node grid of available
+   (actor × role × trust) contexts, then a quiet footer of secondary
+   destinations. The "ethereal" feel comes from composition + whitespace,
+   not flourish (per .impeccable.md: no hairlines, no gradients, no
+   animations beyond 0.12s ease). ── */
 .home-picker {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 64px 48px 48px;
+  padding: 80px 48px 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 48px;
+  gap: 56px;
   width: 100%;
 }
-.home-picker-header {
-  text-align: center;
-  max-width: 560px;
+.home-picker-anchor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 14px;
+  max-width: 560px;
+  text-align: center;
 }
-.home-picker-header h1 {
+.home-picker-anchor-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-picker-greeting {
   margin: 0;
-  font-size: 28px;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 300;
   letter-spacing: -0.02em;
   color: var(--color-text-primary);
+  line-height: 1.1;
 }
-.home-picker-header p {
+.home-picker-subhead {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -7598,8 +7608,8 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 32px 20px;
+  gap: 14px;
+  padding: 40px 24px;
   background: var(--color-card);
   border: 0;
   border-radius: var(--radius-lg, 12px);
@@ -7612,7 +7622,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 }
 .home-picker-node:hover {
   background: var(--bg-row);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 .home-picker-node:focus-visible {
   outline: none;
@@ -7624,6 +7634,13 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   align-items: center;
   justify-content: center;
 }
+.home-picker-node-avatar--ghost {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: var(--bg-row);
+  color: var(--color-text-muted);
+}
 .home-picker-node-actor {
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -7633,23 +7650,48 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
-.home-picker-empty {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  text-align: center;
-  max-width: 480px;
+/* Quieter "Create new trust" tile: transparent at rest so it doesn't
+   compete with real contexts for the eye, same hover treatment so it
+   still feels like a peer affordance. */
+.home-picker-node--create {
+  background: transparent;
 }
-.home-picker-actions {
+.home-picker-node--create:hover {
+  background: var(--bg-row);
+}
+.home-picker-node--create .home-picker-node-actor {
+  color: var(--color-text-secondary);
+}
+.home-picker-footer {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
   align-items: center;
-  width: 100%;
-  max-width: 320px;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
-.home-picker-actions > button {
-  width: 100%;
+.home-picker-link {
+  background: transparent;
+  border: 0;
+  padding: 4px 2px;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.home-picker-link:hover {
+  color: var(--color-text-primary);
+}
+.home-picker-link--muted,
+.home-picker-link[disabled] {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+.home-picker-link--muted:hover {
+  color: var(--color-text-muted);
+}
+.home-picker-link-sep {
+  user-select: none;
 }
 
 /* ── Bottom row: Admin (if applicable) left, HelpMenu always right. The
