@@ -317,7 +317,15 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Execution">
               <div className="sidebar-section-label">Execution</div>
-              {navItem("agents", "Agents", <AgentsIcon />)}
+              {navItem("agents", "Agents", <AgentsIcon />, {
+                action: rowAction("New agent", <PlusIcon />, () => {
+                  // TrustAgentsTab listens for `aeqi:create` to open the
+                  // BlueprintPickerModal. Navigate first so the listener is
+                  // mounted, then dispatch on the next tick.
+                  navigate(`${base}/agents`);
+                  setTimeout(() => window.dispatchEvent(new CustomEvent("aeqi:create")), 0);
+                }),
+              })}
               {navItem("events", "Events", <EventsIcon />, {
                 action: rowAction("New event", <PlusIcon />, () => {
                   navigate(`${base}/events?compose=1`);
