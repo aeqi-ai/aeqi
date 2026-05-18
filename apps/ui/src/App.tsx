@@ -48,6 +48,7 @@ const RESERVED_SLUGS = new Set([
   "launch",
   "blueprints",
   "economy",
+  "acting-as",
   "signup",
   "login",
   "verify",
@@ -225,6 +226,7 @@ export default function App() {
           <Route path="launch/:blueprintId" element={null} />
           <Route path="economy" element={null} />
           <Route path="economy/:tab" element={null} />
+          <Route path="acting-as" element={null} />
           <Route path="trust/:trustAddress" element={null}>
             <Route index element={null} />
             <Route path="agents/:agentId" element={null}>

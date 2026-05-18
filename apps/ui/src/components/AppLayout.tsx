@@ -27,6 +27,7 @@ const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const CompanySetupPage = lazy(() => import("@/pages/CompanySetupPage"));
 const BlueprintsPage = lazy(() => import("@/pages/BlueprintsPage"));
 const EconomyPage = lazy(() => import("@/pages/EconomyPage"));
+const ActingAsPage = lazy(() => import("@/pages/ActingAsPage"));
 const BlueprintDetailPage = lazy(() => import("@/pages/BlueprintDetailPage"));
 const CompanyPage = lazy(() => import("@/pages/CompanyPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
@@ -212,6 +213,7 @@ export default function AppLayout() {
     isBlueprints,
     isLaunch,
     isEconomy,
+    isActingAs,
     isNotFound,
     isAdmin,
     isRolesNew,
@@ -365,6 +367,7 @@ export default function AppLayout() {
     if (isAdmin) return <AdminPage />;
     if (isAccount) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
+    if (isActingAs) return <ActingAsPage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /
       // events / quests / ideas) → catalog tab. Otherwise <seg> is a blueprint
@@ -422,6 +425,7 @@ export default function AppLayout() {
     !isLaunch &&
     !isBlueprints &&
     !isEconomy &&
+    !isActingAs &&
     isAgentChatDefault;
   const showComposer = sessionsMounted;
   const showSessionsRail = sessionsMounted && !!isEntityRoute;

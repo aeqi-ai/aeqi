@@ -17,6 +17,9 @@ export interface ShellSurface {
   /** `/economy/*` — top-level marketplace / inference / billing destination
    *  introduced as part of the "Global" sidebar group on 2026-05-18. */
   isEconomy: boolean;
+  /** `/acting-as` — the operating-context picker (Actor × Role × Trust)
+   *  reached from the sidebar's main accent block. */
+  isActingAs: boolean;
   /** True when the path doesn't match any known shell surface — drives the
    *  in-shell 404 dispatch. Stays false for `/me/...`, `/launch/...`,
    *  `/blueprints/...`, and other non-organization routes. */
@@ -43,6 +46,7 @@ export function useShellSurface(path: string): ShellSurface {
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
     const isEconomy = path === "/economy" || path.startsWith("/economy/");
+    const isActingAs = path === "/acting-as" || path.startsWith("/acting-as/");
 
     // In-shell Roles sub-pages on the canonical trust route. URL slug is
     // `/roles/...`; underlying pages are RoleNewPage / RoleDetailPage /
@@ -61,7 +65,7 @@ export function useShellSurface(path: string): ShellSurface {
     // active-entity render.
     const isCompanyRoute = /^\/trust\/[^/]+(\/|$)/.test(path);
     const isKnownShellRoute =
-      isCompanyRoute || isAccount || isBlueprints || isLaunch || isEconomy || isAdmin;
+      isCompanyRoute || isAccount || isBlueprints || isLaunch || isEconomy || isActingAs || isAdmin;
     const isNotFound = !isKnownShellRoute;
 
     return {
@@ -69,6 +73,7 @@ export function useShellSurface(path: string): ShellSurface {
       isBlueprints,
       isLaunch,
       isEconomy,
+      isActingAs,
       isNotFound,
       isAdmin,
       isRolesNew,

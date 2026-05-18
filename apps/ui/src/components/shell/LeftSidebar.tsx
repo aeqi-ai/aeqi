@@ -18,7 +18,7 @@ import {
   PanelLeftOpen,
   Store,
 } from "lucide-react";
-import CompanySwitcher from "@/components/shell/CompanySwitcher";
+import ActingAsSelector from "@/components/shell/ActingAsSelector";
 import AccountDropdown from "@/components/shell/AccountDropdown";
 import HelpMenu from "@/components/shell/HelpMenu";
 import { IconButton, Tooltip } from "@/components/ui";
@@ -266,10 +266,14 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
           {topLevelItem("/economy", "Economy", <EconomyIcon />, isEconomy)}
         </nav>
 
-        {/* ── Workspace switcher — pivots between launch/user scope and
-            the active company below. ── */}
+        {/* ── Acting-as selector — the main accent block in the rail.
+            Display: Acting as / <Actor> / <Role> · <Trust>. Click opens
+            the dedicated `/acting-as` page where the user picks the full
+            (actor × role × trust) tuple. Replaces the prior workspace
+            switcher dropdown 2026-05-18 — context isn't a "which company"
+            choice anymore, it's an Actor → Role → Trust choice. ── */}
         <div className="sidebar-user-zone">
-          <CompanySwitcher />
+          <ActingAsSelector />
         </div>
 
         {/* ── Company-scope items. Visible only when a company is
