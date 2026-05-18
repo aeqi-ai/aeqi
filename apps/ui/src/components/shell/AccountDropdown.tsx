@@ -1,42 +1,14 @@
 import { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { User, CreditCard, LogOut } from "lucide-react";
 import { Popover, SelectOption } from "@/components/ui";
 import UserAvatar from "@/components/UserAvatar";
 import { useAuthStore } from "@/store/auth";
 import { Events, useTrack } from "@/lib/analytics";
 
-const iconProps = {
-  width: 16,
-  height: 16,
-  viewBox: "0 0 16 16",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
-const AccountIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="8" cy="5.5" r="2.5" />
-    <path d="M3 13.5c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
-  </svg>
-);
-
-const BillingIcon = () => (
-  <svg {...iconProps}>
-    <rect x="2" y="4" width="12" height="9" rx="1" />
-    <path d="M2 7h12" />
-    <path d="M5 10.5h3" />
-  </svg>
-);
-
-const SignOutIcon = () => (
-  <svg {...iconProps}>
-    <path d="M9 3H3v10h6" />
-    <path d="M7 8h7M11 5l3 3-3 3" />
-  </svg>
-);
+const AccountIcon = () => <User />;
+const BillingIcon = () => <CreditCard />;
+const SignOutIcon = () => <LogOut />;
 
 export default function AccountDropdown() {
   const navigate = useNavigate();

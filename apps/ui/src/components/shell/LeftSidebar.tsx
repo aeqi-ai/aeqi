@@ -11,6 +11,13 @@ import {
   Target,
   Lightbulb,
   ScrollText,
+  Layers,
+  Rocket,
+  Shield,
+  Search,
+  Plus,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import CompanySwitcher from "@/components/shell/CompanySwitcher";
 import AccountDropdown from "@/components/shell/AccountDropdown";
@@ -28,15 +35,6 @@ interface LeftSidebarProps {
   path: string;
 }
 
-const iconProps = {
-  viewBox: "0 0 16 16",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
 // Sidebar nav icons — Lucide, sized via CSS (.sidebar-nav-item > svg).
 // Stroke width is overridden to 1.65 by layout.css for the 16px optical sweet
 // spot; the icon prop here just controls glyph identity.
@@ -47,23 +45,10 @@ const EventsIcon = () => <Webhook />;
 const QuestsIcon = () => <Target />;
 const IdeasIcon = () => <Lightbulb />;
 
-// Stack of layered cards — Blueprints is the catalog of recipes, the
-// supply layer of the system. Three rounded rectangles, slightly offset.
-const BlueprintsIcon = () => (
-  <svg {...iconProps}>
-    <rect x="3" y="3" width="10" height="3" rx="0.5" />
-    <rect x="3" y="7" width="10" height="3" rx="0.5" />
-    <rect x="3" y="11" width="10" height="3" rx="0.5" />
-  </svg>
-);
-
-const LaunchIcon = () => (
-  <svg {...iconProps}>
-    <path d="M3 12.5h10" />
-    <path d="M8 3v7" />
-    <path d="M5.5 7.5 8 10l2.5-2.5" />
-  </svg>
-);
+// Blueprints — catalog of recipes (the supply layer). Layers = stacked-deck.
+const BlueprintsIcon = () => <Layers />;
+// Launch — company-creation CTA. Rocket reads the verb directly.
+const LaunchIcon = () => <Rocket />;
 
 // AEQI Ownership primitives — Lucide picks anchored to each row's semantic.
 // Assets (a) → Coins: stacked-coin = stored value.
@@ -79,32 +64,14 @@ const IncorporationIcon = () => <ScrollText />;
 // reads parent + child boxes = hierarchy.
 const RolesIcon = () => <Workflow />;
 
-// Admin — shield silhouette.
-const AdminIcon = () => (
-  <svg {...iconProps}>
-    <path d="M8 1.5L13 4v4.5c0 3.2-2.2 5.4-5 6-2.8-.6-5-2.8-5-6V4l5-2.5z" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="7" cy="7" r="4.5" />
-    <path d="M10 10l3.5 3.5" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg {...iconProps} width={12} height={12}>
-    <path d="M8 3v10M3 8h10" />
-  </svg>
-);
-
-const PanelGlyph = () => (
-  <svg {...iconProps}>
-    <rect x="2" y="3" width="12" height="10" rx="1.5" />
-    <path d="M6.5 3v10" />
-  </svg>
-);
+// Admin — Lucide's Shield is the same silhouette as the prior hand-rolled.
+const AdminIcon = () => <Shield />;
+const SearchIcon = () => <Search />;
+const PlusIcon = () => <Plus />;
+// Sidebar collapse/expand — state-aware glyphs so the affordance reads
+// in both directions.
+const CollapseSidebarIcon = () => <PanelLeftClose />;
+const ExpandSidebarIcon = () => <PanelLeftOpen />;
 
 export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
   const navigate = useNavigate();
@@ -252,7 +219,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
                 onClick={toggleSidebar}
                 aria-label="Collapse sidebar"
               >
-                <PanelGlyph />
+                <CollapseSidebarIcon />
               </IconButton>
             </Tooltip>
           </>
@@ -279,7 +246,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
                 </span>
               </span>
               <span className="sidebar-brand-collapsed-hover" aria-hidden="true">
-                <PanelGlyph />
+                <ExpandSidebarIcon />
               </span>
             </button>
           </Tooltip>

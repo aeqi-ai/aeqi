@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ChevronDown, Plus } from "lucide-react";
 import { Popover, SelectOption } from "@/components/ui";
 import BlockAvatar from "@/components/BlockAvatar";
 import { useEntities, useActiveEntity } from "@/queries/entities";
@@ -7,26 +8,8 @@ import { useUIStore } from "@/store/ui";
 import { entityPath } from "@/lib/entityPath";
 import type { Trust } from "@/lib/types";
 
-const iconProps = {
-  viewBox: "0 0 16 16",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
-const ChevronDownIcon = () => (
-  <svg {...iconProps} width={10} height={10}>
-    <path d="M4 6l4 4 4-4" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg {...iconProps} width={12} height={12}>
-    <path d="M8 3v10M3 8h10" />
-  </svg>
-);
+const ChevronDownIcon = () => <ChevronDown size={10} />;
+const PlusIcon = () => <Plus size={12} />;
 
 /**
  * Top-of-rail workspace switcher. The user can be in two contexts:
