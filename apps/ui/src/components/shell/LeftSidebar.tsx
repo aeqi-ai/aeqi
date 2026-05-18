@@ -10,6 +10,7 @@ import {
   Webhook,
   Target,
   Lightbulb,
+  ScrollText,
 } from "lucide-react";
 import CompanySwitcher from "@/components/shell/CompanySwitcher";
 import AccountDropdown from "@/components/shell/AccountDropdown";
@@ -64,15 +65,19 @@ const LaunchIcon = () => (
   </svg>
 );
 
-// AEQI primitives — Lucide picks anchored to each row's semantic.
+// AEQI Ownership primitives — Lucide picks anchored to each row's semantic.
 // Assets (a) → Coins: stacked-coin = stored value.
 // Equity (e) → PieChart: cap-table slice.
 // Quorum (q) → Vote: ballot-into-box = decision/governance.
-// Identity (i) → Workflow: parent + child boxes = org chart.
+// Inception (i) → ScrollText: founding document / charter.
 const AssetsIcon = () => <Coins />;
 const EquityIcon = () => <PieChart />;
 const QuorumIcon = () => <Vote />;
-const IdentityIcon = () => <Workflow />;
+const InceptionIcon = () => <ScrollText />;
+// Roles — its own peer slot under Trust, outside both AEQI groups. The
+// org-chart authority graph (RoleNewPage / RoleDetailPage et al). Workflow
+// reads parent + child boxes = hierarchy.
+const RolesIcon = () => <Workflow />;
 
 // Admin — shield silhouette.
 const AdminIcon = () => (
@@ -325,9 +330,14 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
                   <span className="sidebar-nav-label">TRUST</span>
                 </a>
               </div>
+              {/* Roles — peer slot under Trust, outside both AEQI groups. The
+                  authority graph is the connective tissue between Ownership
+                  (board tier) and Execution (operating tier), so it doesn't
+                  belong inside either. */}
+              {navItem("roles", "Roles", <RolesIcon />)}
             </nav>
 
-            {/* AEQI ownership grammar — assets · equity · quorum · identity.
+            {/* AEQI ownership grammar — assets · equity · quorum · inception.
                 The four rows spell the wordmark in order. Section label
                 reinforces "this is who owns / runs the TRUST". */}
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Ownership">
@@ -335,7 +345,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
               {navItem("assets", "Assets", <AssetsIcon />)}
               {navItem("equity", "Equity", <EquityIcon />)}
               {navItem("quorum", "Quorum", <QuorumIcon />)}
-              {navItem("identity", "Identity", <IdentityIcon />)}
+              {navItem("inception", "Inception", <InceptionIcon />)}
             </nav>
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Execution">

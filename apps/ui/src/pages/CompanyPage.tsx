@@ -17,6 +17,7 @@ const TrustRolesTab = lazy(() => import("@/components/TrustRolesTab"));
 const AssetsPage = lazy(() => import("@/pages/AssetsPage"));
 const EquityPage = lazy(() => import("@/pages/EquityPage"));
 const QuorumPage = lazy(() => import("@/pages/QuorumPage"));
+const InceptionPage = lazy(() => import("@/pages/InceptionPage"));
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
 const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
 const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
@@ -132,11 +133,24 @@ export default function CompanyPage({ agentId, trustId, tab, itemId }: CompanyPa
       </Suspense>
     );
   }
-  // AEQI grammar: Identity is the role-chart surface (renamed 2026-05-17).
-  if (tab === "identity") {
+  // Roles — the org-chart / authority-graph surface. Hoisted from inside the
+  // AEQI Ownership group on 2026-05-18 to its own peer slot under Trust, so
+  // the connective-tissue primitive (authority graph) sits between the board
+  // tier (Ownership) and the operating tier (Execution).
+  if (tab === "roles") {
     return (
       <Suspense>
         <TrustRolesTab trustId={trustId} />
+      </Suspense>
+    );
+  }
+  // Inception — `i` in the AEQI grammar. The TRUST's constitutional surface
+  // (charter, founders, registration). Renamed from "Identity" 2026-05-18
+  // when the role-graph moved to its own `roles` row.
+  if (tab === "inception") {
+    return (
+      <Suspense>
+        <InceptionPage />
       </Suspense>
     );
   }

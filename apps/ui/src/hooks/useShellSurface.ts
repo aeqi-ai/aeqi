@@ -21,12 +21,15 @@ export interface ShellSurface {
   /** `/admin` — operator dashboard. Backend gates on is_admin; the page
    *  itself returns null + bounces non-admins. */
   isAdmin: boolean;
-  /** In-shell identity (formerly "roles") sub-pages — rendered inside
-   *  AppLayout. The AEQI grammar renamed Roles → Identity 2026-05-17. */
-  isIdentityNew: boolean;
-  isIdentityDetail: boolean;
-  isIdentityEdit: boolean;
-  isIdentityInvite: boolean;
+  /** In-shell Roles sub-pages — rendered inside AppLayout. The Roles
+   *  primitive moved out of the AEQI Ownership group on 2026-05-18 to a
+   *  peer slot directly under Trust (see CompanyPage `tab === "roles"`).
+   *  URL slug is `/roles/...`; underlying page components are RoleNewPage /
+   *  RoleDetailPage / RoleEditPage / RoleInvitePage. */
+  isRolesNew: boolean;
+  isRolesDetail: boolean;
+  isRolesEdit: boolean;
+  isRolesInvite: boolean;
 }
 
 export function useShellSurface(path: string): ShellSurface {
@@ -37,22 +40,16 @@ export function useShellSurface(path: string): ShellSurface {
     const isBlueprints = path === "/blueprints" || path.startsWith("/blueprints/");
     const isLaunch = path === "/launch" || path.startsWith("/launch/");
 
-    // In-shell identity sub-pages on the canonical trust route. URL slug
-    // is `/identity/...` per the AEQI grammar (the underlying primitive
-    // is still Role-typed; the page components keep their RoleNewPage /
-    // RoleDetailPage names because the data model didn't change).
-    const identityPathMatch = path.match(/^\/trust\/[^/]+\/identity\/(.+)$/);
-    const identitySuffix = identityPathMatch ? identityPathMatch[1] : null;
-    const isIdentityNew = identitySuffix === "new";
-    const isIdentityInvite =
-      !isIdentityNew && !!identitySuffix && identitySuffix.endsWith("/invite");
-    const isIdentityEdit = !isIdentityNew && !!identitySuffix && identitySuffix.endsWith("/edit");
-    const isIdentityDetail =
-      !isIdentityNew &&
-      !isIdentityInvite &&
-      !isIdentityEdit &&
-      !!identitySuffix &&
-      !identitySuffix.includes("/");
+    // In-shell Roles sub-pages on the canonical trust route. URL slug is
+    // `/roles/...`; underlying pages are RoleNewPage / RoleDetailPage /
+    // RoleEditPage / RoleInvitePage.
+    const rolesPathMatch = path.match(/^\/trust\/[^/]+\/roles\/(.+)$/);
+    const rolesSuffix = rolesPathMatch ? rolesPathMatch[1] : null;
+    const isRolesNew = rolesSuffix === "new";
+    const isRolesInvite = !isRolesNew && !!rolesSuffix && rolesSuffix.endsWith("/invite");
+    const isRolesEdit = !isRolesNew && !!rolesSuffix && rolesSuffix.endsWith("/edit");
+    const isRolesDetail =
+      !isRolesNew && !isRolesInvite && !isRolesEdit && !!rolesSuffix && !rolesSuffix.includes("/");
 
     // A path is "known" when it matches one of the registered shell
     // surfaces. Anything else is a 404 — including bogus top-level
@@ -68,10 +65,10 @@ export function useShellSurface(path: string): ShellSurface {
       isLaunch,
       isNotFound,
       isAdmin,
-      isIdentityNew,
-      isIdentityDetail,
-      isIdentityEdit,
-      isIdentityInvite,
+      isRolesNew,
+      isRolesDetail,
+      isRolesEdit,
+      isRolesInvite,
     };
   }, [path]);
 }

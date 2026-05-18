@@ -232,10 +232,10 @@ export default function App() {
               <Route path=":tab" element={null} />
               <Route path=":tab/:itemId" element={null} />
             </Route>
-            <Route path="identity/new" element={null} />
-            <Route path="identity/:roleId" element={null} />
-            <Route path="identity/:roleId/edit" element={null} />
-            <Route path="identity/:roleId/invite" element={null} />
+            <Route path="roles/new" element={null} />
+            <Route path="roles/:roleId" element={null} />
+            <Route path="roles/:roleId/edit" element={null} />
+            <Route path="roles/:roleId/invite" element={null} />
             <Route path=":tab" element={null} />
             <Route path=":tab/:itemId" element={null} />
           </Route>

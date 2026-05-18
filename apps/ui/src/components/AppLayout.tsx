@@ -70,11 +70,14 @@ const COMPANY_PAGE_TABS = new Set([
   "overview",
   "inbox",
   "health",
-  // AEQI ownership grammar: assets · equity · quorum · identity.
+  // AEQI ownership grammar: assets · equity · quorum · inception.
   "assets",
   "equity",
   "quorum",
-  "identity",
+  "inception",
+  // Roles is its own peer slot (sits directly under Trust, outside both
+  // Ownership and Execution groups) — renders TrustRolesTab.
+  "roles",
   "agents",
   "events",
   "quests",
@@ -209,10 +212,10 @@ export default function AppLayout() {
     isLaunch,
     isNotFound,
     isAdmin,
-    isIdentityNew,
-    isIdentityDetail,
-    isIdentityEdit,
-    isIdentityInvite,
+    isRolesNew,
+    isRolesDetail,
+    isRolesEdit,
+    isRolesInvite,
   } = surface;
 
   if (!initialLoaded) return <BootLoader />;
@@ -348,10 +351,10 @@ export default function AppLayout() {
 
   const mainContent = (() => {
     if (isNotFound) return <NotFoundPage />;
-    if (isIdentityNew) return <RoleNewPage />;
-    if (isIdentityInvite) return <RoleInvitePage />;
-    if (isIdentityEdit) return <RoleEditPage />;
-    if (isIdentityDetail) return <RoleDetailPage />;
+    if (isRolesNew) return <RoleNewPage />;
+    if (isRolesInvite) return <RoleInvitePage />;
+    if (isRolesEdit) return <RoleEditPage />;
+    if (isRolesDetail) return <RoleDetailPage />;
     if (isLaunch) {
       // When the URL omits a blueprint id, CompanySetupPage resolves the
       // default blueprint internally so the launch surface is a single wizard.
