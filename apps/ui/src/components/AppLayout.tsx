@@ -70,11 +70,11 @@ const COMPANY_PAGE_TABS = new Set([
   "overview",
   "inbox",
   "health",
-  // AEQI ownership grammar: assets · equity · quorum · inception.
+  // AEQI ownership grammar: assets · equity · quorum · incorporation.
   "assets",
   "equity",
   "quorum",
-  "inception",
+  "incorporation",
   // Roles is its own peer slot (sits directly under Trust, outside both
   // Ownership and Execution groups) — renders TrustRolesTab.
   "roles",

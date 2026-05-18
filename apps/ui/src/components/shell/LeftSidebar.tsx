@@ -69,11 +69,11 @@ const LaunchIcon = () => (
 // Assets (a) → Coins: stacked-coin = stored value.
 // Equity (e) → PieChart: cap-table slice.
 // Quorum (q) → Vote: ballot-into-box = decision/governance.
-// Inception (i) → ScrollText: founding document / charter.
+// Incorporation (i) → ScrollText: founding document / charter.
 const AssetsIcon = () => <Coins />;
 const EquityIcon = () => <PieChart />;
 const QuorumIcon = () => <Vote />;
-const InceptionIcon = () => <ScrollText />;
+const IncorporationIcon = () => <ScrollText />;
 // Roles — its own peer slot under Trust, outside both AEQI groups. The
 // org-chart authority graph (RoleNewPage / RoleDetailPage et al). Workflow
 // reads parent + child boxes = hierarchy.
@@ -337,7 +337,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
               {navItem("roles", "Roles", <RolesIcon />)}
             </nav>
 
-            {/* AEQI ownership grammar — assets · equity · quorum · inception.
+            {/* AEQI ownership grammar — assets · equity · quorum · incorporation.
                 The four rows spell the wordmark in order. Section label
                 reinforces "this is who owns / runs the TRUST". */}
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Ownership">
@@ -345,7 +345,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
               {navItem("assets", "Assets", <AssetsIcon />)}
               {navItem("equity", "Equity", <EquityIcon />)}
               {navItem("quorum", "Quorum", <QuorumIcon />)}
-              {navItem("inception", "Inception", <InceptionIcon />)}
+              {navItem("incorporation", "Incorporation", <IncorporationIcon />)}
             </nav>
 
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Execution">

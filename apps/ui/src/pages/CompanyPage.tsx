@@ -17,7 +17,7 @@ const TrustRolesTab = lazy(() => import("@/components/TrustRolesTab"));
 const AssetsPage = lazy(() => import("@/pages/AssetsPage"));
 const EquityPage = lazy(() => import("@/pages/EquityPage"));
 const QuorumPage = lazy(() => import("@/pages/QuorumPage"));
-const InceptionPage = lazy(() => import("@/pages/InceptionPage"));
+const IncorporationPage = lazy(() => import("@/pages/IncorporationPage"));
 const AgentEventsTab = lazy(() => import("@/components/AgentEventsTab"));
 const AgentQuestsTab = lazy(() => import("@/components/AgentQuestsTab"));
 const AgentIdeasTab = lazy(() => import("@/components/AgentIdeasTab"));
@@ -144,13 +144,13 @@ export default function CompanyPage({ agentId, trustId, tab, itemId }: CompanyPa
       </Suspense>
     );
   }
-  // Inception — `i` in the AEQI grammar. The TRUST's constitutional surface
-  // (charter, founders, registration). Renamed from "Identity" 2026-05-18
-  // when the role-graph moved to its own `roles` row.
-  if (tab === "inception") {
+  // Incorporation — `i` in the AEQI grammar. The TRUST's constitutional
+  // surface (charter, founders, registration). Renamed from "Identity"
+  // 2026-05-18 when the role-graph moved to its own `roles` row.
+  if (tab === "incorporation") {
     return (
       <Suspense>
-        <InceptionPage />
+        <IncorporationPage />
       </Suspense>
     );
   }
