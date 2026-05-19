@@ -13,8 +13,8 @@ import type { Trust, TrustType } from "@/lib/types";
 /**
  * Home dashboard at `/`. Reframed 2026-05-19 (cards-v2):
  *
- *   1. Hero image with greeting overlay and account-avatar affordance
- *      in the top-right (single-click to /account).
+ *   1. Hero image with greeting overlay. (The account path lives in
+ *      the sidebar's profile entry; the hero stays purely editorial.)
  *   2. "Step into a trust" CARD (full-width): a row of per-trust tiles
  *      (avatar + name + role context), plus [+ New trust] and
  *      [Browse blueprints] action tiles. Header carries a "View all →"
@@ -93,14 +93,6 @@ export default function StartPage() {
               around you.
             </p>
           </div>
-          <Link
-            to="/account"
-            className="home-hero-account"
-            aria-label="Account settings"
-            title="Account settings"
-          >
-            <BlockAvatar name={actorName} size={36} />
-          </Link>
         </div>
       </header>
 

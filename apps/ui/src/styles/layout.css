@@ -7932,30 +7932,6 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   font-size: var(--font-size-md, 15px);
   line-height: 1.5;
 }
-.home-hero-account {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  background: var(--color-card);
-  color: inherit;
-  text-decoration: none;
-  flex-shrink: 0;
-  transition:
-    background 0.12s ease,
-    transform 0.12s ease;
-}
-.home-hero-account:hover {
-  background: var(--bg-row);
-  transform: translateY(-1px);
-}
-.home-hero-account:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-accent);
-}
 
 /* Card shell — shared by trust card, inbox, economy, and thesis.
    Generous padding (28px) so every card reads as a deliberate
