@@ -1,28 +1,62 @@
 import { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Inbox as InboxIcon, Store, ArrowUpRight } from "lucide-react";
+import { Plus, Inbox as InboxIcon, Store, ArrowUpRight, ArrowRight } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useEntities } from "@/queries/entities";
 import { useInboxStore } from "@/store/inbox";
 import { entityPath } from "@/lib/entityPath";
 import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
+import { timeShort } from "@/lib/format";
 import BlockAvatar from "@/components/BlockAvatar";
+import type { Trust, TrustType } from "@/lib/types";
 
 /**
- * Start — the home dashboard at `/`. Reframed 2026-05-19 from a 4-card
- * nav hub into a working home:
- *   1. Slim greeting header + account-settings affordance (top-right avatar).
- *   2. Trust quick-select row: avatar chips for each trust the operator
- *      acts in, with [+ New trust] and [Browse blueprints] alongside.
- *   3. Two-column preview row: live inbox (top items) | economy teaser.
- *   4. Thesis snippet linking to the canonical post.
+ * Home dashboard at `/`. Reframed 2026-05-19 (cards-v2):
  *
- * The page treats the operator as a real user with work to do — every
- * block is either functional or canonical brand context, never decorative.
+ *   1. Hero image with greeting overlay and account-avatar affordance
+ *      in the top-right (single-click to /account).
+ *   2. "Step into a trust" CARD (full-width): a row of per-trust tiles
+ *      (avatar + name + role context), plus [+ New trust] and
+ *      [Browse blueprints] action tiles. Header carries a "View all →"
+ *      link to /trust for the picker.
+ *   3. Two-column row: live Inbox CARD on the left (rich items with
+ *      avatar + subject + preview + time); Economy CARD on the right
+ *      (quiet teaser — no fake feature tags).
+ *   4. Thesis CARD (full-width): editorial typography linking to the
+ *      canonical /blog/the-uncompiled-institution post.
+ *
+ * All blocks are real cards in the design-system theme (graphite + ink,
+ * no hairlines, no decorative motion). Composition + scale carry the
+ * weight.
  */
 
-const TRUST_CHIP_LIMIT = 6;
+const TRUST_TILE_LIMIT = 5;
 const INBOX_PREVIEW_LIMIT = 4;
+
+// Trust.type → display label. `dao` is intentionally remapped to
+// "Protocol" (brand rule bans "DAO" in user-facing UI copy). When the
+// runtime exposes a real role-per-(user × trust) value, swap this for
+// that data and rename `roleLabelFor` accordingly.
+function roleLabelFor(type: TrustType | undefined): string {
+  switch (type) {
+    case "company":
+      return "Company";
+    case "human":
+      return "Personal";
+    case "agent":
+      return "Agent";
+    case "fund":
+      return "Fund";
+    case "dao":
+      return "Protocol";
+    case "holding":
+      return "Holding";
+    case "protocol":
+      return "Protocol";
+    default:
+      return "Trust";
+  }
+}
 
 export default function StartPage() {
   const navigate = useNavigate();
@@ -38,155 +72,141 @@ export default function StartPage() {
 
   useEffect(() => {
     fetchInbox().catch(() => {
-      // inbox store handles its own error state — page renders the
-      // empty-preview affordance either way.
+      // store handles its own error state; preview shows empty affordance.
     });
   }, [fetchInbox]);
 
-  const trustChips = entities.slice(0, TRUST_CHIP_LIMIT);
-  const trustOverflow = Math.max(0, entities.length - TRUST_CHIP_LIMIT);
+  const trustTiles = entities.slice(0, TRUST_TILE_LIMIT);
+  const trustOverflow = Math.max(0, entities.length - TRUST_TILE_LIMIT);
   const inboxPreview = inboxItems.slice(0, INBOX_PREVIEW_LIMIT);
   const inboxCount = inboxItems.length;
 
   return (
     <div className="home-page">
-      <header className="home-header">
-        <div className="home-header-greeting">
-          <h1 className="home-header-title">Welcome, {actorName}.</h1>
-          <p className="home-header-subtitle">
-            Launch a trust, review what needs approval, or step into the economy already forming
-            around you.
-          </p>
+      <header className="home-hero">
+        <img src="/welcome/start-hero.png" alt="" className="home-hero-image" aria-hidden="true" />
+        <div className="home-hero-overlay">
+          <div className="home-hero-text">
+            <h1 className="home-hero-title">Welcome, {actorName}.</h1>
+            <p className="home-hero-subtitle">
+              Launch a trust, review what needs approval, or step into the economy already forming
+              around you.
+            </p>
+          </div>
+          <Link
+            to="/account"
+            className="home-hero-account"
+            aria-label="Account settings"
+            title="Account settings"
+          >
+            <BlockAvatar name={actorName} size={36} />
+          </Link>
         </div>
-        <Link
-          to="/account"
-          className="home-header-account"
-          aria-label="Account settings"
-          title="Account settings"
-        >
-          <BlockAvatar name={actorName} size={36} />
-        </Link>
       </header>
 
-      <section className="home-trusts" aria-label="Your trusts">
-        <div className="home-section-head">
-          <h2 className="home-section-title">Step into a trust</h2>
-          <span className="home-section-count">
-            {entities.length === 0
-              ? "Nothing yet"
-              : `${entities.length} trust${entities.length === 1 ? "" : "s"}`}
-          </span>
-        </div>
-        <div className="home-trusts-row">
-          {trustChips.map((entity) => (
-            <button
-              key={entity.id}
-              type="button"
-              className="home-trust-chip"
-              onClick={() => navigate(entityPath(entity))}
-              aria-label={`Open ${entity.name}`}
-            >
-              <span className="home-trust-chip-avatar" aria-hidden="true">
-                <BlockAvatar name={entity.name} size={22} />
-              </span>
-              <span className="home-trust-chip-name">{entity.name}</span>
-            </button>
-          ))}
-          {trustOverflow > 0 && (
-            <button
-              type="button"
-              className="home-trust-chip home-trust-chip--overflow"
-              onClick={() => navigate("/trust")}
-            >
-              +{trustOverflow} more
-            </button>
-          )}
-          <button
-            type="button"
-            className="home-trust-action home-trust-action--primary"
-            onClick={() => navigate("/launch")}
-          >
-            <Plus size={14} strokeWidth={1.8} />
-            <span>New trust</span>
-          </button>
-          <button
-            type="button"
-            className="home-trust-action"
-            onClick={() => navigate("/blueprints")}
-          >
-            Browse blueprints
-          </button>
-        </div>
-      </section>
+      <TrustCard
+        entities={entities}
+        trustTiles={trustTiles}
+        trustOverflow={trustOverflow}
+        onPickTrust={(e: Trust) => navigate(entityPath(e))}
+        onNewTrust={() => navigate("/launch")}
+        onBrowseBlueprints={() => navigate("/blueprints")}
+        onViewAll={() => navigate("/trust")}
+      />
 
-      <section className="home-previews" aria-label="Inbox and economy previews">
+      <section className="home-row-two" aria-label="Inbox and economy">
         <button
           type="button"
-          className="home-preview home-preview--inbox"
+          className="home-card home-card--inbox"
           onClick={() => navigate("/inbox")}
         >
-          <div className="home-preview-head">
-            <span className="home-preview-icon">
+          <header className="home-card-head">
+            <span className="home-card-icon">
               <InboxIcon size={16} strokeWidth={1.5} />
             </span>
-            <span className="home-preview-title">Inbox</span>
-            <span className="home-preview-meta">
+            <span className="home-card-title">Inbox</span>
+            <span className="home-card-meta">
               {inboxCount === 0 ? "All clear" : `${inboxCount} waiting`}
             </span>
-          </div>
+          </header>
           {inboxPreview.length > 0 ? (
-            <ul className="home-preview-list">
-              {inboxPreview.map((item) => (
-                <li key={item.session_id} className="home-preview-item">
-                  <Link
-                    className="home-preview-item-link"
-                    to={sessionDeepUrlFromId(
-                      entities,
-                      item.trust_id,
-                      item.agent_id,
-                      item.session_id,
-                    )}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <span className="home-preview-item-subject">
-                      {item.awaiting_subject ||
-                        item.session_name ||
-                        item.last_agent_message?.slice(0, 80) ||
-                        "Untitled session"}
-                    </span>
-                    <span className="home-preview-item-from">{item.agent_name || "—"}</span>
-                  </Link>
-                </li>
-              ))}
+            <ul className="home-inbox-list">
+              {inboxPreview.map((item) => {
+                const subject =
+                  item.awaiting_subject ||
+                  item.session_name ||
+                  item.last_agent_message?.slice(0, 80) ||
+                  "Untitled session";
+                const preview = item.last_agent_message?.replace(/\s+/g, " ").trim() || "";
+                const from = item.agent_name || "Agent";
+                const time = timeShort(item.awaiting_at || item.last_active);
+                return (
+                  <li key={item.session_id} className="home-inbox-item">
+                    <Link
+                      className="home-inbox-link"
+                      to={sessionDeepUrlFromId(
+                        entities,
+                        item.trust_id,
+                        item.agent_id,
+                        item.session_id,
+                      )}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="home-inbox-avatar" aria-hidden="true">
+                        <BlockAvatar name={from} size={28} />
+                      </span>
+                      <span className="home-inbox-body">
+                        <span className="home-inbox-row">
+                          <span className="home-inbox-from">{from}</span>
+                          <span className="home-inbox-time">{time}</span>
+                        </span>
+                        <span className="home-inbox-subject">{subject}</span>
+                        {preview && <span className="home-inbox-preview">{preview}</span>}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
-            <p className="home-preview-empty">Nothing waiting on you right now.</p>
+            <div className="home-inbox-empty">
+              <p>Nothing waiting on you right now.</p>
+              <p className="home-inbox-empty-hint">Approvals and proposals will appear here.</p>
+            </div>
           )}
-          <span className="home-preview-cta">Open inbox →</span>
+          <footer className="home-card-foot">
+            <span className="home-card-cta">
+              Open inbox
+              <ArrowRight size={14} strokeWidth={1.8} />
+            </span>
+          </footer>
         </button>
 
         <button
           type="button"
-          className="home-preview home-preview--economy"
+          className="home-card home-card--economy"
           onClick={() => navigate("/economy")}
         >
-          <div className="home-preview-head">
-            <span className="home-preview-icon">
+          <header className="home-card-head">
+            <span className="home-card-icon">
               <Store size={16} strokeWidth={1.5} />
             </span>
-            <span className="home-preview-title">The economy</span>
-            <span className="home-preview-meta">Taking shape</span>
+            <span className="home-card-title">The economy</span>
+          </header>
+          <div className="home-economy-body">
+            <p className="home-economy-lede">
+              Discover trusts, agents, markets, and capital activity across the network.
+            </p>
+            <p className="home-economy-aside">
+              The places where TRUSTs meet — and where the value moves between them.
+            </p>
           </div>
-          <p className="home-preview-lede">
-            Marketplace, inference, and billing — the global economy aeqi is building, one rail at a
-            time.
-          </p>
-          <ul className="home-preview-tags">
-            <li>Marketplace</li>
-            <li>Inference</li>
-            <li>Billing</li>
-          </ul>
-          <span className="home-preview-cta">Browse →</span>
+          <footer className="home-card-foot">
+            <span className="home-card-cta">
+              Browse
+              <ArrowRight size={14} strokeWidth={1.8} />
+            </span>
+          </footer>
         </button>
       </section>
 
@@ -197,13 +217,15 @@ export default function StartPage() {
           target="_blank"
           rel="noreferrer"
         >
-          <span className="home-thesis-eyebrow">Thesis</span>
-          <h2 className="home-thesis-title">The uncompiled institution</h2>
-          <p className="home-thesis-quote">
-            Institutions are software that has not been compiled yet.
-          </p>
-          <div className="home-thesis-meta">
-            <span>May 2, 2026 · Luca Eichs</span>
+          <div className="home-thesis-left">
+            <span className="home-thesis-eyebrow">Thesis</span>
+            <h2 className="home-thesis-title">The uncompiled institution.</h2>
+            <p className="home-thesis-quote">
+              Institutions are software that has not been compiled yet.
+            </p>
+          </div>
+          <div className="home-thesis-right">
+            <span className="home-thesis-byline">May 2, 2026 · Luca Eichs</span>
             <span className="home-thesis-read">
               Read on aeqi.ai
               <ArrowUpRight size={14} strokeWidth={1.8} />
@@ -212,5 +234,101 @@ export default function StartPage() {
         </a>
       </section>
     </div>
+  );
+}
+
+interface TrustCardProps {
+  entities: ReadonlyArray<Trust>;
+  trustTiles: ReadonlyArray<Trust>;
+  trustOverflow: number;
+  onPickTrust: (entity: Trust) => void;
+  onNewTrust: () => void;
+  onBrowseBlueprints: () => void;
+  onViewAll: () => void;
+}
+
+function TrustCard({
+  entities,
+  trustTiles,
+  trustOverflow,
+  onPickTrust,
+  onNewTrust,
+  onBrowseBlueprints,
+  onViewAll,
+}: TrustCardProps) {
+  const hasEntities = entities.length > 0;
+  return (
+    <section className="home-card home-card--trusts" aria-label="Your trusts">
+      <header className="home-card-head">
+        <span className="home-card-title">Step into a trust</span>
+        <span className="home-card-meta">
+          {hasEntities
+            ? `${entities.length} trust${entities.length === 1 ? "" : "s"}`
+            : "Nothing yet"}
+        </span>
+        {hasEntities && (
+          <button type="button" className="home-card-link" onClick={onViewAll}>
+            View all
+            <ArrowRight size={14} strokeWidth={1.8} />
+          </button>
+        )}
+      </header>
+
+      <div className="home-trusts-grid">
+        {trustTiles.map((entity) => (
+          <button
+            key={entity.id}
+            type="button"
+            className="home-trust-tile"
+            onClick={() => onPickTrust(entity)}
+            aria-label={`Step into ${entity.name}`}
+          >
+            <span className="home-trust-tile-avatar" aria-hidden="true">
+              <BlockAvatar name={entity.name} size={40} />
+            </span>
+            <span className="home-trust-tile-body">
+              <span className="home-trust-tile-name">{entity.name}</span>
+              <span className="home-trust-tile-role">{roleLabelFor(entity.type)}</span>
+            </span>
+          </button>
+        ))}
+        {trustOverflow > 0 && (
+          <button
+            type="button"
+            className="home-trust-tile home-trust-tile--overflow"
+            onClick={onViewAll}
+          >
+            <span className="home-trust-tile-overflow-count">+{trustOverflow}</span>
+            <span className="home-trust-tile-overflow-label">more trusts</span>
+          </button>
+        )}
+        <button
+          type="button"
+          className="home-trust-tile home-trust-tile--action home-trust-tile--primary"
+          onClick={onNewTrust}
+        >
+          <span className="home-trust-tile-action-icon">
+            <Plus size={18} strokeWidth={1.8} />
+          </span>
+          <span className="home-trust-tile-body">
+            <span className="home-trust-tile-name">New trust</span>
+            <span className="home-trust-tile-role">Start from scratch</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="home-trust-tile home-trust-tile--action"
+          onClick={onBrowseBlueprints}
+        >
+          <span className="home-trust-tile-action-icon">
+            <ArrowRight size={18} strokeWidth={1.8} />
+          </span>
+          <span className="home-trust-tile-body">
+            <span className="home-trust-tile-name">Browse blueprints</span>
+            <span className="home-trust-tile-role">Use a template</span>
+          </span>
+        </button>
+      </div>
+    </section>
   );
 }

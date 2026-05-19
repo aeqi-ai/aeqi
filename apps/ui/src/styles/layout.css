@@ -7856,11 +7856,15 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   min-height: 1px;
 }
 
-/* ── Home dashboard — surface at `/`. Reframed 2026-05-19 from a 4-card
-   nav hub into a working home: slim greeting + account avatar (top-right),
-   trust quick-select row, two-column inbox+economy preview, then a quiet
-   thesis snippet linking to the canonical post. Pure-neutral palette;
-   composition and scale carry the gravitas. ── */
+/* ── Home dashboard — surface at `/`. Cards-v2 (2026-05-19):
+   1. Hero image with greeting overlay + account-avatar affordance.
+   2. "Step into a trust" CARD with per-trust tiles (avatar + name +
+      role context) and inline action tiles ([+ New trust],
+      [Browse blueprints]). Header link routes to /trust.
+   3. Two-column row of Inbox + Economy CARDs, heights aligned.
+   4. Thesis CARD with editorial typography linking to the canonical
+      /blog/the-uncompiled-institution post.
+   Graphite + ink palette, no hairlines, no decorative motion. ── */
 .home-page {
   flex: 1;
   min-height: 0;
@@ -7868,48 +7872,68 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   display: flex;
   flex-direction: column;
   width: 100%;
-  gap: 40px;
-  padding: 40px 0 80px;
+  gap: 24px;
+  padding: 24px 0 80px;
 }
-.home-header,
-.home-trusts,
-.home-previews,
-.home-thesis {
+.home-hero,
+.home-row-two,
+.home-thesis,
+.home-card--trusts {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
+  box-sizing: border-box;
 }
-.home-header {
+
+/* Hero — wide image (start-hero.png) with greeting overlay on the
+   lighter left third. Account avatar floats in the top-right of the
+   overlay so the path to /account stays one click from the surface
+   the user lands on. */
+.home-hero {
+  position: relative;
+}
+.home-hero-image {
+  display: block;
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  object-position: center 45%;
+  border-radius: var(--radius-lg, 12px);
+}
+.home-hero-overlay {
+  position: absolute;
+  inset: 0 24px 0 24px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 32px;
+  gap: 24px;
+  padding: 40px 48px;
+  pointer-events: none;
 }
-.home-header-greeting {
-  flex: 1;
-  min-width: 0;
+.home-hero-text {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  max-width: 520px;
 }
-.home-header-title {
+.home-hero-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 44px;
+  font-size: 40px;
   font-weight: 200;
   letter-spacing: -0.025em;
   color: var(--color-text-primary);
   line-height: 1.05;
 }
-.home-header-subtitle {
+.home-hero-subtitle {
   margin: 0;
-  max-width: 640px;
   color: var(--color-text-secondary);
   font-size: var(--font-size-md, 15px);
   line-height: 1.5;
 }
-.home-header-account {
+.home-hero-account {
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7924,143 +7948,49 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
     background 0.12s ease,
     transform 0.12s ease;
 }
-.home-header-account:hover {
+.home-hero-account:hover {
   background: var(--bg-row);
   transform: translateY(-1px);
 }
-.home-header-account:focus-visible {
+.home-hero-account:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-accent);
 }
 
-.home-section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-.home-section-title {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
-.home-section-count {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary, var(--color-text-secondary));
-  font-weight: 500;
-}
-
-/* Trust quick-select row — avatar pill chips for each entity, followed
-   by two action buttons (primary = New trust, secondary = Browse
-   blueprints). Wraps when the row overflows. */
-.home-trusts-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.home-trust-chip,
-.home-trust-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px 8px 8px;
-  background: var(--color-card);
-  border: 0;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.12s ease,
-    transform 0.12s ease;
-}
-.home-trust-chip:hover,
-.home-trust-action:hover {
-  background: var(--bg-row);
-  transform: translateY(-1px);
-}
-.home-trust-chip:focus-visible,
-.home-trust-action:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-accent);
-}
-.home-trust-chip-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-.home-trust-chip-name {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.home-trust-chip--overflow {
-  padding-left: 14px;
-  color: var(--color-text-secondary);
-}
-.home-trust-action {
-  padding: 8px 14px;
-}
-.home-trust-action--primary {
-  background: var(--color-accent);
-  color: var(--btn-primary-text);
-}
-.home-trust-action--primary:hover {
-  background: var(--color-accent);
-  filter: brightness(0.94);
-}
-
-/* Two-column preview row — Inbox (left) and Economy (right). Each is
-   a clickable card that surfaces preview content + a single CTA. */
-.home-previews {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-}
-.home-preview {
+/* Card shell — shared by trust card, inbox, economy, and thesis. */
+.home-card {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: 16px;
-  padding: 20px 22px 18px;
+  padding: 20px 22px;
   background: var(--color-card);
   border: 0;
   border-radius: var(--radius-lg, 12px);
   font-family: inherit;
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
-  cursor: pointer;
   text-align: left;
   transition:
     background 0.12s ease,
     transform 0.12s ease;
 }
-.home-preview:hover {
+button.home-card {
+  cursor: pointer;
+}
+button.home-card:hover {
   background: var(--bg-row);
   transform: translateY(-2px);
 }
-.home-preview:focus-visible {
+button.home-card:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-accent);
 }
-.home-preview-head {
+.home-card-head {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.home-preview-icon {
+.home-card-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8071,106 +8001,318 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   color: var(--color-text-primary);
   flex-shrink: 0;
 }
-.home-preview:hover .home-preview-icon {
+button.home-card:hover .home-card-icon {
   background: var(--color-card);
 }
-.home-preview-title {
+.home-card-title {
   font-size: var(--font-size-md, 15px);
   font-weight: 600;
 }
-.home-preview-meta {
+.home-card-meta {
   margin-left: auto;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+  font-weight: 500;
 }
-.home-preview-list {
+.home-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-accent);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.home-card-link:hover {
+  text-decoration: underline;
+}
+.home-card-link:focus-visible {
+  outline: none;
+  text-decoration: underline;
+}
+.home-card-foot {
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+}
+.home-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+/* Trust card — full-width row above the two-column preview. Holds
+   per-trust tiles plus the [+ New trust] and [Browse blueprints]
+   action tiles, wrapping on narrow viewports. */
+.home-card--trusts {
+  padding: 22px 24px;
+}
+.home-trusts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.home-trust-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-row);
+  border: 0;
+  border-radius: var(--radius-md, 10px);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 0.12s ease,
+    transform 0.12s ease;
+}
+.home-trust-tile:hover {
+  background: var(--color-card);
+  transform: translateY(-1px);
+}
+.home-trust-tile:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+.home-trust-tile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.home-trust-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.home-trust-tile-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-trust-tile-role {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.01em;
+}
+.home-trust-tile-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-card);
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+.home-trust-tile--primary {
+  background: var(--color-text-primary);
+  color: var(--btn-primary-text);
+}
+.home-trust-tile--primary:hover {
+  background: var(--color-text-primary);
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.home-trust-tile--primary .home-trust-tile-name {
+  color: var(--btn-primary-text);
+}
+.home-trust-tile--primary .home-trust-tile-role {
+  color: var(--btn-primary-text);
+  opacity: 0.7;
+}
+.home-trust-tile--primary .home-trust-tile-action-icon {
+  background: transparent;
+  color: var(--btn-primary-text);
+}
+.home-trust-tile--overflow {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-trust-tile-overflow-count {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+.home-trust-tile-overflow-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Two-col row — Inbox + Economy. Cards are `align-items: stretch` so
+   they share the row's height regardless of preview-content length. */
+.home-row-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.home-card--inbox,
+.home-card--economy {
+  min-height: 340px;
+}
+
+/* Inbox preview — richer rows: avatar + (from + time) + subject + last
+   message snippet. Click on the row link bypasses the card-level
+   navigate (stopPropagation in the component) so the user lands on the
+   specific session, not the inbox list. */
+.home-inbox-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
 }
-.home-preview-item {
+.home-inbox-item {
   margin: 0;
 }
-.home-preview-item-link {
+.home-inbox-link {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
-  padding: 8px 10px;
-  margin: 0 -10px;
-  border-radius: var(--radius-sm, 6px);
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: var(--radius-md, 10px);
   color: inherit;
   text-decoration: none;
   transition: background 0.12s ease;
 }
-.home-preview-item-link:hover {
+.home-inbox-link:hover {
   background: var(--color-card);
 }
-.home-preview-item-subject {
-  flex: 1;
+button.home-card:hover .home-inbox-link:hover {
+  background: var(--bg-row);
+}
+.home-inbox-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.home-inbox-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+  flex: 1;
+}
+.home-inbox-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home-inbox-from {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: 0.01em;
+}
+.home-inbox-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.home-inbox-subject {
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.home-preview-item-from {
+.home-inbox-preview {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
-  flex-shrink: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.home-preview-empty {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-.home-preview-lede {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-.home-preview-tags {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.home-inbox-empty {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
+  flex: 1;
+  justify-content: center;
+  padding: 12px 0;
 }
-.home-preview-tags li {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  background: var(--bg-row);
-  border-radius: 999px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  font-weight: 500;
+.home-inbox-empty p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
-.home-preview:hover .home-preview-tags li {
-  background: var(--color-card);
-}
-.home-preview-cta {
-  margin-top: auto;
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  color: var(--color-accent);
+.home-inbox-empty-hint {
+  color: var(--color-text-secondary) !important;
+  font-size: var(--font-size-xs) !important;
 }
 
-/* Thesis snippet — quiet editorial block linking to the canonical
-   post. Lives at the bottom of the home dashboard as the only
-   non-functional element on the page; restrained typography. */
-.home-thesis-card {
+/* Economy preview — minimal, no fake feature tags. Just the lede +
+   one quieter aside line. */
+.home-economy-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 28px 28px 24px;
+  flex: 1;
+}
+.home-economy-lede {
+  margin: 0;
+  font-size: var(--font-size-md, 15px);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  font-weight: 500;
+  max-width: 420px;
+}
+.home-economy-aside {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+/* Thesis card — full-width editorial moment. Title in display weight,
+   quote in body weight, byline + read-on link on the right. The card
+   reads as a magazine-feed entry, not a button. */
+.home-thesis-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 32px;
+  padding: 36px 36px 32px;
   background: var(--color-card);
   border-radius: var(--radius-lg, 12px);
   color: inherit;
@@ -8187,37 +8329,49 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-accent);
 }
+.home-thesis-left {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
 .home-thesis-eyebrow {
   font-size: var(--font-size-xs);
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
 }
 .home-thesis-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 38px;
   font-weight: 300;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: var(--color-text-primary);
-  line-height: 1.1;
+  line-height: 1.05;
+  max-width: 680px;
 }
 .home-thesis-quote {
   margin: 0;
-  font-size: var(--font-size-md, 15px);
+  font-size: 17px;
   color: var(--color-text-secondary);
   line-height: 1.5;
   max-width: 640px;
+  font-style: italic;
 }
-.home-thesis-meta {
+.home-thesis-right {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.home-thesis-byline {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
 }
 .home-thesis-read {
   display: inline-flex;
@@ -8225,6 +8379,30 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   gap: 4px;
   color: var(--color-accent);
   font-weight: 500;
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 720px) {
+  .home-hero-image {
+    height: 220px;
+  }
+  .home-hero-overlay {
+    inset: 0 16px;
+    padding: 24px 28px;
+  }
+  .home-hero-title {
+    font-size: 30px;
+  }
+  .home-thesis-card {
+    grid-template-columns: 1fr;
+    padding: 28px;
+  }
+  .home-thesis-right {
+    align-items: flex-start;
+  }
+  .home-thesis-title {
+    font-size: 28px;
+  }
 }
 
 /* ── Network page — `/network`. Trust-anchored surface. Big current-
