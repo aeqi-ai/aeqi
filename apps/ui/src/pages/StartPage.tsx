@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Inbox, Store, Landmark, Plus } from "lucide-react";
+import { Inbox, Store, Landmark, Plus, Rocket, Bot, PiggyBank, Network } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useEntities } from "@/queries/entities";
 
@@ -14,13 +14,21 @@ import { useEntities } from "@/queries/entities";
  * like entering a new world — cinematic but quiet. The hero image is the
  * single editorial gesture; everything below stays inside the design
  * system's restraint (cards in pure-neutral, no decorative effects).
- *
- * Cards:
- *   1. Start a trust   → /launch
- *   2. Your inbox      → /inbox  (preview: unread count when wired)
- *   3. Economy         → /economy (preview: marketplace pulse later)
- *   4. Your network    → /  (preview: trust count when wired)
  */
+
+type SuggestedBlueprint = {
+  label: string;
+  blueprintId: string;
+  icon: typeof Rocket;
+};
+
+const SUGGESTED_BLUEPRINTS: readonly SuggestedBlueprint[] = [
+  { label: "Startup Trust", blueprintId: "solo-founder", icon: Rocket },
+  { label: "Agentic Company", blueprintId: "aeqi-company", icon: Bot },
+  { label: "Investment Vehicle", blueprintId: "index-fund", icon: PiggyBank },
+  { label: "Protocol Trust", blueprintId: "aeqi", icon: Network },
+];
+
 export default function StartPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -31,7 +39,10 @@ export default function StartPage() {
     [user],
   );
 
-  const trustCount = entities.length;
+  // Empty state shows Suggested blueprints (instantly actionable).
+  // Once the user has at least one trust, this is their landing again —
+  // the suggestions stop being useful and we hide the bottom section.
+  const showSuggested = entities.length === 0;
 
   return (
     <div className="start-page">
@@ -45,8 +56,8 @@ export default function StartPage() {
         <div className="start-page-hero-overlay">
           <h1 className="start-page-hero-title">Welcome, {actorName}.</h1>
           <p className="start-page-hero-subtitle">
-            You&apos;ve arrived. Pick a place to begin — start something of your own, or step into
-            what&apos;s already moving.
+            Launch a trust, review what needs approval, or step into the economy already forming
+            around you.
           </p>
         </div>
       </header>
@@ -62,7 +73,7 @@ export default function StartPage() {
           </span>
           <span className="start-page-card-title">Start a trust</span>
           <span className="start-page-card-desc">
-            Spin up your own — pick a blueprint or start blank.
+            Launch a programmable company vehicle with roles, ownership, and agents.
           </span>
           <span className="start-page-card-action">Get started →</span>
         </button>
@@ -73,7 +84,7 @@ export default function StartPage() {
           </span>
           <span className="start-page-card-title">Your inbox</span>
           <span className="start-page-card-desc">
-            Approvals, signatures, and proposals waiting on you.
+            Approvals, signatures, proposals, and tasks waiting on you.
           </span>
           <span className="start-page-card-action">Open inbox →</span>
         </button>
@@ -84,7 +95,7 @@ export default function StartPage() {
           </span>
           <span className="start-page-card-title">The economy</span>
           <span className="start-page-card-desc">
-            Marketplace, inference, and stake activity across the network.
+            Discover trusts, agents, markets, and capital activity.
           </span>
           <span className="start-page-card-action">Browse →</span>
         </button>
@@ -95,13 +106,32 @@ export default function StartPage() {
           </span>
           <span className="start-page-card-title">Your network</span>
           <span className="start-page-card-desc">
-            {trustCount > 0
-              ? `${trustCount} trust${trustCount === 1 ? "" : "s"} you operate from.`
-              : "The trusts you operate from will appear here."}
+            The trusts, roles, and operators connected to you.
           </span>
           <span className="start-page-card-action">View network →</span>
         </button>
       </section>
+
+      {showSuggested && (
+        <section className="start-page-suggested" aria-label="Suggested blueprints">
+          <h2 className="start-page-suggested-title">Suggested blueprints</h2>
+          <div className="start-page-suggested-grid">
+            {SUGGESTED_BLUEPRINTS.map(({ label, blueprintId, icon: Icon }) => (
+              <button
+                key={blueprintId}
+                type="button"
+                className="start-page-blueprint"
+                onClick={() => navigate(`/launch/${blueprintId}`)}
+              >
+                <span className="start-page-blueprint-icon">
+                  <Icon size={16} strokeWidth={1.5} />
+                </span>
+                <span className="start-page-blueprint-label">{label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

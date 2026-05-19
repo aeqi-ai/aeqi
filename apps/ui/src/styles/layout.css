@@ -7985,6 +7985,76 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   color: var(--btn-primary-text);
 }
 
+/* Suggested blueprints — empty-state companion to the 4 destination cards.
+   Visible only while the actor has zero trusts; quieter chrome than the
+   primary grid (smaller pills, no per-card description) so the eye still
+   lands on the four primary actions first. */
+.start-page-suggested {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 64px;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.start-page-suggested-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+.start-page-suggested-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.start-page-blueprint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-card);
+  border: 0;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 0.12s ease,
+    transform 0.12s ease;
+}
+.start-page-blueprint:hover {
+  background: var(--bg-row);
+  transform: translateY(-1px);
+}
+.start-page-blueprint:focus-visible {
+  outline: none;
+  background: var(--bg-row);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+.start-page-blueprint-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--bg-row);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.start-page-blueprint:hover .start-page-blueprint-icon {
+  background: var(--color-card);
+}
+.start-page-blueprint-label {
+  min-width: 0;
+}
+
 /* ── Network page — `/network`. Trust-anchored surface. Big current-
    trust hero at the top (avatar + name + role), quiet switcher grid
    below for stepping into other contexts. Composition + scale carry
