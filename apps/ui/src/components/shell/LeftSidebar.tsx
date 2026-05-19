@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   Inbox,
-  Sparkles,
+  House,
   LayoutDashboard,
   Coins,
   PieChart,
@@ -17,7 +17,7 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeftOpen,
-  Store,
+  Globe,
 } from "lucide-react";
 import ActingAsSelector from "@/components/shell/ActingAsSelector";
 import AccountDropdown from "@/components/shell/AccountDropdown";
@@ -38,7 +38,7 @@ interface LeftSidebarProps {
 // Stroke width is overridden to 1.65 by layout.css for the 16px optical sweet
 // spot; the icon prop here just controls glyph identity.
 const InboxIcon = () => <Inbox />;
-const StartIcon = () => <Sparkles />;
+const HomeIcon = () => <House />;
 // Overview — the trust cockpit. LayoutDashboard reads "this is the
 // canonical landing for the trust." The Trust group header carries the
 // institution semantic so this glyph doesn't need to.
@@ -61,8 +61,10 @@ const IncorporationIcon = () => <ScrollText />;
 // org-chart authority graph (RoleNewPage / RoleDetailPage et al). Workflow
 // reads parent + child boxes = hierarchy.
 const RolesIcon = () => <Workflow />;
-// Economy — Store reads marketplace/commerce; the row navigates to /economy.
-const EconomyIcon = () => <Store />;
+// Economy — Globe reads "the wider network / world economy" — the
+// marketplace + inference + stake activity is happening *out there*
+// across every trust, not in your local store.
+const EconomyIcon = () => <Globe />;
 
 // Admin — Lucide's Shield is the same silhouette as the prior hand-rolled.
 const AdminIcon = () => <Shield />;
@@ -259,7 +261,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
             user's anchor home — clicking returns to the welcome /
             arrival surface from anywhere in the shell. ── */}
         <nav className="sidebar-surface-nav sidebar-zone" aria-label="Start">
-          {topLevelItem("/", "Start", <StartIcon />, isStart)}
+          {topLevelItem("/", "Home", <HomeIcon />, isStart)}
         </nav>
 
         {/* ── Cross-trust destinations. No group label — Inbox + Economy
