@@ -7,136 +7,139 @@ import { useAuthStore } from "@/store/auth";
 import { useEntities } from "@/queries/entities";
 
 /**
- * Home — the root `/` surface. THIS page IS the network map / identity
- * selection: every authed visit lands here to pick which identity (actor
- * × role × trust tuple) to operate as, or create a new one. There is no
- * separate "view network map" destination — the root is it.
+ * Network — the dominion / constellation view at `/network`. The user is
+ * the centre node; each trust they hold a role in radiates out from
+ * them; the line between user and trust IS the role (the connection in
+ * the authority graph). Picking a node enters that operating context.
  *
- * Two affordances only: SELECT a context tile, or CREATE via the "+ New
- * trust" tile (in the grid, peer to selection — not a separate button).
+ * Layout: static concentric ring (not force-directed). Trusts position
+ * themselves evenly around the centre starting from 12 o'clock. The
+ * "+" tile sits as one extra node on the ring so creation reads as a
+ * peer affordance to selection — exactly the shape the user described.
  *
- * Visual intent (ethereal / character-selection): centred anchor avatar
- * + personal greeting in display type, generous gaps, soft hover lift.
- * Per .impeccable.md: no hairlines, no gradients, no animations beyond
- * 0.12s ease — the feel comes from composition and whitespace.
- *
- * Empty state collapses the page to a single inviting hero card so a
- * brand-new user isn't met with an awkward lone "+" tile.
- *
- * MVP data: actor = the signed-in user, trust = each entity from
- * `useEntities()`, role = stub label pending a runtime per-user × per-
- * trust role surface.
+ * Per .impeccable.md: no decorative motion, no gradients. Lines are
+ * pure-neutral stroke. Hover scales node + brightens line; that's it.
  */
-function timeAwareGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return "Up late";
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const entities = useEntities();
 
   const actorName = useMemo(
-    () => user?.name?.trim() || user?.email?.split("@")[0] || "friend",
+    () => user?.name?.trim() || user?.email?.split("@")[0] || "you",
     [user],
   );
-  const greeting = useMemo(timeAwareGreeting, []);
 
-  const contexts = useMemo(
-    () =>
-      entities.map((entity) => ({
-        id: entity.id,
-        actor: actorName,
-        role: "Director",
-        trust: entity.name,
-        href: `/trust/${encodeURIComponent(entity.id)}`,
-      })),
-    [entities, actorName],
-  );
+  const nodes = useMemo(() => {
+    const trusts = entities.map((entity) => ({
+      kind: "trust" as const,
+      id: entity.id,
+      label: entity.name,
+      role: "Director",
+      href: `/trust/${encodeURIComponent(entity.id)}`,
+    }));
+    return [...trusts, { kind: "create" as const, id: "__create" }];
+  }, [entities]);
 
-  const hasContexts = contexts.length > 0;
+  const positions = useMemo(() => {
+    const n = nodes.length;
+    const radius = n === 1 ? 30 : 36;
+    return nodes.map((_, i) => {
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      return {
+        leftPct: 50 + radius * Math.cos(angle),
+        topPct: 50 + radius * Math.sin(angle),
+      };
+    });
+  }, [nodes]);
 
   return (
-    <div className="home-picker">
-      <div className="home-picker-anchor">
-        <span className="home-picker-anchor-avatar">
-          <UserAvatar name={actorName} src={user?.avatar_url} size={72} />
-        </span>
-        <h1 className="home-picker-greeting">
-          {greeting}, {actorName}.
-        </h1>
-      </div>
+    <div className="constellation-page">
+      <div className="constellation-canvas" role="list" aria-label="Your network">
+        <svg
+          className="constellation-lines"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {nodes.map((node, i) => {
+            const { leftPct, topPct } = positions[i];
+            const isCreate = node.kind === "create";
+            return (
+              <line
+                key={`line-${node.id}`}
+                x1={50}
+                y1={50}
+                x2={leftPct}
+                y2={topPct}
+                className={`constellation-line${isCreate ? " constellation-line--create" : ""}`}
+              />
+            );
+          })}
+        </svg>
 
-      {hasContexts ? (
-        <>
-          <div className="home-picker-grid" role="list">
-            {contexts.map((ctx) => (
+        {nodes.map((node, i) => {
+          if (node.kind !== "trust") return null;
+          const { leftPct, topPct } = positions[i];
+          const midLeft = (50 + leftPct) / 2;
+          const midTop = (50 + topPct) / 2;
+          return (
+            <span
+              key={`role-${node.id}`}
+              className="constellation-role-label"
+              style={{ left: `${midLeft}%`, top: `${midTop}%` }}
+              aria-hidden="true"
+            >
+              {node.role}
+            </span>
+          );
+        })}
+
+        <div className="constellation-self">
+          <span className="constellation-self-avatar">
+            <UserAvatar name={actorName} src={user?.avatar_url} size={80} />
+          </span>
+          <span className="constellation-self-label">{actorName}</span>
+        </div>
+
+        {nodes.map((node, i) => {
+          const { leftPct, topPct } = positions[i];
+          if (node.kind === "create") {
+            return (
               <button
-                key={ctx.id}
+                key={node.id}
                 type="button"
                 role="listitem"
-                className="home-picker-node"
-                onClick={() => navigate(ctx.href)}
-                aria-label={`${ctx.actor}, ${ctx.role} at ${ctx.trust}`}
+                className="constellation-node constellation-node--create"
+                style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+                onClick={() => navigate("/launch")}
+                aria-label="Create a new trust"
               >
-                <span className="home-picker-node-avatar">
-                  <BlockAvatar name={ctx.trust} size={72} />
+                <span className="constellation-node-avatar constellation-node-avatar--ghost">
+                  <Plus size={22} strokeWidth={1.5} />
                 </span>
-                <span className="home-picker-node-actor">{ctx.actor}</span>
-                <span className="home-picker-node-context">
-                  {ctx.role} · {ctx.trust}
-                </span>
+                <span className="constellation-node-label">New trust</span>
               </button>
-            ))}
+            );
+          }
+          return (
             <button
+              key={node.id}
               type="button"
               role="listitem"
-              className="home-picker-node home-picker-node--create"
-              onClick={() => navigate("/launch")}
-              aria-label="Create a new trust"
+              className="constellation-node"
+              style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+              onClick={() => navigate(node.href)}
+              aria-label={`${node.role} at ${node.label}`}
             >
-              <span className="home-picker-node-avatar home-picker-node-avatar--ghost">
-                <Plus size={28} strokeWidth={1.5} />
+              <span className="constellation-node-avatar">
+                <BlockAvatar name={node.label} size={64} />
               </span>
-              <span className="home-picker-node-actor">New trust</span>
-              <span className="home-picker-node-context">Start something fresh</span>
+              <span className="constellation-node-label">{node.label}</span>
             </button>
-          </div>
-          <footer className="home-picker-footer">
-            <button
-              type="button"
-              className="home-picker-link"
-              onClick={() => navigate("/blueprints")}
-            >
-              Browse blueprints
-            </button>
-          </footer>
-        </>
-      ) : (
-        <button
-          type="button"
-          className="home-picker-hero"
-          onClick={() => navigate("/launch")}
-          aria-label="Create your first trust"
-        >
-          <span className="home-picker-hero-icon">
-            <Plus size={36} strokeWidth={1.5} />
-          </span>
-          <span className="home-picker-hero-title">Create your first trust</span>
-          <span className="home-picker-hero-desc">
-            A trust is the unit you operate from — ownership, governance, and execution all live
-            inside one. Pick a blueprint or start from scratch.
-          </span>
-          <span className="home-picker-hero-action">
-            Get started
-            <span aria-hidden="true">→</span>
-          </span>
-        </button>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -382,9 +382,9 @@
   flex: 1;
   padding: var(--space-10) var(--space-8);
   background-color: var(--color-accent);
-  background-image: url("/auth-hero.webp");
+  background-image: url("/auth-hero.png");
   background-size: cover;
-  background-position: 50% 50%;
+  background-position: 60% 35%;
   background-repeat: no-repeat;
   color: #ffffff;
   overflow: hidden;
