@@ -42,9 +42,8 @@ export default function StartPage() {
           className="start-page-hero-image"
           aria-hidden="true"
         />
-        <div className="start-page-hero-text">
-          <p className="start-page-hero-eyebrow">Welcome</p>
-          <h1 className="start-page-hero-title">Hello, {actorName}.</h1>
+        <div className="start-page-hero-overlay">
+          <h1 className="start-page-hero-title">Welcome, {actorName}.</h1>
           <p className="start-page-hero-subtitle">
             You&apos;ve arrived. Pick a place to begin — start something of your own, or step into
             what&apos;s already moving.

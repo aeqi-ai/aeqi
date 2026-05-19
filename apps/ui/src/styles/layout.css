@@ -7786,8 +7786,7 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 }
 .start-page-hero {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: block;
   width: 100%;
   max-width: 1200px;
   margin: 24px auto 0;
@@ -7796,41 +7795,43 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
 .start-page-hero-image {
   display: block;
   width: 100%;
-  height: 280px;
+  height: 360px;
   object-fit: cover;
-  object-position: center 40%;
+  object-position: center 45%;
   border-radius: var(--radius-lg, 12px);
 }
-.start-page-hero-text {
+/* Hero text overlays the image on the left third. The hero asset is
+   composed so the left side is the lightest area (sky / horizon /
+   pale ground), so dark text reads against it directly without a
+   scrim. If the asset changes and a scrim becomes necessary, lift it
+   into a primitive rather than adding a one-off gradient here. */
+.start-page-hero-overlay {
+  position: absolute;
+  inset: 0 24px 0 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 32px;
-  max-width: 640px;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 56px;
+  pointer-events: none;
 }
-.start-page-hero-eyebrow {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-text-muted);
+.start-page-hero-overlay > * {
+  max-width: 460px;
 }
 .start-page-hero-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: 44px;
   font-weight: 200;
   letter-spacing: -0.025em;
   color: var(--color-text-primary);
-  line-height: 1.1;
+  line-height: 1.05;
 }
 .start-page-hero-subtitle {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-md, 15px);
   line-height: 1.5;
-  max-width: 560px;
 }
 .start-page-grid {
   display: grid;
