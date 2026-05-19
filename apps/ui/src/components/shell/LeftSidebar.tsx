@@ -286,9 +286,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
           <>
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Trust">
               <div className="sidebar-section-label">Trust</div>
-              <div className="sidebar-user-zone">
-                <ActingAsSelector />
-              </div>
+              <ActingAsSelector />
               <div key="overview" className="sidebar-nav-row">
                 <a
                   className={`sidebar-nav-item ${isCompanyOverview ? "active" : ""}`}

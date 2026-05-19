@@ -7503,33 +7503,30 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   justify-content: flex-end;
 }
 
-/* ── Acting-as selector — the main accent block in the sidebar.
-   Three-line stacked button replacing the prior CompanySwitcher trigger.
-   Same black-accent treatment as company-switcher-trigger; new geometry
-   for the eyebrow + actor + role·trust stack. ── */
+/* ── Acting-as selector — trust credential card in the sidebar's TRUST
+   group. Vertical stack: avatar (top) → trust name → role caption.
+   Reads as "you are <ROLE> inside <TRUST>". Sits directly inside the
+   surface-nav so the card's outer edges align flush with the nav rows
+   above/below (no extra horizontal inset). ── */
 .acting-as-trigger {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  padding: 12px;
+  padding: 16px 12px 14px;
   background: var(--color-accent);
   border: 0;
   border-radius: var(--radius-md);
   font-family: inherit;
   color: var(--btn-primary-text);
   cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.12s ease,
-    transform 0.12s ease;
+  text-align: center;
+  transition: background 0.12s ease;
 }
 .acting-as-trigger:hover {
   background: var(--color-accent-hover);
-}
-.acting-as-trigger:hover .acting-as-chevron {
-  opacity: 1;
-  transform: translateX(2px);
 }
 .acting-as-trigger:focus-visible {
   outline: none;
@@ -7537,42 +7534,72 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
     0 0 0 2px var(--color-card),
     0 0 0 3px var(--color-accent);
 }
-.acting-as-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
+
+/* Trust visual at the top of the credential. The BlockAvatar's
+   rounded-square geometry gives the card an anchor that immediately
+   identifies WHICH trust this is. */
+.acting-as-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
-.acting-as-role {
+.acting-as-badge--collapsed {
+  display: none;
+}
+
+/* Trust name — the headline of the credential, full-width crop on
+   overflow so long names get an ellipsis rather than wrapping. */
+.acting-as-trust {
+  max-width: 100%;
   font-size: var(--font-size-sm);
   font-weight: 600;
   line-height: 1.2;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.acting-as-trust {
-  font-size: var(--font-size-xs);
-  font-weight: 400;
-  opacity: 0.78;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+/* Role caption — uppercase + tracked, reads as a credential rank.
+   Muted so the trust name remains the headline; the role is the
+   capacity in which the actor is operating. */
+.acting-as-role {
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.62;
 }
+
+/* Chevron tucked into the top-right corner. Subtle at rest, brightens
+   on hover. Signals "this card opens the identity switcher" without
+   competing with the credential content. */
 .acting-as-chevron {
-  display: flex;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  opacity: 0.55;
+  opacity: 0.4;
+  color: var(--btn-primary-text);
   transition:
     opacity 0.12s ease,
     transform 0.12s ease;
 }
-/* Collapsed sidebar — keep just the avatar as the ID badge, drop the
-   text + chevron. The avatar IS the badge in collapsed state. */
+.acting-as-trigger:hover .acting-as-chevron {
+  opacity: 0.85;
+  transform: translateX(1px);
+}
+
+/* Collapsed sidebar — single small avatar tile, drop everything else.
+   The avatar swap (expanded 36px ↔ collapsed 18px) keeps the same trust
+   identity visible at both rail widths without overflowing the 32px
+   row geometry. */
 .left-sidebar.collapsed .acting-as-trigger {
   padding: 6px;
   width: var(--sidebar-row-h);
@@ -7581,9 +7608,14 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   justify-content: center;
   gap: 0;
 }
-.left-sidebar.collapsed .acting-as-text,
+.left-sidebar.collapsed .acting-as-badge--expanded,
+.left-sidebar.collapsed .acting-as-trust,
+.left-sidebar.collapsed .acting-as-role,
 .left-sidebar.collapsed .acting-as-chevron {
   display: none;
+}
+.left-sidebar.collapsed .acting-as-badge--collapsed {
+  display: inline-flex;
 }
 
 /* ── Home picker — the root `/` surface. Anchored on the user (avatar +
