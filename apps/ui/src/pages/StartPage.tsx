@@ -1,137 +1,216 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { Inbox, Store, Landmark, Plus, Rocket, Bot, PiggyBank, Network } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Inbox as InboxIcon, Store, ArrowUpRight } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { useEntities } from "@/queries/entities";
+import { useInboxStore } from "@/store/inbox";
+import { entityPath } from "@/lib/entityPath";
+import { sessionDeepUrlFromId } from "@/lib/sessionUrl";
+import BlockAvatar from "@/components/BlockAvatar";
 
 /**
- * Start — the welcome / first-experience surface. Distinct from `/` (the
- * dominion picker), this is where a new user is *arrived*: a wide hero
- * image at the top, a personalised greeting, and four preview cards for
- * the primary destinations they'll learn to use.
+ * Start — the home dashboard at `/`. Reframed 2026-05-19 from a 4-card
+ * nav hub into a working home:
+ *   1. Slim greeting header + account-settings affordance (top-right avatar).
+ *   2. Trust quick-select row: avatar chips for each trust the operator
+ *      acts in, with [+ New trust] and [Browse blueprints] alongside.
+ *   3. Two-column preview row: live inbox (top items) | economy teaser.
+ *   4. Thesis snippet linking to the canonical post.
  *
- * Per the user's design direction (2026-05-19): the page should feel
- * like entering a new world — cinematic but quiet. The hero image is the
- * single editorial gesture; everything below stays inside the design
- * system's restraint (cards in pure-neutral, no decorative effects).
+ * The page treats the operator as a real user with work to do — every
+ * block is either functional or canonical brand context, never decorative.
  */
 
-type SuggestedBlueprint = {
-  label: string;
-  blueprintId: string;
-  icon: typeof Rocket;
-};
-
-const SUGGESTED_BLUEPRINTS: readonly SuggestedBlueprint[] = [
-  { label: "Startup Trust", blueprintId: "solo-founder", icon: Rocket },
-  { label: "Agentic Company", blueprintId: "aeqi-company", icon: Bot },
-  { label: "Investment Vehicle", blueprintId: "index-fund", icon: PiggyBank },
-  { label: "Protocol Trust", blueprintId: "aeqi", icon: Network },
-];
+const TRUST_CHIP_LIMIT = 6;
+const INBOX_PREVIEW_LIMIT = 4;
 
 export default function StartPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const entities = useEntities();
+  const inboxItems = useInboxStore((s) => s.items);
+  const fetchInbox = useInboxStore((s) => s.fetchInbox);
 
   const actorName = useMemo(
     () => user?.name?.trim() || user?.email?.split("@")[0] || "friend",
     [user],
   );
 
-  // Empty state shows Suggested blueprints (instantly actionable).
-  // Once the user has at least one trust, this is their landing again —
-  // the suggestions stop being useful and we hide the bottom section.
-  const showSuggested = entities.length === 0;
+  useEffect(() => {
+    fetchInbox().catch(() => {
+      // inbox store handles its own error state — page renders the
+      // empty-preview affordance either way.
+    });
+  }, [fetchInbox]);
+
+  const trustChips = entities.slice(0, TRUST_CHIP_LIMIT);
+  const trustOverflow = Math.max(0, entities.length - TRUST_CHIP_LIMIT);
+  const inboxPreview = inboxItems.slice(0, INBOX_PREVIEW_LIMIT);
+  const inboxCount = inboxItems.length;
 
   return (
-    <div className="start-page">
-      <header className="start-page-hero">
-        <img
-          src="/welcome/start-hero.png"
-          alt=""
-          className="start-page-hero-image"
-          aria-hidden="true"
-        />
-        <div className="start-page-hero-overlay">
-          <h1 className="start-page-hero-title">Welcome, {actorName}.</h1>
-          <p className="start-page-hero-subtitle">
+    <div className="home-page">
+      <header className="home-header">
+        <div className="home-header-greeting">
+          <h1 className="home-header-title">Welcome, {actorName}.</h1>
+          <p className="home-header-subtitle">
             Launch a trust, review what needs approval, or step into the economy already forming
             around you.
           </p>
         </div>
+        <Link
+          to="/account"
+          className="home-header-account"
+          aria-label="Account settings"
+          title="Account settings"
+        >
+          <BlockAvatar name={actorName} size={36} />
+        </Link>
       </header>
 
-      <section className="start-page-grid" aria-label="Where to begin">
+      <section className="home-trusts" aria-label="Your trusts">
+        <div className="home-section-head">
+          <h2 className="home-section-title">Step into a trust</h2>
+          <span className="home-section-count">
+            {entities.length === 0
+              ? "Nothing yet"
+              : `${entities.length} trust${entities.length === 1 ? "" : "s"}`}
+          </span>
+        </div>
+        <div className="home-trusts-row">
+          {trustChips.map((entity) => (
+            <button
+              key={entity.id}
+              type="button"
+              className="home-trust-chip"
+              onClick={() => navigate(entityPath(entity))}
+              aria-label={`Open ${entity.name}`}
+            >
+              <span className="home-trust-chip-avatar" aria-hidden="true">
+                <BlockAvatar name={entity.name} size={22} />
+              </span>
+              <span className="home-trust-chip-name">{entity.name}</span>
+            </button>
+          ))}
+          {trustOverflow > 0 && (
+            <button
+              type="button"
+              className="home-trust-chip home-trust-chip--overflow"
+              onClick={() => navigate("/trust")}
+            >
+              +{trustOverflow} more
+            </button>
+          )}
+          <button
+            type="button"
+            className="home-trust-action home-trust-action--primary"
+            onClick={() => navigate("/launch")}
+          >
+            <Plus size={14} strokeWidth={1.8} />
+            <span>New trust</span>
+          </button>
+          <button
+            type="button"
+            className="home-trust-action"
+            onClick={() => navigate("/blueprints")}
+          >
+            Browse blueprints
+          </button>
+        </div>
+      </section>
+
+      <section className="home-previews" aria-label="Inbox and economy previews">
         <button
           type="button"
-          className="start-page-card start-page-card--primary"
-          onClick={() => navigate("/launch")}
+          className="home-preview home-preview--inbox"
+          onClick={() => navigate("/inbox")}
         >
-          <span className="start-page-card-icon">
-            <Plus size={20} strokeWidth={1.5} />
-          </span>
-          <span className="start-page-card-title">Start a trust</span>
-          <span className="start-page-card-desc">
-            Launch a programmable company vehicle with roles, ownership, and agents.
-          </span>
-          <span className="start-page-card-action">Get started →</span>
+          <div className="home-preview-head">
+            <span className="home-preview-icon">
+              <InboxIcon size={16} strokeWidth={1.5} />
+            </span>
+            <span className="home-preview-title">Inbox</span>
+            <span className="home-preview-meta">
+              {inboxCount === 0 ? "All clear" : `${inboxCount} waiting`}
+            </span>
+          </div>
+          {inboxPreview.length > 0 ? (
+            <ul className="home-preview-list">
+              {inboxPreview.map((item) => (
+                <li key={item.session_id} className="home-preview-item">
+                  <Link
+                    className="home-preview-item-link"
+                    to={sessionDeepUrlFromId(
+                      entities,
+                      item.trust_id,
+                      item.agent_id,
+                      item.session_id,
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="home-preview-item-subject">
+                      {item.awaiting_subject ||
+                        item.session_name ||
+                        item.last_agent_message?.slice(0, 80) ||
+                        "Untitled session"}
+                    </span>
+                    <span className="home-preview-item-from">{item.agent_name || "—"}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="home-preview-empty">Nothing waiting on you right now.</p>
+          )}
+          <span className="home-preview-cta">Open inbox →</span>
         </button>
 
-        <button type="button" className="start-page-card" onClick={() => navigate("/inbox")}>
-          <span className="start-page-card-icon">
-            <Inbox size={20} strokeWidth={1.5} />
-          </span>
-          <span className="start-page-card-title">Your inbox</span>
-          <span className="start-page-card-desc">
-            Approvals, signatures, proposals, and tasks waiting on you.
-          </span>
-          <span className="start-page-card-action">Open inbox →</span>
-        </button>
-
-        <button type="button" className="start-page-card" onClick={() => navigate("/economy")}>
-          <span className="start-page-card-icon">
-            <Store size={20} strokeWidth={1.5} />
-          </span>
-          <span className="start-page-card-title">The economy</span>
-          <span className="start-page-card-desc">
-            Discover trusts, agents, markets, and capital activity.
-          </span>
-          <span className="start-page-card-action">Browse →</span>
-        </button>
-
-        <button type="button" className="start-page-card" onClick={() => navigate("/trust")}>
-          <span className="start-page-card-icon">
-            <Landmark size={20} strokeWidth={1.5} />
-          </span>
-          <span className="start-page-card-title">Your trusts</span>
-          <span className="start-page-card-desc">
-            Step into any trust you operate from — your own, or one you've been invited into.
-          </span>
-          <span className="start-page-card-action">Open →</span>
+        <button
+          type="button"
+          className="home-preview home-preview--economy"
+          onClick={() => navigate("/economy")}
+        >
+          <div className="home-preview-head">
+            <span className="home-preview-icon">
+              <Store size={16} strokeWidth={1.5} />
+            </span>
+            <span className="home-preview-title">The economy</span>
+            <span className="home-preview-meta">Taking shape</span>
+          </div>
+          <p className="home-preview-lede">
+            Marketplace, inference, and billing — the global economy aeqi is building, one rail at a
+            time.
+          </p>
+          <ul className="home-preview-tags">
+            <li>Marketplace</li>
+            <li>Inference</li>
+            <li>Billing</li>
+          </ul>
+          <span className="home-preview-cta">Browse →</span>
         </button>
       </section>
 
-      {showSuggested && (
-        <section className="start-page-suggested" aria-label="Suggested blueprints">
-          <h2 className="start-page-suggested-title">Suggested blueprints</h2>
-          <div className="start-page-suggested-grid">
-            {SUGGESTED_BLUEPRINTS.map(({ label, blueprintId, icon: Icon }) => (
-              <button
-                key={blueprintId}
-                type="button"
-                className="start-page-blueprint"
-                onClick={() => navigate(`/launch/${blueprintId}`)}
-              >
-                <span className="start-page-blueprint-icon">
-                  <Icon size={16} strokeWidth={1.5} />
-                </span>
-                <span className="start-page-blueprint-label">{label}</span>
-              </button>
-            ))}
+      <section className="home-thesis" aria-label="Thesis">
+        <a
+          className="home-thesis-card"
+          href="https://aeqi.ai/blog/the-uncompiled-institution"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="home-thesis-eyebrow">Thesis</span>
+          <h2 className="home-thesis-title">The uncompiled institution</h2>
+          <p className="home-thesis-quote">
+            Institutions are software that has not been compiled yet.
+          </p>
+          <div className="home-thesis-meta">
+            <span>May 2, 2026 · Luca Eichs</span>
+            <span className="home-thesis-read">
+              Read on aeqi.ai
+              <ArrowUpRight size={14} strokeWidth={1.8} />
+            </span>
           </div>
-        </section>
-      )}
+        </a>
+      </section>
     </div>
   );
 }
