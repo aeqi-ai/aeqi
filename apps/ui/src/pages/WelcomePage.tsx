@@ -57,6 +57,7 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
   const authMode = useAuthStore((s) => s.authMode);
   const authModeLoaded = useAuthStore((s) => s.authModeLoaded);
   const fetchAuthMode = useAuthStore((s) => s.fetchAuthMode);
+  const waitlistMode = useAuthStore((s) => s.waitlist);
   const handleOAuthCallback = useAuthStore((s) => s.handleOAuthCallback);
   useEffect(() => {
     if (!authModeLoaded) void fetchAuthMode();
@@ -601,7 +602,10 @@ export default function WelcomePage({ mode = "welcome" }: { mode?: WelcomeMode }
               inviteInput={inviteInput}
               setInviteInput={setInviteInput}
               inviteFromUrl={searchParams.get("invite")}
-              showInviteField={mode !== "login"}
+              // Invite field only renders during closed-beta / waitlist mode.
+              // When the platform flips `waitlist=false` on /api/auth/mode the
+              // input disappears automatically so open signup stays clean.
+              showInviteField={waitlistMode && mode !== "login"}
               walletDetected={walletDetected}
               passkeyAvailable={passkeyAvailable}
               submitting={submitting}
