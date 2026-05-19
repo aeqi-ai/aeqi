@@ -7810,9 +7810,9 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   inset: 0 24px 0 24px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-  padding: 0 56px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 48px 56px;
   pointer-events: none;
 }
 .start-page-hero-overlay > * {
