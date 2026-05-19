@@ -276,31 +276,20 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
           {topLevelItem("/economy", "Economy", <EconomyIcon />, isEconomy)}
         </nav>
 
-        {/* ── Identity group — the operating-context "ID card". Only
-            mounts when a trust is active. Clicking the block navigates
-            to /identity where the user can switch contexts. The block
-            itself shows a small trust avatar + role + trust name + a
-            right chevron — it reads as an ID badge. ── */}
-        {hasCompany && (
-          <nav className="sidebar-surface-nav sidebar-zone" aria-label="Identity">
-            <div className="sidebar-section-label">Identity</div>
-            <div className="sidebar-user-zone">
-              <ActingAsSelector />
-            </div>
-          </nav>
-        )}
-
-        {/* ── Company-scope items. Visible only when a company is
-            selected. Order matches the Phase-1 lock:
-              TRUST (cockpit / overview — Health folded in)
-              Inbox
-              ORGANIZATION  (Roles · Ownership · Treasury · Governance · Channels)
-              WORKSPACE     (Agents · Events · Quests · Ideas)
-              Settings (standalone, gap above) ── */}
+        {/* ── Trust group — folds the identity selector (the operating-
+            context ID badge) and the trust-scoped tabs (Overview, Roles)
+            into one coherent block. Viewing the current trust and the
+            role you hold in it are the SAME concern — splitting them
+            into "Identity" + "Trust" groups was redundant. The selector
+            sits at the top of the group (click to switch context), then
+            the trust-scoped tabs below. ── */}
         {hasCompany && (
           <>
             <nav className="sidebar-surface-nav sidebar-zone" aria-label="Trust">
               <div className="sidebar-section-label">Trust</div>
+              <div className="sidebar-user-zone">
+                <ActingAsSelector />
+              </div>
               <div key="overview" className="sidebar-nav-row">
                 <a
                   className={`sidebar-nav-item ${isCompanyOverview ? "active" : ""}`}
