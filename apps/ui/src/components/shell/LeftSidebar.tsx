@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   Inbox,
+  Sparkles,
   LayoutDashboard,
   Coins,
   PieChart,
@@ -37,6 +38,7 @@ interface LeftSidebarProps {
 // Stroke width is overridden to 1.65 by layout.css for the 16px optical sweet
 // spot; the icon prop here just controls glyph identity.
 const InboxIcon = () => <Inbox />;
+const StartIcon = () => <Sparkles />;
 // Overview — the trust cockpit. LayoutDashboard reads "this is the
 // canonical landing for the trust." The Trust group header carries the
 // institution semantic so this glyph doesn't need to.
@@ -126,6 +128,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
   // Top-level public rows.
   const isEconomy = path === "/economy" || path.startsWith("/economy/");
   const isInbox = path === "/inbox" || path.startsWith("/inbox/");
+  const isStart = path === "/" || path === "/start" || path.startsWith("/start/");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
 
@@ -258,6 +261,7 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
             is in), so they're always visible — no hasCompany gate. ── */}
         <nav className="sidebar-surface-nav sidebar-zone" aria-label="Global">
           <div className="sidebar-section-label">Global</div>
+          {topLevelItem("/", "Start", <StartIcon />, isStart)}
           {topLevelItem("/inbox", "Inbox", <InboxIcon />, isInbox, {
             action: rowAction("Search", <SearchIcon />, openPalette, `${isMac ? "⌘" : "Ctrl"}K`),
           })}
