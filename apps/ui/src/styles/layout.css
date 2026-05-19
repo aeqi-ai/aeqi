@@ -7539,7 +7539,10 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   align-items: center;
   gap: 12px;
   width: calc(100% - 8px);
-  margin: 0 4px;
+  /* 4px horizontal inset sets the panel back from the row width;
+     8px bottom separates the credential from the Overview row that
+     follows so the two read as related but distinct. */
+  margin: 0 4px 8px;
   padding: 10px 12px;
   background: var(--color-accent);
   border: 0;
