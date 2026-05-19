@@ -21,7 +21,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 UI_DIR="$REPO_ROOT/apps/ui"
-TARGET="/home/claudedev/aeqi-platform/ui-dist"
+TARGET="${AEQI_UI_DIST:-$HOME/aeqi-platform/ui-dist}"
 
 if [ ! -d "$TARGET" ]; then
   echo "deploy failed: target $TARGET does not exist" >&2

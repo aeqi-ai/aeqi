@@ -2,7 +2,7 @@
 # Roll all sandbox runtimes to the currently staged platform runtime binary.
 #
 # Runtime-impacting deploys copy target/release/aeqi into
-# /home/claudedev/aeqi-platform/runtime/bin/aeqi, then restart the platform.
+# <platform-host>/runtime/bin/aeqi, then restart the platform.
 # Sandboxes are transient systemd units, so a unit-list restart only updates
 # sandboxes that still exist in systemd. The platform admin API reads
 # runtime_placements and respawns missing sandboxes from source-of-truth state.

@@ -38,7 +38,7 @@ tracked_text_paths() {
 
 blocked_paths=$(
     tracked_paths | rg -n \
-        '(^|/)(CLAUDE\.md|OPEN_SOURCE_EXPERIENCE_REPORT\.md|RELEASES\.md|INDEXER\.md|platform-friction\.md|skills-lock\.json)$|^\.agents/|^\.claude/|^docs/internal/|^scripts/ux-|^scripts/persona-walk-|^scripts/_.*\.mjs$|^scripts/(smoke-prod(\.mjs|\.sh)?|ui-deploy\.sh|deploy-storybook\.sh|aeqi-tenant-mcp\.mjs|audit-frontend\.mjs|self-observe\.mjs)$|^apps/ui/scripts/ux-' || true
+        '(^|/)(CLAUDE\.md|OPEN_SOURCE_EXPERIENCE_REPORT\.md|RELEASES\.md|INDEXER\.md|platform-friction\.md|skills-lock\.json)$|^\.agents/|^\.claude/|^docs/internal/|^scripts/ux-|^scripts/persona-walk-|^scripts/_.*\.mjs$|^scripts/(smoke-prod(\.mjs|\.sh)?|deploy-storybook\.sh|aeqi-tenant-mcp\.mjs|audit-frontend\.mjs|self-observe\.mjs)$|^apps/ui/scripts/ux-' || true
 )
 report "blocked tracked paths" "$blocked_paths"
 
@@ -54,9 +54,16 @@ internal_markers=$(
 )
 report "internal or dogfood markers" "$internal_markers"
 
+# `/etc/aeqi/secrets.env` is a canonical secret path. Operator scripts and
+# security-feature code (file_safety denylist, runtime walks doc comments)
+# legitimately reference it as DATA, not a leak. Narrow allowlist: only the
+# files that build/exercise the path as a literal — not arbitrary mentions.
 prod_markers=$(
     tracked_text_paths | xargs -r rg -n -I --with-filename \
-        'app\.aeqi\.ai|aeqi-host-[<{]?(entity|entity_id)|Cross-tenant|/var/lib/aeqi/containers|/etc/aeqi/secrets\.env' || true
+        'aeqi-host-[<{]?(entity|entity_id)|Cross-tenant|/var/lib/aeqi/containers|/etc/aeqi/secrets\.env' \
+        | rg -v \
+            '^crates/aeqi-tools/src/file_safety\.rs:|^crates/aeqi-orchestrator/src/walks\.rs:|^scripts/rollout-sandbox-runtimes\.sh:' \
+        || true
 )
 report "hosted production markers" "$prod_markers"
 

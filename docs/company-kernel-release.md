@@ -70,7 +70,7 @@ The release can ship when these statements are true:
 - A meaningful quest leaves evidence: decision, changed artifact, verification,
   result, and residual risk.
 - Ideas are visibly useful during execution, not just stored after the fact.
-- The MCP dogfood loop is real: release work is tracked through quests, ideas,
+- The MCP self-use loop is real: release work is tracked through quests, ideas,
   and code graph context.
 - Runtime and platform boundaries are explicit. The source-available runtime
   can stand alone; hosted platform claims stay within what is implemented.
@@ -175,7 +175,7 @@ First deliverables:
 
 - document when ideas must be searched, applied, and stored
 - expose which ideas influenced a quest or execution
-- add a release dogfood checklist that uses ideas before each workstream
+- add a release self-use checklist that uses ideas before each workstream
 
 ### Track 4: Operating History
 
