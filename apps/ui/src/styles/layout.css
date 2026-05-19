@@ -7770,3 +7770,131 @@ button.ideas-tag-chip.active .ideas-tag-chip-count {
   display: block;
   min-height: 1px;
 }
+
+/* ── Start page — welcome / first-experience surface at /start. Wide
+   hero image at the top (single editorial gesture, the only place
+   .impeccable.md "no decorative imagery" rule is intentionally relaxed
+   per user direction 2026-05-19), greeting overlay area, then a 4-card
+   grid of preview destinations. Pure-neutral palette otherwise. ── */
+.start-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.start-page-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1200px;
+  margin: 24px auto 0;
+  padding: 0 24px;
+}
+.start-page-hero-image {
+  display: block;
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  object-position: center 40%;
+  border-radius: var(--radius-lg, 12px);
+}
+.start-page-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 32px;
+  max-width: 640px;
+}
+.start-page-hero-eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+}
+.start-page-hero-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 200;
+  letter-spacing: -0.025em;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+.start-page-hero-subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md, 15px);
+  line-height: 1.5;
+  max-width: 560px;
+}
+.start-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 48px auto 64px;
+  padding: 0 24px;
+}
+.start-page-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 24px;
+  background: var(--color-card);
+  border: 0;
+  border-radius: var(--radius-lg, 12px);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 0.12s ease,
+    transform 0.12s ease;
+}
+.start-page-card:hover {
+  background: var(--bg-row);
+  transform: translateY(-2px);
+}
+.start-page-card:focus-visible {
+  outline: none;
+  background: var(--bg-row);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+.start-page-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--bg-row);
+  color: var(--color-text-primary);
+}
+.start-page-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.start-page-card-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+.start-page-card-action {
+  margin-top: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-accent);
+}
+/* Primary card carries slightly more visual weight — the "start a trust"
+   tile is the most ambitious action and earns the eye. */
+.start-page-card--primary .start-page-card-icon {
+  background: var(--color-accent);
+  color: var(--btn-primary-text);
+}

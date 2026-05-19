@@ -25,6 +25,10 @@ export interface ShellSurface {
    *  /trust/<addr>/inbox 2026-05-18 so the user's notifications live at
    *  one URL regardless of which (or no) trust is in scope. */
   isInbox: boolean;
+  /** `/start` — welcome / first-experience page. Hero image + four
+   *  preview cards. Distinct from `/` (the dominion picker) so the
+   *  arrival surface stays cinematic instead of double-duty. */
+  isStart: boolean;
   /** `/acting-as` — the operating-context picker (Actor × Role × Trust)
    *  reached from the sidebar's main accent block. */
   isActingAs: boolean;
@@ -57,6 +61,7 @@ export function useShellSurface(path: string): ShellSurface {
     const isEconomy = path === "/economy" || path.startsWith("/economy/");
     const isActingAs = path === "/acting-as" || path.startsWith("/acting-as/");
     const isInbox = path === "/inbox" || path.startsWith("/inbox/");
+    const isStart = path === "/start" || path.startsWith("/start/");
 
     // In-shell Roles sub-pages on the canonical trust route. URL slug is
     // `/roles/...`; underlying pages are RoleNewPage / RoleDetailPage /
@@ -83,6 +88,7 @@ export function useShellSurface(path: string): ShellSurface {
       isEconomy ||
       isActingAs ||
       isInbox ||
+      isStart ||
       isAdmin;
     const isNotFound = !isKnownShellRoute;
 
@@ -94,6 +100,7 @@ export function useShellSurface(path: string): ShellSurface {
       isEconomy,
       isActingAs,
       isInbox,
+      isStart,
       isNotFound,
       isAdmin,
       isRolesNew,
