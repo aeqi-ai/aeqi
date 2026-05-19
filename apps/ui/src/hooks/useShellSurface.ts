@@ -9,10 +9,14 @@ import { useMemo } from "react";
  * first-class routes. The user-scope MVP entrypoint is `/launch`.
  */
 export interface ShellSurface {
-  /** Bare `/` — the home picker (Step into a context). The root surface
-   *  every authed user lands on, in place of the prior auto-redirect to
-   *  /launch or the primary entity's inbox. */
+  /** Bare `/` — the welcome / Start surface (hero + 4 preview cards).
+   *  The root every authed user lands on (2026-05-19 swap: the dominion
+   *  picker moved to `/network`; `/` is now the cinematic welcome). */
   isHome: boolean;
+  /** `/network` — the dominion picker (Step into a context). Identity
+   *  selection / "network of trusts" view. Lifted out of `/` 2026-05-19
+   *  so the root can be the welcome surface. */
+  isNetwork: boolean;
   /** True for all `/account/*` paths — ProfilePage dispatches further. */
   isAccount: boolean;
   isBlueprints: boolean;
@@ -62,6 +66,7 @@ export function useShellSurface(path: string): ShellSurface {
     const isActingAs = path === "/acting-as" || path.startsWith("/acting-as/");
     const isInbox = path === "/inbox" || path.startsWith("/inbox/");
     const isStart = path === "/start" || path.startsWith("/start/");
+    const isNetwork = path === "/network" || path.startsWith("/network/");
 
     // In-shell Roles sub-pages on the canonical trust route. URL slug is
     // `/roles/...`; underlying pages are RoleNewPage / RoleDetailPage /
@@ -89,6 +94,7 @@ export function useShellSurface(path: string): ShellSurface {
       isActingAs ||
       isInbox ||
       isStart ||
+      isNetwork ||
       isAdmin;
     const isNotFound = !isKnownShellRoute;
 
@@ -101,6 +107,7 @@ export function useShellSurface(path: string): ShellSurface {
       isActingAs,
       isInbox,
       isStart,
+      isNetwork,
       isNotFound,
       isAdmin,
       isRolesNew,

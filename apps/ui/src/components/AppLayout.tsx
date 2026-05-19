@@ -219,6 +219,7 @@ export default function AppLayout() {
     isActingAs,
     isInbox,
     isStart,
+    isNetwork,
     isNotFound,
     isAdmin,
     isRolesNew,
@@ -373,11 +374,12 @@ export default function AppLayout() {
     if (isAccount) return <ProfilePage />;
     if (isEconomy) return <EconomyPage />;
     if (isInbox) return <MeInboxPage />;
-    if (isStart) return <StartPage />;
-    // `/acting-as` is preserved as an alias to `/` while any old link
-    // out there is still live. Both render HomePage; AppLayout's URL is
-    // unchanged so a deep link still works.
-    if (isHome || isActingAs) return <HomePage />;
+    // `/` is the Start surface (welcome + previews). The legacy `/start`
+    // URL keeps working as an alias for any link already in circulation.
+    if (isHome || isStart) return <StartPage />;
+    // `/network` is the dominion picker (Step into a context). `/acting-as`
+    // is preserved as an alias for any link already in circulation.
+    if (isNetwork || isActingAs) return <HomePage />;
     if (isBlueprints) {
       // /blueprints/<seg> where <seg> is a known kind (companies / agents /
       // events / quests / ideas) → catalog tab. Otherwise <seg> is a blueprint
@@ -439,6 +441,7 @@ export default function AppLayout() {
     !isActingAs &&
     !isInbox &&
     !isStart &&
+    !isNetwork &&
     isAgentChatDefault;
   const showComposer = sessionsMounted;
   const showSessionsRail = sessionsMounted && !!isEntityRoute;

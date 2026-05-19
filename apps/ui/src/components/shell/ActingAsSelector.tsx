@@ -37,7 +37,7 @@ export default function ActingAsSelector() {
     <button
       type="button"
       className="acting-as-trigger"
-      onClick={() => navigate("/")}
+      onClick={() => navigate("/network")}
       aria-label="Switch operating context"
     >
       <span className="acting-as-actor">{actorName}</span>
