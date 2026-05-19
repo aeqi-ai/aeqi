@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { User, CreditCard, LogOut } from "lucide-react";
+import { User, CreditCard, LogOut, Shield } from "lucide-react";
 import { Popover, SelectOption } from "@/components/ui";
 import UserAvatar from "@/components/UserAvatar";
 import { useAuthStore } from "@/store/auth";
@@ -8,6 +8,7 @@ import { Events, useTrack } from "@/lib/analytics";
 
 const AccountIcon = () => <User />;
 const BillingIcon = () => <CreditCard />;
+const AdminIcon = () => <Shield />;
 const SignOutIcon = () => <LogOut />;
 
 export default function AccountDropdown() {
@@ -23,8 +24,11 @@ export default function AccountDropdown() {
     (pathname === "/account" || pathname.startsWith("/account/")) &&
     pathname !== "/account/billing";
   const isBilling = pathname === "/account/billing";
-  // Row-level "active" — highlighted whenever we're somewhere under /account.
-  const rowActive = pathname === "/account" || pathname.startsWith("/account/");
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isAdminUser = user?.is_admin === true;
+  // Row-level "active" — highlighted whenever we're somewhere under /account
+  // or /admin (admin tools live under the account menu now).
+  const rowActive = pathname === "/account" || pathname.startsWith("/account/") || isAdminPath;
 
   const userName =
     user?.name || user?.email?.split("@")[0] || (authMode === "none" ? "Local" : "You");
@@ -92,13 +96,7 @@ export default function AccountDropdown() {
 
   return (
     <div className="account-dropdown-row">
-      <Popover
-        trigger={rowTrigger}
-        open={open}
-        onOpenChange={setOpen}
-        placement="bottom-start"
-        portal
-      >
+      <Popover trigger={rowTrigger} open={open} onOpenChange={setOpen} placement="top-start" portal>
         <div className="account-dropdown-menu" role="menu">
           <SelectOption
             selected={isAccount}
@@ -114,6 +112,15 @@ export default function AccountDropdown() {
           >
             Billing
           </SelectOption>
+          {isAdminUser && (
+            <SelectOption
+              selected={isAdminPath}
+              onClick={() => go("/admin")}
+              leadingIcon={<AdminIcon />}
+            >
+              Admin
+            </SelectOption>
+          )}
           <SelectOption onClick={signOut} leadingIcon={<SignOutIcon />}>
             Log out
           </SelectOption>

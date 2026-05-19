@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Inbox,
   House,
@@ -12,7 +12,6 @@ import {
   Target,
   Lightbulb,
   ScrollText,
-  Shield,
   Search,
   Plus,
   PanelLeftClose,
@@ -21,10 +20,10 @@ import {
 } from "lucide-react";
 import ActingAsSelector from "@/components/shell/ActingAsSelector";
 import AccountDropdown from "@/components/shell/AccountDropdown";
+import Wordmark from "@/components/Wordmark";
 import HelpMenu from "@/components/shell/HelpMenu";
 import { IconButton, Tooltip } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
-import { useAuthStore } from "@/store/auth";
 import { useDaemonStore } from "@/store/daemon";
 import { entityBasePath } from "@/lib/entityPath";
 
@@ -67,7 +66,6 @@ const RolesIcon = () => <Workflow />;
 const EconomyIcon = () => <Globe />;
 
 // Admin — Lucide's Shield is the same silhouette as the prior hand-rolled.
-const AdminIcon = () => <Shield />;
 const SearchIcon = () => <Search />;
 const PlusIcon = () => <Plus />;
 // Sidebar collapse/expand — state-aware glyphs so the affordance reads
@@ -131,8 +129,6 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
   const isEconomy = path === "/economy" || path.startsWith("/economy/");
   const isInbox = path === "/inbox" || path.startsWith("/inbox/");
   const isStart = path === "/" || path === "/start" || path.startsWith("/start/");
-  const isAdmin = path === "/admin" || path.startsWith("/admin/");
-  const isAdminUser = useAuthStore((s) => s.user?.is_admin === true);
 
   const navItem = (
     id: string,
@@ -209,13 +205,16 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
       className={`left-sidebar${sidebarCollapsed ? " collapsed" : ""}`}
       style={sidebarCollapsed ? undefined : { width: `${sidebarWidth}px` }}
     >
-      {/* ── Header — account dropdown lives top-left, replacing the
-          previous Wordmark slot. The collapse toggle still hangs on the
-          right edge of the row. ── */}
+      {/* ── Header — aeqi wordmark top-left, collapse toggle on the
+          right. Account moved back to the bottom of the rail
+          (2026-05-19) — the wordmark anchors the rail visually and
+          tells the user where they are at a glance. ── */}
       <div className="sidebar-header">
         {!sidebarCollapsed ? (
           <>
-            <AccountDropdown />
+            <Link to="/" className="sidebar-brand" aria-label="aeqi — home">
+              <Wordmark size={20} />
+            </Link>
             <Tooltip content={`Collapse sidebar (${isMac ? "⌘" : "Ctrl"}B)`}>
               <IconButton
                 className="sidebar-collapse-btn"
@@ -352,20 +351,13 @@ export default function LeftSidebar({ trustId, path }: LeftSidebarProps) {
           </>
         )}
 
-        {/* ── Bottom row — single horizontal row with Admin pinned left
-            (only for admin users) + HelpMenu pinned right. The Help cap
-            sits flush-right regardless of whether Admin is present; an
-            empty flex-grow placeholder occupies the left slot when Admin
-            isn't rendered so Help's right-edge position stays stable. ── */}
+        {/* ── Bottom — AccountDropdown (with Admin link inside its menu
+            for admin users) + HelpMenu pinned right. The account block
+            moved back here from the top-left on 2026-05-19; the
+            wordmark now anchors the rail's top edge. ── */}
         <div className="sidebar-bottom-group">
-          <div className="sidebar-action-row sidebar-action-row--bottom">
-            {isAdminUser ? (
-              <nav className="sidebar-surface-nav sidebar-action-row-nav" aria-label="Admin">
-                {topLevelItem("/admin", "Admin", <AdminIcon />, isAdmin)}
-              </nav>
-            ) : (
-              <span className="sidebar-action-row-spacer" aria-hidden="true" />
-            )}
+          <div className="sidebar-action-row sidebar-action-row--account">
+            <AccountDropdown />
             <HelpMenu />
           </div>
         </div>
